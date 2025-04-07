@@ -1,0 +1,519 @@
+[
+  {
+    "number": 2987,
+    "title": "Does uv_poll_t can monitor the same fd with different events  at the same time? (linux os)",
+    "created_at": "2020-09-04T02:10:33Z",
+    "closed_at": "2020-09-04T02:27:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/2987",
+    "body": "\r\nfor example:\r\nfd : 5\r\nuv_poll_init(loop, uv_poll_handler, fd);\r\nuv_poll_start(uv_poll_handler, UV_READ_EVENT, on_read_event_cb);\r\n\r\nuv_poll_init(loop, uv_poll_handler, fd);\r\nuv_poll_start(uv_poll_handler, UV_WRITE_EVENT, on_write_event_cb);\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/2987/comments",
+    "author": "baldwin-law",
+    "comments": [
+      {
+        "user": "vtjnash",
+        "created_at": "2020-09-04T02:27:23Z",
+        "body": "No, you need to use the same uv_poll_t and one uv_poll_start call. You may wish to handle that with your wrapper library for convenience."
+      }
+    ]
+  },
+  {
+    "number": 2629,
+    "title": "Is there bug uv__run_closing_handles function ?",
+    "created_at": "2020-01-14T13:30:12Z",
+    "closed_at": "2020-01-14T13:50:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/2629",
+    "body": "After  running  this line code as listed follow in **uv__run_closing_handles** function,  the pointer of **p**  will  also is NULL. So whatever the condition of **while** is forever  false,  right ?\r\n```\r\n  loop->closing_handles = NULL;\r\n```\r\n**uv__run_closing_handles** \r\n```\r\nstatic void uv__run_closing_handles(uv_loop_t* loop) {\r\n  uv_handle_t* p;\r\n  uv_handle_t* q;\r\n\r\n\r\n  p = loop->closing_handles;\r\n  loop->closing_handles = NULL;\r\n\r\n  while (p) {\r\n    q = p->next_closing;\r\n    uv__finish_close(p);\r\n    p = q;\r\n  }\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/2629/comments",
+    "author": "ggandycong",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2020-01-14T13:50:14Z",
+        "body": "No... `loop->closing_handles` is a linked list. `p` is a copy of the head-of-list pointer and is then iterated over to dispatch the items in the list."
+      }
+    ]
+  },
+  {
+    "number": 2256,
+    "title": "SIGSEGV in udp sample.",
+    "created_at": "2019-04-12T04:53:37Z",
+    "closed_at": "2019-04-12T09:36:56Z",
+    "labels": [
+      "invalid",
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/2256",
+    "body": "* **Version**: `1.27`\r\n* **Platform**: `Linux 4.8.0-58-generic #63~16.04.1-Ubuntu SMP Mon Jun 26 18:08:51 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux`\r\n\r\nI tried to implement simple UDP listener. I copied the code from UDP sample in docs with minor modifications. But I got `SIGSEGV (Address boundary error)` when I try to print the IP address of the sender. I should note that I send data with `echo -n \"foo\" | nc -4u -w1 127.0.0.1 <port>` command.\r\n\r\nHere is the code:\r\n```c\r\n#include <stdio.h>\r\n#include <stdlib.h>\r\n#include <uv.h>\r\n\r\nstatic void alloc_buffer(uv_handle_t *handle, size_t suggested_size,\r\n                         uv_buf_t *buf) {\r\n  buf->base = malloc(suggested_size);\r\n  buf->len = suggested_size;\r\n}\r\n\r\nvoid on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf,\r\n    const struct sockaddr *addr, unsigned flags) {\r\n\r\n  if (nread < 0) {\r\n    fprintf(stderr, \"Read error %s\\n\", uv_err_name(nread));\r\n    uv_close((uv_handle_t*) req, NULL);\r\n    free(buf->base);\r\n    return;\r\n  }\r\n\r\n\r\n  char sender[17] = { 0 };\r\n  uv_ip4_name((const struct sockaddr_in*) addr, sender, 16);\r\n  fprintf(stderr, \"Recv from %s\\n\", sender);\r\n\r\n}\r\n\r\nint main() {\r\n  uv_loop_t *loop = uv_default_loop();\r\n  uv_udp_t recv_socket;\r\n  struct sockaddr_in recv_addr;\r\n  int len = sizeof(recv_addr);\r\n  int ret = 0;\r\n\r\n  uv_udp_init(loop, &recv_socket);\r\n  uv_udp_recv_start(&recv_socket, alloc_buffer, on_read);\r\n  ret = uv_udp_getsockname(&recv_socket, (struct sockaddr *)&recv_addr, &len);\r\n  if (ret != 0) {\r\n    printf(\"couldn't get sock name\\n\");\r\n  }\r\n  printf(\"listening on port %d for inbound data.\\n\", ntohs(recv_addr.sin_port));\r\n\r\n  uv_run(loop, UV_RUN_DEFAULT);\r\n\r\n  printf(\"End of UV loop.\\n\");\r\n\r\n  return 0;\r\n}\r\n```\r\n\r\nAnd here is the stack trace:\r\n```\r\nProgram received signal SIGSEGV, Segmentation fault.\r\ninet_ntop4 (src=src@entry=0x4 <error: Cannot access memory at address 0x4>,\r\n    dst=dst@entry=0x7fffffffa780 \"\", size=size@entry=16) at src/inet.c:58\r\n58        l = snprintf(tmp, sizeof(tmp), fmt, src[0], src[1], src[2], src[3]);\r\n(gdb) bt\r\n#0  inet_ntop4 (src=src@entry=0x4 <error: Cannot access memory at address 0x4>,\r\n    dst=dst@entry=0x7fffffffa780 \"\", size=size@entry=16) at src/inet.c:58\r\n#1  0x00007ffff7bb6834 in uv_inet_ntop (af=<optimized out>, src=0x4,\r\n    dst=0x7fffffffa780 \"\", size=16) at src/inet.c:43\r\n#2  0x0000000000400be6 in on_read ()\r\n#3  0x00007ffff7bc89d0 in uv__udp_recvmsg (handle=0x7fffffffda90) at src/unix/udp.c:190\r\n#4  uv__udp_io (loop=<optimized out>, w=0x7fffffffdb10, revents=1)\r\n    at src/unix/udp.c:142\r\n#5  0x00007ffff7bca838 in uv__io_poll (\r\n    loop=loop@entry=0x7ffff7dd5da0 <default_loop_struct>, timeout=-1)\r\n    at src/unix/linux-core.c:379\r\n#6  0x00007ffff7bbbfe5 in uv_run (loop=0x7ffff7dd5da0 <default_loop_struct>,\r\n    mode=UV_RUN_DEFAULT) at src/unix/core.c:363\r\n#7  0x0000000000400cf7 in main ()\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/2256/comments",
+    "author": "alishir",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2019-04-12T09:36:56Z",
+        "body": "You don't handle the `nread==0` case, `addr==NULL` when `nread==0`. Check the documentation for `uv_udp_recv_cb` and please use libuv/help next time for questions."
+      }
+    ]
+  },
+  {
+    "number": 1903,
+    "title": "can you provide a multi thread tcp server  sample?  uv_write2 only works only  with multi processes ? ",
+    "created_at": "2018-06-28T08:05:48Z",
+    "closed_at": "2018-06-28T08:11:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1903",
+    "body": "uv_write2 can't send file handle to pipe between threads? \r\n\r\nI get hints from other posts: \r\n\r\n\"There is no way to accept a client on another loop. There are a number of things you can do:\r\n1. create the listener handle, then create X new loops, send the handle to them using uv_write2 and listen in all of them\r\n2. if you're on Linux (> 3.9 IIRC), create X new loops and bind a handle to the same IP and port using SO_REUSEPORT\r\n3. have a single loop accept all incoming connections and send them to other loops using uv_write2.\" \r\n\r\nbut it doesn't figure out it's in multi threads or multi processes. \r\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1903/comments",
+    "author": "cagev",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2018-06-28T08:11:07Z",
+        "body": "Can you post questions to libuv/help?  This issue tracker is only for bug reports.  Thanks."
+      }
+    ]
+  },
+  {
+    "number": 1902,
+    "title": "Is it a good idea to embed `statbuf` struct inside every `uv_fs_t`?",
+    "created_at": "2018-06-28T06:45:42Z",
+    "closed_at": "2018-06-28T09:00:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1902",
+    "body": "In my application, i have a memory pool for various `uv_req_t` struct,  I never release them so that i don't have to pay for malloc /free cost. but somehow `uv_fs_t` 's size is much larger (440B) than other request type (~96B). By looking into source i find `uv_state_t statbuf` is kept in `uv_fs_t` instead of a `uv_stat_t*` pointer, and it has many 64bits fields which makes it a very large struct. So why this design choice is made? We only use `statbuf` field for stat related  functions, why don't use a pointer field instead? ",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1902/comments",
+    "author": "winterland1989",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2018-06-28T09:00:25Z",
+        "body": "Where would the pointer point to when we need to store a `uv_stat_t`?\r\n\r\nLibuv's philosophy is to avoid mallocing memory when at all possible.  Avoiding malloc is certainly possible here by embedding the struct, and therefore that is what we do."
+      },
+      {
+        "user": "winterland1989",
+        "created_at": "2018-06-28T10:10:39Z",
+        "body": "Isn't `uv_req_cleanup` suppose to somewhat a complementary way to manage dynamic memory if needed?\r\n\r\nI should state my problem more clearly, since our goal is the same: avoid mallocing memory when at all possible. In my application i have a grow only memory pool with unified size item to make `uv_req_t` 's allocation fast. Thus i have to pre-allocate this array with the largest `uv_req_t` size possible. The problem is 1) `uv_fs_t` is far larger than other request struct , 2) the `uv_stat_t` inside it is seldom used.\r\n\r\nFrom what i understand, static allocation(stack/memory pool) or dynamic allocation is always a trade off, so maybe my use case can make you reconsider this decision? (issue title edited) If somehow we decide not to shrink `fs_req_t`, I'll fallback to `malloc` for `uv_fs_t`  due to the memory overhead, which is not satisfactory."
+      }
+    ]
+  },
+  {
+    "number": 1894,
+    "title": "Is it okay I create a pr to add circle ci ?",
+    "created_at": "2018-06-18T10:47:25Z",
+    "closed_at": "2018-06-18T16:58:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1894",
+    "body": "RT",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1894/comments",
+    "author": "gengjiawen",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2018-06-18T16:58:25Z",
+        "body": "Thanks but no, we don't use it."
+      },
+      {
+        "user": "gengjiawen",
+        "created_at": "2020-03-27T03:22:10Z",
+        "body": "Is it okay we add github action ? cc @richardlau @cjihrig "
+      },
+      {
+        "user": "cjihrig",
+        "created_at": "2020-03-27T13:15:09Z",
+        "body": "Do you mean to run the CI, or something else? I'm not opposed to GitHub actions personally (I actually like them a lot), but they won't be able to fully replace Jenkins due to lack of platform support."
+      }
+    ]
+  },
+  {
+    "number": 1844,
+    "title": "in uv_default_loop have pipe handle leak?",
+    "created_at": "2018-05-25T07:07:39Z",
+    "closed_at": "2018-05-25T07:42:18Z",
+    "labels": [
+      "invalid",
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1844",
+    "body": "i use udp default loop, empty work, but find the handle not close.\r\n\r\nsource code\r\n`\r\nuv_loop_t* loop = uv_default_loop();\r\n\r\nuv_udp_t udp;\r\n\r\nuv_udp_init(loop, &udp);\r\n\r\nuv_close_all(loop, NULL);\r\n\r\nuv_loop_close(loop);\r\n`\r\nuse lsof find FIFO leak.\r\ntest    17088 root    5r  FIFO   0,10      0t0 1011624 pipe\r\ntest    17088 root    6w  FIFO   0,10      0t0 1011624 pipe\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1844/comments",
+    "author": "huangchouchou",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2018-05-25T07:42:18Z",
+        "body": "Two observations:\r\n\r\n1. You don't check return values.\r\n2. There's no such thing as `uv_close_all()`.\r\n\r\nI see no reason to believe it's a libuv bug.  If you still have questions, can you post them to libuv/help?  Please include (or link to) full source code.  Cheers."
+      }
+    ]
+  },
+  {
+    "number": 1652,
+    "title": "How to install after compiling with Ninja?",
+    "created_at": "2017-11-25T18:24:39Z",
+    "closed_at": "2017-11-25T18:58:48Z",
+    "labels": [
+      "question",
+      "build"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1652",
+    "body": "In the [instructions](//github.com/libuv/libuv#using-ninja), you only provide how to generate and build with ninja. Actully, how do I install LibUV after building it with ninja? There is no `ninja install`.",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1652/comments",
+    "author": "concatime",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2017-11-25T18:58:48Z",
+        "body": "Short answer is \"you don't\" - ninja is a build tool, not a packaging tool.\r\n\r\nUse autotools if you want install functionality.  GYP+ninja is predominantly for projects where libuv is embedded as a component in a larger project, such as in Node.js."
+      },
+      {
+        "user": "concatime",
+        "created_at": "2017-11-25T19:00:46Z",
+        "body": "Ok, I understand. That's why it produces only a `libuv.a` static library. Thank you ;)"
+      }
+    ]
+  },
+  {
+    "number": 1644,
+    "title": "Libuv fails to work with RAW Sockets (errno = ENOTSOCK)",
+    "created_at": "2017-11-22T10:45:55Z",
+    "closed_at": "2017-11-22T11:48:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1644",
+    "body": "The following code works fine when is use the commented loop, but when using libuv, recv returns errno = 88 (ENOTSOCK). what's wrong with using the libuv to catch RAW packets?\r\n\r\n```\r\n/*\r\n *  This program is free software: you can redistribute it and/or modify\r\n *  it under the terms of the GNU General Public License as published by\r\n *  the Free Software Foundation, either version 3 of the License, or\r\n *  (at your option) any later version.\r\n */\r\n\r\n#include <unistd.h>\r\n#include <arpa/inet.h>\r\n#include <linux/if_packet.h>\r\n#include <linux/ip.h>\r\n#include <linux/udp.h>\r\n#include <stdio.h>\r\n#include <string.h>\r\n#include <stdlib.h>\r\n#include <sys/ioctl.h>\r\n#include <sys/socket.h>\r\n#include <net/if.h>\r\n#include <netinet/ether.h>\r\n#include <errno.h>\r\n#include <uv.h>\r\n\r\n#define DEFAULT_IF  \"eth0\"\r\n\r\nuv_loop_t *loop;\r\nint sockfd;\r\nuv_poll_t  *handle;\r\n\r\nstatic void on_close(uv_handle_t* handle)\r\n{\r\n    printf(\"ON CLOSE\\n\");\r\n    free(handle);\r\n}\r\nstatic void on_raw_packet_capture(uv_poll_t *handle, int status, int events)\r\n{\r\n    uint8_t pkt_data[ETH_FRAME_LEN];\r\n    int  len = 0;\r\n\r\n    errno = 0;\r\n    len = recvfrom(sockfd, pkt_data, ETH_FRAME_LEN, 0, NULL, NULL);\r\n\r\n    if (len < 0) {\r\n        if (errno == EAGAIN || errno == EINTR) {\r\n            /* try again */\r\n            sleep(1);\r\n            return;\r\n        }\r\n\r\n        /* error was encountred */\r\n        printf(\"%s (%d)\\n\", strerror(errno), errno);\r\n        uv_close((uv_handle_t *)handle, on_close);\r\n        return;\r\n    } else\r\n    if (len == 0) {\r\n        /* wrong state */\r\n        printf(\"ERROR\\n\");\r\n        uv_close((uv_handle_t *)handle, on_close);\r\n    }\r\n\r\n    printf(\"receive: %d bytes\\n\", len);\r\n\r\n}\r\nint main(int argc, char *argv[])\r\n{\r\n    int sockfd;\r\n    int flags;\r\n    int sockopt;\r\n    struct ifreq ifopts;    /* set promiscuous mode */\r\n    struct ifreq if_ip; /* get ip addr */\r\n    char ifName[IFNAMSIZ];\r\n\r\n    /* Get interface name */\r\n    if (argc > 1)\r\n        strcpy(ifName, argv[1]);\r\n    else\r\n        strcpy(ifName, DEFAULT_IF);\r\n\r\n    memset(&if_ip, 0, sizeof(struct ifreq));\r\n\r\n    /* Open PF_PACKET socket, listening for EtherType ETH_P_ALL */\r\n    if ((sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1) {\r\n        perror(\"listener: socket\");\r\n        return -1;\r\n    }\r\n\r\n    /* Set non-blocking sockets */\r\n    flags = fcntl(sockfd,F_GETFL,0);\r\n    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);\r\n\r\n    /* Set interface to promiscuous mode - do we need to do this every time? */\r\n    strncpy(ifopts.ifr_name, ifName, IFNAMSIZ-1);\r\n    ioctl(sockfd, SIOCGIFFLAGS, &ifopts);\r\n    ifopts.ifr_flags |= IFF_PROMISC;\r\n    ioctl(sockfd, SIOCSIFFLAGS, &ifopts);\r\n\r\n    /* Allow the socket to be reused - incase connection is closed prematurely */\r\n    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof sockopt) == -1) {\r\n        perror(\"setsockopt\");\r\n        close(sockfd);\r\n        exit(EXIT_FAILURE);\r\n    }\r\n\r\n    /* Bind to device */\r\n    if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, ifName, IFNAMSIZ-1) == -1)  {\r\n        perror(\"SO_BINDTODEVICE\");\r\n        close(sockfd);\r\n        exit(EXIT_FAILURE);\r\n    }\r\n\r\n    /*\r\n    for (;;) {\r\n        uint8_t pkt_data[ETH_FRAME_LEN];\r\n        int  len = 0;\r\n\r\n        errno = 0;\r\n        len = recvfrom(sockfd, pkt_data, ETH_FRAME_LEN, 0, NULL, NULL);\r\n        if (len < 0) {\r\n            if (errno == EAGAIN || errno == EINTR) {\r\n                continue;\r\n            }\r\n        }\r\n        printf(\"receive : %d bytes, errno: %d\\n\", len, errno);\r\n    }\r\n    */\r\n\r\n    handle = (uv_poll_t *)malloc(sizeof(uv_poll_t));\r\n    loop = uv_default_loop();\r\n\r\n    if (uv_poll_init(loop, handle, sockfd) != 0) {\r\n        perror(\"uv_poll_init\");\r\n        exit(EXIT_FAILURE);\r\n    }\r\n\r\n    if (uv_poll_start(handle, UV_READABLE, on_raw_packet_capture) != 0) {\r\n        perror(\"uv_poll_start\");\r\n        exit(EXIT_FAILURE);\r\n    }\r\n\r\n\r\n    uv_run(loop, UV_RUN_DEFAULT);\r\n\r\n    close(sockfd);\r\n    return EXIT_SUCCESS;\r\n}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1644/comments",
+    "author": "defeden",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2017-11-22T10:59:14Z",
+        "body": "Can you fill out the issue template?  There is a reason we ask it.\r\n\r\nWhen and where exactly does libuv return that error?"
+      },
+      {
+        "user": "defeden",
+        "created_at": "2017-11-22T11:35:55Z",
+        "body": "Hi,\r\nwhen i pass sockfd as private data (uv_handle_t::data), i can read packets from the callback\r\nbut when i use the sockfd global variable, when it display the value of sockfd, it shows me the value 0 instead of 3 for the value saved into uv_handle_t::data"
+      }
+    ]
+  },
+  {
+    "number": 1145,
+    "title": "Does libuv receive multicast packets from local network without subscription?",
+    "created_at": "2016-11-16T21:16:47Z",
+    "closed_at": "2016-11-17T12:04:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1145",
+    "body": "We know: in flat network every packet is send to all ETH ports. So multicast packets could be received without subscription. Does libuv operate with them?\r\nHow can I know target address of UDP packet if it is multicast?",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1145/comments",
+    "author": "qywx",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-11-17T12:04:39Z",
+        "body": "Can you post questions to the mailing list?  We reserve the bug tracker for, well, bugs.  Thanks.\n"
+      },
+      {
+        "user": "qywx",
+        "created_at": "2016-11-18T19:30:05Z",
+        "body": "Here is the best place to place questions. Somebody will find your answer with search engine. Mailing list are for 90s.\n"
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-11-18T20:03:38Z",
+        "body": "Either use the mailing list or don't but please don't comment in this issue again.  Next time I'll simply lock the conversation and block you from posting here.\n"
+      }
+    ]
+  },
+  {
+    "number": 1111,
+    "title": "Does libuv simultaneous accept has the thundering herd problem on linux?",
+    "created_at": "2016-10-27T14:39:21Z",
+    "closed_at": "2016-10-28T07:20:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1111",
+    "body": "Does libuv simultaneous accept has the thundering herd problem on linux?  and how can I custom the simultaneous accpet load balance? thanks!\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1111/comments",
+    "author": "shungo2020",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-10-28T07:20:25Z",
+        "body": "> Does libuv simultaneous accept has the thundering herd problem on linux?\n\nIf you add the same listen socket to multiple event loops, yes.\n\nIf your kernel is new enough, you can create the file descriptor yourself and set the SO_REUSEPORT socket option on it, then pass it to libuv with `uv_tcp_open()`.\n\nCan you post questions to the mailing list next time?  We use the issue tracker strictly for bug reports.  Thanks.\n"
+      }
+    ]
+  },
+  {
+    "number": 1107,
+    "title": "When the server is sending a large amount of data to the client, the client is suddenly closed.",
+    "created_at": "2016-10-24T15:38:47Z",
+    "closed_at": "2016-10-24T17:47:41Z",
+    "labels": [
+      "invalid",
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1107",
+    "body": "my program is liking this. \n\nwhen server is running, if new  client connect server, the connect_cb  will create a timer to send media data to client on time, but the media data is big , when client closed\n\nthe question is appear !  \n\n=====   uv_write error :  ECANCELED - operation cancled  =====\n\nmy libuv version is V1.9.1,  i  run pragram on ubuntu 16.04 .\n\nWrong print information is located in after_write.\n\nhow can i solve this problem , thanks for answer\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1107/comments",
+    "author": "remainfox",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-10-24T17:47:41Z",
+        "body": "Can you post your question to the libuv mailing list?  We use the issue tracker for tracking bug reports against libuv, not for general support.  Thanks.\n"
+      },
+      {
+        "user": "remainfox",
+        "created_at": "2016-10-25T01:15:46Z",
+        "body": "ok\n"
+      }
+    ]
+  },
+  {
+    "number": 1071,
+    "title": "where the uv_prepare_invoke function's body?",
+    "created_at": "2016-09-25T04:00:42Z",
+    "closed_at": "2016-09-25T04:51:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1071",
+    "body": "these functions only find define no body \nvoid uv_prepare_invoke(uv_loop_t\\* loop);\nvoid uv_check_invoke(uv_loop_t\\* loop);\nvoid uv_idle_invoke(uv_loop_t\\* loop);\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1071/comments",
+    "author": "ilimei",
+    "comments": [
+      {
+        "user": "ilimei",
+        "created_at": "2016-09-25T04:15:12Z",
+        "body": "i found it\nUV_LOOP_WATCHER_DEFINE\n"
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-09-25T04:51:51Z",
+        "body": "Correct.  Can you post questions to the mailing list next time?  Thanks.\n"
+      },
+      {
+        "user": "ilimei",
+        "created_at": "2016-09-25T04:56:11Z",
+        "body": "ok,im sorry for that\n"
+      }
+    ]
+  },
+  {
+    "number": 781,
+    "title": "Building libuv without sphinx",
+    "created_at": "2016-03-24T11:17:11Z",
+    "closed_at": "2016-03-24T11:29:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/781",
+    "body": "Hi,\n\nIs it possible to build this library without sphinx? According to the README sphinx is used to build the documentation, well I don't need the documentation, so is it possible to disregard the sphinx dependency? I ask because I am creating a package for libuv in my Open Build Service Arch_Extra project (and no I can't just use the libuv package in the [community] repo of Arch Linux, due to OBS restrictions) and the sphinx dependency is the main thing that is stopping me, due to the dependency nightmare it would land me in. Is there some options I need to pass to the autogen.sh or configure script in order to build without documentation (hence, hopefully abolishing the sphinx requirement)?\n\nThanks for your time,\nBrenton\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/781/comments",
+    "author": "fusion809",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2016-03-24T11:28:53Z",
+        "body": "I'm not sure what you mean.  `sh autogen.sh && ./configure && make` builds just the library, nothing else; no tests, no documentation.\n"
+      },
+      {
+        "user": "saghul",
+        "created_at": "2016-03-24T11:28:56Z",
+        "body": "Sphinx is only required for building the documentation, as the README says. Whether you build it with autotools or GYP, Sphinx is not required.\n"
+      }
+    ]
+  },
+  {
+    "number": 2974,
+    "title": "test: switch to ASSERT_EQ etc. macros",
+    "created_at": "2020-08-28T04:47:00Z",
+    "closed_at": "2023-10-06T17:50:23Z",
+    "labels": [
+      "test",
+      "help wanted",
+      "good first issue",
+      "not-stale"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/2974",
+    "body": "Wanted to discuss this before opening a PR: is everyone okay with a bulk conversion from the old-style ASSERT macro to the new-style ASSERT_EQ, ASSERT_NE, etc. macros?\r\n\r\nIt'll cause a bit of churn in `test/` but it should make debugging tests a lot easier.",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/2974/comments",
+    "author": "bnoordhuis",
+    "comments": [
+      {
+        "user": "santigimeno",
+        "created_at": "2020-08-28T07:31:51Z",
+        "body": "I'm all for it. 👍 "
+      },
+      {
+        "user": "cjihrig",
+        "created_at": "2020-08-28T12:44:31Z",
+        "body": "Also +1"
+      },
+      {
+        "user": "richardlau",
+        "created_at": "2020-08-28T14:01:48Z",
+        "body": "+1 for making it easier to debug test failures."
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2020-09-20T07:48:39Z",
+        "body": "I haven't had time to work on this. For anyone wanting to pick this up, it should be a fairly mechanical translation - just try to ensure lines stay <= 80 columns. :-)"
+      },
+      {
+        "user": "tjarlama",
+        "created_at": "2020-10-07T16:44:09Z",
+        "body": "Picking this up"
+      },
+      {
+        "user": "leonerd",
+        "created_at": "2020-11-15T17:37:09Z",
+        "body": "Unknowingly, I have mostly done this in #3042; though it seems I still have to do some different macros for unsigned int or pointer tests."
+      },
+      {
+        "user": "Pleuvens",
+        "created_at": "2023-09-28T21:56:25Z",
+        "body": "I'm thinking of picking this up if it is okay for everyone"
+      },
+      {
+        "user": "Pleuvens",
+        "created_at": "2023-09-29T13:59:34Z",
+        "body": "There will be a lot of changes in this issue and I was thinking about doing this progressively. How would you like to review ?"
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2023-09-29T15:43:21Z",
+        "body": "I'd do it in one fell swoop because reviewing e.g. one PR per file is uber tedious. The test suite doesn't change so often that merge conflicts should be a big issue."
+      }
+    ]
+  },
+  {
+    "number": 1911,
+    "title": "child process stuck in defunct state if uv_close is called before child exited",
+    "created_at": "2018-07-05T18:37:10Z",
+    "closed_at": "2023-10-14T11:07:11Z",
+    "labels": [
+      "help wanted",
+      "doc",
+      "good first issue"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1911",
+    "body": "After libuv spawned a process using uv_spawn but before the process has exited you call uv_close, libuv will unregister the SIGCHLD handler for that child process and thus never call waitpid when the child exits and cause the child to forever be stuck in the defunct state. \r\n\r\nEther libuv should be updated to internally keep track of this after uv_close has been called or the documentation should be updated to state not to call uv_close until the exit callback has been called.\r\n\r\n* **Version**: 1.19.1\r\n* **Platform**: Linux 3.10.0-693.5.2.el7.x86_64 #1 SMP Fri Oct 20 20:32:50 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux\r\n\r\nSpawn logic:\r\n```\r\n      uv_process_options_t options;\r\n      memset(&options, 0, sizeof(uv_process_options_t));\r\n\r\n      options.exit_cb = onExit;\r\n      options.file = exe.c_str();\r\n      options.cwd = workingDir.data();\r\n      options.flags = UV_PROCESS_DETACHED;\r\n      options.args = (char**)&argsPtr[0];\r\n\r\n      uv_spawn(&loop, m_handle, &options);\r\n\r\n      // Need to release the handle to the process due to UV_PROCESS_DETACHED\r\n      uv_unref((uv_handle_t*)m_handle);\r\n```\r\n\r\nThen clean up logic before child has exited that causes it to get stuck:\r\n```\r\n      uv_close_cb onClose = [](uv_handle_t* handle)\t\r\n      {\t\r\n        DELETE((uv_process_t*)handle);\t\r\n      };\t\r\n\t\r\n      uv_close((uv_handle_t*)m_handle, onClose);\t\r\n      m_handle = nullptr;\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1911/comments",
+    "author": "mchandler-blizzard",
+    "comments": [
+      {
+        "user": "bnoordhuis",
+        "created_at": "2018-07-06T12:19:07Z",
+        "body": "That's a documentation issue.  Pull request welcome."
+      },
+      {
+        "user": "nimit95",
+        "created_at": "2018-08-20T06:24:43Z",
+        "body": "I would like to work on this issue"
+      },
+      {
+        "user": "cjihrig",
+        "created_at": "2018-09-18T16:19:29Z",
+        "body": "@nimit95 please open a PR if you're still interested in tackling this."
+      },
+      {
+        "user": "stale[bot]",
+        "created_at": "2019-08-10T02:51:47Z",
+        "body": "This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions.\n"
+      },
+      {
+        "user": "vtjnash",
+        "created_at": "2019-08-12T15:38:16Z",
+        "body": "It does seem like it would be good to document this, since it could be a surprising gotcha (e.g. it took us a while to notice and fix this in JuliaLang). What's the thinking on keeping \"doc\" issues open (and \"help wanted / good first issue\" at that)?"
+      },
+      {
+        "user": "stale[bot]",
+        "created_at": "2019-11-10T16:06:02Z",
+        "body": "This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions.\n"
+      },
+      {
+        "user": "Pleuvens",
+        "created_at": "2023-10-05T19:56:18Z",
+        "body": "Hello, I can take this issue if it is okay for everyone"
+      }
+    ]
+  },
+  {
+    "number": 1554,
+    "title": "[doc] Path encoding in uv_fs_XXX",
+    "created_at": "2017-09-20T13:02:07Z",
+    "closed_at": "2018-10-11T10:12:31Z",
+    "labels": [
+      "help wanted",
+      "doc"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/1554",
+    "body": "May be it worth mention that uv_fs_XXX functions use `utf-8` encoding on Windows.\r\nBecause native unicode encoding on Windows is UTF-16.",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/1554/comments",
+    "author": "moteus",
+    "comments": [
+      {
+        "user": "bzoz",
+        "created_at": "2017-09-20T16:53:37Z",
+        "body": "SGTM!\r\n\r\nIf you have time, PRs are always welcomed"
+      }
+    ]
+  },
+  {
+    "number": 271,
+    "title": "uv_get_process_title and uv_set_process_title should be MT-safe",
+    "created_at": "2015-03-16T16:23:58Z",
+    "closed_at": "2017-12-02T11:03:00Z",
+    "labels": [
+      "enhancement",
+      "help wanted",
+      "good first issue"
+    ],
+    "url": "https://github.com/libuv/libuv/issues/271",
+    "body": "Proposal: I move that `uv_get_process_title()` and `uv_set_process_title()` should be safe to call from multiple threads without requiring explicit synchronization from the host program.\n\nRationale: synchronization might be difficult or impossible to orchestrate and it's not obvious that those functions require synchronization in the first place when e.g. uv_hrtime() does not.\n\nI'm volunteering to do the work.\n",
+    "comments_url": "https://api.github.com/repos/libuv/libuv/issues/271/comments",
+    "author": "bnoordhuis",
+    "comments": [
+      {
+        "user": "saghul",
+        "created_at": "2015-03-16T16:52:15Z",
+        "body": "Sounds good, go for it :-)\n"
+      },
+      {
+        "user": "mtharrison",
+        "created_at": "2017-11-14T11:03:36Z",
+        "body": "I'm very interested in contributing to libuv. Any pointers on where to start with this? Is it just a case of using a mutex in those functions to ensure they can't be executed my multiple threads or am I vastly oversimplifying things?"
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2017-11-14T12:00:46Z",
+        "body": "@mtharrison Yes, a mutex would be a good first step."
+      },
+      {
+        "user": "mtharrison",
+        "created_at": "2017-11-15T08:49:13Z",
+        "body": "If my understanding is correct `uv_get_process_title()` is ok to call concurrently from multiple threads as long as there's no concurrent `uv_set_process_title()` happening, so would a rwlock be more appropriate in this case?"
+      },
+      {
+        "user": "bnoordhuis",
+        "created_at": "2017-11-15T10:09:12Z",
+        "body": "Probably, but there are implementations for several platforms.  You'd have to look at each one individually.\r\n\r\nPerformance-wise, mutex vs. rwlock probably doesn't matter that much in practice since the critical section is small, and mutexes don't have writer starvation issues."
+      }
+    ]
+  }
+]

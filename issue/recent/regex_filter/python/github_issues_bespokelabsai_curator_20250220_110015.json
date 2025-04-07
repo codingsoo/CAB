@@ -1,0 +1,816 @@
+[
+  {
+    "number": 455,
+    "title": "Bug: Example on poems crashes with `ValueError: Model is None and does not exist in passed completion_response`",
+    "created_at": "2025-02-06T17:13:16Z",
+    "closed_at": "2025-02-06T17:49:54Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/455",
+    "body": "Steps to reproduce:\n\n1. Run the example provided in the README that produces poems. Code:\n\n```python\nfrom typing import List\nfrom dotenv import load_dotenv\nfrom pydantic import BaseModel, Field\nfrom bespokelabs import curator\n\nload_dotenv()\n\nclass Poem(BaseModel):\n    poem: str = Field(description=\"A poem.\")\n\n\nclass Poems(BaseModel):\n    poems_list: List[Poem] = Field(description=\"A list of poems.\")\n\n\nllm = curator.LLM(model_name=\"gpt-4o-mini\", response_format=Poems)\npoems = llm([\"Write two poems about the importance of data in AI.\", \n              \"Write three haikus about the importance of data in AI.\"])\nprint(poems.to_pandas())\n```\n\n2. Run the code\n3. The script will crash with these errors (obviously, the produced texts may change for you):\n```\nERROR - Request 1 failed permanently after exhausting all 10 retry attempts. Errors: ['Model is None and does not exist in passed completion_response. Passed completion_response={\\'id\\': \\'chatcmpl-AxzhI7MCWs66BlfHCYkA7BmMYaCoB\\', \\'object\\': \\'chat.completion\\', \\'created\\': 1738861880, \\'model\\': \\'gpt-4o-mini-2024-07-18\\', \\'choices\\': [{\\'index\\': 0, \\'message\\': {\\'role\\': \\'assistant\\', \\'content\\': \\'{\"poems_list\":[{\"poem\":\"Patterns hidden deep,\\\\\\\\nData whispers in the dark,\\\\\\\\nTruths brought into light.\"},{\"poem\":\"Bytes of knowledge flow,\\\\\\\\nLearning from what once was learned,\\\\\\\\nAI grows and knows.\"},{\"poem\":\"Numbers tell a tale,\\\\\\\\nLogic framed in lines of code,\\\\\\\\nData, heart of thought.\"}]}\\', \\'refusal\\': None}, \\'logprobs\\': None, \\'finish_reason\\': \\'stop\\'}] ....\n```\n\nI am using a normal OpenAI key, and it is a fresh installation of curator.\n```\nbespokelabs-curator==0.1.18.post1\n```\n\nThanks!",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/455/comments",
+    "author": "AlexMV12",
+    "comments": [
+      {
+        "user": "kartik4949",
+        "created_at": "2025-02-06T17:18:51Z",
+        "body": "@AlexMV12 Hello,\nare you using python3.13?\nalso could you try to degrade litellm version to 1.55.8?\nLitellm latest release have some broken apis.\nwe will release  a patch soon\nThanks"
+      },
+      {
+        "user": "shreyaspimpalgaonkar",
+        "created_at": "2025-02-06T17:49:54Z",
+        "body": "Hey @AlexMV12 , we've released the patch that downgrades litellm. This should be fixed now!"
+      },
+      {
+        "user": "AlexMV12",
+        "created_at": "2025-02-06T18:10:08Z",
+        "body": "Hey @shreyaspimpalgaonkar , I confirm now everything works! Thanks for the very fast fix!"
+      }
+    ]
+  },
+  {
+    "number": 442,
+    "title": "Added support for varying generation_params per request",
+    "created_at": "2025-02-05T01:34:04Z",
+    "closed_at": "2025-02-05T05:49:57Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/442",
+    "body": "Following #370, we want to enable the user to have a separate `generation_params` for each dataset entry.\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/442/comments",
+    "author": "richardzhuang0412",
+    "comments": [
+      {
+        "user": "kartik4949",
+        "created_at": "2025-02-05T05:49:58Z",
+        "body": "duplicate"
+      }
+    ]
+  },
+  {
+    "number": 390,
+    "title": "bump curator version to 0.16.1",
+    "created_at": "2025-01-21T18:03:45Z",
+    "closed_at": "2025-01-21T18:14:31Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/390",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/390/comments",
+    "author": "vutrung96",
+    "comments": [
+      {
+        "user": "adamoptimizer",
+        "created_at": "2025-01-21T18:05:12Z",
+        "body": "rebase it"
+      }
+    ]
+  },
+  {
+    "number": 374,
+    "title": "Update token consumption after a response is recieved",
+    "created_at": "2025-01-17T18:34:27Z",
+    "closed_at": "2025-01-21T13:15:28Z",
+    "labels": [
+      "enhancement",
+      "optimization"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/374",
+    "body": "As @adamoptimizer noted, right now we are estimating the token consumption (see #300) before sending the request, to limit the requests sent.\n\nHowever, we don't current update the **actual** consumption when we get the response back and know the true consumption. This could be leaving extra tokens on the table (actual < estimated) or we could run into rate limits (estimated < actual)",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/374/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "adamoptimizer",
+        "created_at": "2025-01-17T18:55:06Z",
+        "body": "Thanks for creating the issue,\n\nSo, with current implementation of online request processor,\n1. We read a request file. (assume we have 100 requests in this file)\n2. we create a fresh status tracker with capacity.\n3. we block capacity of 100 requests concurrently\n4. we create 100 async concurrent requests \n5. we receive real consumption of all 100 async request\n6. then we save the 100 request concurrently\n\nNow the problem is if we have already requested 100 async concurrent requests i.e all requests in that file.\nwe have blocked capacity of 100 requests already \n\nnow when we actually receive the response there is no point of  freeing the capacity."
+      },
+      {
+        "user": "adamoptimizer",
+        "created_at": "2025-01-19T10:45:22Z",
+        "body": "Update, This will  work for scenarios where the request file has large number for requests.\nIn this scenario we keep hitting token capacity due to over estimation.\n\nThe real benefit of the update is cumulative saving on released capacity over time.\n\nAlso works well with `max_concurrent_requests` mode, which is still WIP "
+      }
+    ]
+  },
+  {
+    "number": 362,
+    "title": "Fix_json adds curly braces",
+    "created_at": "2025-01-14T13:19:58Z",
+    "closed_at": "2025-02-09T15:37:17Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/362",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/362/comments",
+    "author": "marianna13",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-14T21:25:13Z",
+        "body": "Fixed in #359 \r\n\r\nSlightly different from what you have here. \r\nWe can still merge in the other bug fix. "
+      }
+    ]
+  },
+  {
+    "number": 357,
+    "title": "docs: add citation",
+    "created_at": "2025-01-12T21:08:47Z",
+    "closed_at": "2025-01-12T21:13:45Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/357",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/357/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-12T21:11:49Z",
+        "body": "thanks!"
+      }
+    ]
+  },
+  {
+    "number": 356,
+    "title": "Detailed progress monitoring through CLI for offline processing",
+    "created_at": "2025-01-12T19:59:08Z",
+    "closed_at": "2025-01-12T22:22:08Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/356",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/356/comments",
+    "author": "vutrung96",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-12T20:45:56Z",
+        "body": "Duplicate of #348 "
+      }
+    ]
+  },
+  {
+    "number": 334,
+    "title": "test: overload integration tests with other backends",
+    "created_at": "2025-01-09T17:16:19Z",
+    "closed_at": "2025-01-10T06:51:41Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/334",
+    "body": "This pr addes litellm + openai parameterized tests to overload test_all.py with both.",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/334/comments",
+    "author": "adamoptimizer",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-10T06:03:10Z",
+        "body": "also, it seems like we're only adding support for litellm + stop and resume for batch this PR (which is fine to keep the PR scope manageable). if so can we make this clear in the PR description?"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-10T06:03:56Z",
+        "body": "integration tests are also failing :("
+      }
+    ]
+  },
+  {
+    "number": 318,
+    "title": "[EPIC] Integration Test ",
+    "created_at": "2025-01-07T18:29:10Z",
+    "closed_at": "2025-01-14T15:30:39Z",
+    "labels": [
+      "P1",
+      "tests"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/318",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/318/comments",
+    "author": "adamoptimizer",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-07T18:32:07Z",
+        "body": "Online Testing:\r\n- [x] Basic test / smoke test\r\n- [ ] Load test with expected performance (maxing out RPM)  \r\n- [x] Response format validation\r\n- [x] Testing across multiple model types\r\n- [x] Stopping and resuming capabilities\r\n- [x] Cache functionality (running identical tests twice)\r\n- [x] Manual RPM/TPM configuration\r\n- [x] Automatic RPM/TPM detection\r\n\r\nBatch Processing:\r\n- [x] Basic batch test\r\n- [ ] Load test (multiple small batches of size 1)\r\n- [ ] Expired batch handling\r\n- [ ] Failed batch handling\r\n- [x] Failed requests within batch (and resumption)\r\n- [ ] Anthropic-specific batch testing\r\n- [x] OpenAI-specific batch testing\r\n- [ ] Batch cancellation functionality\r\n- [ ] Batch file retention/deletion testing\r\n\r\nEdge Cases & Failure Modes:\r\n- [ ] Non-compliant response format\r\n- [ ] Connection error handling (and retries)\r\n- [ ] Timeout error handling (and retries)\r\n- [ ] API key configuration errors\r\n- [ ] Malformed input dataset/parse function/prompt function\r\n- [ ] Content filter finish reason handling\r\n- [ ] Length limit finish reason handling\r\n- [ ] Oversized batch configuration\r\n- [ ] Excessive prompt size causing batch file limits"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-07T18:39:29Z",
+        "body": "- [x] 1st step: set up vcr\r\n- [x] 2nd step: smoke test with the most important models / backends using vcr\r\n  - [x] openai online (may or may not need depending on performance of litellm)\r\n  - [x] openai batch\r\n  - [x] anthropic batch\r\n  - [x] litellm online (just use openai?)"
+      }
+    ]
+  },
+  {
+    "number": 300,
+    "title": "Token consumption estimation to use a moving average based on responses",
+    "created_at": "2025-01-05T22:57:12Z",
+    "closed_at": "2025-01-20T18:39:41Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/300",
+    "body": "This is better than our current assumption of `max_tokens // 4` which may be under or over-estimating",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/300/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-08T22:57:18Z",
+        "body": "For v0.2, I'm gonna make an executive call and say that this is not needed. Our performance is already pretty decent and this is mostly about improve performance."
+      }
+    ]
+  },
+  {
+    "number": 298,
+    "title": "Closes #297 Support local models via vLLM",
+    "created_at": "2025-01-05T20:29:00Z",
+    "closed_at": "2025-01-08T18:38:39Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/298",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/298/comments",
+    "author": "marianna13",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-06T23:35:18Z",
+        "body": "@marianna13 please merge main into your branch as we had a major refactor! hopefully it is not too difficult to move your changes over. "
+      },
+      {
+        "user": "marianna13",
+        "created_at": "2025-01-07T13:51:26Z",
+        "body": "Hey @RyanMarten thanks for the review!\r\nI made changes to the PR (merged with the main, updated online vllm inference to use litellm).\r\nHopefully these changes address all your questions. Please let me know if you have any questions for me!"
+      },
+      {
+        "user": "marianna13",
+        "created_at": "2025-01-08T14:03:13Z",
+        "body": "Hey @RyanMarten \r\nthank you very much for your review and comments! They are very helpful and insightful!\r\nI addressed the minor issues, made examples clearer and more self-contained. \r\nRegarding CUDA OOM in the online tests I realized that this issue comes from the fact that that vllm server might not be shutdown properly and CUDA memory is not released. For me it was not an issue because I'm using slurm which kills all the processes, that's why now in the `test_vllm_online.py` we forcefully kill the vllm process and all its children.\r\nPlease feel free to reach out if there're any other issues!"
+      }
+    ]
+  },
+  {
+    "number": 249,
+    "title": "Remove code accidentally added, and add a type shortcut.",
+    "created_at": "2024-12-12T18:12:05Z",
+    "closed_at": "2024-12-13T20:36:49Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/249",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/249/comments",
+    "author": "madiator",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2024-12-13T09:49:22Z",
+        "body": "approved but @madiator can you resolve conflicts?"
+      }
+    ]
+  },
+  {
+    "number": 243,
+    "title": "Add Anthropic batch and general refactor",
+    "created_at": "2024-12-10T23:07:53Z",
+    "closed_at": "2025-01-05T22:01:09Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/243",
+    "body": "closes #225 \r\ncloses #62 \r\ncloses #217 ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/243/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "devin-ai-integration[bot]",
+        "created_at": "2024-12-20T07:34:31Z",
+        "body": "This PR introduces several significant improvements to the curator library:\n\n1. **Architecture Refactoring**\n   - Generalized the request processor architecture for better extensibility\n   - Moved type definitions to a dedicated types/ directory for better organization\n   - Introduced a more flexible configuration system for request processors\n\n2. **Anthropic Batch Support**\n   - Added comprehensive support for Anthropic's batch API\n   - Implemented proper rate limiting and token usage tracking\n   - Added support for batch operations up to 100,000 requests per batch\n   - Included proper error handling and status tracking\n\n3. **Generation Parameters**\n   - Improved handling of model-specific generation parameters\n   - Moved from hardcoded parameters to a more flexible generation_params system\n   - Better support for different model capabilities\n\n4. **Testing & Examples**\n   - Added integration tests for example code\n   - Improved test infrastructure with better cache handling\n   - Updated examples to work with the new architecture\n\n5. **Documentation & Type Safety**\n   - Better type definitions and organization\n   - Improved error messages and logging\n   - Added proper documentation for rate limits and API specifics\n\nThis refactor significantly improves the library's ability to handle different LLM providers while maintaining a consistent interface for both batch and online processing."
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-28T17:32:00Z",
+        "body": "Test anthropic batch with structured output with \r\n```\r\npytest -s tests/test_batch.py::test_anthropic_batch_structured_output\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 241,
+    "title": "Cost estimation UI",
+    "created_at": "2024-12-10T21:11:15Z",
+    "closed_at": "2025-01-11T14:10:55Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/241",
+    "body": "TBD",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/241/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-11T14:10:55Z",
+        "body": "Now in #342 "
+      }
+    ]
+  },
+  {
+    "number": 240,
+    "title": "Cannot use curator with FastAPI: uvloop needs to be handled properly in run_in_event_loop",
+    "created_at": "2024-12-10T18:15:21Z",
+    "closed_at": "2025-01-05T22:55:48Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/240",
+    "body": "When trying to use curator with FastAPI, I get this error:\r\nERROR:apigateway.handlers.faithfulness_handler:Error in batch processing: Can't patch loop of type <class 'uvloop.Loop'>\r\n\r\nnest_asyncio is not compatible with uvloop. event_loop.py needs to properly handle uvloop.",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/240/comments",
+    "author": "neginraoof",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2024-12-10T19:08:49Z",
+        "body": "Thanks for flagging!\r\n\r\nThere are two separate issues here:\r\n\r\n(1) uvloop does not work with nest_asyncio which we used to run curator --- this is what's breaking.\r\n(2) we shouldn't run a long-running blocking operation in the main loop of FastAPI --- this is separate but important since not blocking the main loop is important for performance.\r\n\r\nA solution that tackles both (1) and (2) is to run curator in a separate thread. This solves (1) because the thread is separate from uvloop and thus allows us to avoid incompatibility issues between nest_asyncio and uvloop, and it solves (2) because we are running in another thread, so we are not blocking the main loop. \r\n\r\nBelow is an example of using run_in_threadpool to run curator. It seems to work with uvloop. Could you try this?\r\n\r\n```\r\nimport asyncio\r\n\r\nfrom starlette.concurrency import run_in_threadpool\r\n\r\n\"\"\"Example of using the curator library to generate diverse poems.\r\n\r\nWe generate 10 diverse topics and then generate 2 poems for each topic.\"\"\"\r\n\r\nfrom typing import List\r\n\r\nimport uvloop\r\nfrom datasets import Dataset\r\nfrom pydantic import BaseModel, Field\r\n\r\nfrom bespokelabs import curator\r\n\r\n\r\ndef generate_topics():\r\n    class Topics(BaseModel):\r\n        topics_list: List[str] = Field(description=\"A list of topics.\")\r\n\r\n\r\n    topic_generator = curator.Prompter(\r\n        prompt_func=lambda: \"Generate 10 diverse topics that are suitable for writing poems about.\",\r\n        model_name=\"gpt-4o-mini\",\r\n        response_format=Topics,\r\n        parse_func=lambda _, topics: [{\"topic\": t} for t in topics.topics_list],\r\n    )\r\n\r\n    topics: Dataset = topic_generator()\r\n    print(topics[\"topic\"])\r\n\r\n\r\n    class Poems(BaseModel):\r\n        poems_list: List[str] = Field(description=\"A list of poems.\")\r\n\r\n\r\n    poet = curator.Prompter(\r\n        # The prompt_func takes a row of the dataset as input.\r\n        # The row is a dictionary with a single key 'topic' in this case.\r\n        prompt_func=lambda row: f\"Write two poems about {row['topic']}.\",\r\n        model_name=\"gpt-4o-mini\",\r\n        response_format=Poems,\r\n        # `row` is the input row, and `poems` is the Poems class which is parsed from the structured output from the LLM.\r\n        parse_func=lambda row, poems: [{\"topic\": row[\"topic\"], \"poem\": p} for p in poems.poems_list],\r\n    )\r\n\r\n    poems = poet(topics)\r\n    print(poems.to_pandas())\r\n\r\nasync def main():\r\n    await run_in_threadpool(generate_topics)\r\n\r\nuvloop.run(main())\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 217,
+    "title": "Setting generation params",
+    "created_at": "2024-12-05T17:49:50Z",
+    "closed_at": "2025-01-05T22:04:00Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/217",
+    "body": "Would it be possible to set generation params: 'max_tokens', 'logprobs', and 'top_logprobs' ?\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/217/comments",
+    "author": "neginraoof",
+    "comments": [
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-12-05T18:07:33Z",
+        "body": "Related/Duplicate #62"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-05T22:03:53Z",
+        "body": "@neginraoof this is now implemented via #243 and is available in the `dev` branch"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-05T22:26:49Z",
+        "body": "@neginraoof we still need to figure out how we want to return logprobs, maybe makes sense as a special \"response_format\"? \r\n\r\nWhat do you think @vutrung96 @madiator "
+      }
+    ]
+  },
+  {
+    "number": 206,
+    "title": "Better way to do output token estimation",
+    "created_at": "2024-12-04T19:56:04Z",
+    "closed_at": "2025-01-05T23:05:15Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/206",
+    "body": "For our client side rate limit control, we need to estimate the number of tokens that will be used by each request we send to an LLM completions API. \r\n\r\nRight now we are naively estimating that the output of the call will use (max_output_tokens // 4). \r\n\r\nInstead we should implement a moving average based on the responses we have gotten so far. \r\n\r\nThis will help with leaving extra throughput on the table as discovered when looking into #223. \r\n\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/206/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-05T23:05:15Z",
+        "body": "Duplicated in #300 "
+      }
+    ]
+  },
+  {
+    "number": 197,
+    "title": "Display correct progress bar when resuming with batch",
+    "created_at": "2024-12-04T03:13:21Z",
+    "closed_at": "2024-12-05T01:09:04Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/197",
+    "body": "Fixes #196 ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/197/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-04T19:57:20Z",
+        "body": "ah feel like this should just be an in memory database"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2024-12-04T20:06:19Z",
+        "body": "why in-memory database? i think the current logic works fine, just needs that one fix?"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-04T20:07:53Z",
+        "body": "Yea it's not necessary, it's just even confusing me with all the places you need to keep track of everything. \r\nI'll send you the fixed version shortly"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-05T01:09:04Z",
+        "body": "Addressing this now in #198 "
+      }
+    ]
+  },
+  {
+    "number": 190,
+    "title": "Add the OpenAI key to the cache hash if you’re in batch mode",
+    "created_at": "2024-12-02T18:37:26Z",
+    "closed_at": "2024-12-06T01:41:55Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/190",
+    "body": "Being able to switch keys between failed batch jobs would be nice\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/190/comments",
+    "author": "EtashGuha",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-02T18:58:18Z",
+        "body": "The simple solution is just adding openai key to the hash for the batch mode. \r\n\r\nThe better solution would be to not re-do work of the already completed and dowloaded batches (just submit the remaining)"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-03T22:18:57Z",
+        "body": "Right now this causes the following error:\r\n```\r\nError Type: TASK_EXECUTION_EXCEPTION\r\n\r\nUser exception:\r\n return await self._request(\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/71dcb4dc7a71bcfe09f323529818e20eee2981bc/virtualenv/lib/python3.10/site-packages/openai/_base_client.py\", line 1638, in _request\r\n raise self._make_status_error_from_response(err.response) from None\r\nopenai.NotFoundError: Error code: 404 - {'error': {'message': \"No batch found with id 'batch_6748d6725c6c81908110c3a07c93c784'.\", 'type': 'invalid_request_error', 'param': None, 'code': None}}\r\n```"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-12-04T03:32:47Z",
+        "body": "Minimal reproduction of the error: \r\n```\r\nfrom bespokelabs.curator import Prompter\r\nfrom datasets import Dataset\r\nimport logging\r\n\r\n# To see more detail about how batches are being processed\r\nlogger = logging.getLogger(\"bespokelabs.curator\")\r\nlogger.setLevel(logging.INFO)\r\ndataset = Dataset.from_dict({\"prompt\": [\"write me a poem\"] * 3})\r\n\r\nprompter = Prompter(\r\n    prompt_func=lambda row: row[\"prompt\"],\r\n    model_name=\"gpt-4o-mini\",\r\n    response_format=None,\r\n    batch=True,\r\n    batch_size=1,\r\n)\r\n\r\ndataset = prompter(dataset)\r\nprint(dataset.to_pandas())\r\n````\r\n\r\n(1) Run program\r\n```\r\npython test.py\r\n```\r\n(2) CTL+C after batches are submitted \r\n```\r\n2024-12-03 19:33:31,683 - bespokelabs.curator.request_processor.openai_batch_request_processor - INFO - All batch objects submitted and written to /Users/ryan/.cache/curator/6164c53a3dbe675c/batch_objects.jsonl\r\n    raise KeyboardInterrupt()\r\nKeyboardInterrupt\r\nCompleted OpenAI requests in batches:   0%|                                                   | 0/3 [00:02<?, ?request/s]\r\n^C\r\n```\r\n(3) Switch the OpenAI key and run the program again\r\n```\r\nOPENAI_API_KEY=sk... python test.py\r\n```\r\nResults in the following error\r\n```\r\n  File \"/Users/ryan/curator/.venv/lib/python3.12/site-packages/openai/_base_client.py\", line 1634, in _request\r\n    raise self._make_status_error_from_response(err.response) from None\r\nopenai.NotFoundError: Error code: 404 - {'error': {'message': \"No batch found with id 'batch_674fcd8b441c8191b3b1976c14362593'.\", 'type': 'invalid_request_error', 'param': None, 'code': None}}\r\n```\r\n"
+      }
+    ]
+  },
+  {
+    "number": 182,
+    "title": "During writing dataset, ArrowTypeError: Expected bytes, got a 'list' object",
+    "created_at": "2024-11-30T17:38:37Z",
+    "closed_at": "2025-01-05T23:36:46Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/182",
+    "body": "```\r\npyarrow.lib.ArrowTypeError: Expected bytes, got a 'list' object\r\n File \"pyarrow/error.pxi\", line 92, in pyarrow.lib.check_status\r\n File \"pyarrow/error.pxi\", line 155, in pyarrow.lib.pyarrow_internal_check_status\r\n File \"pyarrow/array.pxi\", line 42, in pyarrow.lib._sequence_to_array\r\n File \"pyarrow/array.pxi\", line 370, in pyarrow.lib.array\r\n out = pa.array(cast_to_python_objects(data, only_1d_for_numpy=True))\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/8584ddcd7583e71c82e26deecf561ce65feaa0d1/virtualenv/lib/python3.10/site-packages/datasets/arrow_writer.py\", line 228, in __arrow_array__\r\n File \"pyarrow/array.pxi\", line 114, in pyarrow.lib._handle_arrow_array_protocol\r\n File \"pyarrow/array.pxi\", line 250, in pyarrow.lib.array\r\n arrays.append(pa.array(typed_sequence))\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/8584ddcd7583e71c82e26deecf561ce65feaa0d1/virtualenv/lib/python3.10/site-packages/datasets/arrow_writer.py\", line 605, in write_batch\r\n self.write_batch(batch_examples=batch_examples)\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/8584ddcd7583e71c82e26deecf561ce65feaa0d1/virtualenv/lib/python3.10/site-packages/datasets/arrow_writer.py\", line 495, in write_examples_on_file\r\n self.write_examples_on_file()\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/8584ddcd7583e71c82e26deecf561ce65feaa0d1/virtualenv/lib/python3.10/site-packages/datasets/arrow_writer.py\", line 537, in write\r\n writer.write(row)\r\n File \"/tmp/ray/session_2024-11-27_21-23-10_067307_1/runtime_resources/pip/8584ddcd7583e71c82e26deecf561ce65feaa0d1/virtualenv/lib/python3.10/site-packages/bespokelabs/curator/request_processor/base_request_processor.py\", line 290, in create_dataset_files\r\n ```\r\n \r\n @vutrung96 provide example responses.jsonl file that causes this error\r\n ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/182/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-30T17:53:58Z",
+        "body": "Reproduced this error with a toy example: \r\n\r\n```\r\nfrom datasets.arrow_writer import ArrowWriter\r\nfrom datasets import Dataset\r\n\r\ndataset_file = \"test.arrow\"\r\n\r\ntests = [\r\n    [{\"text\": \"hello\"}, {\"text\": \"world\"}],\r\n    [{\"text\": [\"hello\"]}, [{\"text\": [\"world\"]}]],\r\n    [{\"text\": [\"hello\"]}, {\"text\": \"world\"}],\r\n    [{\"text\": \"hello\"}, {\"text\": [\"world\"]}],\r\n]\r\n\r\nfor n, test in enumerate(tests):\r\n    try:\r\n        with ArrowWriter(path=dataset_file) as writer:\r\n            for row in test:\r\n                writer.write(row)\r\n            writer.finalize()\r\n\r\n        output_dataset = Dataset.from_file(dataset_file)\r\n        print(f\"Test {n}: success\")\r\n    except Exception as e:\r\n        print(f\"Test {n}: {e}\")\r\n```\r\n\r\nResults in \r\n```\r\nTest 0: success\r\nTest 1: list indices must be integers or slices, not str\r\nTest 2: cannot mix list and non-list, non-null values\r\nTest 3: Expected bytes, got a 'list' object\r\n```\r\n\r\nThe error is when you have columns with different data types (e.g. string and list).\r\n\r\n\r\nInterestingly, the error is different based on which data type you first write: \r\n- When string bytes are first written, the error is `pyarrow.lib.ArrowTypeError: Expected bytes, got a 'list' object` when an attempt to write a list in the same column\r\n- When a list is first written, then error is `pyarrow.lib.ArrowInvalid: cannot mix list and non-list, non-null values`"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2024-12-01T04:12:02Z",
+        "body": "i see so i think this is WAI"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-05T23:36:46Z",
+        "body": "Closing this issue for now. We have addressed many of these issues by catching errors. If the problem happens again, I'll re-open. "
+      }
+    ]
+  },
+  {
+    "number": 178,
+    "title": "Curator Fails on Disallowed Special Token <|endoftext|>",
+    "created_at": "2024-11-28T21:00:06Z",
+    "closed_at": "2024-11-30T18:45:49Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/178",
+    "body": "The Curator library encounters a failure during token encoding due to the <|endoftext|> token being disallowed when a text contains the <|endoftext|> token. The error occurs when processing requests with the curator/request_processor/openai_online_request_processor.py.\r\n\r\nThe relevant error message is: \r\nraise ValueError(\r\nValueError: Encountered text corresponding to disallowed special token '<|endoftext|>'.\r\nIf you want this text to be encoded as a special token, pass it to `allowed_special`, e.g. `allowed_special={'<|endoftext|>', ...}`.\r\nIf you want this text to be encoded as normal text, disable the check for this token by passing `disallowed_special=(enc.special_tokens_set - {'<|endoftext|>'})`.\r\nTo disable this check for all special tokens, pass `disallowed_special=()`.\r\n\r\nThis can be fixed by disabling the check or resorting to encoding the token as special token or as normal text. ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/178/comments",
+    "author": "reinhardh",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-30T16:47:04Z",
+        "body": "Thanks for reporting this @reinhardh! \r\n\r\nReproduced this error with the following minimal example:\r\n```\r\nfrom bespokelabs.curator import Prompter\r\n\r\nprompter = Prompter(\r\n    prompt_func=lambda row: \"write me a poem <|endoftext|>\",\r\n    model_name=\"gpt-4o-mini\",\r\n    response_format=None,\r\n)\r\n\r\ndataset = prompter()\r\nprint(dataset.to_pandas())\r\n```\r\nWe use tiktoken for token accounting to adhere to rate limits. I'll just set `disallowed_special=()` to avoid these errors in the future. Encoding as normal text should overestimate input tokens. "
+      }
+    ]
+  },
+  {
+    "number": 172,
+    "title": "add `clear_cache` for curator",
+    "created_at": "2024-11-23T04:54:58Z",
+    "closed_at": "2025-01-16T23:13:12Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/172",
+    "body": "add method `curator.clear_cache()`",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/172/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-16T23:13:12Z",
+        "body": "right now we just do `rm -rf ~/.cache/curator`\n\nAnd if you want to disable the cache set\n\n`export CURATOR_DISABLE_CACHE=true`"
+      }
+    ]
+  },
+  {
+    "number": 143,
+    "title": "Cache depends on HF_fingerprint, means materializing doesn't hit the cache",
+    "created_at": "2024-11-19T01:39:47Z",
+    "closed_at": "2024-12-03T22:10:36Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/143",
+    "body": "```\r\nfrom datasets import Dataset\r\n\r\nsource_dataset = Dataset.from_dict({\"test_col\": [1, 2, 3]})\r\nprint(source_dataset._fingerprint)\r\n\r\nloaded_dataset = source_dataset\r\n\r\nfor i in range(0, 10):\r\n    previous_file = f\"test_dataset_{i}\"\r\n    loaded_dataset.save_to_disk(previous_file)\r\n\r\n    loaded_dataset = Dataset.load_from_disk(previous_file)\r\n\r\n    print(loaded_dataset._fingerprint)\r\n```\r\n\r\n`python hash_test.py`\r\n```\r\n70bbfe779c9e4703\r\n1d9e0dc30792d8bc\r\nfc42dda518450eeb\r\nb10f41d6b6e596ce\r\n7c5792309edd1e22\r\nf30bd34bf9c1ea89\r\n40251439234cdd62\r\n1ad95e3d02eab639\r\n081fa6a1d0ba138b\r\ned220a8307ffd5dc\r\nc4a35493e3d60c92\r\n```",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/143/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-19T01:53:20Z",
+        "body": "If you keep the source dataset constant instead of loading and writing in chain, the hash still changes from the original load, but all the saved datasets have the same hash\r\n```\r\nfrom datasets import Dataset\r\n\r\nsource_dataset = Dataset.from_dict({\"test_col\": [1, 2, 3]})\r\nprint(source_dataset._fingerprint)\r\n\r\nloaded_dataset = source_dataset\r\n\r\nfor i in range(0, 10):\r\n    previous_file = f\"test_dataset_{i}\"\r\n    loaded_dataset.save_to_disk(previous_file)\r\n\r\n    ds = Dataset.load_from_disk(previous_file)\r\n\r\n    print(ds._fingerprint)\r\n```\r\n```python hash_test.py```\r\n```\r\n70bbfe779c9e4703\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n1d9e0dc30792d8bc\r\n```\r\n\r\n"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-19T02:03:39Z",
+        "body": "Replicated on my computer --- I get the same values as Ryan."
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-19T06:00:37Z",
+        "body": "This is a fix --> \r\n```\r\nfrom datasets import Dataset\r\nimport json\r\n\r\nto_save_dataset = Dataset.from_dict({\"test_col\": [1, 2, 3]})\r\nprint(to_save_dataset._fingerprint)\r\n\r\nfor i in range(0, 10):\r\n    file = f\"test_dataset_{i}\"\r\n\r\n    # saving and loading back changes the fingerprint\r\n    to_save_dataset.save_to_disk(file)\r\n    loaded_dataset = Dataset.load_from_disk(file)\r\n\r\n    # but loading from the state.json and overwriting the fingerprint, maintains the same fingerprint\r\n    fingerprint = json.load(open(f\"{file}/state.json\"))[\"_fingerprint\"]\r\n    loaded_dataset._fingerprint = fingerprint\r\n    print(loaded_dataset._fingerprint)\r\n\r\n    to_save_dataset = loaded_dataset\r\n````\r\n\r\n```\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\na495bf5e4d759657\r\n```"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-19T06:04:02Z",
+        "body": "Essentially, the operations `save_to_disk` and `load_from_disk` change the hash in a deterministic way. \r\n\r\nTo get around this, overwrite the `._fingerprint` with the value from `state.json` which contains the hash before the `save_to_disk` operation\r\n\r\n```\r\nloaded_dataset = Dataset.load_from_disk(file)\r\nfingerprint = json.load(open(f\"{file}/state.json\"))[\"_fingerprint\"]\r\nloaded_dataset._fingerprint = fingerprint\r\n```\r\n\r\nThis ensures the continuity of the hash - as if you never materialized at all - making the hash invariant to framework cache hits. "
+      }
+    ]
+  },
+  {
+    "number": 133,
+    "title": "adding an env example file",
+    "created_at": "2024-11-17T16:25:47Z",
+    "closed_at": "2025-02-03T16:36:05Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/133",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/133/comments",
+    "author": "lavishsaluja",
+    "comments": [
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-11-18T06:34:13Z",
+        "body": "TODO here\r\n- [x] update \\_\\_main\\_\\_.py for `curator-viewer` to take environment variables if these exist (**but I think perhaps the CLI defaults here are sufficient as well?**, I think over configuring in environment variables may cause unnecessary confusions)\r\n- [ ] update README for `cp .env.example .env` operation and how to use `.env`"
+      },
+      {
+        "user": "lavishsaluja",
+        "created_at": "2024-11-18T18:25:14Z",
+        "body": "1. updating main.py task -> yes CLI variables are sufficient, should not over engineer this, removed the viewer config variables\r\n2. for now skipping adding this on README as a lot more people will be visiting the repo for documentation of package instead of development so should avoid all noise for them. what do you think?"
+      },
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-11-18T19:52:04Z",
+        "body": "> for now skipping adding this on README as a lot more people will be visiting the repo for documentation of package instead of development so should avoid all noise for them. what do you think?\r\n\r\nI think should place it somewhere on README to reduce onboarding frictions for less experienced developers and have a few words for its purpose can help a lot when we introduce new things that can be configurable. "
+      },
+      {
+        "user": "lavishsaluja",
+        "created_at": "2024-11-19T10:33:34Z",
+        "body": "@CharlieJCJ just made the change of changing collapsible, thanks for the input. it looks better now."
+      },
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-11-19T19:24:12Z",
+        "body": "Thanks! \r\n\r\nWe can merge this after #140 merge, and include part of 0.1.10, since there are some frontend path changes need to address if we introduce the environment variable, and additional testings. In the meantime, can you resolve merge conflict to dev in `README.md`, thanks"
+      },
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-11-21T01:40:33Z",
+        "body": "A question I'm thinking of is how the README would structure after introducing `.env` because the current workflow is to do pip install, and no where in prompter and viewer do `load_env`. Another thing is if user chooses to do the `.env` thing they would `git clone` the repo first and the prompter and viewer needs to know where this `.env` is, which users would poetry install, etc, but then poetry isn't been mentioned at all in the README. Trying to think what's the best way to do here. cc @madiator "
+      },
+      {
+        "user": "lavishsaluja",
+        "created_at": "2024-11-26T19:37:00Z",
+        "body": "fair @CharlieJCJ - I was just thinking of adding an env for people who want to contribute but I guess best to just totally skip this for now - most people will just use with pip and won't need development side information in README"
+      }
+    ]
+  },
+  {
+    "number": 126,
+    "title": "Cache broken when run as a loop",
+    "created_at": "2024-11-15T19:12:05Z",
+    "closed_at": "2025-01-05T23:57:43Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/126",
+    "body": "From Aashay\r\n\r\n```\r\nimport asyncio\r\nfrom typing import List\r\n\r\nfrom pydantic import BaseModel, Field\r\nfrom bespokelabs import curator\r\nfrom datasets import load_dataset\r\nimport logging\r\nimport pandas as pd\r\n\r\npersona_dataset = load_dataset(\"proj-persona/PersonaHub\", \"math\")\r\npersona_dataset = persona_dataset['train'].select(range(100))\r\n\r\nclass Subject(BaseModel):\r\n    subject: str = Field(description=\"A subject\")\r\n\r\n\r\nclass Subjects(BaseModel):\r\n    subjects: List[Subject] = Field(description=\"A list of subjects\")\r\n\r\n\r\nclass QA(BaseModel):\r\n    question: str = Field(description=\"A question\")\r\n    answer: str = Field(description=\"An answer\")\r\n\r\n\r\nclass QAs(BaseModel):\r\n    qas: List[QA] = Field(description=\"A list of QAs\")\r\n\r\nlist_persona_dataset_list = []\r\nfor row in persona_dataset:\r\n    subject_prompter = curator.Prompter(\r\n        prompt_func=lambda: f\"Generate a diverse list of 3 subjects for the following persona - {row['input persona']}. Keep it high-level (e.g. Math, Science).\",\r\n        parse_func=lambda _, subjects: [subject for subject in subjects.subjects],\r\n        model_name=\"gpt-4o-mini\",\r\n        response_format=Subjects,\r\n    )\r\n    subject_dataset = subject_prompter()\r\n\r\n    #persona can be added here also, example - generate subsubjects from persona's viewpoint\r\n    subsubject_prompter = curator.Prompter(\r\n        prompt_func=lambda subject: f\"For the given subject {subject}. Generate 3 diverse subsubjects. No explanation.\",\r\n        parse_func=lambda subject, subsubjects: [\r\n            {\"subject\": subject[\"subject\"], \"subsubject\": subsubject.subject}\r\n            for subsubject in subsubjects.subjects\r\n        ],\r\n        model_name=\"gpt-4o-mini\",\r\n        response_format=Subjects,\r\n    )\r\n    subsubject_dataset = subsubject_prompter(subject_dataset)\r\n\r\n    qa_prompter = curator.Prompter(\r\n        prompt_func=lambda subsubject: f\"For the given subsubject {subsubject}. Generate 3 diverse questions and answers. No explanation.\",\r\n        model_name=\"gpt-4o-mini\",\r\n        response_format=QAs,\r\n        parse_func=lambda subsubject, qas: [\r\n            {\r\n                \"subject\": subsubject[\"subject\"],\r\n                \"subsubject\": subsubject[\"subsubject\"],\r\n                \"question\": qa.question,\r\n                \"answer\": qa.answer,\r\n            }\r\n            for qa in qas.qas\r\n        ],\r\n    )\r\n    qa_dataset = qa_prompter(subsubject_dataset)\r\n\r\n    qa_dataset.map(lambda row: {\"answer\": row[\"answer\"].strip()}, num_proc=2)\r\n    list_persona_dataset_list.append(qa_dataset.to_pandas())\r\n\r\ndf = pd.concat(list_persona_dataset_list)\r\n\r\nprint(df)\r\n```\r\n\r\n\"there is a problem when I run it as a loop. Since HF caches the dataset, the same data gets picked up. Try it out.\"",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/126/comments",
+    "author": "vutrung96",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-05T23:57:43Z",
+        "body": "This is actually a feature. \r\n\r\nBut the behavior is confusing to someone who doesn't expect curator to cache. \r\n\r\nWe can document this better and allow for the cache to be disabled (related to #129 and #88)"
+      }
+    ]
+  },
+  {
+    "number": 125,
+    "title": "Example Prompters (e.g. JudgePrompter) classes",
+    "created_at": "2024-11-15T18:44:01Z",
+    "closed_at": "2025-01-14T18:59:35Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/125",
+    "body": "Related to #122 \r\n\r\ne.g. JudgePrompter, ListPrompter, etc. ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/125/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-11T22:44:08Z",
+        "body": "Copying some code here which is relevant for this (although will need to be modified)\r\n\r\nBase\r\n```\r\nfrom abc import ABC, abstractmethod\r\n\r\n\r\nclass CompletionsMap(ABC):\r\n\r\n    @property\r\n    @abstractmethod\r\n    def response_format(self):\r\n        \"\"\"\r\n        Returns:\r\n            A Pydantic model that describes the format of the response from the completions model\r\n        \"\"\"\r\n        pass\r\n\r\n    @abstractmethod\r\n    def prompt(self, dataset_row: dict) -> list[dict] | str:\r\n        \"\"\"\r\n        Args:\r\n            dataset_row: dict - A row from the dataset\r\n        Returns:\r\n            A messages list for the completions model or string which gets converted to user prompt\r\n        \"\"\"\r\n        pass\r\n\r\n    @abstractmethod\r\n    def parse(self, original_dataset_row: dict, response: dict) -> list[dict] | dict:\r\n        \"\"\"\r\n        Args:\r\n            original_dataset_row: dict - The original dataset row\r\n            response: str | BaseModel - A string response from the completions model if response_format is None, otherwise a Pydantic model response\r\n        Returns:\r\n            new_dataset_rows: list[dict] | dict - A list of new dataset rows or a single new dataset row\r\n        \"\"\"\r\n        pass\r\n```\r\n\r\nJudge (against golden answer)\r\n```\r\nimport logging\r\n\r\nfrom pydantic import BaseModel\r\n\r\nfrom engine.maps.base_map import CompletionsMap\r\n\r\nlogger = logging.getLogger(__name__)\r\n\r\nLLM_JUDGE_SYSTEM_PROMPT = \"\"\"\r\nAs an AI assistant, your role is to evaluate whether a given attempt correctly responds to the provided inputs by comparing it against the specified targets. You will be presented with three elements:\r\n\r\n1. \"inputs\": The initial information or questions given.\r\n2. \"targets\": The expected correct responses or outcomes.\r\n3. \"attempt\": The response that needs to be evaluated.\r\n\r\nYour task is to:\r\n\r\n1. Carefully analyze the relationship between the inputs and targets.\r\n2. Examine the attempt to see if it adequately addresses the inputs.\r\n3. Compare the attempt to the targets, checking for accuracy and completeness.\r\n4. Provide a brief explanation of your reasoning, highlighting any discrepancies or matches.\r\n5. Conclude your response with a final judgment.\r\n\r\nYour explanation should be clear and concise, focusing on the key points of comparison. After your explanation, end your response with a single word, either \"yes\" if the attempt correctly responds to the inputs by matching the targets, or \"no\" if it does not.\r\n\r\nRemember, your final word must be either \"yes\" or \"no\", with no punctuation or additional text after it.\r\n\"\"\"\r\n\r\n\r\nclass JudgeMapConfig(BaseModel):\r\n    input_instruction_column: str\r\n    input_golden_answer_column: str\r\n    input_attempt_answer_column: str\r\n    input_judge_system_message: str | None = LLM_JUDGE_SYSTEM_PROMPT\r\n    output_judgement_decision_column: str = \"model_judgement\"\r\n    output_judgement_reasoning_column: str = \"model_judgement_full\"\r\n    filter_out_negative_judgements: bool = False\r\n\r\n\r\nclass JudgeMap(CompletionsMap):\r\n    \"\"\"\r\n    Judges whether a response is correct for a given instruction and target answer.\r\n    NOTE:(Ryan) This LLM Judge does NOT use structured output currently.\r\n    \"\"\"\r\n\r\n    def __init__(self, config: JudgeMapConfig):\r\n        config = JudgeMapConfig(**config)\r\n        self.config = config\r\n\r\n    @property\r\n    def response_format(self):\r\n        \"\"\"\r\n        Returns:\r\n            A Pydantic model that describes the format of the response from the completions model\r\n        \"\"\"\r\n        return None\r\n\r\n    def prompt(self, dataset_row: dict) -> list[dict]:\r\n        \"\"\"\r\n        Generates completion requests for the LLM judge for a given dataset row.\r\n\r\n        This method constructs a list of messages based on the dataset row. The system message\r\n        is provided as a static string specific to the LLM judge. The system message is followed by a user message that\r\n        includes the inputs, targets, and attempt from the dataset row. Only one request is created per row.\r\n\r\n        Args:\r\n            dataset_row (dict): A dictionary representing a single row of the dataset.\r\n\r\n        Returns:\r\n            list[dict]: A list containing a single request body dictionary.\r\n        \"\"\"\r\n        # Store messages as request body\r\n        messages = []\r\n\r\n        # add system message\r\n        messages.append({\"role\": \"system\", \"content\": self.config.input_judge_system_message})\r\n\r\n        # add user message\r\n        messages.append(\r\n            {\r\n                \"role\": \"user\",\r\n                \"content\": \"inputs: {}\\n\\ntargets: {}\\n\\nattempt: {}\".format(\r\n                    dataset_row[self.config.input_instruction_column],\r\n                    dataset_row[self.config.input_golden_answer_column],\r\n                    dataset_row[self.config.input_attempt_answer_column],\r\n                ),\r\n            }\r\n        )\r\n        return messages\r\n\r\n    def parse(self, original_dataset_row: dict, response: dict) -> list[dict] | dict:\r\n        \"\"\"\r\n        Args:\r\n            original_dataset_row: dict - The original dataset row\r\n            response: ListResponse - A Pydantic model response\r\n        Returns:\r\n            new_dataset_rows: list[dict] | dict - A list of new dataset rows or a single new dataset row\r\n        \"\"\"\r\n        try:\r\n            if not response or not response.strip():\r\n                decision_word = \"no\"\r\n            else:\r\n                words = response.strip().lower().split()\r\n                if not words or len(words) == 0:\r\n                    decision_word = \"no\"\r\n                else:\r\n                    decision_word = words[-1]\r\n\r\n            decision_word = \"\".join(char for char in decision_word if char.isalpha())\r\n        except Exception as e:\r\n            logger.warning(f\"Error while parsing response {response}. Error: {e}. Will default to 'no'.\")\r\n            decision_word = \"no\"\r\n\r\n        decision = decision_word == \"yes\"\r\n\r\n        # Update the dataset row with the decision word and decision\r\n        original_dataset_row[self.config.output_judgement_reasoning_column] = response\r\n        original_dataset_row[self.config.output_judgement_decision_column] = decision\r\n\r\n        # Print a warning if the decision word is not \"yes\" or \"no\"\r\n        if decision_word not in [\"yes\", \"no\"]:\r\n            print(f\"WARNING: Defaulting to False for classification '{decision_word}'\")\r\n\r\n        # Return the dataset row if the decision is positive or if we are not filtering negative judgements\r\n        if decision or not self.config.filter_out_negative_judgements:\r\n            return [original_dataset_row]\r\n```\r\n\r\nList (list of strings generally named)\r\n```\r\nfrom engine.maps.chat_map import ChatMap, ChatMapConfig\r\nfrom pydantic import BaseModel\r\n\r\n\r\nclass ListMap(ChatMap):\r\n    \"\"\"\r\n    Very similar to ChatMap but uses structured output to get a list of strings that are turned into multiple rows in the dataset.\r\n    \"\"\"\r\n\r\n    def __init__(self, config: dict):\r\n        config = ChatMapConfig(**config)\r\n        self.config = config\r\n\r\n    @property\r\n    def response_format(self):\r\n        \"\"\"\r\n        Returns:\r\n            A Pydantic model that describes the format of the response from the completions model\r\n        \"\"\"\r\n\r\n        class ListResponse(BaseModel):\r\n            # Use the output column name from config as the field name\r\n            __annotations__ = {self.config.output_column: list[str]}\r\n\r\n        return ListResponse\r\n\r\n    def parse(self, original_dataset_row: dict, response: dict) -> list[dict] | dict:\r\n        \"\"\"\r\n        Args:\r\n            original_dataset_row: dict - The original dataset row\r\n            response: ListResponse - A Pydantic model response\r\n        Returns:\r\n            new_dataset_rows: list[dict] | dict - A list of new dataset rows or a single new dataset row\r\n        \"\"\"\r\n        new_dataset_rows = []\r\n        for list_item in getattr(response, self.config.output_column):\r\n            new_dataset_rows.append({**original_dataset_row, self.config.output_column: list_item})\r\n\r\n        return new_dataset_rows\r\n```\r\n\r\nChat (with templating to pull values in from other columns)\r\n```\r\nfrom engine.maps.base_map import CompletionsMap\r\nfrom pydantic import BaseModel\r\nimport re\r\n\r\n\r\nclass ChatMapConfig(BaseModel):\r\n    user_message: str | None = None\r\n    user_message_column: str | None = None\r\n    system_message: str | None = None\r\n    system_message_column: str | None = None\r\n    output_column: str\r\n\r\n\r\nclass ChatMap(CompletionsMap):\r\n    def __init__(self, config: dict):\r\n        config = ChatMapConfig(**config)\r\n        self.config = config\r\n\r\n    @property\r\n    def response_format(self):\r\n        \"\"\"\r\n        Returns:\r\n            A Pydantic model that describes the format of the response from the completions model\r\n        \"\"\"\r\n        return None\r\n\r\n    def _fill_templated_strings(self, template: str, dataset_row: dict) -> str:\r\n        \"\"\"\r\n        Replaces templated strings in a template string with values from a dataset row\r\n\r\n        Args:\r\n            template: str - A template string with {{column_name}} patterns\r\n            dataset_row: dict - Dictionary containing values to replace the patterns\r\n        Returns:\r\n            str - A template string with {{column_name}} patterns replaced with values from the dataset row\r\n\r\n        Example: Pattern looks for {{something}}\r\n            template = \"Hello {{name}}, your age is {{age}}\"\r\n            dataset_row = {\"name\": \"Alice\", \"age\": 30}\r\n\r\n            For each match, the regex groups are:\r\n            - group(0): full match (e.g., \"{{name}}\")\r\n            - group(1): captured column name (e.g., \"name\")\r\n        \"\"\"\r\n        pattern = r\"\\{\\{(\\w+)\\}\\}\"\r\n        # For each match, lambda gets a match object (x) where:\r\n        # x.group(0) would be the full match like \"{{name}}\"\r\n        # x.group(1) gets just the column name like \"name\" to use as the dictionary key\r\n        return re.sub(pattern, lambda x: str(dataset_row[x.group(1)]), template)\r\n\r\n    def prompt(self, dataset_row: dict) -> list[dict] | str:\r\n        \"\"\"\r\n        Args:\r\n            dataset_row: dict - A row from the dataset\r\n        Returns:\r\n            A messages list for the completions model or string which gets converted to user prompt\r\n        \"\"\"\r\n        messages = []\r\n\r\n        # Set system message\r\n        system_message = None\r\n        if self.config.system_message and self.config.system_message_column:\r\n            raise ValueError(\"Both system_message and system_message_column provided, only one can be used at a time\")\r\n        if self.config.system_message:\r\n            system_message = self._fill_templated_strings(self.config.system_message, dataset_row)\r\n        if self.config.system_message_column:\r\n            system_message = dataset_row[self.config.system_message_column]\r\n        if system_message:\r\n            messages.append({\"role\": \"system\", \"content\": system_message})\r\n\r\n        # Set user message\r\n        user_message = None\r\n        if self.config.user_message and self.config.user_message_column:\r\n            raise ValueError(\"Both user_message and user_message_column provided, only one can be used at a time\")\r\n        if self.config.user_message:\r\n            user_message = self._fill_templated_strings(self.config.user_message, dataset_row)\r\n        if self.config.user_message_column:\r\n            user_message = dataset_row[self.config.user_message_column]\r\n        if user_message:\r\n            messages.append({\"role\": \"user\", \"content\": user_message})\r\n        else:\r\n            raise ValueError(\r\n                \"You must provide either user_message or user_message_column and the values in user_message_column must be non-null\"\r\n            )\r\n\r\n        return messages\r\n\r\n    def parse(self, original_dataset_row: dict, response: dict) -> list[dict] | dict:\r\n        \"\"\"\r\n        Args:\r\n            original_dataset_row: dict - The original dataset row\r\n            response: str - A response from the completions model\r\n        Returns:\r\n            new_dataset_rows: list[dict] | dict - A list of new dataset rows or a single new dataset row\r\n        \"\"\"\r\n        original_dataset_row[self.config.output_column] = response\r\n        return original_dataset_row\r\n```\r\n\r\n"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2025-01-14T18:59:35Z",
+        "body": "we'll build more sophisticated verifiers for the users instead of these"
+      }
+    ]
+  },
+  {
+    "number": 106,
+    "title": "Add an example for summarizing text messages between two people.",
+    "created_at": "2024-11-14T20:28:56Z",
+    "closed_at": "2025-01-13T18:03:38Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/106",
+    "body": "- Generates diverse personas.\r\n- Creates random pairings between personas with varying conversation parameters:\r\n  - Conversation length (very short to very long)\r\n  - Persona relatedness (very related to very unrelated)\r\n- Generates synthetic text message conversations between paired personas\r\n- Produces one-sentence summaries of the conversations.\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/106/comments",
+    "author": "madiator",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-11T14:07:50Z",
+        "body": "@madiator if we want to keep this example, it needs to be updated to `curator.LLM` and merge conflicts resolved. We can close this PR otherwise"
+      }
+    ]
+  },
+  {
+    "number": 103,
+    "title": "Logo is too small on mobile in README",
+    "created_at": "2024-11-14T07:35:22Z",
+    "closed_at": "2025-01-06T00:08:23Z",
+    "labels": [
+      "documentation"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/103",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/103/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-06T00:08:23Z",
+        "body": "Looks ok to me now. "
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "title": "Fix pytests",
+    "created_at": "2024-11-14T00:43:24Z",
+    "closed_at": "2025-01-06T00:09:55Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/issues/96",
+    "body": "```\r\n================================================= short test summary info ==================================================\r\nFAILED test_prompt.py::test_completions - datasets.arrow_writer.SchemaInferenceError: Please pass `features` or at least one example when writing data\r\nFAILED test_prompt.py::test_single_completion_batch - TypeError: Prompter.__init__() got an unexpected keyword argument 'batch'\r\nFAILED test_prompt.py::test_single_completion_no_batch - AttributeError: 'list' object has no attribute 'get'\r\n============================================== 3 failed, 11 warnings in 2.30s ==============================================\r\n```",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/96/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-06T00:09:55Z",
+        "body": "Outdated"
+      }
+    ]
+  },
+  {
+    "number": 78,
+    "title": "vLLM example for OpenAIOnlineParallelProcessor",
+    "created_at": "2024-11-13T01:31:35Z",
+    "closed_at": "2025-01-06T00:27:59Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/78",
+    "body": "As an example of a diff needed to add ",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/78/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "madiator",
+        "created_at": "2024-11-25T04:22:27Z",
+        "body": "Should this be deleted/closed?"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2025-01-06T00:27:59Z",
+        "body": "Outdated"
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "title": "Prevent .arrow file getting in an invalid state and generate different .arrow based on parse_func",
+    "created_at": "2024-11-12T05:24:28Z",
+    "closed_at": "2024-11-12T21:23:27Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/61",
+    "body": "# 🔧 Improve caching behavior for parse functions\r\n\r\n## 🎯 Changes\r\n\r\n* 🗃️ Moved `parse_func` hash out of cache folder naming\r\n* 📝 Use `parse_func` hash as the `.arrow` dataset filename instead\r\n* 🔄 This allows regenerating datasets from cached responses when only the parse function changes\r\n* ⚠️ Added more helpful error messages for invalid parse functions\r\n* 🧹 Added automatic cleanup of corrupted `.arrow` files to prevent cache getting stuck\r\n\r\n## ✨ Benefits\r\n\r\nNow you can:\r\n- Iterate on your parse function without re-running expensive LLM calls\r\n- Get clear guidance when your parse function returns invalid data\r\n- Avoid getting stuck with corrupted cache files\r\n\r\nCloses #51\r\nCloses #40",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/61/comments",
+    "author": "RyanMarten",
+    "comments": [
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-12T16:03:05Z",
+        "body": "> Can we merge into dev instead of main since dev is our \"staging\" branch now?\r\n\r\nMerging into `dev` now. "
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-12T16:33:50Z",
+        "body": "Actually is this all better handled upstream? (we can add this in addition)\r\nWe can have some asserts on the output of `parse_func` which check if valid rows are being returned and raise exceptions there. "
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-12T17:47:57Z",
+        "body": "> \r\n\r\nI like the idea of handling this upstream. Could you try that approach?"
+      },
+      {
+        "user": "RyanMarten",
+        "created_at": "2024-11-12T21:22:47Z",
+        "body": "Handled row validation upstream to give specific feedback to the user"
+      },
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-12T21:22:54Z",
+        "body": "LGTM with handling validation upstream"
+      }
+    ]
+  },
+  {
+    "number": 57,
+    "title": "Expose more metrics from the raw_response to cache generic request / response",
+    "created_at": "2024-11-12T00:13:11Z",
+    "closed_at": "2024-11-21T01:44:13Z",
+    "labels": [
+      "P1"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/57",
+    "body": "This is the current response. \r\n\r\nThe things inside `raw_response` is different for `batch=True` and `batch=False`, and in across future different models. \r\nWant to surface the metrics, \r\n\r\ne.g. \r\n- create_time\r\n- end_time\r\n- token_counts\r\n\r\nto the top level attributes of GenericResponse. \r\n\r\n\r\nThis is the current class. \r\n```python\r\nfrom typing import Any, Dict, List, Optional\r\nfrom pydantic import BaseModel, Field\r\nfrom .generic_request import GenericRequest\r\nimport datetime\r\n\r\n\"\"\"A generic response model for LLM API requests.\r\n\r\nAttributes:\r\n    response_message: The main response content. Can be:\r\n        - None when there are errors\r\n        - str for non-structured output\r\n        - Dict[str, Any] for structured output\r\n    response_errors: List of error messages. None when there are no errors.\r\n    raw_response: The raw response data from the API.\r\n    raw_request: The raw request data. Will be None for BatchAPI requests.\r\n    generic_request: The associated GenericRequest object.\r\n\"\"\"\r\n\r\n\r\nclass GenericResponse(BaseModel):\r\n    response_message: Optional[Dict[str, Any]] | str = None\r\n    response_errors: Optional[List[str]] = None\r\n    raw_response: Optional[Dict[str, Any]]\r\n    raw_request: Optional[Dict[str, Any]] = None\r\n    generic_request: GenericRequest\r\n    created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)\r\n    finished_at: Optional[datetime.datetime] = None\r\n```\r\n\r\nTasks:\r\n- [x] #145\r\n- [x] #146\r\n- [x] #147\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/57/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-12T04:43:52Z",
+        "body": "I don't think is P0, probably P1 since it's not breaking users.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 46,
+    "title": "[UI] Resolve dataset viewer component streaming logic after PR #28",
+    "created_at": "2024-11-10T05:00:01Z",
+    "closed_at": "2024-11-13T15:26:02Z",
+    "labels": [
+      "curator-viewer",
+      "P0"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/46",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/46/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-13T15:26:11Z",
+        "body": "Fixed with #79 "
+      }
+    ]
+  },
+  {
+    "number": 45,
+    "title": "[UI] Resolve dataset viewer component read file location after PR #28",
+    "created_at": "2024-11-10T04:59:42Z",
+    "closed_at": "2024-11-13T15:26:38Z",
+    "labels": [
+      "curator-viewer",
+      "P0"
+    ],
+    "url": "https://github.com/bespokelabsai/curator/issues/45",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/45/comments",
+    "author": "CharlieJCJ",
+    "comments": [
+      {
+        "user": "vutrung96",
+        "created_at": "2024-11-13T15:26:38Z",
+        "body": "Fixed with #79 "
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Various small fixes",
+    "created_at": "2024-11-06T19:50:25Z",
+    "closed_at": "2024-11-06T21:13:05Z",
+    "labels": [],
+    "url": "https://github.com/bespokelabsai/curator/pull/13",
+    "body": "- Fix outdated documentation\r\n- Fix hashing logic to use source code. Claude uses the bytecode which is very unreliable (i tried changing the lambda code and nothing happened). \r\n- Fix OHv3 example",
+    "comments_url": "https://api.github.com/repos/bespokelabsai/curator/issues/13/comments",
+    "author": "vutrung96",
+    "comments": [
+      {
+        "user": "CharlieJCJ",
+        "created_at": "2024-11-06T20:35:18Z",
+        "body": "Others changes LGTM"
+      }
+    ]
+  }
+]

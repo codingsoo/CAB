@@ -1,0 +1,121 @@
+[
+  {
+    "number": 214,
+    "title": "Problem when routing calls to an API that has no response body.",
+    "created_at": "2018-02-01T14:04:29Z",
+    "closed_at": "2018-02-05T19:16:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/214",
+    "body": "Hi\r\nI try to forward calls to a method in an  Web API method that has a \"void\" return type. What happens is that Ocelot hangs indefinitely. It seems to occur for any verb. Calling the method directly works fine and responds with HTTP/200.\r\n\r\nIs this an issue with my hosting or configuration, or could be a another problem.\r\n\r\nMy Ocelot Gateway Implementation runs under IIS, and calling a method returning a response body works fine.\r\n\r\nThanks\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/214/comments",
+    "author": "janhabelvik",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-01T20:36:54Z",
+        "body": "@janhabelvik I have no idea why this is happening :( I will look into it. I assume you have a controller that returns void? It might be something to do with the fact is doesn't have a response body.\n\n---\n\n@janhabelvik also how are you hosting Ocelot? IIS, Kestrel etc?"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T09:50:47Z",
+        "body": "@TomPallister  I'm hosting in IIS, but the issue seems to happen independent of the hosting environment.\r\n\r\nI downloaded the source and did some debugging, the processing seems to hang on ResponderMiddleware.Invoke on the line:  await _responder.SetResponseOnHttpContext(context, HttpResponseMessage);\r\n\r\nThis code seems to get stuck when the content.Length is 0. I guess the copy step can be skipped if it's the case.\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-02T11:07:45Z",
+        "body": "@janhabelvik thanks for looking into this. If you want you can submit a PR with the change?\r\n\r\nOtherwise I will fix it asap! :D"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T11:48:25Z",
+        "body": "This little fix resolved the issue for me:\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified\r\n                    **&& context.Response.ContentLength != 0**)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-05T19:16:24Z",
+        "body": "fixed in 3.0.2"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Handling of API responses with empty content bodies",
+      "Avoidance of stream processing for empty responses",
+      "Cross-environment compatibility",
+      "Clear identification of root cause"
+    ]
+  },
+  {
+    "number": 641,
+    "title": "store configuration in consul  problem on v12.0.0",
+    "created_at": "2018-09-28T03:05:12Z",
+    "closed_at": "2018-10-15T01:50:37Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "medium effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/641",
+    "body": "## Expected Behavior / New Feature\r\nhi\r\n\r\nWhen the configuration is stored in consul, restarting the application causes local ocelot. json information to be synchronized to consul, resulting in loss of consul configuration data;\r\n\r\nI find that every restart application is executed.\r\n\r\n`if(AdministrationApiInUse(adminPath))`\r\n`{`\r\n    `   var fileConfigSetter = builder.ApplicationServices.GetService<IFileConfigurationSetter>();`\r\n    `   await SetFileConfig(fileConfigSetter, fileConfig);`\r\n`}`\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:v12.0.0\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/641/comments",
+    "author": "q315523275",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-13T16:44:41Z",
+        "body": "@q315523275 mmmmm I will check this out ASAP, I thought I fixed this already.\n\n---\n\n@q315523275 Ive had a chance to look at this issue, it looks like expected behaviour. If you are using the administration API when Ocelot starts up it writes to ocelot.json and ocelot.{env}.json because users expect both of these configs to be in sync.\r\n\r\nIf you are using consul instead of using DiskFileConfigurationRepository to do the save it uses the Consul version and hence it saves to your consul instance.\r\n\r\nThe fix for this is say if using consul to store ocelot configuration don't save the config when starting Ocelot. This would mean exposing some kind of delegate from Ocelot.Provider.Consul package.\r\n\r\nFor now I would suggest dont use the administration api when using Consul. You shouldnt need both."
+      },
+      {
+        "user": "q315523275",
+        "created_at": "2018-10-15T01:50:37Z",
+        "body": "@TomPallister Thank you very much for your reply. I will use API management in another way."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent local configuration from overwriting Consul-stored configuration during application restarts",
+      "Provide a way to disable configuration synchronization when using Consul storage",
+      "Document separation between administration API usage and Consul configuration storage",
+      "Offer configuration options to choose between different storage synchronization behaviors"
+    ]
+  },
+  {
+    "number": 41,
+    "title": "Get Cake build working on MacOS",
+    "created_at": "2017-02-12T14:59:15Z",
+    "closed_at": "2017-02-19T15:32:15Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/41",
+    "body": "Think the problem is that cake cannot reference variables declared at top of page in private methods on macos...no idea why it can on windows!",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/41/comments",
+    "author": "TomPallister",
+    "comments": [
+      {
+        "user": "binarymash",
+        "created_at": "2017-02-19T13:34:48Z",
+        "body": "Had the same problem when trying to set stuff up on my own project, and got it working... I'll pick this up now."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-02-19T13:41:34Z",
+        "body": "@binarymash thanks! I spent ages trying to work this out so very interested in why it didn't just work."
+      },
+      {
+        "user": "binarymash",
+        "created_at": "2017-02-19T15:10:12Z",
+        "body": "I don't understand the difference between Mac and Windows, but the variables can be accessed from all the tasks so the solution is just to pass them into the private methods."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-02-19T15:28:10Z",
+        "body": "Sounds good! I'm a bit embarrassed I didn't try that!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a method to share variables across tasks and private methods in Cake builds on macOS",
+      "Addresses the platform-specific differences in Cake's variable scoping behavior"
+    ]
+  }
+]

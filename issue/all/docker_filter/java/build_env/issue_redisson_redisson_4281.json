@@ -1,0 +1,792 @@
+{
+  "number": 4281,
+  "title": "Redis is changed to access with password, and trylock takes more time",
+  "created_at": "2022-05-10T09:47:28Z",
+  "closed_at": "2022-05-12T06:58:11Z",
+  "labels": [
+    "question"
+  ],
+  "url": "https://github.com/redisson/redisson/issues/4281",
+  "body": "Redis used to access without password, and then upgraded to access with password. It was found that trylock took more than one second\u3002\r\nredisson version is 3.16.0\r\nThe configuration is as follows\uff1a\r\n`config.useClusterServers()\r\n                    .setPassword(password)\r\n                    .setScanInterval(2000)\r\n                    .addNodeAddress(xxxxx);\r\n            return Redisson.create(config);`\r\nso, I tried to reduce the reission version to 3.11.6, and the time consumption decreased significantly\r\nI don't know what caused this. Is it the wrong way to use the new version?\r\n",
+  "comments_url": "https://api.github.com/repos/redisson/redisson/issues/4281/comments",
+  "author": "XTUxiongda",
+  "comments": [
+    {
+      "user": "mrniko",
+      "created_at": "2022-05-10T10:02:24Z",
+      "body": "It was caused by introduction of WAIT command to sync with slaves. It seems that sync takes much time in your case."
+    },
+    {
+      "user": "XTUxiongda",
+      "created_at": "2022-05-10T10:27:39Z",
+      "body": "> It was caused by introduction of WAIT command to sync with slaves. It seems that sync takes much time in your case.\r\nIs there any way to solve it? I found this problem after version 3.14.1. Or can I only use the old version, and the new version all has this problem?\r\n\n\n---\n\nAnd My waittime input parameter is 0\r\n"
+    },
+    {
+      "user": "mrniko",
+      "created_at": "2022-05-10T12:59:24Z",
+      "body": "Could you set `TRACE` logging level for `org.redisson` package and share output?"
+    },
+    {
+      "user": "XTUxiongda",
+      "created_at": "2022-05-12T01:13:05Z",
+      "body": "[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:16.221 TRACE 20100 [redisson-netty-2-4] [CommandEncoder.java:112] channel: [id: 0x5eda2625, L:/xxx.xx.xx.xx:58206 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7002] message: *2\r\n$7\r\nCLUSTER\r\n$5\r\nNODES\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:16.235 TRACE 20100 [redisson-netty-2-4] [CommandDecoder.java:113] reply: $775\r\na45ecb9201e0bf48665ed7e5a9846cbe6d753165 xxx.xx.xx.xx:7006@17006 slave f5d943dbd5806937e204ee35ea5f6aa65e46a6ca 0 1652189413455 6 connected\r\nf5d943dbd5806937e204ee35ea5f6aa65e46a6ca xxx.xx.xx.xx:7003@17003 master - 0 1652189414000 3 connected 10923-16383\r\n40e866c9d83596f7d50ff09ee92370f580c9add9 xxx.xx.xx.xx:7001@17001 master - 0 1652189415465 1 connected 0-5460\r\nf226329e04bda39971a532552f18a32bb2c1b7a8 xxx.xx.xx.xx:7005@17005 slave ced813a2fd0db10432dbc999befd3709ac2234a2 0 1652189414460 5 connected\r\neccdd6be867c3fc36a27f2c1cc105c98c2d08879 xxx.xx.xx.xx:7004@17004 slave 40e866c9d83596f7d50ff09ee92370f580c9add9 0 1652189414000 1 connected\r\nced813a2fd0db10432dbc999befd3709ac2234a2 xxx.xx.xx.xx:7002@17002 myself,master - 0 1652189413000 2 connected 5461-10922\r\n\r\n, channel: [id: 0x5eda2625, L:/xxx.xx.xx.xx:58206 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7002], command: CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@44c15e70(incomplete)], command=(CLUSTER NODES), params=[], codec=null]\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:16.236 DEBUG 20100 [redisson-netty-2-4] [ClusterConnectionManager.java:466] cluster nodes state got from xxx.xx.xx.xx/xxx.xx.xx.xx:7002:\r\na45ecb9201e0bf48665ed7e5a9846cbe6d753165 xxx.xx.xx.xx:7006@17006 slave f5d943dbd5806937e204ee35ea5f6aa65e46a6ca 0 1652189413455 6 connected\r\nf5d943dbd5806937e204ee35ea5f6aa65e46a6ca xxx.xx.xx.xx:7003@17003 master - 0 1652189414000 3 connected 10923-16383\r\n40e866c9d83596f7d50ff09ee92370f580c9add9 xxx.xx.xx.xx:7001@17001 master - 0 1652189415465 1 connected 0-5460\r\nf226329e04bda39971a532552f18a32bb2c1b7a8 xxx.xx.xx.xx:7005@17005 slave ced813a2fd0db10432dbc999befd3709ac2234a2 0 1652189414460 5 connected\r\neccdd6be867c3fc36a27f2c1cc105c98c2d08879 xxx.xx.xx.xx:7004@17004 slave 40e866c9d83596f7d50ff09ee92370f580c9add9 0 1652189414000 1 connected\r\nced813a2fd0db10432dbc999befd3709ac2234a2 xxx.xx.xx.xx:7002@17002 myself,master - 0 1652189413000 2 connected 5461-10922\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:17.313 DEBUG 20100 [http-nio-8080-exec-3] [ClusterConnectionManager.java:751] slot 2875 for sync_tadata_lock\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:17.314 DEBUG 20100 [http-nio-8080-exec-3] [ClusterConnectionManager.java:751] slot 2875 for sync_tadata_lock\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:17.314 TRACE 20100 [redisson-netty-2-5] [CommandEncoder.java:112] channel: [id: 0x1dd4250d, L:/xxx.xx.xx.xx:58207 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7001] message: *6\r\n$4\r\nEVAL\r\n$339\r\nif (redis.call('exists', KEYS[1]) == 0) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call('pexpire', KEYS[1], ARGV[1]); return nil; end; if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call('pexpire', KEYS[1], ARGV[1]); return nil; end; return redis.call('pttl', KEYS[1]);\r\n$1\r\n1\r\n$16\r\nsync_tadata_lock\r\n$6\r\n600000\r\n$40\r\n8f9cbb23-40dd-4457-a13a-6f8041461ba5:194\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:17.315 TRACE 20100 [redisson-netty-2-5] [CommandEncoder.java:112] channel: [id: 0x1dd4250d, L:/xxx.xx.xx.xx:58207 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7001] message: *6\r\n$4\r\nEVAL\r\n$339\r\nif (redis.call('exists', KEYS[1]) == 0) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call('pexpire', KEYS[1], ARGV[1]); return nil; end; if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call('pexpire', KEYS[1], ARGV[1]); return nil; end; return redis.call('pttl', KEYS[1]);\r\n$1\r\n1\r\n$16\r\nsync_tadata_lock\r\n$6\r\n600000\r\n$40\r\n8f9cbb23-40dd-4457-a13a-6f8041461ba5:194\r\n*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$4\r\n1000\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:17.332 TRACE 20100 [redisson-netty-2-5] [CommandDecoder.java:113] reply: $-1\r\n, channel: [id: 0x1dd4250d, L:/xxx.xx.xx.xx:58207 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7001], command: CommandsData [commands=[CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@5dfb7633(incomplete)], command=(EVAL), params=[if (redis.call('exists', KEYS[1]) == 0) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call(..., 1, sync_tadata_lock, 600000, 8f9cbb23-40dd-4457-a13a-6f8041461ba5:194], codec=org.redisson.client.codec.LongCodec], CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@ee60138(incomplete)], command=(WAIT), params=[1, 1000], codec=org.redisson.client.codec.StringCodec]]]\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:18.255 TRACE 20100 [redisson-netty-2-4] [CommandEncoder.java:112] channel: [id: 0x5eda2625, L:/xxx.xx.xx.xx:58206 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7002] message: *2\r\n$7\r\nCLUSTER\r\n$5\r\nNODES\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:18.271 TRACE 20100 [redisson-netty-2-4] [CommandDecoder.java:113] reply: $775\r\na45ecb9201e0bf48665ed7e5a9846cbe6d753165 xxx.xx.xx.xx:7006@17006 slave f5d943dbd5806937e204ee35ea5f6aa65e46a6ca 0 1652189416468 6 connected\r\nf5d943dbd5806937e204ee35ea5f6aa65e46a6ca xxx.xx.xx.xx:7003@17003 master - 0 1652189414000 3 connected 10923-16383\r\n40e866c9d83596f7d50ff09ee92370f580c9add9 xxx.xx.xx.xx:7001@17001 master - 0 1652189415465 1 connected 0-5460\r\nf226329e04bda39971a532552f18a32bb2c1b7a8 xxx.xx.xx.xx:7005@17005 slave ced813a2fd0db10432dbc999befd3709ac2234a2 0 1652189416000 5 connected\r\neccdd6be867c3fc36a27f2c1cc105c98c2d08879 xxx.xx.xx.xx:7004@17004 slave 40e866c9d83596f7d50ff09ee92370f580c9add9 0 1652189417471 1 connected\r\nced813a2fd0db10432dbc999befd3709ac2234a2 xxx.xx.xx.xx:7002@17002 myself,master - 0 1652189415000 2 connected 5461-10922\r\n\r\n, channel: [id: 0x5eda2625, L:/xxx.xx.xx.xx:58206 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7002], command: CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@3c593bb7(incomplete)], command=(CLUSTER NODES), params=[], codec=null]\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:18.272 DEBUG 20100 [redisson-netty-2-4] [ClusterConnectionManager.java:466] cluster nodes state got from xxx.xx.xx.xx/xxx.xx.xx.xx:7002:\r\na45ecb9201e0bf48665ed7e5a9846cbe6d753165 xxx.xx.xx.xx:7006@17006 slave f5d943dbd5806937e204ee35ea5f6aa65e46a6ca 0 1652189416468 6 connected\r\nf5d943dbd5806937e204ee35ea5f6aa65e46a6ca xxx.xx.xx.xx:7003@17003 master - 0 1652189414000 3 connected 10923-16383\r\n40e866c9d83596f7d50ff09ee92370f580c9add9 xxx.xx.xx.xx:7001@17001 master - 0 1652189415465 1 connected 0-5460\r\nf226329e04bda39971a532552f18a32bb2c1b7a8 xxx.xx.xx.xx:7005@17005 slave ced813a2fd0db10432dbc999befd3709ac2234a2 0 1652189416000 5 connected\r\neccdd6be867c3fc36a27f2c1cc105c98c2d08879 xxx.xx.xx.xx:7004@17004 slave 40e866c9d83596f7d50ff09ee92370f580c9add9 0 1652189417471 1 connected\r\nced813a2fd0db10432dbc999befd3709ac2234a2 xxx.xx.xx.xx:7002@17002 myself,master - 0 1652189415000 2 connected 5461-10922\r\n\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:18.826 TRACE 20100 [redisson-netty-2-5] [CommandDecoder.java:113] reply: :0\r\n, channel: [id: 0x1dd4250d, L:/xxx.xx.xx.xx:58207 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7001], command: CommandsData [commands=[CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@5dfb7633(success)], command=(EVAL), params=[if (redis.call('exists', KEYS[1]) == 0) then redis.call('hincrby', KEYS[1], ARGV[2], 1); redis.call(..., 1, sync_tadata_lock, 600000, 8f9cbb23-40dd-4457-a13a-6f8041461ba5:194], codec=org.redisson.client.codec.LongCodec], CommandData [promise=RedissonPromise [promise=ImmediateEventExecutor$ImmediatePromise@ee60138(incomplete)], command=(WAIT), params=[1, 1000], codec=org.redisson.client.codec.StringCodec]]]\r\n[basic-porter-tadata-xxx.xx.xx.xx-0000] 2022-05-10 21:30:18.827 DEBUG 20100 [redisson-netty-2-5] [RedisExecutor.java:522] connection released for command null and params null from slot NodeSource [slot=null, addr=null, redisClient=null, redirect=null, entry=MasterSlaveEntry [masterEntry=[freeSubscribeConnectionsAmount=1, freeSubscribeConnectionsCounter=value:50:queue:0, freeConnectionsAmount=24, freeConnectionsCounter=value:64:queue:0, freezeReason=null, client=[addr=redis://xxx.xx.xx.xx:7001], nodeType=MASTER, firstFail=0]]] using connection RedisConnection@1915911582 [redisClient=[addr=redis://xxx.xx.xx.xx:7001], channel=[id: 0x1dd4250d, L:/xxx.xx.xx.xx:58207 - R:xxx.xx.xx.xx/xxx.xx.xx.xx:7001], currentCommand=null]\r\n\r\n\n\n---\n\n@mrniko can you help me on this queston? thank you very much. i really want to know the reason."
+    },
+    {
+      "user": "mrniko",
+      "created_at": "2022-05-12T06:13:29Z",
+      "body": "I reproduce your case only if masterauth is not set for slave nodes."
+    },
+    {
+      "user": "XTUxiongda",
+      "created_at": "2022-05-12T06:49:45Z",
+      "body": "> I reproduce your case only if masterauth is not set for slave nodes.\r\n\r\nthank you very much !  That's why. "
+    }
+  ],
+  "satisfaction_conditions": [
+    "Explanation of why Redisson versions >=3.14.1 introduce latency when using password-protected Redis clusters",
+    "Identification of required authentication configuration for master-slave replication",
+    "Solution that maintains password security while avoiding WAIT command delays",
+    "Clarification of version-specific behavior differences in cluster synchronization"
+  ],
+  "_classification": {
+    "category": "Can be dockerized without any issue",
+    "timestamp": "2025-03-21 17:44:30"
+  },
+  "git_commit_info": {
+    "sha": "74fde8ae90f41d89281c242cb1e5b1c441699ed9",
+    "date": "2018-10-22T12:44:05Z",
+    "message": "Merge branch 'master' into 3.0.0\n\n# Conflicts:\n#\tredisson/src/main/java/org/redisson/reactive/RedissonBatchReactive.java",
+    "author": "Nikita"
+  },
+  "repository_info": {
+    "structure": {
+      "name": "/",
+      "path": "",
+      "type": "directory",
+      "contents": [
+        {
+          "name": ".gitignore",
+          "path": ".gitignore",
+          "type": "file",
+          "size": 197
+        },
+        {
+          "name": ".travis.yml",
+          "path": ".travis.yml",
+          "type": "file",
+          "size": 16639
+        },
+        {
+          "name": "CHANGELOG.md",
+          "path": "CHANGELOG.md",
+          "type": "file",
+          "size": 75105
+        },
+        {
+          "name": "CONTRIBUTING.md",
+          "path": "CONTRIBUTING.md",
+          "type": "file",
+          "size": 470
+        },
+        {
+          "name": "ISSUE_TEMPLATE.md",
+          "path": "ISSUE_TEMPLATE.md",
+          "type": "file",
+          "size": 252
+        },
+        {
+          "name": "LICENSE.txt",
+          "path": "LICENSE.txt",
+          "type": "file",
+          "size": 11358
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "type": "file",
+          "size": 13316
+        },
+        {
+          "name": "checkstyle.xml",
+          "path": "checkstyle.xml",
+          "type": "file",
+          "size": 8277
+        },
+        {
+          "name": "header.txt",
+          "path": "header.txt",
+          "type": "file",
+          "size": 556
+        },
+        {
+          "name": "pom.xml",
+          "path": "pom.xml",
+          "type": "file",
+          "size": 10077
+        },
+        {
+          "name": "redisson-all",
+          "path": "redisson-all",
+          "type": "directory",
+          "contents": [
+            {
+              "name": "README.md",
+              "path": "redisson-all/README.md",
+              "type": "file",
+              "size": 732
+            },
+            {
+              "name": "pom.xml",
+              "path": "redisson-all/pom.xml",
+              "type": "file",
+              "size": 8265
+            }
+          ]
+        },
+        {
+          "name": "redisson-spring-boot-starter",
+          "path": "redisson-spring-boot-starter",
+          "type": "directory",
+          "contents": [
+            {
+              "name": "README.md",
+              "path": "redisson-spring-boot-starter/README.md",
+              "type": "file",
+              "size": 1522
+            },
+            {
+              "name": "pom.xml",
+              "path": "redisson-spring-boot-starter/pom.xml",
+              "type": "file",
+              "size": 4391
+            },
+            {
+              "name": "src",
+              "path": "redisson-spring-boot-starter/src",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "main",
+                  "path": "redisson-spring-boot-starter/src/main",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "java",
+                      "path": "redisson-spring-boot-starter/src/main/java",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "org",
+                          "path": "redisson-spring-boot-starter/src/main/java/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "resources",
+                      "path": "redisson-spring-boot-starter/src/main/resources",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "META-INF",
+                          "path": "redisson-spring-boot-starter/src/main/resources/META-INF",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "test",
+                  "path": "redisson-spring-boot-starter/src/test",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "java",
+                      "path": "redisson-spring-boot-starter/src/test/java",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "org",
+                          "path": "redisson-spring-boot-starter/src/test/java/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "resources",
+                      "path": "redisson-spring-boot-starter/src/test/resources",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "redisson.yaml",
+                          "path": "redisson-spring-boot-starter/src/test/resources/redisson.yaml",
+                          "type": "file",
+                          "size": 58
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "redisson-spring-data",
+          "path": "redisson-spring-data",
+          "type": "directory",
+          "contents": [
+            {
+              "name": "README.md",
+              "path": "redisson-spring-data/README.md",
+              "type": "file",
+              "size": 2901
+            },
+            {
+              "name": "pom.xml",
+              "path": "redisson-spring-data/pom.xml",
+              "type": "file",
+              "size": 2336
+            },
+            {
+              "name": "redisson-spring-data-16",
+              "path": "redisson-spring-data/redisson-spring-data-16",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-spring-data/redisson-spring-data-16/pom.xml",
+                  "type": "file",
+                  "size": 2257
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-spring-data/redisson-spring-data-16/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-spring-data/redisson-spring-data-16/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-16/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-spring-data/redisson-spring-data-16/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-16/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-spring-data-17",
+              "path": "redisson-spring-data/redisson-spring-data-17",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-spring-data/redisson-spring-data-17/pom.xml",
+                  "type": "file",
+                  "size": 2258
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-spring-data/redisson-spring-data-17/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-spring-data/redisson-spring-data-17/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-17/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-spring-data/redisson-spring-data-17/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-17/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-spring-data-18",
+              "path": "redisson-spring-data/redisson-spring-data-18",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-spring-data/redisson-spring-data-18/pom.xml",
+                  "type": "file",
+                  "size": 2258
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-spring-data/redisson-spring-data-18/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-spring-data/redisson-spring-data-18/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-18/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-spring-data/redisson-spring-data-18/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-18/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-spring-data-20",
+              "path": "redisson-spring-data/redisson-spring-data-20",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-spring-data/redisson-spring-data-20/pom.xml",
+                  "type": "file",
+                  "size": 2257
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-spring-data/redisson-spring-data-20/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-spring-data/redisson-spring-data-20/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-20/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-spring-data/redisson-spring-data-20/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-spring-data/redisson-spring-data-20/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "redisson-tomcat",
+          "path": "redisson-tomcat",
+          "type": "directory",
+          "contents": [
+            {
+              "name": "README.md",
+              "path": "redisson-tomcat/README.md",
+              "type": "file",
+              "size": 4165
+            },
+            {
+              "name": "pom.xml",
+              "path": "redisson-tomcat/pom.xml",
+              "type": "file",
+              "size": 1669
+            },
+            {
+              "name": "redisson-tomcat-6",
+              "path": "redisson-tomcat/redisson-tomcat-6",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-tomcat/redisson-tomcat-6/pom.xml",
+                  "type": "file",
+                  "size": 2231
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-tomcat/redisson-tomcat-6/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-tomcat/redisson-tomcat-6/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-6/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-tomcat/redisson-tomcat-6/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-6/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        },
+                        {
+                          "name": "webapp",
+                          "path": "redisson-tomcat/redisson-tomcat-6/src/test/webapp",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-tomcat-7",
+              "path": "redisson-tomcat/redisson-tomcat-7",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-tomcat/redisson-tomcat-7/pom.xml",
+                  "type": "file",
+                  "size": 2927
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-tomcat/redisson-tomcat-7/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-tomcat/redisson-tomcat-7/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-7/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-tomcat/redisson-tomcat-7/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-7/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        },
+                        {
+                          "name": "webapp",
+                          "path": "redisson-tomcat/redisson-tomcat-7/src/test/webapp",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-tomcat-8",
+              "path": "redisson-tomcat/redisson-tomcat-8",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-tomcat/redisson-tomcat-8/pom.xml",
+                  "type": "file",
+                  "size": 2691
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-tomcat/redisson-tomcat-8/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-tomcat/redisson-tomcat-8/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-8/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-tomcat/redisson-tomcat-8/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-8/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        },
+                        {
+                          "name": "webapp",
+                          "path": "redisson-tomcat/redisson-tomcat-8/src/test/webapp",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "redisson-tomcat-9",
+              "path": "redisson-tomcat/redisson-tomcat-9",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "pom.xml",
+                  "path": "redisson-tomcat/redisson-tomcat-9/pom.xml",
+                  "type": "file",
+                  "size": 2691
+                },
+                {
+                  "name": "src",
+                  "path": "redisson-tomcat/redisson-tomcat-9/src",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "main",
+                      "path": "redisson-tomcat/redisson-tomcat-9/src/main",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-9/src/main/java",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "test",
+                      "path": "redisson-tomcat/redisson-tomcat-9/src/test",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "java",
+                          "path": "redisson-tomcat/redisson-tomcat-9/src/test/java",
+                          "type": "directory",
+                          "truncated": true
+                        },
+                        {
+                          "name": "webapp",
+                          "path": "redisson-tomcat/redisson-tomcat-9/src/test/webapp",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "redisson",
+          "path": "redisson",
+          "type": "directory",
+          "contents": [
+            {
+              "name": "LICENSE.txt",
+              "path": "redisson/LICENSE.txt",
+              "type": "file",
+              "size": 11358
+            },
+            {
+              "name": "checkstyle.xml",
+              "path": "redisson/checkstyle.xml",
+              "type": "file",
+              "size": 8493
+            },
+            {
+              "name": "pom.xml",
+              "path": "redisson/pom.xml",
+              "type": "file",
+              "size": 15741
+            },
+            {
+              "name": "src",
+              "path": "redisson/src",
+              "type": "directory",
+              "contents": [
+                {
+                  "name": "main",
+                  "path": "redisson/src/main",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "java",
+                      "path": "redisson/src/main/java",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "org",
+                          "path": "redisson/src/main/java/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "resources",
+                      "path": "redisson/src/main/resources",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "META-INF",
+                          "path": "redisson/src/main/resources/META-INF",
+                          "type": "directory",
+                          "truncated": true
+                        },
+                        {
+                          "name": "org",
+                          "path": "redisson/src/main/resources/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "test",
+                  "path": "redisson/src/test",
+                  "type": "directory",
+                  "contents": [
+                    {
+                      "name": "java",
+                      "path": "redisson/src/test/java",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "org",
+                          "path": "redisson/src/test/java/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    },
+                    {
+                      "name": "resources",
+                      "path": "redisson/src/test/resources",
+                      "type": "directory",
+                      "contents": [
+                        {
+                          "name": "logback.xml",
+                          "path": "redisson/src/test/resources/logback.xml",
+                          "type": "file",
+                          "size": 1173
+                        },
+                        {
+                          "name": "org",
+                          "path": "redisson/src/test/resources/org",
+                          "type": "directory",
+                          "truncated": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "structure_summary": "/\n    \u251c\u2500\u2500 redisson/\n    \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 org/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 resources/\n    \u2502   \u2502   \u2502       \u251c\u2500\u2500 META-INF/\n    \u2502   \u2502   \u2502       \u2502   ... (directory truncated)\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 org/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502       \u2502   \u2514\u2500\u2500 org/\n    \u2502   \u2502       \u2502       ... (directory truncated)\n    \u2502   \u2502       \u2514\u2500\u2500 resources/\n    \u2502   \u2502           \u251c\u2500\u2500 org/\n    \u2502   \u2502           \u2502   ... (directory truncated)\n    \u2502   \u2502           \u2514\u2500\u2500 logback.xml\n    \u2502   \u251c\u2500\u2500 checkstyle.xml\n    \u2502   \u251c\u2500\u2500 LICENSE.txt\n    \u2502   \u2514\u2500\u2500 pom.xml\n    \u251c\u2500\u2500 redisson-all/\n    \u2502   \u251c\u2500\u2500 pom.xml\n    \u2502   \u2514\u2500\u2500 README.md\n    \u251c\u2500\u2500 redisson-spring-boot-starter/\n    \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 org/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 resources/\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 META-INF/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502       \u2502   \u2514\u2500\u2500 org/\n    \u2502   \u2502       \u2502       ... (directory truncated)\n    \u2502   \u2502       \u2514\u2500\u2500 resources/\n    \u2502   \u2502           \u2514\u2500\u2500 redisson.yaml\n    \u2502   \u251c\u2500\u2500 pom.xml\n    \u2502   \u2514\u2500\u2500 README.md\n    \u251c\u2500\u2500 redisson-spring-data/\n    \u2502   \u251c\u2500\u2500 redisson-spring-data-16/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-spring-data-17/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-spring-data-18/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-spring-data-20/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 pom.xml\n    \u2502   \u2514\u2500\u2500 README.md\n    \u251c\u2500\u2500 redisson-tomcat/\n    \u2502   \u251c\u2500\u2500 redisson-tomcat-6/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502       \u2502   ... (directory truncated)\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 webapp/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-tomcat-7/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502       \u2502   ... (directory truncated)\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 webapp/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-tomcat-8/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502       \u2502   ... (directory truncated)\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 webapp/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 redisson-tomcat-9/\n    \u2502   \u2502   \u251c\u2500\u2500 src/\n    \u2502   \u2502   \u2502   \u251c\u2500\u2500 main/\n    \u2502   \u2502   \u2502   \u2502   \u2514\u2500\u2500 java/\n    \u2502   \u2502   \u2502   \u2502       ... (directory truncated)\n    \u2502   \u2502   \u2502   \u2514\u2500\u2500 test/\n    \u2502   \u2502   \u2502       \u251c\u2500\u2500 java/\n    \u2502   \u2502   \u2502       \u2502   ... (directory truncated)\n    \u2502   \u2502   \u2502       \u2514\u2500\u2500 webapp/\n    \u2502   \u2502   \u2502           ... (directory truncated)\n    \u2502   \u2502   \u2514\u2500\u2500 pom.xml\n    \u2502   \u251c\u2500\u2500 pom.xml\n    \u2502   \u2514\u2500\u2500 README.md\n    \u251c\u2500\u2500 .gitignore\n    \u251c\u2500\u2500 .travis.yml\n    \u251c\u2500\u2500 CHANGELOG.md\n    \u251c\u2500\u2500 checkstyle.xml\n    \u251c\u2500\u2500 CONTRIBUTING.md\n    \u251c\u2500\u2500 header.txt\n    \u251c\u2500\u2500 ISSUE_TEMPLATE.md\n    \u251c\u2500\u2500 LICENSE.txt\n    \u251c\u2500\u2500 pom.xml",
+    "readme": "Redisson: Redis based In-Memory Data Grid for Java.<br/> State of the Art Redis client\n====\n[Quick start](https://github.com/redisson/redisson#quick-start) | [Documentation](https://github.com/redisson/redisson/wiki) | [Javadocs](http://www.javadoc.io/doc/org.redisson/redisson/3.8.2) | [Changelog](https://github.com/redisson/redisson/blob/master/CHANGELOG.md) | [Code examples](https://github.com/redisson/redisson-examples) | [FAQs](https://github.com/redisson/redisson/wiki/16.-FAQ) | [Report an issue](https://github.com/redisson/redisson/issues/new) | **[Redisson PRO](https://redisson.pro)**\n\nBased on high-performance async and lock-free Java Redis client and [Netty](http://netty.io) framework.  \n\n| Stable <br/> Release Version | Release Date | JDK Version<br/> compatibility | `CompletionStage` <br/> support | `ProjectReactor` version<br/> compatibility |\n| ------------- | ------------- | ------------| -----------| -----------|\n| 3.8.2  | 06.10.2018 | 1.8 - 11 | Yes | 3.1.x |\n| 2.13.2 | 06.10.2018 | 1.6 - 11, Android | No | 2.0.8 |\n\n\nFeatures\n================================\n* Replicated servers mode (also supports [AWS ElastiCache](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/Replication.html) and [Azure Redis Cache](https://azure.microsoft.com/en-us/services/cache/)):\n    1. automatic master server change discovery\n* Cluster servers mode (also supports [AWS ElastiCache Cluster](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/Clusters.html) and [Azure Redis Cache](https://azure.microsoft.com/en-us/services/cache/)):\n    1. automatic master and slave servers discovery\n    2. automatic status and topology update\n    3. automatic slots change discovery\n* Sentinel servers mode: \n    1. automatic master, slave and sentinel servers discovery\n    2. automatic status and topology update\n* Master with Slave servers mode  \n* Single server mode  \n* Thread-safe implementation  \n* [Reactive Streams](https://github.com/redisson/redisson/wiki/3.-operations-execution#32-reactive-way) API  \n* [Asynchronous](https://github.com/redisson/redisson/wiki/3.-operations-execution#31-async-way) API  \n* Asynchronous connection pool  \n* Lua scripting  \n* [Distributed objects](https://github.com/redisson/redisson/wiki/6.-Distributed-objects)  \n    Object holder, Binary stream holder, Geospatial holder, BitSet, AtomicLong, AtomicDouble, PublishSubscribe,\n    Bloom filter, HyperLogLog\n* [Distributed collections](https://github.com/redisson/redisson/wiki/7.-Distributed-collections)  \n    Map, Multimap, Set, List, SortedSet, ScoredSortedSet, LexSortedSet, Queue, Deque, Blocking Queue, Bounded Blocking Queue, Blocking Deque, Delayed Queue, Priority Queue, Priority Deque\n* [Distributed locks and synchronizers](https://github.com/redisson/redisson/wiki/8.-Distributed-locks-and-synchronizers)  \n    Lock, FairLock, MultiLock, RedLock, ReadWriteLock, Semaphore, PermitExpirableSemaphore, CountDownLatch\n* [Distributed services](https://github.com/redisson/redisson/wiki/9.-distributed-services)  \n    Remote service, Live Object service, Executor service, Scheduler service, MapReduce service\n* [Spring Framework](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks#141-spring-framework)\n* [Spring Cache](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks/#142-spring-cache) implementation\n* [Spring Transaction API](https://github.com/redisson/redisson/wiki/14.-Integration-with-frameworks/#147-spring-transaction-manager) implementation\n* [Spring Data Redis](https://github.com/redisson/redisson/wiki/14.-Integration-with-frameworks/#148-spring-data-redis) integration\n* [Spring Boot Starter](https://github.com/redisson/redisson/wiki/14.-Integration-with-frameworks/#149-spring-boot-starter) implementation\n* [Hibernate Cache](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks/#143-hibernate-cache) implementation\n* [Transactions API](https://github.com/redisson/redisson/wiki/10.-Additional-features#104-transactions)\n* [XA Transaction API](https://github.com/redisson/redisson/wiki/10.-additional-features/#105-xa-transactions) implementation\n* [JCache API (JSR-107)](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks/#144-jcache-api-jsr-107-implementation) implementation\n* [Tomcat Session Manager](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks#145-tomcat-redis-session-manager) implementation\n* [Spring Session](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks/#146-spring-session) implementation\n* [Redis pipelining](https://github.com/redisson/redisson/wiki/10.-additional-features#102-execution-batches-of-commands) (command batches)\n* Supports Android platform  \n* Supports auto-reconnection  \n* Supports failed to send command auto-retry  \n* Supports OSGi  \n* Supports SSL  \n* Supports many popular codecs ([Jackson JSON](https://github.com/FasterXML/jackson), [Avro](http://avro.apache.org/), [Smile](http://wiki.fasterxml.com/SmileFormatSpec), [CBOR](http://cbor.io/), [MsgPack](http://msgpack.org/), [Kryo](https://github.com/EsotericSoftware/kryo), [Amazon Ion](https://amzn.github.io/ion-docs/), [FST](https://github.com/RuedigerMoeller/fast-serialization), [LZ4](https://github.com/jpountz/lz4-java), [Snappy](https://github.com/xerial/snappy-java) and JDK Serialization)\n* With over 1800 unit tests  \n\nUsed by\n================================\n[![Siemens](https://redisson.org/assets/logos/client29.png \"Siemens\")](https://www.siemens.com) &nbsp;&nbsp;&nbsp;\n[![BMW GROUP](https://redisson.org/assets/logos/client27.png \"BMW GROUP\")](https://www.bmwgroup.com) &nbsp;&nbsp;&nbsp;\n[![AIG](https://redisson.org/assets/logos/client24.png \"AIG\")](https://www.aig.com/) &nbsp;&nbsp;&nbsp;\n[![S&P Global](https://redisson.org/assets/logos/client20.png \"S&P Global\")](https://www.spglobal.com/) &nbsp;&nbsp;&nbsp;\n[![SAP](https://redisson.org/assets/logos/client12.png \"SAP\")](http://www.sap.com/) &nbsp;&nbsp;&nbsp;\n[![EA](https://redisson.org/assets/logos/client1.png \"EA\")](http://ea.com/) &nbsp;&nbsp;&nbsp;\n[![Adobe](https://redisson.org/assets/logos/client23.png \"Adobe\")](https://www.adobe.com/)  \n\n[![Jeppesen](https://redisson.org/assets/logos/client25.png \"Jeppesen\")](https://www.jeppesen.com/) &nbsp;&nbsp;&nbsp;\n[![BROOKHAVEN](https://redisson.org/assets/logos/client6.png \"Brookhaven National Laboratory\")](http://bnl.gov/) &nbsp;&nbsp;&nbsp;\n[![New Relic Synthetics](https://redisson.org/assets/logos/client3.png \"New Relic Synthetics\")](http://newrelic.com/synthetics) &nbsp;&nbsp;&nbsp;\n[![Netflix](https://redisson.org/assets/logos/client10.png \"Netflix\")](https://netflix.com/) &nbsp;&nbsp;&nbsp;\n[![Personal Capital](https://redisson.org/assets/logos/client26.png \"Personal Capital\")](https://www.personalcapital.com)  \n\n[![Singtel](https://redisson.org/assets/logos/client5.png \"New Relic Synthetics\")](http://singtel.com/) &nbsp;&nbsp;&nbsp;\n[![Baidu](https://redisson.org/assets/logos/client2.png \"Baidu\")](http://baidu.com/) &nbsp;&nbsp;&nbsp;\n[![Infor](https://redisson.org/assets/logos/client4.png \"Infor\")](http://www.infor.com/) &nbsp;&nbsp;&nbsp;\n[![Crimson Hexagon](https://redisson.org/assets/logos/client7.png \"Crimson Hexagon\")](https://www.crimsonhexagon.com/) &nbsp;&nbsp;&nbsp;\n[![ContaAzul](https://redisson.org/assets/logos/client18.png \"ContaAzul\")](https://contaazul.com/)&nbsp;&nbsp;&nbsp;\n[![\u9a6c\u8702\u7a9d](https://redisson.org/assets/logos/client33.png \"\u9a6c\u8702\u7a9d\")](http://www.mafengwo.cn/)  \n\n[![Datorama](https://redisson.org/assets/logos/client8.png \"Datorama\")](https://datorama.com/)&nbsp;&nbsp;&nbsp;\n[![Ticketmaster](https://redisson.org/assets/logos/client14.png \"Ticketmaster\")](http://www.ticketmaster.com/)&nbsp;&nbsp;&nbsp;\n[![NAB](https://redisson.org/assets/logos/client11.png \"NAB\")](https://www.nab.com.au/)&nbsp;&nbsp;&nbsp;\n[![Juniper](https://redisson.org/assets/logos/client31.png \"Juniper\")](https://www.juniper.net/)&nbsp;&nbsp;&nbsp;\n[![\u706b\u5e01](https://redisson.org/assets/logos/client32.png \"\u706b\u5e01\")](https://www.huobi.com/)&nbsp;&nbsp;&nbsp;\n\n[![Alibaba](https://redisson.org/assets/logos/client19.png \"Alibaba\")](http://www.alibaba-inc.com)&nbsp;&nbsp;&nbsp;\n[![Flipkart](https://redisson.org/assets/logos/client21.png \"Flipkart\")](https://www.flipkart.com/)&nbsp;&nbsp;&nbsp;\n[![Invaluable](https://redisson.org/assets/logos/client13.png \"Invaluable\")](http://www.invaluable.com/)&nbsp;&nbsp;&nbsp;\n[![BBK](https://redisson.org/assets/logos/client22.png \"BBK\")](http://www.gdbbk.com/)  \n[![SULAKE](https://redisson.org/assets/logos/client17.png \"SULAKE\")](http://www.sulake.com/)\n\n<sub>Logos, product names and all other trademarks displayed on this page belong to their respective holders and used for identification purposes only. Use of these trademarks, names and brands does not imply endorsement.</sub>\n\nSuccess stories\n================================\n\n## [Moving from Hazelcast to Redis  /  Datorama](https://engineering.datorama.com/moving-from-hazelcast-to-redis-b90a0769d1cb)  \n## [Distributed Locking with Redis (Migration from Hazelcast)  /  ContaAzul](https://carlosbecker.com/posts/distributed-locks-redis/)  \n## [Migrating from Coherence to Redis](https://www.youtube.com/watch?v=JF5R2ucKTEg)  \n\n\nQuick start\n===============================\n\n#### Maven \n    <!-- JDK 1.8+ compatible -->\n    <dependency>\n       <groupId>org.redisson</groupId>\n       <artifactId>redisson</artifactId>\n       <version>3.8.2</version>\n    </dependency>  \n\n    <!-- JDK 1.6+ compatible -->\n    <dependency>\n       <groupId>org.redisson</groupId>\n       <artifactId>redisson</artifactId>\n       <version>2.13.2</version>\n    </dependency>\n\n\n#### Gradle\n    // JDK 1.8+ compatible\n    compile 'org.redisson:redisson:3.8.2'  \n\n    // JDK 1.6+ compatible\n    compile 'org.redisson:redisson:2.13.2'\n\n#### Java\n\n```java\n// 1. Create config object\nConfig = ...\n\n// 2. Create Redisson instance\nRedissonClient redisson = Redisson.create(config);\n\n// 3. Get object you need\nRMap<MyKey, MyValue> map = redisson.getMap(\"myMap\");\n\nRLock lock = redisson.getLock(\"myLock\");\n\nRExecutorService executor = redisson.getExecutorService(\"myExecutorService\");\n\n// over 30 different objects and services ...\n\n```\n\nDownloads\n===============================\n   \n[Redisson 3.8.2](https://repository.sonatype.org/service/local/artifact/maven/redirect?r=central-proxy&g=org.redisson&a=redisson&v=3.8.2&e=jar),\n[Redisson node 3.8.2](https://repository.sonatype.org/service/local/artifact/maven/redirect?r=central-proxy&g=org.redisson&a=redisson-all&v=3.8.2&e=jar)  \n\n[Redisson 2.13.2](https://repository.sonatype.org/service/local/artifact/maven/redirect?r=central-proxy&g=org.redisson&a=redisson&v=2.13.2&e=jar),\n[Redisson node 2.13.2](https://repository.sonatype.org/service/local/artifact/maven/redirect?r=central-proxy&g=org.redisson&a=redisson-all&v=2.13.2&e=jar)  \n\nFAQs\n===============================\n[Q: I saw a RedisTimeOutException, What does it mean? What shall I do? Can Redisson Team fix it?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-i-saw-a-redistimeoutexception-what-does-it-mean-what-shall-i-do-can-redisson-team-fix-it)\n\n[Q: I saw a com.fasterxml.jackson.databind.JsonMappingException during deserialization process, can you fix it?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-i-saw-a-comfasterxmljacksondatabindjsonmappingexception-during-deserialization-process-can-you-fix-it)\n\n[Q: There were too many quotes appeared in the redis-cli console output, how do I fix it?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-there-were-too-many-quotes-appeared-in-the-redis-cli-console-output-how-do-i-fix-it)\n\n[Q: When do I need to shut down a Redisson instance, at the end of each request or the end of the life of a thread?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-when-do-i-need-to-shut-down-a-redisson-instance-at-the-end-of-each-request-or-the-end-of-the-life-of-a-thread)\n\n[Q: In MapCache/SetCache/SpringCache/JCache, I have set an expiry time to an entry, why is it still there when it should be disappeared?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-in-mapcachesetcachespringcachejcache-i-have-set-an-expiry-time-to-an-entry-why-is-it-still-there-when-it-should-be-disappeared)\n\n[Q: How can I perform Pipelining/Transaction through Redisson?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-how-can-i-perform-pipeliningtransaction-through-redisson)\n\n[Q: Is Redisson thread safe? Can I share an instance of it between different threads?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-is-redisson-thread-safe-can-i-share-an-instance-of-it-between-different-threads)\n\n[Q: Can I use different encoder/decoders for different tasks?](https://github.com/redisson/redisson/wiki/16.-FAQ#q-can-i-use-different-encoderdecoders-for-different-tasks)\n\n### Supported by\n\nYourKit is kindly supporting this open source project with its full-featured Java Profiler.\nYourKit, LLC is the creator of innovative and intelligent tools for profiling\nJava and .NET applications. Take a look at YourKit's leading software products:\n<a href=\"http://www.yourkit.com/java/profiler/index.jsp\">YourKit Java Profiler</a> and\n<a href=\"http://www.yourkit.com/.net/profiler/index.jsp\">YourKit .NET Profiler</a>.\n",
+    "readme_filename": "README.md"
+  },
+  "llm_calls_before_build": 5,
+  "dockerfile_attempt_1": 1,
+  "dockerfile": "FROM eclipse-temurin:17-jdk AS builder\n\n# Install system dependencies for building\nRUN apt-get update && \\\n    apt-get install -y git maven wget && \\\n    apt-get clean && \\\n    rm -rf /var/lib/apt/lists/*\n\n# Clone repository and checkout issue-specific commit\nRUN git clone https://github.com/redisson/redisson.git /app/redisson\nWORKDIR /app/redisson\nRUN git checkout 74fde8ae90f41d89281c242cb1e5b1c441699ed9\n\n# Build project with Maven including dependencies\nRUN mvn clean install -DskipTests",
+  "dockerfile_build_success": true,
+  "successful_candidate_index": 1,
+  "successful_candidate_attempt": 1,
+  "successful_candidate_improvement_attempt": 0,
+  "llm_calls_total": 10
+}

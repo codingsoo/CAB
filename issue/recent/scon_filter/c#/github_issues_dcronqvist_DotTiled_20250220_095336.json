@@ -1,0 +1,100 @@
+[
+  {
+    "number": 64,
+    "title": "Automatic custom enum parsing doesn't work with \"Save as String\"",
+    "created_at": "2024-11-23T22:05:23Z",
+    "closed_at": "2024-12-02T21:08:34Z",
+    "labels": [
+      "bug",
+      "ready"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/issues/64",
+    "body": "I'm working from the \"dev\" branch.\r\nTo reproduce:\r\n- Make a custom enum in the Custom Types Editor, add some values, and set it to Save as String.\r\n- Add an object like a point, and add this enum as a custom property, and set the value.\r\n- If editing an existing object, when changing from \"Save as String\" to \"Save as Int\" or vice-versa, you have to make a change in the map (like moving the object a couple pixels or something) and then save the map for the storage type to take effect. \r\n- in C#, import a map with the default loader and no arguments.\r\n- I get the error \"System.FormatException: 'The input string 'North' was not in a correct format.'\"\r\n\r\nSo, for thoroughness, this is what is in the .tiled-project:\r\n```\r\n    \"propertyTypes\": [\r\n        {\r\n            \"id\": 5,\r\n            \"name\": \"CardinalDirection\",\r\n            \"storageType\": \"string\",\r\n            \"type\": \"enum\",\r\n            \"values\": [\r\n                \"North\",\r\n                \"East\",\r\n                \"South\",\r\n                \"West\"\r\n            ],\r\n            \"valuesAsFlags\": false\r\n        },\r\n```\r\nThis is what is in the .tmx:\r\n```\r\n  <object id=\"6\" name=\"Tim\" x=\"630.695\" y=\"180.202\">\r\n   <properties>\r\n    <property name=\"cardinal\" propertytype=\"CardinalDirection\" value=\"North\"/>\r\n   </properties>\r\n   <point/>\r\n  </object>\r\n```",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/64/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-23T22:34:23Z",
+        "body": "Great detail here, nice! Yeah, I'm aware of this limitation regarding enums. Is there any way to have enum properties without having them being defined as custom types? Because if not, then it feels more natural to have a hard requirement in DotTiled that those custom enum types are also defined properly with `CustomEnumDefinition`.\r\n\r\nHowever, if there's a way to have enum properties without having them defined (like how you can input arbitrary strings in `class`) as a custom type, then we're going to have to find a way to deal with them without them needing to be defined in DotTiled.\r\n\r\nWhat do you think?"
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-24T14:36:04Z",
+        "body": "It's a great feature, and the enums are much easier than classes to implement, so it's definitely manageable as a requirement. My personal preference would be to have strings as a backup option however, because why not? The string is *right there*. From my perspective in this case, I get a crash on load with one storage type and not the other, so it feels more like a bug than a limitation. So I'm curious what's going on data-wise with the \"Save As Integer\" option selected. Is that integer available? If so, why make the string unavailable?\r\n\r\nI think part of what i was getting at with my original issue about classes has to do with the process of iteratively coding a game. You make some maps, put some data into the maps, and then you might want to launch the game and see some fraction of that working before you implement all of the data you have in the map file. It's iterative, and not being able to load and view a map before a ton of stuff is perfectly in place can be frustrating. This is _especially_ true if you're learning to use all these tools simultaneously. Not to rag on the custom classes again, but in that case that would have been a total deal-breaker for me using this library a couple years ago."
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-24T15:22:21Z",
+        "body": "You make a good point. I agree that it should be as frictionless as possible to use DotTiled in an iterative development process. Let's go over the 4 combinations of enums that you can have in the `.tmx` format.\r\n\r\n1. String storage, no flags\r\n```xml\r\n<property name=\"customenumstringprop\" propertytype=\"CustomEnumString\" value=\"CustomEnumString_2\"/>\r\n```\r\nIn this case, there's no problem with providing just the string value with a `StringProperty`.\r\n\r\n2. String storage, flags\r\n```xml\r\n<property name=\"customenumstringflagsprop\" propertytype=\"CustomEnumStringFlags\" value=\"CustomEnumStringFlags_1,CustomEnumStringFlags_2\"/>\r\n```\r\nCan provide this string too as a `StringProperty`, but it might be confusing to some extent. But that would allow developers to do their own e.g. `.Contains(\"CustomEnumStringFlags_1\")` to check if a flag is set.\r\n\r\n3. Integer storage, no flags\r\n```xml\r\n<property name=\"customenumintprop\" type=\"int\" propertytype=\"CustomEnumInt\" value=\"3\"/>\r\n```\r\nCan provide as `IntProperty`. If users want to know which string value \"3\" corresponds to in Tiled, there is no other solution than also providing a custom enum definition.\r\n\r\n4. Integer storage, flags\r\n```xml\r\n<property name=\"customenumintflagsprop\" type=\"int\" propertytype=\"CustomEnumIntFlags\" value=\"6\"/>\r\n```\r\nWe can provide this as an `IntProperty`, and users would have to do their own bitwise `&` to check if a flag is set.\r\n\r\nEssentially, this behaviour would be to use whatever `type` is set to by default, and *only* ever map a property like the ones above to an `EnumProperty` if there is a custom enum definition for that `propertytype`. The same behaviour should be possible to implement for the `.tmj` format.\r\n\r\nThe only problem that I can see is that we will be providing different types of properties (`IntProperty` and `StringProperty`) depending on what the user has configured for that custom enum type. We won't get the exact same thing unfortunately, and I'm not sure that I see a way past that. There will be completely different data in the map file so we can't provide the same things. That is the advantage of using a custom enum type - we can provide an `EnumProperty` that will look the same regardless of storage type (as long as it is configured the same in DotTiled).\r\n\r\nDo you think this is an acceptable way to change the behaviour? It would allow users to freely use custom enums, load maps that use them without crashing, and check their values without having to define them as custom enum definitions. The only caveat is the different storage type -> different property type in DotTiled."
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-27T14:13:03Z",
+        "body": "Yes, this sounds straightforward enough! I think getting the exact same data out regardless of setup is a noble goal but limiting in this case. You could add a warning in these cases I suppose. "
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-27T21:22:53Z",
+        "body": "Great, there's a PR up with a fix for this issue. Is it possible for you to verify it against something you were experiencing a problem with? #65 "
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-12-02T17:06:47Z",
+        "body": "Ah, apologies, I thought I responded already. The PR seems to work as expected! Tested with several permutations."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Support loading maps with custom enum properties without requiring predefined enum definitions",
+      "Handle both string and integer storage types without runtime exceptions",
+      "Provide fallback property types when enum definitions are missing",
+      "Maintain data integrity when changing storage types in Tiled"
+    ]
+  },
+  {
+    "number": 47,
+    "title": "TryParse on empty color string now returns null",
+    "created_at": "2024-11-14T14:48:44Z",
+    "closed_at": "2024-11-22T20:20:14Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/47",
+    "body": "Moved exception into Parse in the case of a string greater than 1 character (\"#\")",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/47/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-16T12:57:17Z",
+        "body": "I am not sure I agree with this modification. Typically in C#, a `Parse` method will be used when you expect the parsing to be successful (and want an exception to be thrown if it fails since that is an unexpected outcome). \r\n\r\n`TryParse` is used when you would like to attempt to parse a string into some kind of structure, and get a `bool` result of its success.\r\n\r\nTo be in line with typical C# conventions, I think we should stick to the current implementation of letting `Parse` throw an exception and have `TryParse` be exception-less. \r\n\r\nPerhaps we are trying to solve a different problem here? Is there some kind of parsing error regarding colors that you are attempting to solve? Perhaps one that is expected to be present when there is none?"
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-16T19:18:53Z",
+        "body": "Basically, there are scenarios where Tiled will output a color property with an empty string. Like if you make an object, and just add a new Color property to it, but leave it unset, the tmx will save with that property as an empty string. If the color property is part of a custom type however, the tmx won't add the property at all if it is unset. So I think it makes sense to allow the color value to be null, or perhaps an Optional. Or just return black as is the case in a lot of other places in the library. My fix keeps the exception in the case that the string is greater than one character, but returns null (or default) in the case that the string is one character, since it recurses with \"#\" added in any case. The difference between Parse and TryParse is a bit arbitrary to me, though, so however it's implemented is fine with me."
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-21T20:04:09Z",
+        "body": "I believe I understand the issue you are describing, and I have made a draft PR #63 with a proposed solution. If you have time, could you check if the proposed solution works for the case you are describing? Or if you can review the solution in a way to check that it would work."
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-22T17:55:22Z",
+        "body": "Yep, that works fine!"
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-22T20:19:44Z",
+        "body": "Great, then I'll close this PR as duplicate :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Handles empty color strings from Tiled output gracefully without exceptions",
+      "Maintains C# convention where Parse throws exceptions for invalid formats and TryParse handles failures silently",
+      "Provides clear null/default value handling for unset color properties",
+      "Ensures compatibility with Tiled's property serialization behavior"
+    ]
+  }
+]

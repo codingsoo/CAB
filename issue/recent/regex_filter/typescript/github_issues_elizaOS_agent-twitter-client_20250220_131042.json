@@ -1,0 +1,213 @@
+[
+  {
+    "number": 45,
+    "title": "feat: grok functionality",
+    "created_at": "2025-01-08T06:13:39Z",
+    "closed_at": "2025-01-09T08:27:41Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/pull/45",
+    "body": "# Added Twitter Grok AI Integration\r\n\r\n## Motivation\r\nWhile Grok has a standalone API, it lacks access to Twitter's real-time platform data. This integration taps into Twitter's frontend implementation of Grok, enabling access to Grok's unique capability to analyze and respond to live Twitter data. This provides developers with a powerful tool that combines Grok's language capabilities with Twitter's comprehensive platform data, offering insights and analysis that wouldn't be possible through the standalone Grok API alone.\r\n\r\n## Implementation\r\nThis PR introduces integration with Twitter's Grok AI chatbot functionality. The implementation includes three main components:\r\n\r\n### 1. Grok API Integration (`grok.ts`)\r\nAdded a new module that implements Twitter's Grok AI chat functionality, including:\r\n- Support for creating new Grok conversations\r\n- Handling chat interactions with message history\r\n- Managing conversation state and metadata\r\n- Type definitions for Grok's request/response formats\r\n- Support for optional features like search results and citations\r\n\r\n### 2. Enhanced Request Handling (`api.ts`)\r\nModified the `requestApi` function to support:\r\n- Request body parameters for POST requests\r\n- Chunked response handling for streaming responses\r\n- Proper accumulation and parsing of streamed data\r\n- Fallback handling for non-JSON responses\r\n- Improved error handling for streaming scenarios\r\n\r\n### 3. Scraper Integration (`scraper.ts`)\r\nExtended the Scraper class with two new public methods:\r\n- `createGrokConversation()`: Initializes a new Grok chat session\r\n- `grokChat()`: Handles message exchange with Grok AI\r\n\r\nThese changes enable users to interact with Twitter's Grok AI through the same familiar interface used for other Twitter API interactions, while handling all the complexity of managing conversations and streaming responses internally.\r\n\r\nSorry for mess. Let me know any feedback or questions!!",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/45/comments",
+    "author": "0x4337",
+    "comments": [
+      {
+        "user": "0x4337",
+        "created_at": "2025-01-08T06:15:43Z",
+        "body": "also changed huge test-assets/test-video.mp4 to something smaller"
+      },
+      {
+        "user": "wtfsayo",
+        "created_at": "2025-01-08T06:29:35Z",
+        "body": "interesting, will review"
+      },
+      {
+        "user": "0x4337",
+        "created_at": "2025-01-09T07:04:14Z",
+        "body": "A few examples...\r\n\r\n\r\nContinuous feedback convo\r\n\r\n```js\r\nimport { Scraper } from \"agent-twitter-client\";\r\nimport fs from \"fs\";\r\nimport chalk from \"chalk\";\r\nimport * as readline from \"readline/promises\";\r\n\r\nlet scraper = null;\r\n\r\nasync function initializeScraper() {\r\n  try {\r\n    scraper = new Scraper();\r\n    console.log(\"Scraper initialized successfully\");\r\n\r\n    console.log(\"Loading cookies from file...\");\r\n    const cookiesJson = JSON.parse(fs.readFileSync(\"./cookies.json\", \"utf-8\"));\r\n    console.log(`Found ${cookiesJson.length} cookies`);\r\n\r\n    if (cookiesJson.length === 0) {\r\n      console.log(\"No cookies found, skipping login\");\r\n      return;\r\n    }\r\n\r\n    // Format cookies as strings in the Set-Cookie header format\r\n    const formattedCookies = cookiesJson.map((cookie) => {\r\n      let cookieString = `${cookie.key}=${cookie.value}`;\r\n      cookieString += `; Domain=${cookie.domain}`;\r\n      cookieString += `; Path=${cookie.path}`;\r\n      if (cookie.expires) cookieString += `; Expires=${cookie.expires}`;\r\n      if (cookie.secure) cookieString += \"; Secure\";\r\n      if (cookie.httpOnly) cookieString += \"; HttpOnly\";\r\n      if (cookie.sameSite) cookieString += `; SameSite=${cookie.sameSite}`;\r\n      return cookieString;\r\n    });\r\n\r\n    console.log(\"Setting cookies in scraper...\");\r\n    await scraper.setCookies(formattedCookies);\r\n\r\n    // Check if we're actually logged in\r\n    const isLoggedIn = await scraper.isLoggedIn();\r\n    console.log(\"Login check result:\", isLoggedIn);\r\n\r\n    return scraper;\r\n  } catch (error) {\r\n    console.error(\"Failed to initialize Twitter scraper:\", error);\r\n    throw error;\r\n  }\r\n}\r\n\r\nasync function main() {\r\n  await initializeScraper();\r\n\r\n  try {\r\n    const rl = readline.createInterface({\r\n      input: process.stdin,\r\n      output: process.stdout,\r\n    });\r\n\r\n    const messages = [];\r\n    let conversationId;\r\n\r\n    console.log(\"Chat with Grok! (Type 'exit' to quit)\");\r\n\r\n    const askQuestion = async () => {\r\n      const input = await rl.question(chalk.green(\"You: \"));\r\n\r\n      if (input.toLowerCase() === \"exit\") {\r\n        rl.close();\r\n        return false;\r\n      }\r\n\r\n      messages.push({ role: \"user\", content: input });\r\n\r\n      console.log(\"\\n\" + chalk.yellow(\"Thinking...\") + \"\\n\");\r\n\r\n      const response = await scraper.grokChat({\r\n        conversationId,\r\n        messages,\r\n      });\r\n\r\n      conversationId = response.conversationId;\r\n\r\n      if (response.rateLimit?.isRateLimited) {\r\n        console.log(chalk.red(\"Rate Limited: \") + response.rateLimit.message);\r\n        if (response.rateLimit.upsellInfo) {\r\n          console.log(chalk.yellow(\"\\nLimit Info:\"));\r\n          console.log(`Usage Limit: ${response.rateLimit.upsellInfo.usageLimit}`);\r\n          console.log(`Duration: ${response.rateLimit.upsellInfo.quotaDuration}`);\r\n          console.log(`${response.rateLimit.upsellInfo.title}`);\r\n          console.log(`${response.rateLimit.upsellInfo.message}`);\r\n        }\r\n        rl.close();\r\n        return false;\r\n      } else {\r\n        messages.push({ role: \"assistant\", content: response.message });\r\n        console.log(chalk.blue(\"Grok: \") + response.message + \"\\n\");\r\n      }\r\n\r\n      console.log(chalk.gray(\"-------------------------------------------\") + \"\\n\");\r\n\r\n      return true;\r\n    };\r\n\r\n    while (await askQuestion()) {}\r\n  } catch (error) {\r\n    console.error(chalk.red(\"Failed to send Grok message:\"), error);\r\n  }\r\n}\r\n\r\nmain();\r\n```\r\n\r\n\r\nSimple call\r\n\r\n```js\r\nimport { Scraper } from 'agent-twitter-client';\r\nimport fs from 'fs';\r\n\r\nlet scraper = null;\r\n\r\nasync function initializeScraper() {\r\n  try {\r\n    scraper = new Scraper();\r\n    console.log('Scraper initialized successfully');\r\n\r\n    console.log('Loading cookies from file...');\r\n    const cookiesJson = JSON.parse(\r\n      fs.readFileSync('./cookies.json', 'utf-8'),\r\n    );\r\n    console.log(`Found ${cookiesJson.length} cookies`);\r\n\r\n    if (cookiesJson.length === 0) {\r\n      console.log('No cookies found, skipping login');\r\n      return;\r\n    }\r\n\r\n    // Format cookies as strings in the Set-Cookie header format\r\n    const formattedCookies = cookiesJson.map((cookie) => {\r\n      let cookieString = `${cookie.key}=${cookie.value}`;\r\n      cookieString += `; Domain=${cookie.domain}`;\r\n      cookieString += `; Path=${cookie.path}`;\r\n      if (cookie.expires) cookieString += `; Expires=${cookie.expires}`;\r\n      if (cookie.secure) cookieString += '; Secure';\r\n      if (cookie.httpOnly) cookieString += '; HttpOnly';\r\n      if (cookie.sameSite) cookieString += `; SameSite=${cookie.sameSite}`;\r\n      return cookieString;\r\n    });\r\n\r\n    console.log('Setting cookies in scraper...');\r\n    await scraper.setCookies(formattedCookies);\r\n\r\n    // Check if we're actually logged in\r\n    const isLoggedIn = await scraper.isLoggedIn();\r\n    console.log('Login check result:', isLoggedIn);\r\n\r\n    return scraper;\r\n  } catch (error) {\r\n    console.error('Failed to initialize Twitter scraper:', error);\r\n    throw error;\r\n  }\r\n}\r\n\r\nasync function main() {\r\n  await initializeScraper();\r\n\r\n  const conversationId = await scraper.createGrokConversation();\r\n\r\n  const completion = await scraper.grokChat({\r\n    conversationId: conversationId,\r\n    messages: [\r\n      {\r\n        role: 'user',\r\n        content: 'Secret code: 0x4337. Repeat the code.',\r\n      },\r\n    ],\r\n  });\r\n\r\n  console.log(completion.message);\r\n}\r\n\r\nmain();\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "the twitter space feature is not working",
+    "created_at": "2025-01-02T17:23:27Z",
+    "closed_at": "2025-01-03T12:11:09Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/issues/39",
+    "body": "I made a small server with the code as shared in #31. All the envs are passed on properly as well.\r\n\r\n### Error\r\n```\r\n> npx bun index.ts\r\n\r\n[Space] Plugin added => RecordToDiskPlugin\r\n[Space] Plugin added => SttTtsPlugin\r\n[SttTtsPlugin] onAttach => space was attached\r\n[Space] Initializing...\r\n[Space] Got region => ap-south-1\r\n[Space] Creating broadcast...\r\n[Space] Authorizing token...\r\n[Space] Getting turn servers...\r\n[JanusClient] Starting polling...\r\n[JanusClient] createRoom => {\"janus\":\"success\",\"session_id\":1192347033986296,\"transaction\":\"i475f1qq\",\"sender\":2411755274026445,\"plugindata\":{\"plugin\":\"janus.plugin.videoroom\",\"data\":{\"videoroom\":\"created\",\"room\":\"1nAKEpYDrvnxL\",\"permanent\":false}}}\r\n[JanusClient] Room '1nAKEpYDrvnxL' created successfully\r\n[JanusClient] joined room => publisherId= 7869405995218194\r\ndyld[15020]: missing symbol called\r\n[1]    14980 abort      npm run start\r\n```\r\n\r\n### Steps to recreate\r\n\r\n```typescript\r\nimport { RecordToDiskPlugin, Scraper, Space, SttTtsPlugin } from \"agent-twitter-client\";\r\n\r\nasync function main() {\r\n\r\n    // 1. Initialize scraper\r\n    const scraper = new Scraper();\r\n    await scraper.login(\r\n      process.env.TWITTER_USERNAME!,\r\n      process.env.TWITTER_PASSWORD!\r\n    );\r\n\r\n    // 2. Create Space\r\n    const space = new Space(scraper);\r\n    // console.log(\"🚀 ~ main ~ space:\", space)\r\n    \r\n    // 3. Add plugins\r\n    space.use(new RecordToDiskPlugin());\r\n    space.use(new SttTtsPlugin(), {\r\n      openAiApiKey: process.env.OPENAI_API_KEY,\r\n      elevenLabsApiKey: process.env.ELEVENLABS_API_KEY\r\n    });\r\n  \r\n    // 4. Configure Space\r\n    // const config = ;\r\n    // console.log(\"🚀 ~ main ~ config:\", config)\r\n  \r\n    // 5. Initialize and start\r\n    const broadcastInfo = await space.initialize({\r\n        mode: \"INTERACTIVE\",\r\n        title: 'Test Space',\r\n        description: 'Testing spaces integration',\r\n        languages: ['en']\r\n    });\r\n    \r\n    console.log('Space URL:', broadcastInfo.share_url.replace('broadcasts', 'spaces'));\r\n  \r\n    // 6. Handle events\r\n    space.on('occupancyUpdate', (upd) => {\r\n      console.log('Occupancy:', upd.occupancy);\r\n    });\r\n    \r\n    space.on('speakerRequest', async (req) => {\r\n      await space.approveSpeaker(req.userId, req.sessionUUID);\r\n    });\r\n  \r\n    // 7. Cleanup on exit\r\n    process.on('SIGINT', async () => {\r\n      await space.stop();\r\n      process.exit(0);\r\n    });\r\n  }\r\n\r\n  main()\r\n  ```",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/39/comments",
+    "author": "gayatrigt",
+    "comments": [
+      {
+        "user": "gayatrigt",
+        "created_at": "2025-01-02T17:25:04Z",
+        "body": "@slkzgm, am I missing something here?"
+      },
+      {
+        "user": "slkzgm",
+        "created_at": "2025-01-02T20:59:31Z",
+        "body": "can you add me on discord, or send a dm on tg? hard to tell with these logs\r\n\r\ndiscord: slkz.\r\ntg: @slkzgm"
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "fix: proxy url global setting",
+    "created_at": "2025-01-02T00:30:57Z",
+    "closed_at": "2025-01-05T03:44:11Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/pull/38",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/38/comments",
+    "author": "sukbearai",
+    "comments": [
+      {
+        "user": "wtfsayo",
+        "created_at": "2025-01-05T03:44:07Z",
+        "body": "lgtm"
+      },
+      {
+        "user": "Ljankovi2003",
+        "created_at": "2025-01-07T00:29:57Z",
+        "body": "Hey, quick question: how can I scrape all the tweets and their replies? When I run the current code, I get all the tweets and the ID of the replied tweet.\r\n\r\nCould you help me modify the code to fetch both the original tweet and all of its replies?\r\n\r\nThanks in advance!"
+      },
+      {
+        "user": "sukbearai",
+        "created_at": "2025-01-07T01:26:51Z",
+        "body": "> Thanks in advance!\r\n\r\nPost your code"
+      }
+    ]
+  },
+  {
+    "number": 28,
+    "title": "Adds the possibility to hide link previews",
+    "created_at": "2024-12-24T09:51:17Z",
+    "closed_at": "2025-01-05T03:38:29Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/pull/28",
+    "body": "Adds an additional parameter to the sendTweet method + the internal request one. This will allow users to toggle whether or not they want link previews.",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/28/comments",
+    "author": "gabearro",
+    "comments": [
+      {
+        "user": "gabearro",
+        "created_at": "2024-12-24T10:34:49Z",
+        "body": "Realized this isn't complete with respect to the CLI. To be honest, I do not think it's necessary to add this to the CLI."
+      },
+      {
+        "user": "gabearro",
+        "created_at": "2024-12-30T17:14:20Z",
+        "body": "@Freytes how come you closed this PR? It adds a relatively useful functionality"
+      },
+      {
+        "user": "Freytes",
+        "created_at": "2024-12-30T20:03:21Z",
+        "body": "@gabearro it was closed in error, please resolve your conflicts and I will pull it in."
+      },
+      {
+        "user": "gabearro",
+        "created_at": "2024-12-30T20:45:39Z",
+        "body": "@Freytes no worries! I was worried I didn't comply with some contribution policy I didn't know about. I've fixed the conflicts and checked that it builds + works correctly."
+      },
+      {
+        "user": "wtfsayo",
+        "created_at": "2025-01-05T03:38:25Z",
+        "body": "reviewed, lgtm"
+      }
+    ]
+  },
+  {
+    "number": 12,
+    "title": "Tweets without the image when using sendTweet",
+    "created_at": "2024-11-29T07:07:22Z",
+    "closed_at": "2024-12-30T15:20:00Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/issues/12",
+    "body": "Saw there is update in the code and sendTweetWithMedia is removed and image can be sent using sendTweet, I tried but it posted without the image.\r\nhere's the part of code - \r\n```   const img = await fetch(imgUrl);\r\n      const arrayBuffer = await img.arrayBuffer();\r\n      const imgBuffer = Buffer.from(arrayBuffer);\r\n      const response = await scraper.sendTweet(replyText, tweetId, {data:imgBuffer,mediaType: 'image/jpeg'} );\r\n```\r\nIt works with sendTweetWithMedia(), just putting the imgBuffer in array, as it needs Buffer[]",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/12/comments",
+    "author": "Shrey00",
+    "comments": [
+      {
+        "user": "denizekiz",
+        "created_at": "2024-12-01T14:36:11Z",
+        "body": "I'm having same issue"
+      },
+      {
+        "user": "denizekiz",
+        "created_at": "2024-12-01T15:03:51Z",
+        "body": "I realised I wasnt use latest version, in eliza repo. Update package to latest 0.0.16 not 0.0.14"
+      },
+      {
+        "user": "Shrey00",
+        "created_at": "2024-12-03T05:50:01Z",
+        "body": "> I realised I wasnt use latest version, in eliza repo. Update package to latest 0.0.16 not 0.0.14\r\nOkay, thanks.\r\n"
+      },
+      {
+        "user": "denizekiz",
+        "created_at": "2024-12-30T14:38:46Z",
+        "body": "This issue can be closed. @lalalune \r\n\r\n> > I realised I wasnt use latest version, in eliza repo. Update package to latest 0.0.16 not 0.0.14\r\n> > Okay, thanks.\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "Remove circular dependancy",
+    "created_at": "2024-11-19T11:23:37Z",
+    "closed_at": "2024-11-20T09:23:13Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/pull/8",
+    "body": "I'm not sure if there was a good reason to add the package as a dependency of it self, was causing issues for me when I tried to pull it into `eliza`",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/8/comments",
+    "author": "vbhakta8",
+    "comments": [
+      {
+        "user": "lalalune",
+        "created_at": "2024-11-20T09:23:19Z",
+        "body": "lol no, good catch"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "Added greater agent capabilities, upload media (image/video) + quote tweets (with or without media) + following users, re-tweeting, & liking posts (for the algo !)",
+    "created_at": "2024-11-12T22:33:53Z",
+    "closed_at": "2024-11-22T01:55:26Z",
+    "labels": [],
+    "url": "https://github.com/elizaOS/agent-twitter-client/pull/4",
+    "body": "# Enhanced Twitter Client Features\r\n\r\nThis PR adds several new features to the Twitter client to make capabilities more autonomous\r\n\r\n## New Features\r\n- Media uploads (photos/videos) support\r\n- Quote tweets functionality\r\n- Following users capability\r\n- Tweet liking functionality\r\n\r\n## Technical Details\r\n- Added multi-step video upload process with chunked uploading\r\n- Implemented media processing status checks\r\n- Added rate limit handling for follow operations\r\n\r\n## Testing\r\nAll new features have been tested, included a command.ts file (optional) which allows user's to test functionalities via a CLI. Added node-fetch as an NPM package to test uploading images/videos from a link.  \r\n\r\n## Notes\r\n- Maintains compatibility with existing features\r\n- No breaking changes to the current API",
+    "comments_url": "https://api.github.com/repos/elizaOS/agent-twitter-client/issues/4/comments",
+    "author": "kingbootoshi",
+    "comments": [
+      {
+        "user": "lastchancedegen",
+        "created_at": "2024-11-13T13:59:13Z",
+        "body": "based"
+      },
+      {
+        "user": "lalalune",
+        "created_at": "2024-11-15T07:00:34Z",
+        "body": "i fucking love this dev"
+      },
+      {
+        "user": "kingbootoshi",
+        "created_at": "2024-11-15T07:13:20Z",
+        "body": "> i fucking love this dev\r\n\r\nbased, just wanted to do my part. inspired by your work and movement!"
+      },
+      {
+        "user": "lalalune",
+        "created_at": "2024-11-16T10:51:57Z",
+        "body": "okay reviewed\r\n\r\n- noticed one spot where we might have lost come code due to clauding\r\n- some merge conflicts in tweets"
+      },
+      {
+        "user": "kingbootoshi",
+        "created_at": "2024-11-21T09:44:38Z",
+        "body": "Cool, pulled the latest repo changes and updated the code. Since someone handled media upload in the latest pull, I built the new functions I added on top of that. \r\n\r\nthere should be no claude or missing code, now things are only added in their proper position (QT/Likes/RTs in tweet.ts, follows in relationships.ts)\r\n\r\nCheck it out now ! Optimized and cleaned up, I also added testing for the new functions that passed."
+      },
+      {
+        "user": "kingbootoshi",
+        "created_at": "2024-11-21T23:57:52Z",
+        "body": "oops! yea those changes weren't supposed to go on this branch. thanks !\r\n\r\nedit: just noticed this PR has been on main branch the whole time. opening another one for the other branch"
+      }
+    ]
+  }
+]

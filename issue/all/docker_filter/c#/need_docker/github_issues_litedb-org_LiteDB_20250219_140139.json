@@ -1,0 +1,113 @@
+[
+  {
+    "number": 1842,
+    "title": "[QUESTION] How do you DeleteMany efficiently",
+    "created_at": "2020-10-12T21:17:59Z",
+    "closed_at": "2020-10-13T16:32:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/litedb-org/LiteDB/issues/1842",
+    "body": "I've looked through the documentation and there is a lot of information about querying and indexes to query things efficiently, but I don't see a lot of information about deleting things efficiently.\r\n\r\nI'm trying to DeleteMany from a LiteDb database, but even relatively small deletes of 3000 items takes 10-20 seconds. Right now I am just experimenting with smaller data sets, but I plan to scale things up to much larger data sets, but I'm concerned that if the performance scales as well, then some of my deletion operations may take 30 minutes or more.\r\n\r\nI'm trying to make a generic database implementation using LiteDB, and below is the code that I'm using for deleting from the database\r\n\r\n```csharp\r\npublic void Delete<T>(IEnumerable<T> items)\r\n{\r\n    //Gets the collection name based on type. Will throw an exception if we don't support the type used.\r\n    var collectionName = getCollectionNameAndThrowIfNotSupported<T>();\r\n    //Gets the connection string. We are only specifying Filename, ReadOnly, and the Connection is shared\r\n    var connectionString = getConnectionString(read_only: false);\r\n    using (var db = new LiteDatabase(connectionString))\r\n    {\r\n        var collectionExists = db.CollectionExists(collectionName);\r\n        if (!collectionExists)\r\n            return; //no collection exists, so there is nothing to delete\r\n\r\n        //converting items to a hash set to help find matches more quickly\r\n        var hashedItems = items.ToHashSet();\r\n\r\n        var collection = db.GetCollection<T>(collectionName);\r\n        //This is the line that I have the most questions about. Is there a better way of writing this line to be more efficient?\r\n        collection.DeleteMany(x => hashedItems.Contains(x));\r\n    }\r\n}\r\n``` \r\n\r\nI thought that `Contains` would check if the items are equal, and for my objects that are being stored in LiteDb I am overriding `Equals` and `GetHashCode` and for two items to be equal I am only checking if the `ObjectId`s are equal.\r\n\r\nFrom the documentation it would appear that if you have an `ObjectId Id` that this will automatically get indexed, but am I missing something in my `DeleteMany` predicate that would help take advantage of indexes? Is there something that can be done to make this process faster?",
+    "comments_url": "https://api.github.com/repos/litedb-org/LiteDB/issues/1842/comments",
+    "author": "trockefeller-pathway",
+    "comments": [
+      {
+        "user": "lbnascimento",
+        "created_at": "2020-10-13T14:59:25Z",
+        "body": "@trockefeller-pathway Basically, what `DeleteMany` does is to run a query to get the id of all documents that match the predicate and, after that, it deletes these documents by their ids. What is actually happening is that `x => hashedItems.Contains(x)` is being converted into a `BsonExpression`, which involves serializing all the items in `hashedItems`, and executed for every document in the query. So, not very efficient.\r\n\r\nDeleting by id is always faster. Given your situation, I believe the fastest way to delete many documents would be something like this (assuming your class has an Id field):\r\n```C#\r\ndb.BeginTrans();\r\nforeach(var item in items)\r\n{\r\n\tcollection.Delete(BsonMapper.Global.Serialize(item)[\"_id\"]);\r\n}\r\ndb.Commit();\r\n```"
+      },
+      {
+        "user": "trockefeller-pathway",
+        "created_at": "2020-10-13T15:32:23Z",
+        "body": "@lbnascimento in my LiteDb objects I have a `public ObjectId Id { get; }` property. I don't explicitly have a private _id field. Do I need to explicitly create this field, or does it automatically get created because of my public Id property?\n\n---\n\n@lbnascimento I was able to test the code you suggested, and it did work to delete the items I was needing to, and it was at least 100x faster than how I was doing it previously. Thank you."
+      },
+      {
+        "user": "lbnascimento",
+        "created_at": "2020-10-13T15:37:33Z",
+        "body": "@trockefeller-pathway The id property in your object always becomes \"_id\" in the mapped `BsonDocument`, which is why I used it after the `BsonMapper.Serialize<T>(T obj)` call. I did this because your method is generic, so you can't simply do something like `collection.Delete(item.Id)`.\r\n\r\nThere are other ways to solve your problem, of course. You could get the Id field by reflection, but that's exactly what `BsonMapper` does. You could also make all of your data classes implement an interface that has a public property Id, which would allow you to use `collection.Delete(item.Id)`, but I think it would be over-engineering and it would only work if you own all of your data classes."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates efficient bulk deletion leveraging primary key/indexes",
+      "Avoids full collection scans during deletion operations",
+      "Works with LiteDB's document ID handling",
+      "Maintains generic implementation capability",
+      "Scales effectively to large datasets",
+      "Utilizes transactional batching where appropriate"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:27:47"
+    }
+  },
+  {
+    "number": 500,
+    "title": "DateTime.Kind property is not preserved",
+    "created_at": "2017-02-23T03:38:34Z",
+    "closed_at": "2017-03-11T22:09:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/litedb-org/LiteDB/issues/500",
+    "body": "```\r\npublic class Ax {\r\n    [BsonIndex] public DateTime Time { get; set; }\r\n}\r\n\r\nusing (var db = new LiteDatabase(\"temp.db\")) {     \r\n    LiteCollection<Ax> col = db.GetCollection<Ax>(\"Ax\");\r\n    DateTime now = DateTime.UtcNow;\r\n    Console.WriteLine(now.Kind);//\r\n    col.Insert(new Ax {Time = DateTime.UtcNow});\r\n    Console.WriteLine(col.FindOne(x => true).Time.Kind);\r\n}\r\n```\r\n\r\nThis gives output: \r\n`Utc`\r\n`Local`\r\n\r\nWhich is not correct. \r\n\r\nAny thoughts?",
+    "comments_url": "https://api.github.com/repos/litedb-org/LiteDB/issues/500/comments",
+    "author": "aviadmini",
+    "comments": [
+      {
+        "user": "mbdavid",
+        "created_at": "2017-02-24T12:26:32Z",
+        "body": "Hi @aviadmini, BSON specs has no information about how date was storage and always convert to UTC.\r\n\r\n```\r\npublic static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);\r\n\r\n// serialize\r\nvar date = (DateTime)value.RawValue;\r\n// do not convert to UTC min/max date values - #19\r\nvar utc = (date == DateTime.MinValue || date == DateTime.MaxValue) ? date : date.ToUniversalTime();\r\nvar ts = utc - BsonValue.UnixEpoch;\r\nwriter.Write(Convert.ToInt64(ts.TotalMilliseconds));\r\n\r\n// deserialize\r\nvar ts = reader.ReadInt64();\r\n\r\n// catch specific values for MaxValue / MinValue #19\r\nif (ts == 253402300800000) return DateTime.MaxValue;\r\nif (ts == -62135596800000) return DateTime.MinValue;\r\n\r\nreturn BsonValue.UnixEpoch.AddMilliseconds(ts).ToLocalTime();\r\n```\r\n\r\nSo, deserialization always convert to you date to LocalTime to be more common. If you works wih UTC you must use ToUniversalTime()."
+      },
+      {
+        "user": "aviadmini",
+        "created_at": "2017-02-24T14:42:16Z",
+        "body": "Ok @mbdavid that makes sense"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why DateTime.Kind is not preserved during serialization/deserialization",
+      "Method to maintain UTC time consistency when working with the database",
+      "Clarification of the library's datetime handling behavior"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:32:41"
+    }
+  },
+  {
+    "number": 48,
+    "title": "Huge Memory & CPU Usage",
+    "created_at": "2015-08-13T12:26:10Z",
+    "closed_at": "2015-08-22T13:40:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/litedb-org/LiteDB/issues/48",
+    "body": "Hello,\n\nI compared three versions of a test application. I saved a lot (10^7) objects of a type with three properties of type double.\nThe first version was coded with saving to a file with json serialization (Newtonsoft Json). The second was with litedb. The third with simply saving to a txt-File (File.WriteAllLines).\n\nCode LiteDB:\n\n```\n// Open database (or create if not exits)\nusing(var db = new LiteDatabase(@\".\\LiteDB.db\"))\n{\n    // Get customer collection\n    var col = db.GetCollection<Node>(\"nodes\");\n    col.Insert(nodes);\n}\n```\n\nThe results are:\n\n| Version | Memory Usage | Disk Space Usage | Time Needed [ms] |\n| --- | --- | --- | --- |\n| Newtonsoft Json | ~500MB | 673MB | 68,630ms |\n| LiteDB | ~6 675MB | 3 476MB | 497,464ms |\n| Text File | ~500MB | 950MB | 38,913ms |\n\nIs there a faster way of saving bigger datas?\n",
+    "comments_url": "https://api.github.com/repos/litedb-org/LiteDB/issues/48/comments",
+    "author": "KeKl",
+    "comments": [
+      {
+        "user": "mbdavid",
+        "created_at": "2015-08-13T23:32:27Z",
+        "body": "Hi @KeKl, thanks for your comment.\n\nPerformance and memory use drops in LiteDB when you are working with huge mass of data. This reason is because LiteDB implement a full transaction and journal backup save. Transactions are memory only (thats why use too many memory) and journal write in disk twice.\n\nTo works fast with huge data in LiteDB, try to use:\n\n``` C#\nusing(var db = new LiteDatabase(@\"filename=.\\LiteDB.db; journal=false\"))\n{\n    var col = db.GetCollection<Node>(\"nodes\");\n    col.InsertBulk(nodes);\n}\n```\n- `nodes` var must returns and `IEnumerable<Node>` and will be better if uses `yield return`\n\nThis code must run fast, but never as Newtonsoft or Text File. LiteDB implements indexes (at least _id index), data in pages, and has a much more complex data structure.\n\nI have some plans to remove some features (like transactions and journals) in prior be simple, less memory usage and faster.\n"
+      },
+      {
+        "user": "KeKl",
+        "created_at": "2015-08-22T13:40:45Z",
+        "body": "Hi @mbdavid,\n\nthank you for your answer.\n\nI tested also your implementation. It\u00b4s faster.\n\nThank you!\n\nRegards,\nKevin\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates LiteDB performance optimization strategies for large datasets",
+      "Addresses transaction/memory overhead in data persistence",
+      "Provides bulk data insertion methodology",
+      "Compares tradeoffs between data safety and performance"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:35:20"
+    }
+  }
+]

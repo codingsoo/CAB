@@ -1,0 +1,104 @@
+[
+  {
+    "number": 23,
+    "title": "Issue with /tf Remapping in kinematic_icp for 2D LiDAR",
+    "created_at": "2024-11-30T21:31:00Z",
+    "closed_at": "2024-12-25T06:44:17Z",
+    "labels": [],
+    "url": "https://github.com/PRBonn/kinematic-icp/issues/23",
+    "body": "## Problem Summary  \r\n\r\nI encountered an issue with the `kinematic_icp` package when running LiDAR odometry with a remapped `/tf` topic and `use_2d_lidar:=true`. In my setup, I remap `/tf` to `/JK3/tf` (JK3: namespace) to match my simulation environment. This configuration works correctly with default (3D LiDAR) version of the package. However, the node crashes with an error when using 2D LiDAR (`use_2d_lidar:=true`).\r\n\r\n## Error Details  \r\nWhen launching the `online_node` with the following command for 2D LiDAR odometry:  \r\n```bash\r\nros2 launch kinematic_icp online_node.launch.py \\\r\n    lidar_topic:=/JK3/sensors/lidar2d_0/scan \\ # replace JK3 with your namespace\r\n    use_2d_lidar:=true \\\r\n    use_sim_time:=True\r\n```\r\n    \r\nand remapping /tf to /JK3/tf in the launch file, I encounter the following error:\r\n\r\n```bash\r\n[ERROR] [kinematic_icp_online_node-1]: process has died \r\n[pid 288680, exit code -6, cmd '/[workspace]/install/kinematic_icp/lib/kinematic_icp/kinematic_icp_online_node --ros-args -r __node:=online_node -r __ns:=/kinematic_icp --params-file /[workspace]/install/kinematic_icp/share/kinematic_icp/config/kinematic_icp_ros.yaml --params-file /tmp/launch_params_23mw3z60 -r lidar_odometry:=lidar_odometry -r /tf:=/JK3/tf'].\r\n```\r\n\r\nWhen running the node without remapping /tf, the node does not crash but fails to find the required transforms, which prevents it from performing odometry (obviously).\r\n\r\nHowever, when running the following command with 3D LiDAR odometry, everything works as expected, even with the same remapping:\r\n\r\n```bash\r\nros2 launch kinematic_icp online_node.launch.py \\\r\n    lidar_topic:=/JK3/sensors/lidar3d_0/points \\\r\n    use_2d_lidar:=false \\\r\n    use_sim_time:=True\r\n```\r\n## Steps to Reproduce\r\n\r\n1. Clone the latest version of the repository.\r\n2. Configure a launch file to include the following remapping:\r\n\r\n```py\r\nremappings=[\r\n    ('/tf', '/JK3/tf'), # replace JK3 with your namespace\r\n],\r\n```\r\n\r\n3. Run the node with a 2D LiDAR topic (sensor_msgs/LaserScan) and the following parameters:\r\n```bash\r\nros2 launch kinematic_icp online_node.launch.py \\\r\n    lidar_topic:=/JK3/sensors/lidar2d_0/scan \\ # replace JK3 with your namespace\r\n    use_2d_lidar:=true \\\r\n    use_sim_time:=True\r\n```\r\n4. ### MOVE THE ROBOT AND THE CODE CRASHES!\r\n\r\n5. Run the node with a 3D LiDAR topic (sensor_msgs/PointCloud2) using the following parameters:\r\n```bash\r\n    ros2 launch kinematic_icp online_node.launch.py \\\r\n        lidar_topic:=/JK3/sensors/lidar3d_0/points \\ # replace JK3 with your namespace\r\n        use_2d_lidar:=false \\\r\n        use_sim_time:=True\r\n```\r\n6. Observe that the node runs without errors.\r\n\r\n## Expected Behavior\r\n\r\nThe kinematic_icp node should support remapping /tf for both 2D and 3D LiDAR configurations. Alternatively, if remapping /tf is not supported in specific configurations, an explicit error message should be provided, and the limitation should be documented.\r\n\r\n## Actual Behavior\r\n\r\n**2D LiDAR (use_2d_lidar:=true):** The node crashes with a fatal error (exit code -6) when remapping /tf to /JK3/tf.\r\n**3D LiDAR (use_2d_lidar:=false):** The node runs without issues, even with the same remapping.\r\n\r\n## Environment Details\r\n\r\n- **OS:** Ubuntu 22.04\r\n- **ROS Version:** ROS2 Humble\r\n- **kinematic_icp Version:** Latest commit as of Nov 29 2024.\r\n- **LiDAR Configuration:**\r\n2D LiDAR topic: /JK3/sensors/lidar2d_0/scan (sensor_msgs/LaserScan)\r\n3D LiDAR topic: /JK3/sensors/lidar3d_0/points (sensor_msgs/PointCloud2)\r\n- **Remapping:** /tf → /JK3/tf\r\n\r\n## Proposed Solutions\r\n\r\n- Investigate differences in handling sensor_msgs/LaserScan (2D LiDAR) and sensor_msgs/PointCloud2 (3D LiDAR) in relation to TF remapping.\r\n- Add support for remapping /tf for 2D LiDAR configurations.\r\n- Add support for namespacing in general\r\n- Update documentation to clarify any limitations or requirements regarding `/tf` remapping for 2D LiDAR odometry.\r\n\r\n## Additional Context\r\n\r\nI tested this with both 2D and 3D LiDAR odometry. The issue is isolated to 2D LiDAR (sensor_msgs/LaserScan).\r\n\r\nIf needed, I can share additional logs, configuration files, or launch files to help reproduce the issue.\r\n\r\nThank you for maintaining this package! Please let me know if there's anything else I can provide to assist with debugging this problem.",
+    "comments_url": "https://api.github.com/repos/PRBonn/kinematic-icp/issues/23/comments",
+    "author": "MikeDegany",
+    "comments": [
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-12-02T13:52:25Z",
+        "body": "Hello @MikeDegany, I cannot reproduce the behavior you describe. Although it is not a standard practice to remap the `/tf` topic (99% of ROS packages expect the transforms to be under `/tf` and `/tf_static`), I really cannot see a difference between using the `PointCloud2` and `LaserScan` msg. Have you check the `frame_id` in the msg?"
+      },
+      {
+        "user": "MikeDegany",
+        "created_at": "2024-12-25T01:23:20Z",
+        "body": "Thank you for the response. After more checks, I found that the problem isn’t caused by namespacing. All topics in my setup are namespaced because I use multiple robots, and this setup works fine in other cases.\r\n\r\nI checked the LaserScan messages, and the data looks correct. However, the node still crashes **just after I move the robot**, and I’m not sure how to debug this further. Do you have any suggestions for further investigation?\r\n\r\nWould it be better to close this issue and open a new one later with more details or keep it until I resolve it? In the meantime, if you could [share](mailto:mike.degany@gmail.com) a `bag` file or provide details about the 2D LiDAR data you tested with, it might help me find the differences and fix the problem.\r\n\r\nThank you for your help!"
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "make kinematic_icp_registration static",
+    "created_at": "2024-11-11T11:21:44Z",
+    "closed_at": "2024-11-12T08:25:26Z",
+    "labels": [],
+    "url": "https://github.com/PRBonn/kinematic-icp/pull/16",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/PRBonn/kinematic-icp/issues/16/comments",
+    "author": "ardabbour",
+    "comments": [
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-11-11T11:28:43Z",
+        "body": "Thanks for the consistency check; I know it is quite a small change, but please always put a description. It is fine for me, I will wait @benemer approval as well and then merge"
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Fix for at least two types of timestamps in PointCloud2 messages",
+    "created_at": "2024-10-29T09:18:10Z",
+    "closed_at": "2024-11-07T18:00:51Z",
+    "labels": [],
+    "url": "https://github.com/PRBonn/kinematic-icp/pull/13",
+    "body": "This is mainly to tackle the issue reported in #12 . In essence, some drivers (in this case the Livox driver) express the timestamps in nanoseconds, while other vendors (e.g. Ouster if my mind doesn't fail me) report the stamp directly in seconds. To handle the scenario I decided to count the digits of the timestamps, as we know that ROS stores the seconds and nanoseconds in `int32`. As this type cannot handle more than 10 digits, any stamp with more than 10 digits in the integer part of the floating point is assumed to be expressed in nanoseconds and converted. \r\n\r\nIt will need some testing to be sure but on the preliminary analysis, I don't see any difference in results for our data. @KenN7 can you test it on your stuff? or if you can send me the data ;)",
+    "comments_url": "https://api.github.com/repos/PRBonn/kinematic-icp/issues/13/comments",
+    "author": "tizianoGuadagnino",
+    "comments": [
+      {
+        "user": "KenN7",
+        "created_at": "2024-11-05T13:07:00Z",
+        "body": "Hi there,\r\nI cannot send you my data unfortunately, but i can tell you, that from my initial tests, it seems to work fine :)"
+      },
+      {
+        "user": "KenN7",
+        "created_at": "2024-11-05T13:08:10Z",
+        "body": "I was only wondering whether it is normal that the method outputs less points on rviz when the computation is faster ? (in debug vs release)"
+      },
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-11-07T08:44:32Z",
+        "body": "> I was only wondering whether it is normal that the method outputs less points on rviz when the computation is faster ? (in debug vs release)\r\n\r\nI would guess that is a rendering issue from RVIZ, if you check the size of the published `PointCloud2` msg it doesn't seems to change\r\n"
+      },
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-11-07T09:31:11Z",
+        "body": "@benemer from my side we can merge this, I will wait for your trigger"
+      },
+      {
+        "user": "benemer",
+        "created_at": "2024-11-07T14:05:00Z",
+        "body": "What do you think about this solution? It is a bit lighter and still uses the fact that ROS represents seconds in int32. This means that if your timestamp is larger than this, it must be measured in nanoseconds (assuming it's either seconds or nanoseconds).\r\n\r\nIn both solutions, this conversion fails if the message contains a timestamp in nanoseconds smaller than the max value of an int32, which is 2.147483647 seconds. This should not be very important since it only occurs if you use nanoseconds and relative timestamps starting from 0. But in that case, the way we infer the timestamps of the beginning and end of the scan will also fail because this assumes absolute timestamps for the points.\r\n\r\nThis conversion is not easy because the message timestamp could also contain milliseconds (for whatever reason). However, with this, we at least support the most common scenarios."
+      },
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-11-07T14:40:19Z",
+        "body": "Any solution we bring will be ugly and not elegant in some way. I will stick to what was here to close this after 2 weeks because this was already tested in both scenarios. Any breaking point in this part is going to be my fault. Hopefully, someone else come up with more issues like this so that we can further robustify this part. Thanks @KenN7 for now ;)"
+      }
+    ]
+  },
+  {
+    "number": 12,
+    "title": "Timestamp problem",
+    "created_at": "2024-10-25T14:26:55Z",
+    "closed_at": "2024-11-07T18:00:52Z",
+    "labels": [],
+    "url": "https://github.com/PRBonn/kinematic-icp/issues/12",
+    "body": "Hi, \r\n\r\nI have checked more in depth the problem of the timestamp (merged in the last PR).\r\n\r\nIt boils down to the type of timestamp defined by manufacturers in the PointCloud2 Messages.\r\nE.g. In my case (i'm using a livox 360 lidar, with PointCloud2 messages), the messages are of type *double* but are expressed in nanoseconds.\r\n\r\nThat means , that a given lidar can output different timestamps e.g. for linux timestamp : \r\n- 1726578368464684544.00 (double and *nanoseconds* (my case))\r\n- 1726578368.464684544 (double, and *seconds*)\r\n- 1726578368 (int and seconds)\r\n- 1726578368464684544 (int64 and nanoseconds)\r\n\r\nIt could even by microseconds, or any other combination or datatype and time unit.\r\n\r\nThis has an impact on the way that timestamps have to be converted in  the *ExtractTimestampsFromMsg* fucntion in RosUtils.cpp (line 55).\r\nIn this function, all timestamp are converted to a vector of double, but that does not mean that they necessarily are expressed in seconds (in my case, those are nanoseconds).\r\n\r\nAny idea how this could be handled ? maybe a configuration file that would indicate the format of the timestamp ?\r\n\r\nCheers :) !\r\n",
+    "comments_url": "https://api.github.com/repos/PRBonn/kinematic-icp/issues/12/comments",
+    "author": "KenN7",
+    "comments": [
+      {
+        "user": "tizianoGuadagnino",
+        "created_at": "2024-10-29T09:18:39Z",
+        "body": "#13 "
+      }
+    ]
+  }
+]

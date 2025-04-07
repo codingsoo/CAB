@@ -1,0 +1,53 @@
+[
+  {
+    "number": 127,
+    "title": "Setting batch_cfg=True produces slightly different results",
+    "created_at": "2025-01-12T20:32:53Z",
+    "closed_at": "2025-01-15T11:30:03Z",
+    "labels": [],
+    "url": "https://github.com/genmoai/mochi/issues/127",
+    "body": "Hi, I was playing around with `batch_cfg` and am seeing different results when I enable/disable batching. Is this intended behaviour?\r\n\r\nCode to reproduce:\r\n```py\r\nimport numpy as np\r\nimport os\r\nfrom genmo.mochi_preview.pipelines import (\r\n    DecoderModelFactory,\r\n    DitModelFactory,\r\n    MochiPipeline,\r\n    T5ModelFactory,\r\n    linear_quadratic_schedule,\r\n)\r\n\r\nimport pickle\r\n\r\nMOCHI_DIR = \"./weights\"\r\n\r\npipeline = MochiPipeline(\r\n    text_encoder_factory=T5ModelFactory(),\r\n    dit_factory=DitModelFactory(\r\n        model_path=f\"{MOCHI_DIR}/dit.safetensors\", model_dtype=\"bf16\"\r\n    ),\r\n    decoder_factory=DecoderModelFactory(\r\n        model_path=f\"{MOCHI_DIR}/decoder.safetensors\",\r\n    ),\r\n    decode_type=\"tiled_full\",\r\n    cpu_offload=True\r\n)\r\n\r\ncfgs = [\r\n    (dict(\r\n        height=480,\r\n        width=848,\r\n        num_frames=31,\r\n        num_inference_steps=64,\r\n        sigma_schedule=linear_quadratic_schedule(64, 0.025),\r\n        cfg_schedule=[4.5] * 64,\r\n        batch_cfg=False,\r\n        prompt=\"A spinning globe on a wooden desk.\",\r\n        negative_prompt=\"\",\r\n        seed=12345,\r\n    ), \"ref_unbatched.pkl\"),\r\n    (dict(\r\n        height=480,\r\n        width=848,\r\n        num_frames=31,\r\n        num_inference_steps=64,\r\n        sigma_schedule=linear_quadratic_schedule(64, 0.025),\r\n        cfg_schedule=[4.5] * 64,\r\n        batch_cfg=True,\r\n        prompt=\"A spinning globe on a wooden desk.\",\r\n        negative_prompt=\"\",\r\n        seed=12345,\r\n    ), \"ref_batched.pkl\")\r\n]\r\n\r\nvideos = []\r\nfor cfg, fname in cfgs:\r\n    video = pipeline(**cfg)\r\n    videos.append(video)\r\n        \r\nprint(np.allclose(videos[0], videos[1]))\r\n```\r\n\r\nNote: The generated videos look roughly the same",
+    "comments_url": "https://api.github.com/repos/genmoai/mochi/issues/127/comments",
+    "author": "Akshat-Tripathi",
+    "comments": [
+      {
+        "user": "ajayjain",
+        "created_at": "2025-01-14T23:47:24Z",
+        "body": "Hi @Akshat-Tripathi,\r\n\r\nDo you have any visual examples comparing the two videos?\r\n\r\nSome slight numerical differences are expected between batch_cfg=False and batch_cfg=True due to CUDA kernel differences in the framework.\r\n\r\nIf there's a significant difference in the videos, we'd be happy to check for a bug."
+      },
+      {
+        "user": "Akshat-Tripathi",
+        "created_at": "2025-01-15T11:30:04Z",
+        "body": "Hi @ajayjain,\r\n\r\nYeah I've got a few videos generated without any noticeable differences. Kernel differences does make sense as a reason thanks!"
+      }
+    ]
+  },
+  {
+    "number": 93,
+    "title": "TypeError: configure_model() missing 1 required positional argument: 'cpu_offload_'",
+    "created_at": "2024-11-28T16:18:48Z",
+    "closed_at": "2024-11-30T09:43:00Z",
+    "labels": [],
+    "url": "https://github.com/genmoai/mochi/issues/93",
+    "body": "TypeError: configure_model() missing 1 required positional argument: 'cpu_offload_'\r\nstart gradio\r\nI will encounter this problem regardless of whether I pass this parameter or not\r\nHere are some startup parameters I have tried\r\npython3 ./demos/gradio_ui.py --model_dir weights/ --cpu_offload true\r\npython3 ./demos/gradio_ui.py --model_dir weights/ --cpu_offload false\r\npython3 ./demos/gradio_ui.py --model_dir weights/ ",
+    "comments_url": "https://api.github.com/repos/genmoai/mochi/issues/93/comments",
+    "author": "ysxk",
+    "comments": [
+      {
+        "user": "paras-genmo",
+        "created_at": "2024-11-30T09:40:06Z",
+        "body": "Hi @ysxk, this is a bug introduced by our LoRA trainer. I'm working on a fix which should be out soon. In the meantime, `./demos/cli.py` works. Thanks for reporting!"
+      },
+      {
+        "user": "paras-genmo",
+        "created_at": "2024-11-30T09:43:53Z",
+        "body": "@ysxk gradio_ui.py is now fixed. You can use it with:\r\n```\r\npython3 ./demos/gradio_ui.py --model_dir weights/ --cpu_offload\r\n```\r\nor\r\n```\r\npython3 ./demos/gradio_ui.py --model_dir weights/\r\n```\r\n"
+      },
+      {
+        "user": "ysxk",
+        "created_at": "2024-12-01T06:07:21Z",
+        "body": "thanks"
+      }
+    ]
+  }
+]

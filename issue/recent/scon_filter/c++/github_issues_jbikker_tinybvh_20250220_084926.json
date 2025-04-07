@@ -1,0 +1,218 @@
+[
+  {
+    "number": 116,
+    "title": "A question for usage in multiple-bounce raytracing",
+    "created_at": "2025-02-14T12:38:07Z",
+    "closed_at": "2025-02-14T15:52:16Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/116",
+    "body": "Hello Jacco,\n\nI am using tinybvh for raytracing meshes that represent the surface of a fluid. It works very well (and it is 5x to 10x faster than my naive AABB !)\n\nIn my usage case, there might be multiple bounces and refractions. So I have a question:\n \n- is it possible to ignore a specific primitive in the traversal ? For instance, when I raytrace my surface, each time I encounter an intersection with a facet (say f), I am launching a refracted ray, and I would like to ignore the intersections with f when intersecting this refracted ray with the mesh (for now I am moving the origin of the ray slightly along the facet's normal and it works, but it is not super elegant). Same thing for computing shadow rays.\n\nBest,\n-- Bruno\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/116/comments",
+    "author": "BrunoLevy",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-14T14:47:35Z",
+        "body": "Hello Bruno,\n\nI am glad you find tinybvh useful! Depending on how many rays you need to trace, you may benefit from using ````::BuildHQ````, ````::Optimize```` and/or different BVH layouts: ````BVH4_CPU```` seems to be best for many ray distributions.\n\nThat being said: Offsetting a ray is in fact the commonly used solution to avoid self-intersections at t=0. However, the offset is typically not made along the normal, but in the ray direction. Ignoring a single primitive doesn't resolve all cases, e.g. when a hit is exactly on a shared edge.\n\nThe offset magnitude is best chosen as 1e-7 times the extent of the scene for float32. In some rare cases, for grazing rays offsetting in the ray direction is not sufficient. It can then be beneficial to lerp between an offset in the ray direction D and an offset along the normal N using ````sqr(dot(N,D))```` as the lerp factor.  "
+      },
+      {
+        "user": "BrunoLevy",
+        "created_at": "2025-02-14T15:37:09Z",
+        "body": "Awesome ! Thank you Jacco !\nYour lib is a gem, easy to use, excellent perf, love it !"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-14T15:52:05Z",
+        "body": "That's great to hear! And thanks for the BlueSky post!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a method to avoid self-intersections during secondary ray traversal (refracted/shadow rays)",
+      "Maintains performance characteristics of the BVH implementation",
+      "Handles edge cases like shared edges and grazing rays reliably"
+    ]
+  },
+  {
+    "number": 112,
+    "title": "Fix missing functions for custom double vectors. And allow the use of explicit constructors for float to vector.",
+    "created_at": "2025-02-13T10:57:23Z",
+    "closed_at": "2025-02-13T15:30:00Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/112",
+    "body": "This PR does two things.\r\n1. It fixes a few missing `bvhdbl3` that happen to be on the wrong side of an ifdef.\r\n2. It allows `bvhvec3` and `bvhdbl3` to use `explicit bvhvec3(const float a)` constructors (I do this in my custom math library.)\r\n\r\nI understand if the explicit ctor change isn't something you want to do. But I think the double vector functions should be fixed.\r\n\r\nI also tried to match the code style that I saw, might not have done it perfectly though.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/112/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T12:16:49Z",
+        "body": "It's obviously a matter of taste, but I would rather not bring in the explicit constructors. I did move the #ifdef, see last push."
+      },
+      {
+        "user": "NogginBops",
+        "created_at": "2025-02-13T12:28:47Z",
+        "body": "That is fair.\r\nI just found it to be useful as I had some issues where floats were implicitly casted to vectors where I didn't want them to.\r\nBut I can easily maintain a version of the code that allows me to use explicit constructors so it's not that big of a problem."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures missing double vector functions are available regardless of build configuration",
+      "Maintains backward compatibility for implicit float-to-vector conversions"
+    ]
+  },
+  {
+    "number": 109,
+    "title": "TLAS IsOccluded doesn't handle BVBH4_CPU layout correctly",
+    "created_at": "2025-02-12T19:24:30Z",
+    "closed_at": "2025-02-13T10:01:57Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/109",
+    "body": "The `IsOccluded` function doesn't do the same BLAS layout check that `Intersect` does. This causes a crash when trying to use `IsOccluded` on a TLAS of BVH4_CPU BLASes\n\n`Intersect`:\n```c++\n// 2. Traverse BLAS with the transformed ray\n// Note: Valid BVH layout options for BLASses are the regular BVH layout,\n// the AVX-optimized BVH_SOA layout and the wide BVH4_CPU layout. If all\n// BLASses are of the same layout this reduces to nearly zero cost for\n// a small set of predictable branches.\nassert( blas->layout == LAYOUT_BVH || blas->layout == LAYOUT_BVH4_CPU || blas->layout == LAYOUT_BVH_SOA );\nif (blas->layout == LAYOUT_BVH)\n{\n    // regular (triangle) BVH traversal\n    tmp.rD = tinybvh_safercp( tmp.D );\n    cost += ((BVH*)blas)->Intersect( tmp );\n}\nelse\n{\n    tmp.rD = tinybvh_safercp( tmp.D );\n    if (blas->layout == LAYOUT_BVH4_CPU) cost += ((BVH4_CPU*)blas)->Intersect( tmp );\n    else if (blas->layout == LAYOUT_BVH_SOA) cost += ((BVH_SoA*)blas)->Intersect( tmp );\n}\n```\n\n`IsOccluded`:\n```c++\n// 2. Traverse BLAS with the transformed ray\nif (blas->IsOccluded( tmp )) return true;\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/109/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-12T19:59:08Z",
+        "body": "This was indeed missing, apologies. The correct behavior has now been added and is available in the dev branch. A test scenario is provided in tiny_bvh_anim.cpp, which now traces shadow rays to a point light in a scene with a TLAS, a BVH with custom geometry and a BVH in the BVH4_CPU layout. \n\nCan you confirm that this now works properly on your end as well?"
+      },
+      {
+        "user": "NogginBops",
+        "created_at": "2025-02-13T10:01:57Z",
+        "body": "Yeah it works, I made the same workaround as in your fix. I've updated to your version and it works."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T10:26:49Z",
+        "body": "Nice, thanks for confirming!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "IsOccluded function must handle all valid BLAS layout types supported by Intersect",
+      "Solution must prevent crashes when processing TLAS structures containing BVH4_CPU BLASes",
+      "Implementation must maintain consistency between Intersect and IsOccluded behavior",
+      "Validation through test scenarios involving mixed BLAS layouts must be provided"
+    ]
+  },
+  {
+    "number": 84,
+    "title": "tiny_bvh_speedtest crashes on ARM Mac",
+    "created_at": "2025-01-09T15:12:12Z",
+    "closed_at": "2025-01-09T15:53:32Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/84",
+    "body": "Tried main and dev branches - same result. Here is the stacktrace. Looks like maybe bvhNode list is empty, as debugger highlighted the assignment to root.leftFirst. The other demos work fine.\r\n\r\n```\r\nLoading triangle data (0 tris).\r\nBVH construction speed\r\nwarming caches...\r\nProcess 93514 stopped\r\n* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0xc)\r\n    frame #0: 0x0000000100004b1c tiny_bvh_speedtest`tinybvh::BVH::PrepareBuild(this=0x0000600001b70080, vertices=0x000000016fdfe3c8, indices=0x0000000000000000, prims=0) at tiny_bvh.h:1386:17\r\n   1383\t\tverts = vertices, idxCount = triCount = primCount;\r\n   1384\t\t// prepare fragments\r\n   1385\t\tBVHNode& root = bvhNode[0];\r\n-> 1386\t\troot.leftFirst = 0, root.triCount = triCount, root.aabbMin = bvhvec3( BVH_FAR ), root.aabbMax = bvhvec3( -BVH_FAR );\r\n   1387\t\tif (!indices)\r\n   1388\t\t{\r\n   1389\t\t\tFATAL_ERROR_IF( vertices.count == 0, \"BVH::PrepareBuild( .. ), primCount == 0.\" );\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/84/comments",
+    "author": "fxtech",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-09T15:26:31Z",
+        "body": "Looks like it didn't manage to load the scene file. Perhaps a working directory issue?"
+      },
+      {
+        "user": "fxtech",
+        "created_at": "2025-01-09T15:53:32Z",
+        "body": "That's exactly what it was. Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of scene file loading failure"
+    ]
+  },
+  {
+    "number": 67,
+    "title": "Crashes with CWBVH usage",
+    "created_at": "2024-12-17T20:39:12Z",
+    "closed_at": "2024-12-18T07:38:25Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/67",
+    "body": "When I build a CWBVH it crashes because allocatedBlocks is uninitialized so its value can be greater than spaceNeeded and no allocation of bvh8Data/bvh8Tris occurs. \r\n\r\nSecond problem is when I create a BVH8 and then build a CWBVH by using ConvertFrom when I go to free them, freeing both results in a crash. At first glance it looks like this is because the copy of BVH8 is not a deep copy so its two structs holding the same pointer to bvh8Node and then it gets freed twice when bvh8 is destructed.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/67/comments",
+    "author": "andr3wmac",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T14:18:42Z",
+        "body": "This should be fixed in the latest commit on the dev branch, can you verify? The data was indeed not zeroed. Regarding the second problem: I am not sure what you encountered, perhaps it is related to the first issue; The CWBVH is not using data from bvh8, since it needs a specific format for both nodes and tris.\n\n---\n\nSecond issue was actually an issue too, sorry for dismissing that too soon. This should now be resolved: tinybvh now keeps track of ownership of bvhs and prevents duplicated deletion."
+      },
+      {
+        "user": "andr3wmac",
+        "created_at": "2024-12-18T19:17:48Z",
+        "body": "Np, just tested the latest and it looks like everything is working great \ud83d\udc4d thanks for the quick fixes."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures proper initialization of critical variables to prevent invalid memory access",
+      "Implements ownership tracking for shared resources to prevent double-free scenarios"
+    ]
+  },
+  {
+    "number": 66,
+    "title": "Using custom allocation functions broke with the API rework",
+    "created_at": "2024-12-17T18:33:14Z",
+    "closed_at": "2024-12-18T08:56:50Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/66",
+    "body": "Thanks a lot for this great piece of software - After the last version I unfortunately have a crash because the library doesn't use the provided context to override the allocations functions anymore.\r\n\r\n~~~\r\ntinybvh::BVH4_CPU blas;\r\nblas.context = myContext;\r\nblas.Build( vertices, triangleCount );\r\n~~~\r\n\r\nThis internally will create more temporary Bvh structures which use the default memory context. Either the context needs to be copied, or maybe change the api to always pass the context into functions that require memory operations. \r\n\r\nI fixed it for my by setting the context member of both BVH structs on the way.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/66/comments",
+    "author": "jkoenen",
+    "comments": [
+      {
+        "user": "DavidPeicho",
+        "created_at": "2024-12-17T19:05:39Z",
+        "body": "Wouldn't it make sense to have a way to set a global allocator instead? Or do you build multiple BVH with different allocators?"
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-17T19:07:13Z",
+        "body": "I would prefer to pass it as a parameter because it simplifies the situation in multi-threaded situations (Where different threads potentially use different heaps) "
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T07:08:58Z",
+        "body": "This should be fixed in the dev branch now: The context that you pass to each of the specialized / derived layouts is now propagated to the intermediate formats. It's a simple fix, but it is a bit hard for me to verify; can you confirm it works properly? After that I will close this issue."
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-18T08:54:12Z",
+        "body": "Yes, that works for me - thank you for the quick fix"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T08:56:50Z",
+        "body": "Thanks for confirming; case closed."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Custom memory contexts must propagate to all temporary/intermediate BVH structures during build operations",
+      "Memory allocation customization must work without manual context re-assignment",
+      "Solution must support thread-specific memory contexts without global state",
+      "API must maintain explicit context passing rather than relying on implicit global allocators"
+    ]
+  },
+  {
+    "number": 36,
+    "title": "Q: Recommended BVH node layout/",
+    "created_at": "2024-12-04T12:35:49Z",
+    "closed_at": "2024-12-04T12:58:58Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/36",
+    "body": "What is the recommended BVH node layout for BLAS and TLAS levels?\r\n\r\nWhat are the guidelines?",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/36/comments",
+    "author": "ib00",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-04T12:48:46Z",
+        "body": "There is some information in the README.md, but not really a recommendation. This information should ultimately end up in the wiki. In short:\r\n\r\n* WALD_32BYTE is what the builders produce: a 2-wide BVH with a compact node layout. This is also the default for Intersect calls and should get you decent performance with no overhead caused by any BVH conversion or optimization.\r\n* If you expect to trace lots of rays, you can convert the 2-wide BVH into a ALT_SOA. This is a quick conversion; after this, tracing rays will be a bit faster. Run speedtest to get an idea of the speed benefit on your machine.\r\n* For even more rays, you can convert the 2-wide BVH to a 4-wide BVH (BVH4_BASIC), and then to a BVH4_AFRA. So, two conversions. This gets you the format that is currently the fastest option in tiny_bvh, at the expense of more conversion work.\r\n* If you're serious about performance, there is one more option. Convert to VERBOSE, then optimize the BVH. Convert it back to WALD_32BYTE. The optimized tree will be substantially better, and can still be converted to BVH4_AFRA. The optimization takes a while though - this will improve in a future version of the library, but it will never be free.\r\n\r\nOn the GPU other options exist. The basic GPU layout is AILA_LAINE, which is quickly obtained by converting WALD_32BYTE. Faster options (that take longer to convert to) are BVH4_GPU and the ultimate format, CWBVH. You will find that CWBVH is often not the fastest option for primary rays (which are very coherent) but it should do relatively well on reflected rays.\r\n\r\nHope this helps!\n\n---\n\nFor TLAS you can probably just use WALD_32BYTE on CPU and AILA_LANE on GPU. Traversal should not spend too much time in the TLAS; since it is typically rebuilt each frame build time becomes the bottleneck. Keep it simple."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of performance trade-offs between different BVH node layouts",
+      "Guidance for different usage scenarios (BLAS vs TLAS)",
+      "Consideration of ray coherence and tracing workload size",
+      "Platform-specific recommendations (CPU vs GPU)",
+      "Clarification of build-time vs runtime performance tradeoffs"
+    ]
+  }
+]

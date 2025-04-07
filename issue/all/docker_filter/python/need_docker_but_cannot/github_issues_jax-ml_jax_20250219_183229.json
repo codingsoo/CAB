@@ -1,0 +1,42 @@
+[
+  {
+    "number": 17214,
+    "title": "bf16 * int8 matmul results in incorrect value",
+    "created_at": "2023-08-22T03:27:26Z",
+    "closed_at": "2023-08-23T02:10:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/17214",
+    "body": "### Description\r\n```\r\n# Let us define a bf16 array and an int8 array:\r\n\r\nX=jnp.array([[-1.6171875,0.5703125]],dtype=jax.numpy.bfloat16)\r\nW=jnp.array([[127],[-4]],dtype=jax.numpy.int8)\r\n\r\n# perform matrix multiplication:\r\njax.numpy.matmul(X,W,precision=jax.lax.Precision.HIGHEST)\r\nDeviceArray([[-208]], dtype=bfloat16)\r\n\r\n\r\n# However, if we manually do the multiplication:\r\nX[0,0]*W[0,0]\r\nDeviceArray(-205, dtype=bfloat16)\r\nX[0,1]*W[1,0]\r\nDeviceArray(-2.28125, dtype=bfloat16)\r\nX[0,0]*W[0,0]+X[0,1]*W[1,0]\r\nDeviceArray(-207, dtype=bfloat16)\r\n\r\n# That is -207 which is different to -208 from the matmul function. \r\n```\r\nI have been trying to find a DL framework that does bf16 and int8 matrix multiplication, so far only Jax supports it, but it seems to have this rounding issue at the moment.\r\n\r\n### What jax/jaxlib version are you using?\r\n\r\n0.3.20+cuda11.cudnn82\r\n\r\n### Which accelerator(s) are you using?\r\n\r\n_No response_\r\n\r\n### Additional system info\r\n\r\n_No response_\r\n\r\n### NVIDIA GPU info\r\n\r\nA100",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/17214/comments",
+    "author": "YingHH1",
+    "comments": [
+      {
+        "user": "jakevdp",
+        "created_at": "2023-08-22T04:04:22Z",
+        "body": "Thanks for the question! I believe this is working as expected: you're doing math at `bfloat16` precision, and `bfloat16` only has 7 bits of mantissa, meaning that you should generally expect numerical results to be good to within roughly one part in $2^7$.\r\n\r\nDoing this computation in `float32` reveals the \"true\" result:\r\n```python\r\nX.astype('float32') @ W.astype('float32')\r\n# Array([[-207.66406]], dtype=float32)\r\n```\r\nIn `bfloat16`, you got `-208`, which is actually the closest bfloat16-representable value to the true answer. You can see this by using the `jnp.nextafter` function to see what the next representable value is:\r\n```python\r\nprint(jnp.nextafter(jnp.bfloat16(-208), jnp.bfloat16(0)))\r\n# -207\r\n```\r\nThe next bfloat16-representable value greater than `-208` is `-207`, so it's clear that `-208` is the best possible bfloat16 representation of the answer to your computation. The reason your manual matmul returns this incorrect value is because by splitting the ops you incur bfloat16 rounding errors twice instead of once.\r\n\r\nHope that helps!"
+      },
+      {
+        "user": "YingHH1",
+        "created_at": "2023-08-22T04:51:56Z",
+        "body": "Great, thank you for the help!\n\n---\n\nI guess this implies that matmul internally converts the bf16/int8 arrays to fp32 for both multiplication and accumulation?\r\n```\r\n# i.e. y=x1.float32()*W1.float32()+x2.float32()*W2.float32()+...\r\n\r\nprint(X[0,0].astype(jnp.float32)*W[0,0].astype(jnp.float32)+X[0,1].astype(jnp.float32)*W[1,0].astype(jnp.float32))\r\n-207.66406\r\n# in this case the closest bf16 number is -208\r\n```\r\n\r\nbut this means we cast everything to fp32 such that the acceleration from low-bit computation is lost. Thus, what I would have expected is:\r\n```\r\n# i.e. y=(x1*W1).float32()+(x2*W2).float32()+...\r\n\r\nprint((X[0,0]*W[0,0]).astype(jnp.float32)+(X[0,1]*W[1,0]).astype(jnp.float32))\r\n-207.28125\r\n# in this case the closest bf16 number is -207\r\n```\r\n\r\nI am unfamiliar with A100's internal instruction, but I would have thought the bf16/int8 matrix multiplication is performed in low-bit for mul and high-bit for add, in order to reduce accumulation error whilst maintaining a performance edge."
+      },
+      {
+        "user": "jakevdp",
+        "created_at": "2023-08-22T11:56:39Z",
+        "body": "The implementation of bfloat16 matmul is hardware-specific, and I\u2019m not sure of the details on A100."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how bfloat16/int8 matrix multiplication handles intermediate precision during accumulation",
+      "Clarification of whether numerical discrepancies are inherent to the precision limits or indicate implementation issues",
+      "Description of hardware-specific considerations for bfloat16/int8 operations on A100 GPUs",
+      "Analysis of error propagation differences between single-operation matmul vs manual stepwise computation"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:16:25"
+    }
+  }
+]

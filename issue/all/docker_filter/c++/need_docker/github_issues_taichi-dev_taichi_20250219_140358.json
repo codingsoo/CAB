@@ -1,0 +1,77 @@
+[
+  {
+    "number": 5970,
+    "title": "print has no output inside taichi kernel",
+    "created_at": "2022-09-04T02:53:43Z",
+    "closed_at": "2022-09-04T14:07:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/taichi-dev/taichi/issues/5970",
+    "body": "The code:\r\n```python\r\nimport taichi as ti\r\n\r\nti.init(arch=ti.cpu, debug=True)\r\n\r\nx = ti.field(ti.f32)\r\nblock = ti.root.pointer(ti.ij, (4,4))\r\npixel = block.bitmasked(ti.ij, (2,2))\r\npixel.place(x)\r\n\r\n@ti.kernel\r\ndef activate():\r\n    x[2,3] = 1.0\r\n    x[2,4] = 2.0\r\n\r\n@ti.kernel\r\ndef print_active():\r\n    for i, j in block:\r\n        print(\"Active block\", i, j)\r\n    for i, j in x:\r\n        print('field x[{}, {}] = {}'.format(i, j, x[i, j]))\r\n\r\nif __name__ == '__main__':\r\n    print_active()\r\n```\r\n\r\noutput:\r\n```\r\n[Taichi] version 1.1.2, llvm 10.0.0, commit f25cf4a2, linux, python 3.7.4\r\n[Taichi] Starting on arch=x64\r\n```\r\n\r\nThe `print` in taichi kernel has no output.\r\n",
+    "comments_url": "https://api.github.com/repos/taichi-dev/taichi/issues/5970/comments",
+    "author": "hiyyg",
+    "comments": [
+      {
+        "user": "yuanming-hu",
+        "created_at": "2022-09-04T12:32:33Z",
+        "body": "I believe you forgot to call `activate()` before `print_active()`. The following code would work as expected:\r\n\r\n```python\r\nimport taichi as ti\r\n\r\nti.init(arch=ti.cpu, debug=True)\r\n\r\nx = ti.field(ti.f32)\r\nblock = ti.root.pointer(ti.ij, (4,4))\r\npixel = block.bitmasked(ti.ij, (2,2))\r\npixel.place(x)\r\n\r\n@ti.kernel\r\ndef activate():\r\n    x[2,3] = 1.0\r\n    x[2,4] = 2.0\r\n\r\n@ti.kernel\r\ndef print_active():\r\n    for i, j in block:\r\n        print(\"Active block\", i, j)\r\n    for i, j in x:\r\n        print('field x[{}, {}] = {}'.format(i, j, x[i, j]))\r\n\r\nif __name__ == '__main__':\r\n    activate()\r\n    print_active()\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why print statements in Taichi kernels require data structure activation to produce output",
+      "Clarification about Taichi's lazy initialization behavior for sparse data structures",
+      "Demonstration of the relationship between data writes and kernel execution visibility"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:59:38"
+    }
+  },
+  {
+    "number": 4934,
+    "title": "unexpected behavior with Hilles-Steele scan ",
+    "created_at": "2022-05-09T03:13:59Z",
+    "closed_at": "2022-05-15T16:15:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/taichi-dev/taichi/issues/4934",
+    "body": "I'm not sure if this is a bug of some kind, or just user error/misunderstanding of how Taichi is supposed to work, but I was surprised by the behavior in the code example below.\r\n\r\nThis snippet implements a simple Hilles-Steele scan and uses it to attempt get the cumulative sum of a 100000 element field filled with 1s.\r\n\r\nThe output is fine up until the 30720th entry in the array, after which the entries are incorrect, and non-derministic. For example, the last element of the output array should of course be 100000, but I've been seeing values from 210000 to 290000 ish.\r\n\r\nThe number 30720 looked suspicious to me, and indeed it's 16*1920, the latter of which is the number of CUDA cores available in my Nvidia RTX 2060.\r\n\r\nI don't really know what is going wrong -- my best guess is that it seems to be some kind of race situation, in particular because of the appearance of that magic number 30720... maybe the hardware is saturated, and <something something> data race? But I'm not really sure why there would be a race condition -- I've certainly run parallel `for` loops over fields with many more elements than this without any issues.\r\n\r\nThis scan implementation is inspired by the `parallel_sort` function in `python/taichi/_kernels.py`, and I have noticed that that function includes a `sync()` call. I've tried putting `sync()` in a many different places with no change in the values I'm seeing, but I wonder if I need to use `sync()` somehow, or some other low-level runtime method like that?\r\n\r\nFinally, in case it might be helpful for writing docs that guide other users away from whatever I am misunderstanding, I'll add a bit of background about why I found this behavior surprising (and, I guess relatedly, why I was surprised that a `sync()` function even exists, and was surprised it would be needed in `parallel_sort`): In my mental model of Taichi, and based on the examples I've looked at, I have been assuming that from the perspective of the python code calling the kernels, kernel invocations are inherently serial and synchronous. That is: if you have python code like...\r\n```python\r\nti_kernel_1()\r\nti_kernel_2()\r\nti_kernel_3()\r\n```\r\n...then all of the GPU work associated with `ti_kernel_1` will finish before any of `ti_kernel_2`'s work starts, and all of `ti_kernel_2`'s work will finish before ti_kernel_3` starts, and it should not be possible to have data races between these kernels. The existence of the `sync()` function seem like a hint to me my mental model is not correct, because it seems like it would not be needed if all kernel invocations were serial and synchronous.\r\n\r\nSo I guess perhaps this is an area of the docs that might benefit from some clarification:\r\n- when are kernels launched async/parallel vs sync/serial? and how is this controlled?\r\n- when can kernel invocations result in race conditions between subsequent invocations? how can these race conditions be prevented?\r\n- what does the `sync()` function do, and when is it needed?\r\n\r\nThanks as always for the great work on Taichi! I'm always learning something fun when I work with it :-) (And I'm sure I will learn a lot from whatever I'm misunderstanding in this example!)\r\n\r\n### My non-working scan code\r\n\r\n```python\r\nimport taichi as ti\r\nimport numpy as np\r\n\r\nti.init(arch=ti.gpu)\r\n\r\n@ti.kernel\r\ndef fill_int(field: ti.template(), x: int):\r\n    for i in field:\r\n        field[i] = x\r\n\r\n\r\ndef prepare_HS_scan(in_field, out_field, ti_func):\r\n    @ti.kernel\r\n    def scan_stage(last: ti.template(), step: int):\r\n        for i in last:\r\n            out_field[i] = last[i] if i < step else ti_func(last[i - step], last[i])\r\n\r\n    def scan():\r\n        step = 1\r\n        while step < N:\r\n            last = in_field if step == 1 else out_field\r\n            scan_stage(last, step)\r\n            step = step * 2\r\n\r\n    return scan\r\n\r\n\r\n@ti.func\r\ndef ti_sum(a, b):\r\n    return a + b\r\n\r\n\r\nN = int(100000)\r\nfield_in = ti.field(ti.int32, shape=N)\r\nfill_int(field_in, 1)\r\n\r\nfield_out = ti.field(ti.int32, shape=N)\r\n\r\nscan1 = prepare_HS_scan(in_field=field_in, out_field=field_out, ti_func=ti_sum)\r\n\r\nscan1()\r\n\r\nfield_out_np = field_out.to_numpy()\r\n\r\n# last value in the array\r\n# should be 100000, non-deterministic output from 220000 to 280000 ish\r\nprint(field_out[N - 1])\r\n\r\n# first element of the arrays that doesn't match\r\n# always 30720 on my machine, which is 1920*16 -- RTX2060 has 1920 cuda cores\r\nprint(np.argmin(np.equal(field_out_np, np.arange(1, N + 1))))\r\n```\r\n\r\nExample output from the above (including version and system info)\r\n```\r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=cuda\r\n290112\r\n30720\r\n```",
+    "comments_url": "https://api.github.com/repos/taichi-dev/taichi/issues/4934/comments",
+    "author": "bcolloran",
+    "comments": [
+      {
+        "user": "bobcao3",
+        "created_at": "2022-05-09T03:34:08Z",
+        "body": "That sync is for dealing with a previous bug in Vulkan. Speaking of Vulkan, can you try this on Vulkan as well so that we can narrow down the problem a bit. (If Vulkan also shows a wrong number we might have a CHI-IR level problem, if not then we have a CUDA runtime / codegen problem) Thanks!"
+      },
+      {
+        "user": "bcolloran",
+        "created_at": "2022-05-11T01:34:32Z",
+        "body": "Thanks for the fast reply @bobcao3!\r\n\r\nIndeed, I get similar behavior with `ti.init(arch=ti.vulkan)`. Example output:\r\n```\r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=vulkan\r\n[I 05/08/22 21:11:43.047 140724] [vulkan_device_creator.cpp:pick_physical_device@363] Found Vulkan Device 0 (NVIDIA GeForce RTX 2060)\r\n[I 05/08/22 21:11:43.047 140724] [vulkan_device_creator.cpp:pick_physical_device@363] Found Vulkan Device 1 (llvmpipe (LLVM 12.0.0, 256 bits))\r\n[I 05/08/22 21:11:43.048 140724] [vulkan_device_creator.cpp:create_logical_device@431] Vulkan Device \"NVIDIA GeForce RTX 2060\" supports Vulkan 0 version 1.2.175\r\n305088\r\n30720\r\n```\r\n\r\nJust to see what would happen, I also decided to try it out with `ti.cpu`... in this case I got very different (incorrect) results. In case it will be helpful, here are some example outputs:\r\n```\r\n$ python scan_error.py \r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=x64\r\n41257076\r\n4\r\n\r\n\r\n$ python scan_error.py \r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=x64\r\n-1087188976\r\n4\r\n\r\n\r\n$ python scan_error.py \r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=x64\r\n919975044\r\n4\r\n\r\n\r\n$ python scan_error.py \r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=x64\r\n-1183775544\r\n4\r\n\r\n\r\n$ python scan_error.py \r\n[Taichi] version 1.0.1, llvm 10.0.0, commit 1c3619d9, linux, python 3.9.7\r\n[Taichi] Starting on arch=x64\r\n-14705324\r\n4\r\n```\r\n(that is with AMD Ryzen 5 2600 Six-Core Processor)\r\n\r\nPlease let me know if I can supply any more information! :-)\r\n\n\n---\n\n(Oh, one more quick question @bobcao3: just for my understanding, does your comment indicate that this behavior _is_ a bug, and not user error on my part in the code above? Thanks! :-) )"
+      },
+      {
+        "user": "bobcao3",
+        "created_at": "2022-05-14T16:27:23Z",
+        "body": "Just checked your code, it seems out_field might be used as both input and output in some cases? That might be why this produces non deterministic outputs "
+      },
+      {
+        "user": "bcolloran",
+        "created_at": "2022-05-15T16:15:13Z",
+        "body": "@bobcao3 you are of course entirely correct... well I feel foolish for taking your time! Thank you for your patience and help, and apologies for the noise!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why concurrent kernel executions might cause data races in Taichi",
+      "Clarification of when fields can be safely reused between kernel invocations",
+      "Documentation requirements for Taichi's execution model and synchronization",
+      "Guidance on proper scan algorithm implementation patterns in Taichi",
+      "Explanation of memory aliasing risks in parallel algorithms"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:00:13"
+    }
+  }
+]

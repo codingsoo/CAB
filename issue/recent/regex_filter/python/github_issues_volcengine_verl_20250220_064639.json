@@ -1,0 +1,765 @@
+[
+  {
+    "number": 302,
+    "title": "cuda error: out of memory at /workspace/csrc/cumem_allocator.cpp:62",
+    "created_at": "2025-02-18T23:00:20Z",
+    "closed_at": "2025-02-18T23:29:05Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/302",
+    "body": "I am trying to run the vllm=0.7 version with 8GPU H100 but hit this error after rollout finished:\n\n\n```(main_task pid=1748945) Unhandled error (suppress with 'RAY_IGNORE_UNHANDLED_ERRORS=1'): ray::WorkerDict.actor_rollout_generate_sequences() (pid=1751030, ip=10.65.194.91, actor_id=d2209bc23ff048efb340dd9001000000, repr=<verl.single_controller.ray.base.WorkerDict object at 0x152530529600>)\n(main_task pid=1748945)   File \"/verl/verl/single_controller/ray/base.py\", line 399, in func\n(main_task pid=1748945)     return getattr(self.worker_dict[key], name)(*args, **kwargs)\n(main_task pid=1748945)   File \"/verl/verl/single_controller/base/decorator.py\", line 404, in inner\n(main_task pid=1748945)     return func(*args, **kwargs)\n(main_task pid=1748945)   File \"/verl/verl/workers/fsdp_workers.py\", line 463, in generate_sequences\n(main_task pid=1748945)     with self.rollout_sharding_manager:\n(main_task pid=1748945)   File \"/verl/verl/workers/sharding_manager/fsdp_vllm.py\", line 79, in __enter__\n(main_task pid=1748945)     self.inference_engine.wake_up()\n(main_task pid=1748945)   File \"miniconda/envs/verl/lib/python3.10/site-packages/vllm/entrypoints/llm.py\", line 1244, in wake_up\n(main_task pid=1748945)     self.llm_engine.wake_up()\n(main_task pid=1748945)   File \"miniconda/envs/verl/lib/python3.10/site-packages/vllm/engine/llm_engine.py\", line 1854, in wake_up\n(main_task pid=1748945)     self.model_executor.wake_up()\n(main_task pid=1748945)   File \"/miniconda/envs/verl/lib/python3.10/site-packages/vllm/executor/executor_base.py\", line 216, in wake_up\n(main_task pid=1748945)     self.collective_rpc(\"wake_up\")\n(main_task pid=1748945)   File \"miniconda/envs/verl/lib/python3.10/site-packages/vllm/executor/uniproc_executor.py\", line 56, in collective_rpc\n(main_task pid=1748945)     answer = run_method(self.driver_worker, method, args, kwargs)\n(main_task pid=1748945)   File \"/miniconda/envs/verl/lib/python3.10/site-packages/vllm/utils.py\", line 2196, in run_method\n(main_task pid=1748945)     return func(*args, **kwargs)\n(main_task pid=1748945)   File \"/miniconda/envs/verl/lib/python3.10/site-packages/vllm/worker/worker.py\", line 140, in wake_up\n(main_task pid=1748945)     allocator.wake_up()\n(main_task pid=1748945)   File \"/miniconda/envs/verl/lib/python3.10/site-packages/vllm/device_allocator/cumem.py\", line 207, in wake_up\n(main_task pid=1748945)     create_and_map(handle)\n(main_task pid=1748945)   File \"/miniconda/envs/verl/lib/python3.10/site-packages/vllm/device_allocator/cumem.py\", line 75, in create_and_map\n(main_task pid=1748945)     python_create_and_map(*allocation_handle)\n(main_task pid=1748945) RuntimeError: CUDA Error: out of memory at /workspace/csrc/cumem_allocator.cpp:62\n(WorkerDict pid=1751027) CUDA Error: out of memory at /workspace/csrc/cumem_allocator.cpp:62\n(main_task pid=1748945) Unhandled error (suppress with 'RAY_IGNORE_UNHANDLED_ERRORS=1'): ray::WorkerDict.actor_rollout_generate_sequences() (pid=1751025, ip=10.65.194.91, actor_id=b04b4de9d57cc6c79cf0070001000000, repr=<verl.single_controller.ray.base.WorkerDict object at 0x1525306a67d0>)\n```\n`python3 -m verl.trainer.main_ppo \\\n    data.train_files=\"$train_files\" \\\n    data.val_files=\"$test_files\" \\\n    data.train_batch_size=32 \\\n    data.val_batch_size=5000 \\\n    data.max_prompt_length=1024 \\\n    data.max_response_length=4000 \\\n    actor_rollout_ref.model.path=Qwen/Qwen2.5-Math-7B \\\n    actor_rollout_ref.actor.optim.lr=1e-6 \\\n    actor_rollout_ref.rollout.enforce_eager=False \\\n    actor_rollout_ref.rollout.free_cache_engine=False \\\n    actor_rollout_ref.model.use_remove_padding=True \\\n    actor_rollout_ref.actor.ppo_mini_batch_size=16 \\\n    actor_rollout_ref.actor.use_dynamic_bsz=True \\\n    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \\\n    actor_rollout_ref.model.enable_gradient_checkpointing=True \\\n    actor_rollout_ref.actor.fsdp_config.param_offload=False \\\n    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \\\n    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \\\n    actor_rollout_ref.rollout.name=vllm \\\n    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \\\n    actor_rollout_ref.ref.fsdp_config.param_offload=True \\\n    actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=24000 \\\n    actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=24000 \\\n    critic.optim.lr=1e-5 \\\n    critic.model.use_remove_padding=True \\\n    critic.model.path=Qwen/Qwen2.5-Math-7B \\\n    critic.ppo_max_token_len_per_gpu=98304 \\\n    critic.model.enable_gradient_checkpointing=True \\\n    critic.model.fsdp_config.param_offload=False \\\n    critic.model.fsdp_config.optimizer_offload=False \\\n    reward_model.reward_manager=\"prime\" \\\n    algorithm.kl_ctrl.kl_coef=0.001 \\\n    trainer.critic_warmup=0 \\\n    trainer.logger=['wandb'] \\\n    trainer.project_name='ppo' \\\n    trainer.experiment_name='Qwen2.5-7B-math-format-numia' \\\n    trainer.n_gpus_per_node=8 \\\n    trainer.nnodes=1 \\\n    trainer.save_freq=5 \\\n    trainer.test_freq=5 \\\n    trainer.total_epochs=15 $@`\n\n\nvllm=0/7/3/dev213+ga4d577b3\nverl=0.2\ntorch=2.5.1\ntransformers=4.49.0\n",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/302/comments",
+    "author": "edchengg",
+    "comments": [
+      {
+        "user": "PKU-Fgx",
+        "created_at": "2025-02-19T06:42:15Z",
+        "body": "Can I ask how to fix this bug?"
+      }
+    ]
+  },
+  {
+    "number": 262,
+    "title": "Add model merger to save checkpoints in the format of .safetensor and push them to the huggingface",
+    "created_at": "2025-02-13T03:13:43Z",
+    "closed_at": "2025-02-15T01:31:27Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/262",
+    "body": "This PR introduces a new script, `scripts/model_merger.py`, which enables the conversion of model checkpoints saved in `.pt` format to the `.safetensors` format. The script also includes functionality to optionally push the converted model to Hugging Face Hub.\r\n\r\n### Changes:\r\n1. Added `scripts/model_merger.py` to handle the conversion process.\r\n2. Implemented support for `.pt` to `.safetensors` transformation.\r\n3. Added an option to push the converted model to Hugging Face Hub if required.\r\n",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/262/comments",
+    "author": "YSLIU627",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-14T08:51:12Z",
+        "body": "We may need to place this script in another directory.\r\nI'll merge it first and rearrange it"
+      },
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-02-14T14:13:25Z",
+        "body": "Could you add license head by copying from another file?"
+      },
+      {
+        "user": "YSLIU627",
+        "created_at": "2025-02-14T23:47:17Z",
+        "body": "Have added the license"
+      }
+    ]
+  },
+  {
+    "number": 258,
+    "title": "clean 'WG_BACKEND' unused code.",
+    "created_at": "2025-02-12T12:21:33Z",
+    "closed_at": "2025-02-14T23:07:43Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/258",
+    "body": "1  i see `WG_BACKEND` will == 'ray'\r\n2 i can not found the pkg about ' from verl.single_controller.torchrpc.k8s_client import get_ip_addr'\r\n\r\nwould these changes is ok for that?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/258/comments",
+    "author": "zhanluxianshen",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-02-12T13:07:19Z",
+        "body": "Yes, please delete the torchrpc part"
+      }
+    ]
+  },
+  {
+    "number": 244,
+    "title": "[misc] feat: give main_task num_cpus=1",
+    "created_at": "2025-02-10T15:10:31Z",
+    "closed_at": "2025-02-10T16:19:39Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/244",
+    "body": "give main_task num_cpus=1 and make sure that main_task should not be scheduled on head",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/244/comments",
+    "author": "vermouth1992",
+    "comments": [
+      {
+        "user": "Ber666",
+        "created_at": "2025-02-18T20:49:25Z",
+        "body": "Hi, thanks for the great work. Could you explain why we don't want the `main_task` to be scheduled on head, and how `num_cpus=1` achieve that?\r\n\r\nThanks again!"
+      }
+    ]
+  },
+  {
+    "number": 240,
+    "title": "Typo in the rank zero code",
+    "created_at": "2025-02-10T07:36:01Z",
+    "closed_at": "2025-02-11T00:45:05Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/240",
+    "body": "The original Ray controller method `execute_rank_zero_sync()` is not functional. Fixed.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/240/comments",
+    "author": "ExtremeViscent",
+    "comments": [
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-02-10T09:13:17Z",
+        "body": "could you also add a test to tests/ray? thanks!\r\n"
+      }
+    ]
+  },
+  {
+    "number": 225,
+    "title": "[ckpt] feat: support saving and loading FSDP full state dict in ckpt manager",
+    "created_at": "2025-02-08T09:15:21Z",
+    "closed_at": "2025-02-08T14:05:25Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/225",
+    "body": "- As titled\r\n- Currently, the FSDPCkptManger can save/load either sharded state dict and full state dict.\r\n- Recommend using sharded state dict as full state dict is too slow.\r\n\r\n**TODO**\r\n- But we should provide a merging script for the sharded state dict to form a huggingface ckpt.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/225/comments",
+    "author": "PeterSH6",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-02-08T13:07:31Z",
+        "body": "Do we have a merge ckpt script?"
+      },
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-08T13:09:46Z",
+        "body": "> Do we have a merge ckpt script?\r\n\r\nWill add one in a separate PR"
+      }
+    ]
+  },
+  {
+    "number": 194,
+    "title": "fix critic save error",
+    "created_at": "2025-02-04T00:05:17Z",
+    "closed_at": "2025-02-04T23:13:56Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/194",
+    "body": "This PR is similar to PR #174 but fix the critic save error  ",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/194/comments",
+    "author": "WeiXiongUST",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-04T02:25:14Z",
+        "body": "Thanks for PR!\n\nPlease run the scripts/format.sh to lint"
+      }
+    ]
+  },
+  {
+    "number": 189,
+    "title": "Encounter issue when perform RL rollout",
+    "created_at": "2025-02-03T17:08:35Z",
+    "closed_at": "2025-02-04T13:10:06Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/189",
+    "body": "I tried to use verl to perform GRPO with 8k response length for 32B models. Here is my training script (I used vllm 0.6.3):\n\n```\nexport CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7\nexport N_GPUS=8\nexport BASE_MODEL=/mnt/bn/hillzhang/TinyZero/DeepSeek-R1-Distill-Qwen-32B\nexport DATA_DIR=/mnt/bn/hillzhang/TinyZero/data/Math-RL-Data-41k-250201-filtered_processed\nexport ROLLOUT_TP_SIZE=8\nexport EXPERIMENT_NAME=Math-RL-Data-41k-250201-filtered_processed-32b-grpo-$(date +%Y%m%d_%H%M%S)\nexport VLLM_ATTENTION_BACKEND=XFORMERS\n\npython3 -m verl.trainer.main_ppo \\\nalgorithm.adv_estimator=grpo \\\ndata.train_files=${DATA_DIR}/train.parquet \\\ndata.val_files=${DATA_DIR}/test.parquet \\\ndata.train_batch_size=32 \\\ndata.val_batch_size=300 \\\ndata.max_prompt_length=1024 \\\ndata.max_response_length=8192 \\\nactor_rollout_ref.model.use_remove_padding=True \\\nactor_rollout_ref.model.enable_gradient_checkpointing=True \\\nactor_rollout_ref.actor.use_dynamic_bsz=True \\\nactor_rollout_ref.actor.ppo_max_token_len_per_gpu=16384 \\\nactor_rollout_ref.model.path=${BASE_MODEL} \\\nactor_rollout_ref.actor.optim.lr=1e-6 \\\nactor_rollout_ref.actor.ppo_mini_batch_size=32 \\\nactor_rollout_ref.actor.fsdp_config.param_offload=False \\\nactor_rollout_ref.actor.fsdp_config.grad_offload=False \\\nactor_rollout_ref.actor.fsdp_config.optimizer_offload=False \\\nactor_rollout_ref.rollout.tensor_model_parallel_size=${ROLLOUT_TP_SIZE} \\\nactor_rollout_ref.rollout.gpu_memory_utilization=0.6 \\\nalgorithm.kl_ctrl.kl_coef=0.0 \\\nactor_rollout_ref.actor.use_kl_loss=True \\\nactor_rollout_ref.actor.kl_loss_coef=0.0 \\\nactor_rollout_ref.actor.kl_loss_type=low_var_kl \\\nactor_rollout_ref.ref.fsdp_config.param_offload=True \\\nactor_rollout_ref.rollout.name=vllm \\\nactor_rollout_ref.rollout.n=8 \\\ntrainer.logger=['console','wandb'] \\\n+trainer.val_before_train=False \\\ntrainer.default_hdfs_dir=null \\\ntrainer.n_gpus_per_node=${N_GPUS} \\\ntrainer.nnodes=1 \\\ntrainer.save_freq=10 \\\ntrainer.test_freq=10 \\\ntrainer.project_name=Deepseek_R1_RL \\\ntrainer.experiment_name=${EXPERIMENT_NAME} \\\ntrainer.total_epochs=100 2>&1 | tee ${EXPERIMENT_NAME}.log\n```\n\nHowever, during experience making stage, I encountered this strange error:\n```Traceback (most recent call last):\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/trainer/main_ppo.py\", line 111, in main\n    ray.get(main_task.remote(config))\n  File \"/home/tiger/.local/lib/python3.9/site-packages/ray/_private/auto_init_hook.py\", line 21, in auto_init_wrapper\n    return fn(*args, **kwargs)\n  File \"/home/tiger/.local/lib/python3.9/site-packages/ray/_private/client_mode_hook.py\", line 103, in wrapper\n    return func(*args, **kwargs)\n  File \"/home/tiger/.local/lib/python3.9/site-packages/ray/_private/worker.py\", line 2772, in get\n    available in the local object store. If this object is not in the local\n  File \"/home/tiger/.local/lib/python3.9/site-packages/ray/_private/worker.py\", line 919, in get_objects\n    # GCS subscriber only returns None on unavailability.\nray.exceptions.RayTaskError(AssertionError): ray::main_task() (pid=436874, ip=10.122.248.216)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/trainer/main_ppo.py\", line 197, in main_task\n    trainer.fit()\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/trainer/ppo/ray_trainer.py\", line 590, in fit\n    gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/single_controller/ray/base.py\", line 42, in func\n    output = ray.get(output)\nray.exceptions.RayTaskError(AssertionError): ray::WorkerDict.actor_rollout_generate_sequences() (pid=441103, ip=10.122.248.216, actor_id=7883a8320d9417068ce9fcc701000000, repr=<verl.single_controller.ray.base.WorkerDict object at 0x7eef7c0fb700>)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/single_controller/ray/base.py\", line 399, in func\n    return getattr(self.worker_dict[key], name)(*args, **kwargs)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/single_controller/base/decorator.py\", line 404, in inner\n    return func(*args, **kwargs)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/workers/fsdp_workers.py\", line 419, in generate_sequences\n    output = self.rollout.generate_sequences(prompts=prompts)\n  File \"/home/tiger/.local/lib/python3.9/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\n    return func(*args, **kwargs)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/workers/rollout/vllm_rollout/vllm_rollout.py\", line 175, in generate_sequences\n    output = self.inference_engine.generate(\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/utils.py\", line 1063, in inner\n    return fn(*args, **kwargs)\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/entrypoints/llm.py\", line 353, in generate\n    outputs = self._run_engine(use_tqdm=use_tqdm)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/third_party/vllm/vllm_v_0_6_3/llm.py\", line 161, in _run_engine\n    outputs = super()._run_engine(use_tqdm=use_tqdm)\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/entrypoints/llm.py\", line 879, in _run_engine\n    step_outputs = self.llm_engine.step()\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/engine/llm_engine.py\", line 1386, in step\n    outputs = self.model_executor.execute_model(\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/third_party/vllm/vllm_v_0_6_3/spmd_gpu_executor.py\", line 163, in execute_model\n    all_outputs = self.worker.execute_model(execute_model_req=execute_model_req)\n  File \"/mnt/bn/hillzhang2/fuseo1_opensource/TinyZero/verl/third_party/vllm/vllm_v_0_6_3/worker.py\", line 256, in execute_model\n    model_input: ModelRunnerInputBase = self.model_runner.prepare_model_input(\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/worker/model_runner.py\", line 1593, in prepare_model_input\n    model_input = self._prepare_model_input_tensors(\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/worker/model_runner.py\", line 1200, in _prepare_model_input_tensors\n    return builder.build()  # type: ignore\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/worker/model_runner.py\", line 871, in build\n    attn_metadata = self.attn_metadata_builder.build(\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/attention/backends/utils.py\", line 202, in build\n    self._add_seq_group(inter_data,\n  File \"/home/tiger/.local/lib/python3.9/site-packages/vllm/attention/backends/utils.py\", line 163, in _add_seq_group\n    assert query_len == 1, (\nAssertionError: seq_len: 6360, context_len: 0, query_len: 6360\n```\n\nIt seems like that the query length of AR decoding was wrongly set when performing VLLM rollout. Do you have any ideas?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/189/comments",
+    "author": "HillZhang1999",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-02-04T03:10:13Z",
+        "body": "@PeterSH6 Does this look like a bug in vllm chunked prefill?"
+      },
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-04T05:20:58Z",
+        "body": "Not sure if tiny-zero support vllm chunked prefill. But this error seems to relate to input_ids. The input_ids should be List[List[str]. Probably it's due to a shape mismatch."
+      },
+      {
+        "user": "HillZhang1999",
+        "created_at": "2025-02-04T13:10:06Z",
+        "body": "Thanks a lot, I found a mistake in my pre-processed training data. Already fix it."
+      },
+      {
+        "user": "Xiuyu-Li",
+        "created_at": "2025-02-08T03:24:30Z",
+        "body": "Hi @HillZhang1999, I encountered the exact same error message when running grpo on a TinyZero-format dataset. This error did not happen when I ran it with PPO. Could you share what mistake you found in your training data? Thank you."
+      },
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-12T04:01:57Z",
+        "body": "@Xiuyu-Li Can you disable `actor_rollout_ref.rollout.enable_chunked_prefill=False` . Not sure if this feature is robust enought."
+      },
+      {
+        "user": "HillZhang1999",
+        "created_at": "2025-02-12T04:22:58Z",
+        "body": "`[36m(main_task pid=3523385)\u001b[0m ValueError: max_num_batched_tokens (8192) is smaller than max_model_len (9216). This effectively limits the maximum sequence length to max_num_batched_tokens and makes vLLM reject longer sequences. Please increase max_num_batched_tokens or decrease max_model_len.`\n\nWhen enable_chunked_prefill is activated, the aforementioned issue will be concealed. Please increase max_num_batched_tokens or decrease max_model_len.\n"
+      }
+    ]
+  },
+  {
+    "number": 178,
+    "title": "docs: Add LigerKernel performance tuning documentation",
+    "created_at": "2025-01-31T17:46:33Z",
+    "closed_at": "2025-02-03T04:43:23Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/178",
+    "body": "This PR adds documentation for the LigerKernel option in a new performance tuning section, addressing the comment from volcengine/verl#173.\r\n\r\nChanges:\r\n- Created new performance tuning section in docs\r\n- Documented LigerKernel option for SFT\r\n- Added performance tuning section to documentation index\r\n\r\nRelated to volcengine/verl#173",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/178/comments",
+    "author": "xingyaoww",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-02-03T02:39:45Z",
+        "body": "Ready for review/merge？"
+      },
+      {
+        "user": "xingyaoww",
+        "created_at": "2025-02-03T04:12:20Z",
+        "body": "Yep! Should be ready for merge!"
+      }
+    ]
+  },
+  {
+    "number": 170,
+    "title": "Reference model sharding strategies",
+    "created_at": "2025-01-30T14:52:19Z",
+    "closed_at": "2025-01-30T15:46:23Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/170",
+    "body": "I noticed in the configs that the reference model is also sharded with FSDP. Does sharding with FSDP have implications for an inference-only model? I'm wondering if you explored using alternative sharding strategies for the reference model?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/170/comments",
+    "author": "SalmanMohammadi",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-30T15:16:40Z",
+        "body": "What other sharding strategies would like recommend?"
+      },
+      {
+        "user": "SalmanMohammadi",
+        "created_at": "2025-01-30T15:37:58Z",
+        "body": "> What other sharding strategies would like recommend?\n\nYou'll be far more knowledgeable than me in this area, but would TP/MP be better suited for inference-only models to avoid the additional communication overhead from the all-gather in the forward pass with FSDP? I've been experimenting with optimizing the sharding strategy for the reference model in DPO and seeing some success. "
+      },
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-30T15:43:19Z",
+        "body": "I agree that TP/MP is more suitable for inference-only workload. The only problem is that transformer doesn't implement the TP plan for every model, so the generality of apply TP is quite limited, and has to be supported by model. In fact, the inference of reference policy only occupies a tiny faction of the overall training time in on-policy RL. So, accelerating inference workload has very impact on the overall performance. "
+      },
+      {
+        "user": "SalmanMohammadi",
+        "created_at": "2025-01-30T15:46:23Z",
+        "body": "> I agree that TP/MP is more suitable for inference-only workload. The only problem is that transformer doesn't implement the TP plan for every model, so the generality of apply TP is quite limited, and has to be supported by model. In fact, the inference of reference policy only occupies a tiny faction of the overall training time in on-policy RL. So, accelerating inference workload has very impact on the overall performance.\n\nYeah definitely makes sense in this case. I've found it helpful for DPO in torchtune where we have our own model definition and are able to quite aggresively apply parallelism strategies - I thought I'd see if this was something you had experimented with here.\n\nThanks again for your response : )"
+      }
+    ]
+  },
+  {
+    "number": 169,
+    "title": "Mulit-modal rl training support?",
+    "created_at": "2025-01-30T14:29:55Z",
+    "closed_at": "2025-01-30T15:36:52Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/169",
+    "body": "Will support with multimodal training in rl?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/169/comments",
+    "author": "lucasjinreal",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-30T15:36:52Z",
+        "body": "Duplicate #168 "
+      }
+    ]
+  },
+  {
+    "number": 161,
+    "title": "Duplicate GPU detected : rank 1 and rank 0 both on CUDA device 10",
+    "created_at": "2025-01-29T18:05:36Z",
+    "closed_at": "2025-02-03T08:27:24Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/161",
+    "body": "Thx for the great work!\n\nWhen I run main_generation.py\n\nThe following error occurs:\n\n\"\"\"\ntorch.distributed.DistBackendError: NCCL error in: ../torch/csrc/distributed/c10d/NCCLUtils.hpp:275, invalid usage (run with NCCL_DEBUG=WARN for details), NCCL version 2.20.5\nncclInvalidUsage: This usually reflects invalid usage of NCCL library.\nLast error:\nDuplicate GPU detected : rank 1 and rank 0 both on CUDA device 10\n\"\"\"\n\nCould you please tell me the potential reason?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/161/comments",
+    "author": "Raf-Chen",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-30T01:37:50Z",
+        "body": "Hi @Raf-Chen, this may relate to Ray version.\n\nCan you upgrade ray to 2.40?"
+      },
+      {
+        "user": "Raf-Chen",
+        "created_at": "2025-02-03T08:27:21Z",
+        "body": "Thx for the response!\n"
+      }
+    ]
+  },
+  {
+    "number": 150,
+    "title": "[misc]fix: pad dataproto when pad size is larger than len(dataproto)",
+    "created_at": "2025-01-28T03:51:45Z",
+    "closed_at": "2025-01-28T13:18:16Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/150",
+    "body": "- As titled\r\n- Solved: #149 \r\n\r\nWaiting for testing from @chujiezheng",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/150/comments",
+    "author": "PeterSH6",
+    "comments": [
+      {
+        "user": "chujiezheng",
+        "created_at": "2025-01-28T05:36:05Z",
+        "body": "This fix works for me"
+      }
+    ]
+  },
+  {
+    "number": 139,
+    "title": "docs: update README.md",
+    "created_at": "2025-01-26T18:12:09Z",
+    "closed_at": "2025-01-26T18:19:05Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/139",
+    "body": "minor fix",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/139/comments",
+    "author": "eltociear",
+    "comments": [
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-01-26T18:18:53Z",
+        "body": "thanks!"
+      }
+    ]
+  },
+  {
+    "number": 135,
+    "title": "[misc] fix nan in non_tensor_batch union",
+    "created_at": "2025-01-26T08:55:58Z",
+    "closed_at": "2025-01-26T11:46:40Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/135",
+    "body": "- In some cases, there would be a nan value in the np.array.\r\n- We fix it using pandas as np fail to assert array when the type is object",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/135/comments",
+    "author": "PeterSH6",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-26T09:03:58Z",
+        "body": "Could you add a test case?"
+      }
+    ]
+  },
+  {
+    "number": 131,
+    "title": "微信交流群满了",
+    "created_at": "2025-01-25T06:26:36Z",
+    "closed_at": "2025-01-25T07:26:53Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/131",
+    "body": "可以再给一个wechat群聊二维码吗",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/131/comments",
+    "author": "Unakar",
+    "comments": [
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-01-25T07:26:43Z",
+        "body": "Updated "
+      },
+      {
+        "user": "c-box",
+        "created_at": "2025-02-19T13:55:30Z",
+        "body": "请问还有wechat群聊可以加入吗？"
+      }
+    ]
+  },
+  {
+    "number": 108,
+    "title": "nccl error when using multi node training",
+    "created_at": "2025-01-16T03:22:34Z",
+    "closed_at": "2025-01-16T07:25:38Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/108",
+    "body": "I attempted to utilize the official Docker image or install dependencies with the NVIDIA PyTorch Docker image. Single-node training worked well, but the process failed when I attempted to train on two nodes.\n\nHere is the error message:\n```\nError executing job with overrides: ['data.train_files=[/user/panyinxu/datasets/Eurus-2-RL-Data/train.parquet]', 'data.val_files=[/user/panyinxu/datasets/Eurus-2-RL-Data/validation.parquet]', 'data.train_batch_size=256', 'data.val_batch_size=1024', 'data.max_prompt_length=1024', 'data.max_response_length=3072', 'actor_rollout_ref.model.path=/user/panyinxu/models/minicpm3-4b', 'actor_rollout_ref.actor.optim.lr=5e-7', 'actor_rollout_ref.actor.ppo_mini_batch_size=256', 'actor_rollout_ref.actor.ppo_micro_batch_size=8', 'actor_rollout_ref.actor.fsdp_config.param_offload=True', 'actor_rollout_ref.actor.fsdp_config.grad_offload=True', 'actor_rollout_ref.actor.fsdp_config.optimizer_offload=True', 'actor_rollout_ref.actor.entropy_coeff=0.', 'actor_rollout_ref.rollout.log_prob_micro_batch_size=64', 'actor_rollout_ref.rollout.tensor_model_parallel_size=1', 'actor_rollout_ref.rollout.name=vllm', 'actor_rollout_ref.rollout.gpu_memory_utilization=0.7', 'actor_rollout_ref.ref.log_prob_micro_batch_size=64', 'actor_rollout_ref.ref.fsdp_config.param_offload=True', 'critic.model.path=/user/panyinxu/models/minicpm3-4b', '+critic.model.trust_remote_code=True', 'actor_rollout_ref.model.path=/user/panyinxu/models/minicpm3-4b', '+actor_rollout_ref.model.trust_remote_code=True', 'algorithm.kl_ctrl.kl_coef=0.00', 'trainer.logger=[console]', 'trainer.project_name=PRIME', 'trainer.experiment_name=online-after-solvable-0.2-0.8-policy-self-ref', 'trainer.default_local_dir=/data/checkpoints//PRIME/online-after-solvable-0.2-0.8-policy-self-ref', 'trainer.n_gpus_per_node=8', 'trainer.nnodes=2', 'trainer.save_freq=16', 'trainer.test_freq=16', 'trainer.total_epochs=1', '++data.n_samples=4', '++data.filter_accuracy=True', '++data.accuracy_lower_bound=0.2', '++data.accuracy_upper_bound=0.8', 'algorithm.adv_estimator=rloo', 'algorithm.adv_params.verifier_gamma=1.0', 'algorithm.adv_params.reward_model_gamma=1.0', 'reward_model.rm_type=prime', 'reward_model.rm_coef=5', 'reward_model.prime_model.path=/user/panyinxu/models/minicpm3-4b', 'reward_model.prime_model.ref_path=/user/panyinxu/models/minicpm3-4b', 'reward_model.model.input_tokenizer=null', 'reward_model.prime_granularity=token', 'reward_model.micro_batch_size=8', 'reward_model.prime_model.update=after', 'reward_model.prime_model.beta_train=0.05', 'reward_model.prime_model.optim.lr=1e-6', 'reward_model.prime_model.optim.grad_clip=10.0', 'reward_model.prime_model.input_tokenizer=null', '+reward_model.prime_model.trust_remote_code=True', 'trainer.default_local_dir=/data/checkpoints//PRIME/online-after-solvable-0.2-0.8-policy-self-ref']\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/local/apps/PRIME/training/verl/trainer/main_ppo.py\", line 219, in <module>\n    main()\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/main.py\", line 94, in decorated_main\n    _run_hydra(\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/utils.py\", line 394, in _run_hydra\n    _run_app(\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/utils.py\", line 457, in _run_app\n    run_and_report(\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/utils.py\", line 223, in run_and_report\n    raise ex\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/utils.py\", line 220, in run_and_report\n    return func()\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/utils.py\", line 458, in <lambda>\n    lambda: hydra.run(\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/_internal/hydra.py\", line 132, in run\n    _ = ret.return_value\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/core/utils.py\", line 260, in return_value\n    raise self._return_value\n  File \"/usr/local/lib/python3.10/dist-packages/hydra/core/utils.py\", line 186, in run_job\n    ret.return_value = task_function(task_cfg)\n  File \"/local/apps/PRIME/training/verl/trainer/main_ppo.py\", line 121, in main\n    ray.get(main_task.remote(config))\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/auto_init_hook.py\", line 21, in auto_init_wrapper\n    return fn(*args, **kwargs)\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/client_mode_hook.py\", line 103, in wrapper\n    return func(*args, **kwargs)\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/worker.py\", line 2755, in get\n    values, debugger_breakpoint = worker.get_objects(object_refs, timeout=timeout)\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/worker.py\", line 906, in get_objects\n    raise value.as_instanceof_cause()\nray.exceptions.RayTaskError(DistBackendError): \u001b[36mray::main_task()\u001b[39m (pid=5634, ip=10.233.85.222)\n  File \"/local/apps/PRIME/training/verl/trainer/main_ppo.py\", line 213, in main_task\n    trainer.init_workers()\n  File \"/local/apps/PRIME/training/verl/trainer/ppo/ray_trainer.py\", line 433, in init_workers\n    self.ref_policy_wg.init_model()\n  File \"/local/apps/PRIME/training/verl/single_controller/ray/base.py\", line 42, in func\n    output = ray.get(output)\nray.exceptions.RayTaskError(DistBackendError): \u001b[36mray::WorkerDict.ref_init_model()\u001b[39m (pid=6536, ip=10.233.85.222, actor_id=a767d1d9997a7e2856edec3f01000000, repr=<verl.single_controller.ray.base.WorkerDict object at 0x7f6b54308d30>)\n  File \"/local/apps/PRIME/training/verl/single_controller/ray/base.py\", line 448, in func\n    return getattr(self.worker_dict[key], name)(*args, **kwargs)\n  File \"/local/apps/PRIME/training/verl/single_controller/base/decorator.py\", line 404, in inner\n    return func(*args, **kwargs)\n  File \"/local/apps/PRIME/training/verl/workers/fsdp_workers.py\", line 295, in init_model\n    self.ref_module_fsdp = self._build_model_optimizer(model_path=self.config.model.path,\n  File \"/local/apps/PRIME/training/verl/workers/fsdp_workers.py\", line 148, in _build_model_optimizer\n    torch.distributed.barrier()\n  File \"/usr/local/lib/python3.10/dist-packages/torch/distributed/c10d_logger.py\", line 79, in wrapper\n    return func(*args, **kwargs)\n  File \"/usr/local/lib/python3.10/dist-packages/torch/distributed/distributed_c10d.py\", line 3936, in barrier\n    work = default_pg.barrier(opts=opts)\ntorch.distributed.DistBackendError: NCCL error in: ../torch/csrc/distributed/c10d/ProcessGroupNCCL.cpp:2615, unhandled system error (run with NCCL_DEBUG=INFO for details), NCCL version 2.24.3\nncclSystemError: System call (e.g. socket, malloc) or external library call failed or device error. \nLast error:\n[Service thread] Error encountered progressing operation=Connect, res=3, closing connection\n\u001b[36m(main_task pid=5634)\u001b[0m Unhandled error (suppress with 'RAY_IGNORE_UNHANDLED_ERRORS=1'): \u001b[36mray::WorkerDict.ref_init_model()\u001b[39m (pid=866, ip=10.233.115.77, actor_id=6dcc10e94574ab24d22bce5201000000, repr=<verl.single_controller.ray.base.WorkerDict object at 0x7f2255328cd0>)\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/local/apps/PRIME/training/verl/single_controller/ray/base.py\", line 448, in func\n\u001b[36m(main_task pid=5634)\u001b[0m     return getattr(self.worker_dict[key], name)(*args, **kwargs)\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/local/apps/PRIME/training/verl/single_controller/base/decorator.py\", line 404, in inner\n\u001b[36m(main_task pid=5634)\u001b[0m     return func(*args, **kwargs)\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/local/apps/PRIME/training/verl/workers/fsdp_workers.py\", line 295, in init_model\n\u001b[36m(main_task pid=5634)\u001b[0m     self.ref_module_fsdp = self._build_model_optimizer(model_path=self.config.model.path,\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/local/apps/PRIME/training/verl/workers/fsdp_workers.py\", line 148, in _build_model_optimizer\n\u001b[36m(main_task pid=5634)\u001b[0m     torch.distributed.barrier()\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/usr/local/lib/python3.10/dist-packages/torch/distributed/c10d_logger.py\", line 79, in wrapper\n\u001b[36m(main_task pid=5634)\u001b[0m     return func(*args, **kwargs)\n\u001b[36m(main_task pid=5634)\u001b[0m   File \"/usr/local/lib/python3.10/dist-packages/torch/distributed/distributed_c10d.py\", line 3936, in barrier\n\u001b[36m(main_task pid=5634)\u001b[0m     work = default_pg.barrier(opts=opts)\n\u001b[36m(main_task pid=5634)\u001b[0m torch.distributed.DistBackendError: NCCL error in: ../torch/csrc/distributed/c10d/ProcessGroupNCCL.cpp:2615, unhandled system error (run with NCCL_DEBUG=INFO for details), NCCL version 2.24.3\n\u001b[36m(main_task pid=5634)\u001b[0m ncclSystemError: System call (e.g. socket, malloc) or external library call failed or device error. \n\u001b[36m(main_task pid=5634)\u001b[0m Last error:\n\u001b[36m(main_task pid=5634)\u001b[0m [Service thread] Error encountered progressing operation=Connect, res=3, closing connection\n\u001b[36m(WorkerDict pid=870, ip=10.233.115.77)\u001b[0m [W116 11:14:02.902978520 Utils.hpp:135] Warning: Environment variable NCCL_ASYNC_ERROR_HANDLING is deprecated; use TORCH_NCCL_ASYNC_ERROR_HANDLING instead \n```\n\nOther information\n```\nCUDA Version: 12.5 \ntorch version: 2.4.0\nnccl version: 2.24.3\nray: 2.40\nvllm: 0.6.3\nflash_attn: 2.7.0.post2\n```\n\nAny help?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/108/comments",
+    "author": "Cppowboy",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-16T06:04:45Z",
+        "body": "Can you run a simple test to ensure that the basic torchrun is working across multiple nodes?"
+      },
+      {
+        "user": "Cppowboy",
+        "created_at": "2025-01-16T07:25:38Z",
+        "body": "It is an NCCL config problem; the multi-node training works fine after updating the LD_LIBRARY_PATH to the correct config.\n\nThanks for your help."
+      },
+      {
+        "user": "Jiuzhouh",
+        "created_at": "2025-02-11T09:36:43Z",
+        "body": "hi I also met this issue, may I ask what LD_LIBRARY_PATH you set to solve this issue? "
+      },
+      {
+        "user": "Cppowboy",
+        "created_at": "2025-02-11T10:00:13Z",
+        "body": "In my case, I set the LD_LIBRARY_PATH to cuda 12.6, which is incompatible. After I set the LD_LIBRARY_PATH to cuda 12.4, it works fine."
+      },
+      {
+        "user": "Jiuzhouh",
+        "created_at": "2025-02-11T10:12:52Z",
+        "body": "thanks! I am using cuda 12.2, but I had no idea about how to fix this error"
+      },
+      {
+        "user": "Cppowboy",
+        "created_at": "2025-02-11T11:01:57Z",
+        "body": "You could try to use the official docker image."
+      },
+      {
+        "user": "echo-valor",
+        "created_at": "2025-02-19T08:45:57Z",
+        "body": "What does the complete multi-node script look like here? Isn't this a single-node script?"
+      }
+    ]
+  },
+  {
+    "number": 107,
+    "title": "[readme] docs: add acknowledgement",
+    "created_at": "2025-01-15T22:21:36Z",
+    "closed_at": "2025-01-16T18:29:51Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/107",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/107/comments",
+    "author": "eric-haibin-lin",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-16T07:18:29Z",
+        "body": "Shall we merge this?"
+      }
+    ]
+  },
+  {
+    "number": 101,
+    "title": "Support saving to huggingface",
+    "created_at": "2025-01-13T02:29:41Z",
+    "closed_at": "2025-01-14T05:58:19Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/101",
+    "body": "Is there an option similar to `push_to_hub`?",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/101/comments",
+    "author": "rawsh",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-14T03:48:20Z",
+        "body": "Hi @rawsh , we don't have this option now.\r\n\r\nI think `push_to_hub` could be done in an independent script using the checkpoint saved in veRL.\r\nI'm wondering why we need to `push_to_hub` during training."
+      },
+      {
+        "user": "rawsh",
+        "created_at": "2025-01-14T05:52:04Z",
+        "body": "Gotcha makes sense, would just be useful in ephemeral environments / parity with TRL to push to hub on an interval during training. Definitely would be just a nice to have though\r\n\r\nThank you!"
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "title": "Liger kernel integration",
+    "created_at": "2025-01-12T03:33:25Z",
+    "closed_at": "2025-02-09T09:02:41Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/volcengine/verl/issues/96",
+    "body": "Integrate liger kernel for main stream models such as Qwen, llama.\nHelp wanted",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/96/comments",
+    "author": "eric-haibin-lin",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-12T03:51:29Z",
+        "body": "A quick comment: I think we should be really careful about adding features that require patches and more package dependencies.\n\nAs their optimizations may not be applicable for all transformers models and would increase maintaining workload."
+      },
+      {
+        "user": "hongpeng-guo",
+        "created_at": "2025-01-19T09:59:22Z",
+        "body": "cc @ByronHsu"
+      },
+      {
+        "user": "deter3",
+        "created_at": "2025-01-25T11:01:18Z",
+        "body": "> A quick comment: I think we should be really careful about adding features that require patches and more package dependencies.\n> \n> As their optimizations may not be applicable for all transformers models and would increase maintaining workload.\n\nThere is big wave of using RL for LLMs after deepseek R1 . If there is no Liger kernel integration , veRL will be facing huge GPU memory requirements and training cost . You can either catch this wave or play safe . "
+      },
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-25T11:47:52Z",
+        "body": "> > A quick comment: I think we should be really careful about adding features that require patches and more package dependencies.\n> > \n> > As their optimizations may not be applicable for all transformers models and would increase maintaining workload.\n> \n> There is big wave of using RL for LLMs after deepseek R1 . If there is no Liger kernel integration , veRL will be facing huge GPU memory requirements and training cost . You can either catch this wave or play safe . \n\nCannot agree more. We'll support it soon."
+      },
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-02-09T09:02:41Z",
+        "body": "Already implemented in PPOTrainer and SFTTrainer"
+      }
+    ]
+  },
+  {
+    "number": 95,
+    "title": "Several issues on current main",
+    "created_at": "2025-01-12T01:32:13Z",
+    "closed_at": "2025-01-13T08:40:29Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/95",
+    "body": "- Fix flash-attention compatibility\r\n- Add a CI with model-based reward to ensure it's always runnable\r\n- Support running for particular steps instead of epochs\r\n- Fix reward model chooses reward on EOS token after switching from AutoModelForSequenceClassification to AutoModelForTokenClassification",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/95/comments",
+    "author": "vermouth1992",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-12T03:09:58Z",
+        "body": "Will fix them later today"
+      }
+    ]
+  },
+  {
+    "number": 93,
+    "title": "[FSDP] optimizer offload",
+    "created_at": "2025-01-10T23:29:08Z",
+    "closed_at": "2025-01-25T00:32:28Z",
+    "labels": [
+      "fsdp"
+    ],
+    "url": "https://github.com/volcengine/verl/issues/93",
+    "body": "fsdp optimizer offload will affect the correctness of gradient accumulation. It shall only be enabled if the micro batch size is equal to batch size. verl should add a check to avoid misusage of such kind. ",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/93/comments",
+    "author": "eric-haibin-lin",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-25T00:32:29Z",
+        "body": "This is fixed in the code by forcing turning off CPUOffload for model that is trainable."
+      }
+    ]
+  },
+  {
+    "number": 88,
+    "title": "[docker] megatron: add TE to ngc dockerfile",
+    "created_at": "2025-01-08T16:33:45Z",
+    "closed_at": "2025-01-09T05:05:03Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/88",
+    "body": "Image:\r\n`verlai/verl:ngc-th2.4.0-cu124-vllm0.6.3-te1.7-v0.0.4`",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/88/comments",
+    "author": "eric-haibin-lin",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-08T16:35:45Z",
+        "body": "We can also upgrade ray to the latest version without depending on 2.10"
+      },
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-01-08T21:15:32Z",
+        "body": "> We can also upgrade ray to the latest version without depending on 2.10\r\n\r\nThis will install ray 2.40"
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "No module named 'megatron.optimizer'",
+    "created_at": "2025-01-06T08:58:22Z",
+    "closed_at": "2025-01-25T19:48:47Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/82",
+    "body": "I followed the installation instructions to install Megatron version 0.4.0. but I found this error when training with megatron backend\r\n```\r\nfrom megatron.optimizer import DistributedOptimizer\r\nModuleNotFoundError: No module named 'megatron.optimizer'\r\n```",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/82/comments",
+    "author": "Wraythh",
+    "comments": [
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-01-07T00:13:55Z",
+        "body": "Could you make sure megatron-lm is in your PYTHONPATH? Unfortunately mcore does not include megatron.optimizer in their package."
+      }
+    ]
+  },
+  {
+    "number": 81,
+    "title": "Fix repeat",
+    "created_at": "2025-01-06T07:29:44Z",
+    "closed_at": "2025-01-06T09:12:28Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/81",
+    "body": "DataProto misses the repeat function.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/81/comments",
+    "author": "caoshiyi",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-06T09:12:28Z",
+        "body": "Thanks for your investigation! Sorry that I missed this feature.\r\nYour impl looks good but I'll upload our implementation to keep consistency.\r\nI'll close it first."
+      }
+    ]
+  },
+  {
+    "number": 78,
+    "title": "Validation dataset silently drops last batch",
+    "created_at": "2025-01-05T01:46:00Z",
+    "closed_at": "2025-01-09T09:04:35Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/78",
+    "body": "Hi thanks for the lib! It seems that the val dataloader silently drops last batch. This can be confusing especially when a lot of rows are dropped, because the validation stage is not validating the whole val dataset, but part of it.\r\n\r\nJudging from comments near that line, I guess it is because we need to ensure number of rows is divisible by dp size? Then maybe we can have either drop only minimal number of rows to satisfy this, or add assertions to ensure users do not drop too many rows.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/78/comments",
+    "author": "fzyzcjy",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-05T13:32:34Z",
+        "body": "Hi, I guess a potentially solution is to pad the data into a size that is divisible by dp_size and unpad the results."
+      },
+      {
+        "user": "fzyzcjy",
+        "created_at": "2025-01-05T14:40:27Z",
+        "body": "That looks also reasonable!\r\n\r\nIndeed I guess it is not a problem if we only throw away several test examples. Just do not want it to e.g. throw away 1000 samples without any hints."
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "Resume from checkpoints",
+    "created_at": "2025-01-04T10:35:58Z",
+    "closed_at": "2025-02-09T10:27:10Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/76",
+    "body": "Hi thanks for the lib! It would be great if it can support resuming from checkpoints. I checked the doc but it seems this is not mentioned...",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/76/comments",
+    "author": "fzyzcjy",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-04T15:46:54Z",
+        "body": "Nice suggestion. It's a good feature to be added! We'll include it in our roadmap."
+      },
+      {
+        "user": "edchengg",
+        "created_at": "2025-01-23T18:16:23Z",
+        "body": "this feature would be awesome. thanks!"
+      },
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-02-09T10:27:10Z",
+        "body": "mr mergede"
+      }
+    ]
+  },
+  {
+    "number": 67,
+    "title": "Super tiny fix typo in title",
+    "created_at": "2024-12-31T05:13:09Z",
+    "closed_at": "2024-12-31T13:22:17Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/67",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/67/comments",
+    "author": "fzyzcjy",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2024-12-31T13:22:07Z",
+        "body": "Thanks!"
+      },
+      {
+        "user": "fzyzcjy",
+        "created_at": "2024-12-31T13:34:55Z",
+        "body": "You are welcome!"
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "[example] add a split placement tutorial",
+    "created_at": "2024-12-11T10:20:45Z",
+    "closed_at": "2024-12-11T14:41:22Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/43",
+    "body": "- Add the split placement tutorial by monkey-patch the `fit` function in ray_trainer\r\n- Split the actor/rollout/ref in one set of GPUs while mapping the critic and reward model to remaining GPUs\r\n- Currently, for simplicity, we only parallelize the execution of `actor.update_actor` and `critic.update_critic`. We can further parallelize operation in prepare experience stage.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/43/comments",
+    "author": "PeterSH6",
+    "comments": [
+      {
+        "user": "vermouth1992",
+        "created_at": "2024-12-11T10:23:29Z",
+        "body": "Actually, the critic/rm group can also have rollout. And this placement is most efficient in most cases. But this requires changing the code"
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "title": "Are optimizer states reloaded or offloaded during the conversion from actor training to actor rollout?",
+    "created_at": "2024-12-09T09:00:57Z",
+    "closed_at": "2024-12-17T09:29:45Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/42",
+    "body": "hi veRL team, thanks for open-sourcing the great framework. I have some questions about conversion from actor training to rollout in verl.  I would greatly appreciate any insights or clarifications you can provide.\r\n\r\n### Questions:\r\n**Optimizer State Offload:**\r\nDuring the conversion from actor training to actor rollout, is there an interface provided to offload/reload the optimizer states? \r\n\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/42/comments",
+    "author": "G1aZzz",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2024-12-12T04:16:54Z",
+        "body": "Hi @G1aZzz , do you mean the offload optimizer in Megatron backend? Offload optimizer is supported in FSDP."
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "[ci] feat: add more CI workflow",
+    "created_at": "2024-12-06T14:17:27Z",
+    "closed_at": "2025-01-09T01:10:27Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/38",
+    "body": "- As titled",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/38/comments",
+    "author": "PeterSH6",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2025-01-08T16:53:54Z",
+        "body": "Nice! Finally...\r\n\r\nSome TODOs:\r\n- Update and fix the colocated worker name in the log and relevant CI\r\n- Install cupy in L20 using docker.\r\n- Check the connection error in the ignore ray task in L20.\r\n\r\nWe can merge this PR first"
+      },
+      {
+        "user": "eric-haibin-lin",
+        "created_at": "2025-01-08T22:07:22Z",
+        "body": "so this PR run e2e test with the digit completion trainer. We do not have e2e tests covering the verl ppo trainer yet?"
+      },
+      {
+        "user": "vermouth1992",
+        "created_at": "2025-01-09T00:01:43Z",
+        "body": "> so this PR run e2e test with the digit completion trainer. We do not have e2e tests covering the verl ppo trainer yet?\r\n\r\nIt does cover the verl ppo trainer, but not the main entry. It's better to add QWen 0.5b as a nightly ci later"
+      }
+    ]
+  },
+  {
+    "number": 18,
+    "title": "[chore] Break the loop after obtaining the register_center actor",
+    "created_at": "2024-11-20T23:26:54Z",
+    "closed_at": "2024-11-21T15:00:53Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/pull/18",
+    "body": "Currently, the loop will always iterate 120 times.",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/18/comments",
+    "author": "kevin85421",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2024-11-21T15:00:20Z",
+        "body": "Nice catch!"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "启动训练脚本出现偶发性ray.exceptions.ActorDiedError错误",
+    "created_at": "2024-11-12T06:35:35Z",
+    "closed_at": "2024-11-12T12:10:19Z",
+    "labels": [],
+    "url": "https://github.com/volcengine/verl/issues/10",
+    "body": "您好，我们对您的项目非常感兴趣，有个问题想请教一下。\r\n\r\n我们在执行训练脚本`examples/ppo_trainer/run_deepseek7b_llm.sh`的时候，有时会遇到ray.exceptions.ActorDiedError错误，这个问题应该如何解决？以下是错误栈：\r\n\r\n```\r\n(main_task pid=90508) Using LocalLogger is deprecated. The constructor API will change \r\nError executing job with overrides: ['data.train_files=/hyzhou/gsm8k/train.parquet', 'data.val_files=/hyzhou/gsm8k/test.parquet', 'data.train_batch_size=1024', 'data.val_batch_size=1312', 'data.max_prompt_length=512', 'data.max_response_length=512', 'actor_rollout_ref.model.path=/hyzhou/deepseek-ai/deepseek-llm-7b-instruct', 'actor_rollout_ref.actor.optim.lr=1e-6', 'actor_rollout_ref.actor.ppo_mini_batch_size=256', 'actor_rollout_ref.actor.ppo_micro_batch_size=32', 'actor_rollout_ref.actor.fsdp_config.param_offload=False', 'actor_rollout_ref.actor.fsdp_config.grad_offload=False', 'actor_rollout_ref.actor.fsdp_config.optimizer_offload=False', 'actor_rollout_ref.rollout.log_prob_micro_batch_size=128', 'actor_rollout_ref.rollout.tensor_model_parallel_size=4', 'actor_rollout_ref.rollout.name=vllm', 'actor_rollout_ref.rollout.gpu_memory_utilization=0.4', 'actor_rollout_ref.ref.log_prob_micro_batch_size=128', 'actor_rollout_ref.ref.fsdp_config.param_offload=True', 'critic.optim.lr=1e-5', 'critic.model.path=/hyzhou/deepseek-ai/deepseek-llm-7b-instruct', 'critic.model.enable_gradient_checkpointing=False', 'critic.ppo_micro_batch_size=32', 'critic.model.fsdp_config.param_offload=False', 'critic.model.fsdp_config.grad_offload=False', 'critic.model.fsdp_config.optimizer_offload=False', 'algorithm.kl_ctrl.kl_coef=0.001', 'trainer.critic_warmup=0', 'trainer.logger=[console]', 'trainer.project_name=verl_example_gsm8k', 'trainer.experiment_name=deepseek_llm_7b_function_rm', 'trainer.n_gpus_per_node=8', 'trainer.nnodes=1', 'trainer.save_freq=-1', 'trainer.total_epochs=15']\r\nTraceback (most recent call last):\r\n  File \"/usr/local/lib/python3.10/dist-packages/verl/trainer/main_ppo.py\", line 97, in main\r\n    ray.get(main_task.remote(config))\r\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/auto_init_hook.py\", line 21, in auto_init_wrapper\r\n    return fn(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/client_mode_hook.py\", line 103, in wrapper\r\n    return func(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/worker.py\", line 2745, in get\r\n    values, debugger_breakpoint = worker.get_objects(object_refs, timeout=timeout)\r\n  File \"/usr/local/lib/python3.10/dist-packages/ray/_private/worker.py\", line 901, in get_objects\r\n    raise value.as_instanceof_cause()\r\nray.exceptions.RayTaskError(ActorDiedError): ray::main_task() (pid=90508, ip=10.90.67.83)\r\n  File \"/usr/local/lib/python3.10/dist-packages/verl/trainer/main_ppo.py\", line 182, in main_task\r\n    trainer.fit()\r\n  File \"/usr/local/lib/python3.10/dist-packages/verl/trainer/ppo/ray_trainer.py\", line 433, in fit\r\n    gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)\r\n  File \"/usr/local/lib/python3.10/dist-packages/single_controller/ray/base.py\", line 42, in func\r\n    output = ray.get(output)\r\nray.exceptions.ActorDiedError: The actor died unexpectedly before finishing this task.\r\n\tclass_name: create_colocated_worker_cls.<locals>.WorkerDict\r\n\tactor_id: 9ca8e95bb0140a3b4f8c56f001000000\r\n\tpid: 91584\r\n\tname: 0pTaDIWorkerDict_0:0\r\n\tnamespace: 1d4891db-ba8e-4ee5-8ec8-5d6e1b3b466e\r\n\tip: 10.90.67.83\r\nThe actor is dead because all references to the actor were removed.\r\n```\r\n\r\n很期待您的回复~",
+    "comments_url": "https://api.github.com/repos/volcengine/verl/issues/10/comments",
+    "author": "metaqiang",
+    "comments": [
+      {
+        "user": "PeterSH6",
+        "created_at": "2024-11-12T06:40:59Z",
+        "body": "你好@metaqiang，请问安装的ray版本是什么？是2.10吗？"
+      },
+      {
+        "user": "metaqiang",
+        "created_at": "2024-11-12T12:10:19Z",
+        "body": "谢谢，我们的问题已经解决，是因为ray版本安装错误，换成2.10即可"
+      }
+    ]
+  }
+]

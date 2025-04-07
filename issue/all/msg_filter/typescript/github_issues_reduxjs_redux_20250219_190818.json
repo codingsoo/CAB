@@ -1,0 +1,348 @@
+[
+  {
+    "number": 1714,
+    "title": "Dispatch a redux action from an external javascript module",
+    "created_at": "2016-05-11T09:17:36Z",
+    "closed_at": "2016-05-11T13:00:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/1714",
+    "body": "Hi guys,\nI'm working on a react/redux application, which makes use of an external module (written in plain javascript):\n\n``` javascript\nmodule.exports = {\n    ...\n    // Some functions here..\n    someFunction () {\n        dispatch(setSomething());\n    }\n    ...\n};\n```\n\nI need to dispatch an action on the existing store, previously built and linked to the React application. \nWhat's the best way?\n\nThank you\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/1714/comments",
+    "author": "rpnna",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2016-05-11T13:00:03Z",
+        "body": "This is just JavaScript, so the answer is the same as with any JavaScript code.\nIf you need a module to have access to a function, pass that function to that module.\n\n``` js\nmodule.exports = {\n  someFunction (dispatch) {\n    dispatch(setSomething());\n  }\n};\n```\n\nor\n\n``` js\nmodule.exports = function (dispatch) {\n  return {\n    someFunction () {\n      dispatch(setSomething());\n    }\n  }\n};\n```\n\nFinally, you can (if you really want) put a store in a separate module as a singleton, but this makes testing and universal apps considerably harder.\n"
+      },
+      {
+        "user": "rpnna",
+        "created_at": "2016-05-11T15:19:07Z",
+        "body": "@gaearon thanks, I also have solved this way, it was a fake problem..I really appreciate your work and this project.\n"
+      }
+    ]
+  },
+  {
+    "number": 1390,
+    "title": "Component Loading",
+    "created_at": "2016-02-11T18:33:07Z",
+    "closed_at": "2016-02-11T20:23:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/1390",
+    "body": "I'm curious about best practices for my use-case (which I believe is probably very common). It's combination of `react`, `redux`, `react-router` but I believe the discussion is best suited for `redux`\n\nDocumentation and guides are very vague when it comes to component-to-component communication (of a non parent-child nature). Imagine using `react-router` where the overall page is derived of nested layout components such as\n\n``` js\nReactDOM.render((\n    <Router>\n        <Route component={DefaultLayout}>\n            <Route path=\"foo\" component={FooLayout}>\n                <Route path=\"products\" component={Products}>\n                <Route path=\"users\" component={Users}>\n                <Route path=\"widgets\" component={Widgets}>\n            </Route>\n        </Route>\n    </Router>\n), document.getElementById('app'))\n```\n\n`DefaultLayout` looks like this:\n\n``` js\nexport default React.createClass({\n    render: function() {\n        return (\n            <div className=\"default-layout\">\n                <div class=\"receive-any-component\"></div>\n                <main>\n                    {this.props.children}\n                </main>\n            </div>\n        )\n    }\n})\n```\n\nFor the sake of this example, `FooLayout` (loaded into `this.props.children`) can be any sub layout you want to imagine. \n\nAll three routes: `/products`, `/users`, or `/widgets` have a button in their component. When clicked, it will load a whole new component into the `DefaultLayout`'s `<div class=\"receive-any-component\"></div>` section. For example\n\n`Products` component:\n\n``` js\nimport store from 'path/to/store'\n\nexport default React.createClass({\n    render: function() {\n        return (\n            <div className=\"product\">\n                Lorem ipsum...\n                <button onClick={this.onClick}>Click Me</button>\n            </div>\n        )\n    },\n    onClick: function() {\n        // There are several ways to have a component loaded DefaultLayout's\n        // div.receive-any-component\n    }\n})\n```\n\nThis whole example is over simplified. I'm using `react-redux` in the real thing. Official react docs only say one small bit on this type of use-case:\n\n> For communication between two components that don't have a parent-child relationship, you can set up your own global event system. Subscribe to events in componentDidMount(), unsubscribe in componentWillUnmount(), and call setState() when you receive an event. Flux pattern is one of the possible ways to arrange this.\n\nSo, I understand that I can use Redux to dispatch info whereby `DefaultLayout` is subscribed, but I need to load a whole component into `DefaultLayout`. It would seem to me there are two basic options, neither of which I feel are correct.\n## Option One\n\nHave our `Product` component dispatch the component we want to load:\n\n``` js\nimport store from 'path/to/store'\nconst componentToLoad = (\n    <Whatever />\n)\n\nexport default React.createClass({\n    render: function() {\n        return (\n            <div className=\"product\">\n                Lorem ipsum...\n                <button onClick={this.onClick}>Click Me</button>\n            </div>\n        )\n    },\n    onClick: function() {\n        store.dispatch({\n            type: 'LOAD',\n            component: componentToLoad\n        })\n    }\n})\n```\n\nUltimately, I'd like the `DefaultLayout` to be unaware of what components it's loading, so this solution works out in that regards. But sending a component into `redux` just seems so wrong, but it works.\n## Option Two\n\nInstead of dispatching a component, dispatch some state that indicates which component should be loaded. In this case, it would seem that `DefaultLayout` would have to `import` every possible component it might need to load (which in my real usecase is many), then subscribe to our state and use a switch statement to determine which one of our loaded components should be placed into `.receive-any-component`. This feels better from the `redux` end but feels crappy that `DefaultLayout` is aware of every possible component that it might need to load.\n\nI'm not new to JS, but somewhat new to React/Redux. What am I missing?\n\nAnd I apologize this question is so long. It's difficult for me to describe this any other way\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/1390/comments",
+    "author": "bradwestfall",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2016-02-11T20:23:52Z",
+        "body": "It is advisable that both actions and state are always serializable. Therefore putting a component into the action doesn\u2019t seem like the correct way, and I would encourage you not to do that.\n\n> Instead of dispatching a component, dispatch some state that indicates which component should be loaded. In this case, it would seem that DefaultLayout would have to import every possible component it might need to load (which in my real usecase is many), then subscribe to our state and use a switch statement to determine which one of our loaded components should be placed into .receive-any-component. This feels better from the redux end but feels crappy that DefaultLayout is aware of every possible component that it might need to load.\n\nThis is exactly what I would suggest. I don\u2019t think at all it is bad. You can have a separate module that does this.\n\n``` js\nimport Button from './Button'\nimport Checkbox from './Checkbox'\n\nfunction resolveComponent(componentId) {\n  switch (componentId) {\n  case 'BUTTON':\n    return Button\n  case 'CHECKBOX':\n    return Checkbox\n  }\n}\n```\n\nand in your component:\n\n``` js\nfunction mapStateToProps(state) {\n  let Type = resolveComponent(state.componentId)\n  let children = <Type />\n  return { children }\n}\n```\n\nIf your bundler supports code splitting, you can even make `resolveComponent` dynamically load components and return a promise so you can show some default view while component is being loaded.\n"
+      },
+      {
+        "user": "bradwestfall",
+        "created_at": "2016-02-11T21:16:32Z",
+        "body": "Thanks, I can massage this into my real example\n"
+      }
+    ]
+  },
+  {
+    "number": 1000,
+    "title": "Mocking nested smart components with mocha",
+    "created_at": "2015-11-03T21:27:00Z",
+    "closed_at": "2015-11-03T21:34:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/1000",
+    "body": "Hi,\n\nI'm trying to test a \"smart\" connected component that has another connect'ed child inside.\nPreparing a store for the test and providing it directly\n\n``` js\nTestUtils.renderIntoDocument(\n    <SmartParent store={store} />\n);\n```\n\nand SmartParent has `<SmartChild />` in it that throws an exception like `Either wrap the root component in a <Provider>, or explicitly pass \"store\"...`\n\nI know there's `rewire`, but I couldn't manage babel\\webpack\\karma\\rewire setup easily, so I went with making the `SmartChild` dumb for now. But I really would like to figure testing thing out.\nAny hints on this? Maybe some working examples?\n\nThanks!\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/1000/comments",
+    "author": "gothy",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-11-03T21:34:11Z",
+        "body": "``` js\nTestUtils.renderIntoDocument(\n  <Provider store={store}>\n    <SmartParent />\n  </Provider>\n);\n```\n"
+      },
+      {
+        "user": "gothy",
+        "created_at": "2015-11-03T22:07:33Z",
+        "body": "Thanks!\n\nps. That was easy... good sign I need to have some rest :)\n"
+      },
+      {
+        "user": "markerikson",
+        "created_at": "2016-02-24T04:01:26Z",
+        "body": "Followup observation: the wrapper components generated by `connect()` do support taking `store` as a prop, which seems like it would be an alternate approach to passing it in to a smart component.  Also, it looks like the Enzyme library supports defining the context for a component being tested.\n"
+      }
+    ]
+  },
+  {
+    "number": 934,
+    "title": "dispatch(action) calls reducer twice but this.props.function not",
+    "created_at": "2015-10-22T18:15:07Z",
+    "closed_at": "2015-10-22T18:21:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/934",
+    "body": "Hello,\nI got a strange problem and I have no idea what causes this.\nThe approach that I am using is the mapStateToProps / mapDispatchToProps.\n\nThe strang thing is:\n- When I call the action through the function I am passing in through mapDispatchToProps, the reducer gets only called once.\n- When I am using the this.props.dispatch(action) the reducer gets called twice.\n\nThe logger shows that the state is changed to true but then the reducers gets called again and its set back to false again.\n\nFor better understanding, here's the code a code sample.\n\nAction creator:\n\n``` typescript\n//../actions/shellActions\nimport { TOGGLE_SIDEBAR } from '../constants/actionTypes';\nexport function toggleNavigation() {\n    return {\n        type: TOGGLE_SIDEBAR\n    }\n}\n```\n\nReducer\n\n``` typescript\n//../reducers/navigationReducer\nimport { TOGGLE_SIDEBAR } from '../constants/actionTypes';\n\nexport default function toggleSidebar(state:boolean=false, action:any) {\n    let hideSidebar = !state;\n    switch (action.type) {        \n        case TOGGLE_SIDEBAR:\n            return hideSidebar;\n        default:\n            return state;\n    }\n}\n\n//../reducers/rootReducer\nimport { default as toggleSidebar } from './navigationReducer';\n\nconst rootReducer: Redux.Reducer = combineReducers({\n    toggleSidebar: toggleSidebar\n});\n\nexport default rootReducer;\n```\n\nContainer\n\n``` typescript\nimport * as React from 'react';\nimport { connect } from 'react-redux';\nimport { toggleNavigation } from '../actions/shellActions';\n\nclass App extends React.Component<any, any> {\n    constructor(props) {\n        super(props);\n    }\n\n    onToggle() {\n        //this.props.toggleNavigation(); This gets called once\n        this.props.dispatch(toggleNavigation()); // This gets called twice\n    }\n\n    render() {\n        return (\n            <div className={ isSidebarVisible ? \"body-container\" : \"body-container sidebar-open\"}>\n                <button onClick={ this.onToggle.bind(this) }>Toggle</button>\n\n            </div>\n        );\n    }\n}\n\n\nfunction mapStateToProps(state: RootState):AppProp {\n    return {\n        isSidebarVisible: state.toggleSidebar\n    };\n}\n\nfunction mapDispatchToProps(dispatch) {\n    const actions: AppProp = {\n        dispatch: dispatch,\n        toggleNavigation: toggleNavigation\n    };\n\n    return bindActionCreators(actions, dispatch);\n}\n\nexport default connect(mapStateToProps, mapDispatchToProps)(App);\n```\n\nMaybe I did something wrong.\nThanks\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/934/comments",
+    "author": "datoml",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-10-22T18:21:31Z",
+        "body": "If you're using `bindActionCreators` and `mapDispatchToProps`, the action creators _are already bound_. There is no need to call `dispatch()` on their return values. The whole point of `bindActionCreators()` is _not_ to call `dispatch()`. You should either `bindActionCreators()` and call them as is, or not use it, and call `dispatch()`.\n"
+      },
+      {
+        "user": "datoml",
+        "created_at": "2015-10-22T18:49:56Z",
+        "body": "Thank you for the explanation @gaearon.\n"
+      }
+    ]
+  },
+  {
+    "number": 872,
+    "title": "Why does this work?",
+    "created_at": "2015-10-08T19:34:12Z",
+    "closed_at": "2015-10-08T20:04:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/872",
+    "body": "So, after literally hours of moving things around, trudging through docs, etc., I finally got this to work:\n\n``` js\nconst middleware = compose(\n  applyMiddleware(promise, thunk),\n  devTools(),\n  persistState(window.location.href.match(/[?&]debug_session=([^&]+)\\b/)),\n);\n\n// You may call this a finalCreateStore\nconst store = middleware(createStore)(reducer); // reducer is already combined up the chain\n...\n```\n\nSo...\n- What gets `compose`d vs. `applyMiddleware`d?\n- Why can't I `compose(promise, thunk, devTools(), persist(...))`?\n- Why can't I `applyMiddleware(promise, thunk, devTools())`\n- Why can't I do `compose(..., createStore, reducer)`?\n\nSorry if these are \"newbie\" questions, but my take was that things are either `actions`, `actionCreators`, `reducers`, or `middleware`, so I thought all of the above was middleware?\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/872/comments",
+    "author": "ericclemmons",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-10-08T19:41:34Z",
+        "body": "DevTools is not middleware.\npersistState is not middleware. \n\nBoth are \"store enhancers\".\nIncidentally applyMiddleware is also one.\nThat's why they're on the same level.\n\nIt's the opposite:\n- The basic concept is \"store enhancer\". It's createStore => createStore.\n- Store enhancers are too powerful, usually all you want is dispatch => dispatch (and have a reference to store for good measure).\n- There's a store enhancer called applyMiddleware().\n\n\n---\n\nMaybe it's easier to understand if you stop using compose(). It's just an inessential helper.\n\nWhat's really happening is this:\n\n```\nlet createStore = require('redux').createStore;\n\ncreateStore = applyMiddleware(thunk, promise)(createStore);\n\ncreateStore = devTools()(createStore);\n\ncreateStore = persistState(...)(createStore);\n\nlet store = createStore(reducer);\n```\n"
+      },
+      {
+        "user": "ericclemmons",
+        "created_at": "2015-10-08T19:42:14Z",
+        "body": "Ok, so if I understand correctly...\n- middleware _can directly handle events from action creators_, which is why they get wrapped by the `applyMiddleware` \"store enhancer\".\n- Store enhancers aren't really part of the action dispatching process/changing/handing responsibility, but are there for adding features _using_ the store?\n"
+      },
+      {
+        "user": "gaearon",
+        "created_at": "2015-10-08T19:58:11Z",
+        "body": "Store enhancers can do pretty much anything. For example they can wrap reducers, override any store method, or map state.\n\nThe only thing middleware does is wrap dispatch() method. It's less powerful but easier to write correctly.\n\nEverything that middleware can do, store enhancers can do. But they're more complicated to implement so we don't talk about them much in the docs.\n\nIf all you need is wrap dispatch, write middleware. If you need more exotic things write a store enhancer.\n\nAlso check out applyMiddleware() source.\n"
+      },
+      {
+        "user": "ericclemmons",
+        "created_at": "2015-10-08T20:04:22Z",
+        "body": "This helps a lot.  Thanks!\n\nKnowing these are the pieces, I ended up with something up:\n\n``` js\nconst store = createStoreWith(middlewares, enhancers)(reducer, initialState);\n// Internally does the above, but now the terseness helps\n// the team understand what goes where.\n```\n"
+      },
+      {
+        "user": "gaearon",
+        "created_at": "2015-10-08T20:09:45Z",
+        "body": "Yeah you could do that.\n\nOne side effect is that you might want to apply middleware twice.\n\n\n---\n\nWhat I meant to say is that there are cases where you want to apply some middleware, then some enhancer, and then some more middleware. For example if you want to put logger after some enhancer that generates actions you want to log.\n\nNot saying it's a common use case but it's something that gets lost with the signature above. That's the reason we don't include such createStoreWith in the core, too. \n"
+      },
+      {
+        "user": "ericclemmons",
+        "created_at": "2015-10-08T20:53:34Z",
+        "body": "Ah, good explanation.  This reminds me much more of doing Koa-middleware where you `yield next` and create very special little sandwiches :)\n\n\n---\n\nAnother question (last one!):  if \"middleware\" were all just store enhancers (but only concerned themselves with the dispatch part), would it then read:\n\n``` js\ncompose(\n  thunkEnhancer,\n  promiseEnhancer,\n  devTools(),\n  ...\n)(createStore)(reducer, initialState);\n```\n\nIf that's correct, then `applyMiddleware` is really _enhancing_ `thunk` and `promise` to be a \"store enhancer\" like the rest of the chain...\n"
+      },
+      {
+        "user": "acdlite",
+        "created_at": "2015-10-08T21:17:17Z",
+        "body": "If we want to be precise about it, `applyMiddleware()` is a function whose arguments are middleware and which returns a store enhancer.\n\n\n---\n\nSo you could make a `thunkEnhancer` or `promiseEnhancer` like so:\n\n``` js\nconst thunkEnhancer = applyMiddleware(thunk);\nconst promiseEnhancer = applyMiddleware(promise);\n```\n"
+      },
+      {
+        "user": "ericclemmons",
+        "created_at": "2015-10-08T22:35:45Z",
+        "body": ":+1: \n\n\n---\n\n@acdlite I think that's clarification I (we) needed. Finally arrived to that conclusion, but   that distinction hasn't been clear.  Thanks guys!\n"
+      }
+    ]
+  },
+  {
+    "number": 621,
+    "title": "Problem with componentWillMount on connected component",
+    "created_at": "2015-08-25T13:21:41Z",
+    "closed_at": "2015-08-25T13:32:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/621",
+    "body": "I have a problem with server rendering when use `componentWillMount` method for request data. Some of my requests are pre-fetched on server-side and some of them not.\nExample:\n\n``` javascript\n// HomePage container\nclass HomePage extends Component {\n  static willRender = store => {\n    // I don't want fetch anything - let's client do this job\n  }\n\n  componentWillMount() {\n    this.props.fetchSongs();\n    this.props.fetchAlbums();\n    this.props.fetchBands();\n  }\n\n  ...\n}\n\nexport default connect(select, mapDispatchToProps)(HomePage);\n```\n\nWhen server render markup client can not use it, I see this error in console:\n\n```\nWarning: React attempted to reuse markup in a container but the checksum was invalid. This generally means that you are using server rendering and the markup generated on the server was not what the client was expecting. React injected new markup to compensate which works but you have lost many of the benefits of server rendering. Instead, figure out why the markup being generated is different on the client or server:\n (client) eoa8oo3k.1.$/\"><div class=\"loader-block\"\n (server) eoa8oo3k.1.$/\"><div data-reactid=\".meeoa\n```\n\nAs I understand it's because this method invoked on the client side before rendering and on server side \"after\".\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/621/comments",
+    "author": "tadjik1",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-08-25T13:32:50Z",
+        "body": "This is just how React works, isn't it? Either you generate identical markup, and then client is able to reuse it, or you generate a different markup, and client cannot reuse it.\n\nIn your example the server renders the data, but the client renders `<div class=\"loader-block\"` first. Unfortunately I can't help you further because I don't understand the problem from the issue description.\n\n\n---\n\nIf you want to only fetch something on the client, put it into `componentDidMount` which executes only on the client:\n\n``` js\n  componentDidMount() {\n    this.props.fetchSongs();\n    this.props.fetchAlbums();\n    this.props.fetchBands();\n  }\n```\n"
+      },
+      {
+        "user": "tadjik1",
+        "created_at": "2015-08-25T13:34:27Z",
+        "body": "yes, I want to make some requests only on client side. thanks for description\n"
+      }
+    ]
+  },
+  {
+    "number": 596,
+    "title": "store.dispatch() from Actions",
+    "created_at": "2015-08-21T08:01:26Z",
+    "closed_at": "2015-08-21T11:07:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/596",
+    "body": "I'm working on an example that makes use of async state updates. In that app I'm trying to find the best place for dispatch (e.g. as in `redux-thunk`), and it just happens to make sense to use it from Actions. \n\nHere's a sample action just to illustrate. \n\n```\nimport { RECEIVE_LOCATION } from '../constants/Types';\nimport { defaultPosition } from '../constants/Geo';\nimport store from '../stores';\n\nfunction requestGeolocation() {\n  return function(dispatch) {\n    navigator.geolocation.getCurrentPosition(function(position) {\n      dispatch({\n        type: RECEIVE_LOCATION,\n        coords: {\n          latitude: position.coords.latitude,\n          longitude: position.coords.longitude,\n          inProgress: false,\n        },\n      });\n    });\n  };\n}\n\nexport function getGeolocation() {\n  if (!navigator.geolocation) {\n    return store.dispatch({\n      type: RECEIVE_LOCATION,\n      ...defaultPosition,\n    });\n  }\n  return store.dispatch(requestGeolocation());\n}\n```\n\nObviously `dispatch` didn't come from a view when firing `getGeolocation()`, which is why I'm looking to hear about your take on this approach. This kind of makes sense to me only for the agnostic components where I don't expect bound actions received through props (e.g. `<GeoButton />` that cares less about anything other than triggering that action)\n\nSo my question is, would this pattern break the basic Redux principles?\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/596/comments",
+    "author": "grgur",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-08-21T11:07:10Z",
+        "body": "> Obviously dispatch didn't come from a view\n\nIf you're grabbing `dispatch` from a singleton `store` by exporting it from some module, you're making it hard to change your app to be universal (i.e. render on the server) later. Whether you care about this or not, is up to you, but we don't encourage this pattern.\n\nWhy not just use thunk middleware to change\n\n``` js\nexport function getGeolocation() {\n  if (!navigator.geolocation) {\n    return store.dispatch({\n      type: RECEIVE_LOCATION,\n      ...defaultPosition,\n    });\n  }\n  return store.dispatch(requestGeolocation());\n}\n```\n\ninto thunk:\n\n``` js\nexport function getGeolocation() {\n  return function (dispatch) {\n    if (!navigator.geolocation) {\n      return dispatch({\n        type: RECEIVE_LOCATION,\n        ...defaultPosition,\n      });\n    }\n    return dispatch(requestGeolocation());\n  }\n}\n```\n\nThen you can dispatch it like this:\n\n``` js\nstore.dispatch(getGeolocation());\n```\n\nand import `store` from your view, if that's what you prefer.\n\nAt this point, though, you should probably put `connect()` without arguments onto your view. Then you'll only get `dispatch` injected as a prop, which is all you need:\n\n``` js\nclass GeoButton extends Component {\n  componentDidMount() {\n    this.props.dispatch(getGeolocation());\n  }\n}\n\nexport default connect()(GeoButton); // just gives it dispatch()\n```\n\nAnother option is to keep your `GeoButton` \u201cdumb\u201d, that is, unaware of Redux.\n\n``` js\nclass GeoButton extends Component {\n  componentDidMount() {\n    this.props.fetch();\n  }\n}\n```\n\nThen you can bind it somewhere else:\n\n``` js\nlet GeoButtonThatKnowsWhatToDo = connect(null, { fetch: getGeolocation })(GeoButton);\n```\n"
+      }
+    ]
+  },
+  {
+    "number": 584,
+    "title": "Best practise of handling normalised Entities?",
+    "created_at": "2015-08-19T21:29:56Z",
+    "closed_at": "2015-08-20T21:38:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/584",
+    "body": "In my first App with Redux, I am trying to keep my collections normalised as recommended. This way you only have to change the Entities in one place. (this feels right to me)\n\nAt first i successfully normalised my Array of data to an Array-like-Object of Entities with the id's as key's\n\nThen i wanted to list the entities in a View, so i had to parse it back to an Array. Also if i want to filter my Entities, i need the real Array. <b>Is this really the right approach? </b>\n\nExample with re-select:\n\n``` javascript\n    // As \"id\" for my images i use \"uri\"\n\n    imageEntities = {\n     uri1: {image...},\n     uri2: {image...},\n    ....\n    }\n\n    // Selectors:\n    const imagesSelector = state => state.images;\n\n    // parse the Array-like-Object to an Array\n    const imagesArySelector = createSelector(\n      [imagesSelector],\n          images => {\n            let ary = [];\n            for (var key in images) {\n              if (images.hasOwnProperty(key)) {\n                ary.push(images[key]);\n              }\n             }\n            return ary;\n          }\n     );\n\n    // filter the Array to get only the new images\n    export const newImagesSelector = createSelector(\n      [imagesArySelector],\n        images => images.filter(image => image.isNew)\n     );\n```\n\n<b>Is this really the right approach? </b> (it is working fine, from what i see until now)\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/584/comments",
+    "author": "ms88privat",
+    "comments": [
+      {
+        "user": "itsmepetrov",
+        "created_at": "2015-08-20T07:20:51Z",
+        "body": "I think it can be done more elegantly.\nHow I do it:\n\n``` js\nimport { createSelector } from 'reselect';\n\nconst providersSelector = state => state.entities.providers;\nconst subscribersSelector = state => state.entities.subscribers;\n\nexport const providersArraySelector = createSelector(\n    [providersSelector],\n    providers => Object.keys(providers).map(id => providers[id])\n);\n\nexport const subscribersArraySelector = createSelector(\n    [subscribersSelector],\n    subscribers => Object.keys(subscribers).map(id => subscribers[id])\n);\n```\n"
+      },
+      {
+        "user": "ms88privat",
+        "created_at": "2015-08-20T12:28:38Z",
+        "body": "@itsmepetrov looks a'lot better... thx. \n\nSo in principle I am on the right track. Anybody else? \n"
+      },
+      {
+        "user": "gaearon",
+        "created_at": "2015-08-20T21:38:08Z",
+        "body": "> Then i wanted to list the entities in a View, so i had to parse it back to an Array.\n\nYou can keep an array of IDs when arrays are more convenient to work with. You'll _need_ to do this for things like pagination. The `real-world` example in `examples` folder does that.\n"
+      }
+    ]
+  },
+  {
+    "number": 562,
+    "title": "Clearing State Between Views",
+    "created_at": "2015-08-17T20:03:54Z",
+    "closed_at": "2015-08-17T20:40:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/562",
+    "body": "Howdy.\n\nThis is more of a general Flux question, but being incredibly interested and impressed with Redux I wanted to see how all of you approached the situation, since I've been wavering on it for a while.\n\nFlux and Redux implementations are both incredibly clear to me when you have state that persists across your entire application - Facebook commonly cites the canonical Todo app or FB chat in their examples. But what do you do when you have disparate views that require entirely new sets of data? By that I mean: what is the best way to discard of the unused data that still lives inside of other stores/reducers.\n\nCreating a global \"reset\" action seems like a poor (albeit easy) way of doing this, but it severely hampers the ability to create reducers that reliably persist (or don't) between views. Or do you instead have the component/route responsible for triggering the initial load action also trigger an action to clear it? Thinking about it the latter option seems the most intuitive to me, but hopefully somebody more well-versed than me can speak on the issue. Maybe it's just that simple and I'm overthinking it.\n\nIf anybody has any recommendations or could point me to some documentation I'd greatly appreciate it. Almost all of the Flux examples I've found implement fairly trivial applications, so I'm still left wondering how reducers are managed in the context of a larger application.\n\nThanks :)\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/562/comments",
+    "author": "dvdzkwsk",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-08-17T20:35:09Z",
+        "body": "> Or do you instead have the component/route responsible for triggering the initial load action also trigger an action to clear it?\n\nThis is how I'd do it.\n"
+      }
+    ]
+  },
+  {
+    "number": 391,
+    "title": "Question: where this the place for keeping \"isLoading\" state?",
+    "created_at": "2015-08-04T08:32:44Z",
+    "closed_at": "2015-08-04T10:22:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/391",
+    "body": "Hello. Thanks for a perfect work and very useful tool!\nWe are trying to use it in our project and meet a next difficult situation:\n\nwe have a movies collection in our project. movies could be recommendation, new releases, free, etc. How should we construct our store for keep all of this types and movies and how we detect that free movies are loading but new releases already loaded? All of this collections are paginated.\n\nfor example movies reducer:\n\n``` javascript\nconst initialState = {\n  allMovies: {}, // id => movie\n  free: [], // id\n  releases: [], // id\n  ...,\n  search: new Map() // {search query} => [id1, id2, ...]\n};\n\nexport default function movies(state = initialState, action) {\n  const movies = selectn('payload.entities.movies', action);\n  const ids = selectn('payload.result.movies', action);\n\n  switch (action.type) {\n  case RECEIVED_NEW_RELEASES:\n    // add movies and return new state\n\n  case RECEIVED_FREE_MOVIES:\n    // add movies and return new state\n  default:\n   // return state\n  }\n}\n```\n\nSo, how can I detect that my request for free movies is in process or finished? Where this state should be placed?\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/391/comments",
+    "author": "tadjik1",
+    "comments": [
+      {
+        "user": "gaearon",
+        "created_at": "2015-08-04T10:22:44Z",
+        "body": "It's sensible to store `isFetching` together with other pagination information. Your data structure most likely will look like this:\n\n``` js\nconst initialState = {\n  allMovies: {}, // id => movie\n  free: {\n    ids: [],\n    nextPageUrl: string, // empty on last page, parsed from server response\n    isFetching: bool\n  },\n  releases: {\n    ids: [],\n    nextPageUrl: string, // empty on last page, parsed from server response\n    isFetching: bool\n  },\n  ...,\n  search: new Map() // {search query} => [id1, id2, ...]\n};\n```\n\nIt's also sensible to make something like `createPaginationReducer(actionTypes)` so you don't need to write this logic more than once.\n"
+      },
+      {
+        "user": "tadjik1",
+        "created_at": "2015-08-04T11:58:34Z",
+        "body": "@gaearon Thanks!\n"
+      }
+    ]
+  },
+  {
+    "number": 222,
+    "title": "State that doesn't fit into memory",
+    "created_at": "2015-07-06T11:55:26Z",
+    "closed_at": "2015-07-06T13:08:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/222",
+    "body": "First off, there are some great ideas in this library, and I very muched enjoyed your talk at React Europe!\n\nA lot of Flux or Flux-like libraries focus on use cases where all state fits in memory, and never mentions how you would tackle use cases where you use WebSQL or IndexedDB to store state and only fect a subset of it on demand. If your stores implement getters, it's simple to put the on-demand queries there. But where do you put it with Redux?\n\nLet's say you have a todo app, but the number of todos are too big to have in memory. How would you approach that with Redux?\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/222/comments",
+    "author": "andersekdahl",
+    "comments": [
+      {
+        "user": "johanneslumpe",
+        "created_at": "2015-07-06T12:22:07Z",
+        "body": "You could implement a simple pagination. Then to fetch more data you'd just call an action which in turns fetches the data from your database backend. The new data gets passed to your reducers and updates the state.\n\nIt's not different from a normal async request I'd say. Except that you don't use a REST api or something, but a local database.\n"
+      },
+      {
+        "user": "andersekdahl",
+        "created_at": "2015-07-06T13:01:36Z",
+        "body": "I agree that it's conceptually the same as going over the wire to fetch data, but it's often assumed that you fetch everything once and have everything in memory after that.\n\nDo you have an example to point at for pagination? And perhaps filtering of finished todos where the filtering isn't done on an array but having the backend/database do it.\n\n\n---\n\nI'm not looking for a silver bullet here. Handicaping the client by not letting it know everything about state management puts some tough constraints on it. Was just looking to see what your take it on it was.\n\n\n---\n\n(That is, when the server keeps state the client doesn't have. Different story with a client database with all state.)\n"
+      },
+      {
+        "user": "johanneslumpe",
+        "created_at": "2015-07-06T13:03:00Z",
+        "body": "Sorry, I currently have no example :/ But pagination would just be the same as with a web api. You only need to know the total count, the current page you're on and the amount of items per page. Then you can easily construct a working pagination. (Without having to store anything in memory, each page could just be fetched from the db).\n\nFiltering would work the same, maybe something like this:\n\n``` javascript\nconst action = {\n  filterItemsByKeyword: (keyword) => {\n    return (dispatch, getState) => {\n      // you could also just pass in the current page into the action\n      const { currentPage } = getState().todos.pagination;\n\n      // whether the db is local or remote really does not matter\n      api.retrieveItemsFilteredByKeyword(keyword, currentPage)\n        .then(results => dispatch({type: ITEMS_FETCHED, payload: results}));\n    };\n  }\n}\n```\n\nDoes that help you?\n"
+      },
+      {
+        "user": "andersekdahl",
+        "created_at": "2015-07-06T13:08:00Z",
+        "body": "I think it does, thanks! I suspect that I'm approaching this with a different mindset than I should. I'll play with it, and reopen if I find something interesting.\n"
+      },
+      {
+        "user": "johanneslumpe",
+        "created_at": "2015-07-06T13:09:06Z",
+        "body": ":+1: \n"
+      }
+    ]
+  },
+  {
+    "number": 1687,
+    "title": "Replace es3ify with Babel ES3 transforms",
+    "created_at": "2016-05-01T22:59:50Z",
+    "closed_at": "2016-05-02T14:30:31Z",
+    "labels": [
+      "help wanted",
+      "infrastructure"
+    ],
+    "url": "https://github.com/reduxjs/redux/issues/1687",
+    "body": "The only reason it was added is because Babel ES3 transforms were broken.\nThey have since been fixed.\n\nNow that es3ify itself is broken (see Travis), I\u2019d appreciate somebody just putting those plugins in and removing es3ify from our build process.\n",
+    "comments_url": "https://api.github.com/repos/reduxjs/redux/issues/1687/comments",
+    "author": "gaearon",
+    "comments": [
+      {
+        "user": "chentsulin",
+        "created_at": "2016-05-02T12:48:37Z",
+        "body": "Submitted a PR at #1688 \n"
+      },
+      {
+        "user": "gaearon",
+        "created_at": "2016-05-02T14:30:32Z",
+        "body": "Thank you!\n"
+      }
+    ]
+  }
+]

@@ -1,0 +1,574 @@
+[
+  {
+    "number": 152,
+    "title": "RecursiveRules integration into OverlapRefinery",
+    "created_at": "2025-01-21T17:51:35Z",
+    "closed_at": "2025-02-10T18:01:07Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/152",
+    "body": "As discussed in #150. \r\n\r\n## Key changes\r\n\r\n- Added a new \"recursive\" method alongside the existing \"static\" method for calculating overlap\r\n\r\n- The class now provides three methods for calculating overlap:\r\n     - Exact (using tokenizer)\r\n     - Approximate (using text length ratios)\r\n     - Recursive (using hierarchical rules for natural boundaries)\r\n\r\n- `min_tokens` and `rules` have been added as new parameters. But only used for `recursive` refining.\r\n\r\n- `_find_boundary_with_rules()`, `_find_primary_boundary_context()`, and `_find_forward_boundary_context()` are the key functions for applying RecursiveRules.\r\n\r\n- Split the refinement logic into separate methods for static and hierarchical approaches:\r\n\r\n    - _refine_prefix_static() and _refine_suffix_static() for the original method\r\n    - _refine_prefix_hierarchical() and _refine_suffix_hierarchical() for the new recursive method\r\n\r\n- A new `_count_tokens()` method added\r\n\r\n## Tests\r\n\r\n- `test_recursive_refinery_initialization` verifies proper initialization with recursive mode parameters and validates error cases for invalid configurations.\r\n\r\n- `test_recursive_refinery_with_rules` checks that the refinery properly applies custom recursive rules to hierarchical chunks and maintains appropriate context sizes.\r\n\r\n- `test_recursive_refinery_boundary_detection` ensures the refinery correctly identifies paragraph breaks and other structural boundaries in hierarchical text.\r\n\r\n- `test_recursive_refinery_whitespace_fallback` validates that the refinery falls back to whitespace-based splitting when no explicit delimiters are found.\r\n\r\n- `test_recursive_refinery_with_small_chunk` confirms correct handling of chunks smaller than the minimum token size and verifies exact token counting. **NOTE**: default behaviour is to return the entire chunk in cases where the chunk is **smaller** than the specified `min_tokens`. \r\n\r\n- `test_recursive_refinery_suffix_mode` tests the refinery's suffix mode operation when adding context from subsequent chunks.\r\n\r\n- `test_recursive_refinery_merge_context` validates that context is properly merged into chunk text when the `merge_context `option is enabled.\r\n\r\n- `test_recursive_refinery_empty_input` verifies proper handling of empty input lists.\r\n\r\n- `test_recursive_refinery_single_chunk` ensures correct processing of single-chunk inputs without context.\r\n\r\n# OverlapRefinery state diagram\r\nThe diagram below demonstrates the configuration options now available with OverlapRefinery.\r\n```mermaid\r\nstateDiagram-v2\r\n    [*] --> Initialization\r\n    \r\n    state Initialization {\r\n        [*] --> ValidateParams\r\n        ValidateParams --> SetTokenizer: Has tokenizer\r\n        ValidateParams --> ApproximateMode: No tokenizer\r\n        \r\n        SetTokenizer --> ExactCounting: approximate=False\r\n        SetTokenizer --> ApproximateMode: approximate=True\r\n        \r\n        state ApproximateMode {\r\n            UseCharRatio: Use char/token ratio\r\n        }\r\n        \r\n        state ExactCounting {\r\n            UseTokenizer: Use exact tokenizer\r\n        }\r\n    }\r\n    \r\n    state Processing {\r\n        [*] --> ValidateChunks\r\n        ValidateChunks --> MethodSelection\r\n        \r\n        state MethodSelection {\r\n            [*] --> Static: method=\"static\"\r\n            [*] --> Recursive: method=\"recursive\"\r\n            \r\n            state Static {\r\n                [*] --> StaticPrefix: mode=\"prefix\"\r\n                [*] --> StaticSuffix: mode=\"suffix\"\r\n            }\r\n            \r\n            state Recursive {\r\n                [*] --> RecursivePrefix: mode=\"prefix\"\r\n                [*] --> RecursiveSuffix: mode=\"suffix\"\r\n                \r\n                state RecursivePrefix {\r\n                    HierarchicalBackward: Find boundaries backwards\r\n                }\r\n                \r\n                state RecursiveSuffix {\r\n                    HierarchicalForward: Find boundaries forwards\r\n                }\r\n            }\r\n        }\r\n    }\r\n    \r\n    state ChunkHandling {\r\n        [*] --> ChunkTypeCheck\r\n        \r\n        ChunkTypeCheck --> SemanticProcessing: SemanticChunk\r\n        ChunkTypeCheck --> SentenceProcessing: SentenceChunk\r\n        ChunkTypeCheck --> TokenProcessing: Basic Chunk\r\n        \r\n        state TokenProcessing {\r\n            [*] --> ExactTokens: Has tokenizer\r\n            [*] --> ApproximateTokens: No tokenizer\r\n        }\r\n    }\r\n    \r\n    Initialization --> Processing: Start refine()\r\n    Processing --> ChunkHandling: For each chunk\r\n    ChunkHandling --> [*]: Context added\r\n    \r\n    note right of ChunkHandling\r\n        If merge_context=True:\r\n        Update chunk text & indices\r\n    end note\r\n```",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/152/comments",
+    "author": "Sankgreall",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2025-02-10T18:00:53Z",
+        "body": "Hey @Sankgreall!\r\n\r\nThanks for the PR~! As I had mentioned, I plan to do some refactoring of the OverlapRefinery for the next release, so this makes a wonderful addition. I plan to test it in a separate branch along with the refactors and merge them once complete. This PR will show up in the next Chonkie release :)\r\n\r\nThanks again (^-^)"
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "[BUG] No argument `batch_size` in sentence chunker",
+    "created_at": "2025-01-02T11:16:39Z",
+    "closed_at": "2025-01-06T23:01:20Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/124",
+    "body": "## 🐛 Bug Description\r\n\r\n\r\n\r\n## 🔍 Minimal Example\r\n<!-- A small, self-contained code example that demonstrates the issue -->\r\n```python\r\nfrom chonkie import TokenChunker\r\n\r\nchonkie_token_chunker = TokenChunker (\r\n    tokenizer=\"gpt2\",  # Supports string identifiers\r\n    chunk_size=512,    # Maximum tokens per chunk\r\n    chunk_overlap=0    # Overlap between chunks\r\n)\r\nchonkie_sentence_chunker.chunk_batch(texts, batch_size=1024)\r\n```\r\n\r\n## 📋 Current Behavior\r\nBatch size is not an accepted argument.\r\n\r\n## ✨ Expected Behavior\r\nBatch size should be an accepted argument\r\n\r\n\r\n## ✅ Reproduction Rate\r\n- [x] Always\r\n- [ ] Sometimes\r\n- [ ] Rarely\r\n- [ ] Not sure",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/124/comments",
+    "author": "shreyashnigam",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2025-01-06T23:01:21Z",
+        "body": "`SentenceChunker` doesn't have a custom implementation of batching, and since it's using multiprocessing in the back, we can avoid adding the `batch_size` parameter for now!\r\n\r\nWill re-open when needed."
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "Patch SemanticChunker._group_sentences_window() to add last sentence …",
+    "created_at": "2024-12-27T16:47:31Z",
+    "closed_at": "2024-12-29T11:59:02Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/111",
+    "body": "A patch that addresses #106 by adding last sentence to last group in `SemanticChunker._group_sentences_window()`.\r\n\r\nUnclear if this is adequate or if the fix should occur in the actual semantic splitting logic in `SemanticChunker._get_split_indices()`.",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/111/comments",
+    "author": "philipchung",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-29T00:01:27Z",
+        "body": "Hey @philipchung!\r\n\r\nThanks for opening a PR~ 😊\r\n\r\nI just merged a PR for the issue you raised (#106 -> #112), which is going to be added to the feature release soon. There was a mismatch in the splits generated and the similarities, which was causing the issue. Thanks for raising and following up on this issue!\r\n\r\nFeel free to test it out from the source in a little bit and let me know if you face any issues!\r\n\r\nThanks 😊"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-29T11:59:03Z",
+        "body": "Hey @philipchung!\r\nThis is fixed as of `Chonkie v0.4.0`~ please test it out and let me know!\r\nClosing this PR, thanks 😊"
+      }
+    ]
+  },
+  {
+    "number": 106,
+    "title": "[BUG] SemanticChunker and SDPMChunker Truncates Last Sentence",
+    "created_at": "2024-12-27T03:02:43Z",
+    "closed_at": "2024-12-29T10:41:01Z",
+    "labels": [
+      "bug",
+      "in progress"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/106",
+    "body": "**Describe the bug**\r\nSemantic Chunker truncates the last sentence and does not return it in the final chunk. SDPMChunker relies on the same logic and has the same issue. This appears to be an indexing issue where the last sentence is left out of the last group. This issue occurs in `chonkie 0.3.0`\r\n\r\n**To Reproduce**\r\n```python\r\nfrom chonkie.chunker import SemanticChunker\r\n\r\nchunker = SemanticChunker(\r\n    embedding_model=\"minishlab/potion-base-8M\",\r\n    mode=\"window\",\r\n    threshold=\"auto\",\r\n    chunk_size=10,\r\n    similarity_window=1,\r\n    min_sentences=1,\r\n)\r\ntext = \"Alice ate an apple. Bob ate a banana. Charlie ate a cherry. David ate a date.\"\r\n\r\nchunks = chunker.chunk(text)\r\n\r\n# The below methods are used in Semantic Chunker's internal logic\r\nsentences = chunker._prepare_sentences(text)\r\nsimilarity_threshold = chunker._calculate_similarity_threshold(sentences)\r\nsimilarities = chunker._compute_pairwise_similarities(sentences)\r\nsplit_indices = chunker._get_split_indices(similarities, chunker.similarity_threshold)\r\ngroups = [sentences[split_indices[i] : split_indices[i + 1]] for i in range(len(split_indices) - 1)]\r\n```\r\n\r\n```python\r\n# Inspect Chunks\r\nfor chunk in chunks:\r\n    print(f\"Chunk Text: {chunk.text}\")\r\n\r\n# Output:\r\n# Chunk Text: Alice ate an apple.\r\n# Chunk Text:  Bob ate a banana.\r\n# Chunk Text:  Charlie ate a cherry.\r\n```\r\n\r\n```python\r\n# Inspect Chunked Sentences\r\nfor sentence in sentences:\r\n    print(\r\n        f\"Sentence Text: {sentence.text}\\n\"\r\n        f\"Start Index: {sentence.start_index}\\n\"\r\n        f\"End Index: {sentence.end_index}\\n\"\r\n    )\r\n\r\n# Output:\r\n# Sentence Text: Alice ate an apple.\r\n# Start Index: 0\r\n# End Index: 19\r\n#\r\n# Sentence Text:  Bob ate a banana.\r\n# Start Index: 19\r\n# End Index: 37\r\n\r\n# Sentence Text:  Charlie ate a cherry.\r\n# Start Index: 37\r\n# End Index: 59\r\n\r\n# Sentence Text:  David ate a date.\r\n# Start Index: 59\r\n# End Index: 77\r\n```\r\n\r\n```python\r\nprint(\r\n    f\"Num Chunks: {len(chunks)}\\n\"\r\n    f\"Num Sentences: {len(sentences)}\\n\"\r\n    f\"Num Similarities: {len(similarities)}\\n\"\r\n    f\"Num Split Indices: {len(split_indices)}\\n\"\r\n    f\"Num Groups: {len(groups)}\\n\"\r\n)\r\n\r\n# Output:\r\n# Num Chunks: 3\r\n# Num Sentences: 4\r\n# Num Similarities: 3\r\n# Num Split Indices: 3\r\n# Num Groups: 2\r\n```\r\n\r\n```python\r\n# Inspect Group 0\r\n[sentence.text for sentence in groups[0]]\r\n# Output:\r\n# ['Alice ate an apple.', ' Bob ate a banana.']\r\n\r\n# Inspect Group 1\r\n[sentence.text for sentence in groups[1]]\r\n# Output:\r\n# [' Charlie ate a cherry.']. <-- this group is missing the last sentence\r\n```\r\n\r\n\r\n**Expected behavior**\r\nLast sentence should not be dropped from the final group.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/106/comments",
+    "author": "philipchung",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-27T11:01:32Z",
+        "body": "Hey @philipchung! 👋\r\n\r\nThanks for opening an issue and for the detailed error reproduction code~ \r\n\r\nI'm taking this issue up right now, will recreate it, and understand what's going on. Will ping when I make progress on this...\r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-29T00:06:01Z",
+        "body": "Hey @philipchung!\r\n\r\nJust merged a patch for the issue (#112) and verified your test case as well. Thank you for your patience. \r\n\r\nI will add it to the source soon, so you can verify it. And will be released with chonkie's next feature release as well :)\r\n\r\nThanks 😊"
+      }
+    ]
+  },
+  {
+    "number": 93,
+    "title": "Semantic Similarity does not work - got an unexpected keyword argument 'similarity_threshold'",
+    "created_at": "2024-12-15T11:53:26Z",
+    "closed_at": "2024-12-23T17:35:17Z",
+    "labels": [
+      "bug",
+      "documentation",
+      "in progress"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/93",
+    "body": "Semantic Similarity does not work\r\n**Error**\r\n```\r\nchunker = SemanticChunker(\r\nTypeError: __init__() got an unexpected keyword argument 'similarity_threshold'\r\n```\r\n\r\n**To Reproduce**\r\n```\r\nfrom chonkie import SemanticChunker\r\nfrom chonkie import SentenceTransformerEmbeddings\r\n\r\nembeddings = SentenceTransformerEmbeddings(\"all-MiniLM-L6-v2\") #all-mpnet-base-v2\"\r\n\r\nprint(embeddings)\r\n\r\na = embeddings.embed(\"Hi\")\r\nprint(a) # prints a embedding\r\n\r\nchunker = SemanticChunker(\r\n    embedding_model='all-MiniLM-L6-v2',\r\n    similarity_threshold=0.5,\r\n    chunk_size=512\r\n)\r\ntext = \"\"\"The neural network processes input data through layers.\r\nTraining data is essential for model performance.\r\nGPUs accelerate neural network computations significantly.\r\nQuality training data improves model accuracy.\r\nTPUs provide specialized hardware for deep learning.\r\nData preprocessing is a crucial step in training.\"\"\"\r\n\r\nchunks = chunker.chunk(text)\r\n\r\nfor chunk in chunks:\r\n    print(f\"Chunk text: {chunk.text}\")\r\n    print(f\"Token count: {chunk.token_count}\")\r\n    print(f\"Number of sentences: {len(chunk.sentences)}\")\r\n```\r\nIt prints the embedding, just errors when initializing the semantic chunker class.\r\n**Output**\r\n```\r\nSentenceTransformerEmbeddings(model=all-MiniLM-L6-v2)\r\n[-9.04762074e-02  4.04395871e-02  2.39057038e-02  5.89479916e-02\r\n -2.28823498e-02 -4.72201295e-02  4.50476483e-02  1.57863833e-02\r\n -4.81994823e-02 -3.77941355e-02 -1.90776791e-02  2.13088039e-02\r\n -4.68304241e-03 -4.33081537e-02  5.99147603e-02  5.91033921e-02\r\n -2.80367117e-02 -5.92184067e-02 -1.24403164e-01 -3.55999470e-02\r\n -6.08053710e-03  3.24290805e-02 -3.78007963e-02  2.47109272e-02\r\n -4.27244082e-02 -4.24538366e-02  4.59356494e-02  9.86255109e-02\r\n -4.99980375e-02 -3.52358408e-02  7.08397478e-02  3.31632011e-02\r\n  2.65883375e-02  1.73212480e-04  3.88164306e-03  3.04672271e-02\r\n -7.82026500e-02 -1.20379530e-01  1.80415660e-02  2.28290427e-02\r\n -1.77501398e-03 -2.34498996e-02  3.05816252e-03  2.43557133e-02\r\n  4.41539772e-02 -4.01097350e-02  2.01923326e-02  1.08881649e-02\r\n  2.87315268e-02  1.23677272e-02 -9.13190767e-02 -6.81244433e-02\r\n  6.19151257e-03 -1.25605203e-02  9.28248987e-02  2.79071033e-02\r\n -3.12197749e-02 -2.52352040e-02  7.84362331e-02 -7.33027086e-02\r\n -6.69823512e-02  1.39002353e-02 -1.42814413e-01  8.77210591e-03\r\n  2.07010098e-02  9.07208887e-05 -5.91357350e-02 -6.52026758e-02\r\n -3.80246937e-02 -6.19724393e-02 -2.50714133e-03 -4.24507726e-03\r\n -4.13620546e-02 -4.95713837e-02  2.24600956e-02 -3.56280915e-02\r\n  4.03861962e-02  4.88409922e-02  5.20196520e-02  3.16421390e-02\r\n  3.02730724e-02 -3.80800143e-02 -1.65185332e-02 -6.83415355e-03\r\n -8.96493811e-03 -3.80861685e-02  2.37352401e-02 -8.56116693e-03\r\n -5.12796491e-02  1.02583468e-02 -1.06715269e-01  5.38776256e-02\r\n  3.03738285e-02 -3.54465619e-02 -7.69298300e-02 -6.11885712e-02\r\n  7.78368711e-02  1.08476519e-03 -1.23568341e-01  2.79173732e-01\r\n  4.79933247e-02  5.21415398e-02  4.21877131e-02  1.02176912e-01\r\n -2.11793073e-02  5.31466976e-02 -5.25944047e-02  7.74884447e-02\r\n -5.98228956e-03  2.23340485e-02  2.56445501e-02 -1.77126937e-03\r\n -2.79253628e-02 -1.91525444e-02  5.49053364e-02  7.07536936e-02\r\n -3.37207830e-03  7.49428431e-03  2.57694367e-02 -7.10282251e-02\r\n -2.47852914e-02 -5.38527109e-02  3.37568410e-02 -4.50824425e-02\r\n -1.98343415e-02 -2.40076575e-02  3.07824998e-03 -4.39805003e-33\r\n  7.13740960e-02 -2.46291980e-02  4.34765853e-02  8.48252997e-02\r\n -4.63567004e-02 -3.41022797e-02 -2.29421165e-02 -4.99801710e-02\r\n  2.06044386e-03  5.18267974e-03  8.05836357e-03  5.91129763e-03\r\n -4.03364375e-02 -2.34233146e-03 -2.57336590e-02  3.13819796e-02\r\n  4.91707362e-02  5.95755540e-02  3.62815298e-02  3.59637477e-02\r\n -7.95034245e-02 -3.18895243e-02  2.03541014e-02  5.40887266e-02\r\n  3.40220742e-02 -2.66799964e-02  5.13579790e-03 -1.37623310e-01\r\n  5.35681173e-02  6.24607988e-02  4.66554910e-02  8.25161114e-03\r\n -1.12271623e-03  1.58642866e-02 -1.48686823e-02 -1.06545649e-02\r\n  1.39251528e-02 -5.11116050e-02 -5.11570461e-02  1.81104448e-02\r\n -2.60318164e-02  4.10491973e-02  6.18396588e-02 -4.09641080e-02\r\n  2.03002878e-02  4.35215682e-02  1.52085321e-02  2.21398696e-02\r\n  5.85440174e-03  3.38419490e-02 -5.83182760e-02  4.04238282e-03\r\n -1.38970748e-01  4.21360228e-03 -5.61999716e-03 -4.35496978e-02\r\n -5.90716023e-03 -7.45447353e-02  8.35962221e-02  4.02504168e-02\r\n  3.14086713e-02  7.68125802e-02 -2.74488702e-02  1.83432046e-02\r\n -1.53332144e-01 -3.48912850e-02  4.94039617e-02 -3.46934460e-02\r\n  1.14418186e-01 -2.06293724e-02 -4.37950604e-02 -1.24856578e-02\r\n  7.63989612e-03  4.81630154e-02 -3.52325886e-02  3.67844477e-02\r\n  6.14347272e-02  1.70743000e-02  1.93933006e-02 -1.52372774e-02\r\n -4.23128437e-03  4.59325276e-02 -8.32644291e-03  1.58503801e-02\r\n  5.95141463e-02 -9.18054860e-03 -1.49881067e-02 -6.76251948e-02\r\n -7.32812434e-02 -3.96396481e-02 -7.59298950e-02  2.27835216e-02\r\n  8.00924152e-02 -2.19015963e-02  1.66906882e-02  3.85790707e-33\r\n  9.64368805e-02  6.16989620e-02 -5.79451546e-02 -1.41535383e-02\r\n -1.89403780e-02 -1.41951339e-02 -2.27934029e-03  8.97949338e-02\r\n -8.37799758e-02 -2.26818696e-02  6.83509111e-02 -3.02902162e-02\r\n  6.81150332e-02  1.75223202e-02  4.47526723e-02  2.56442390e-02\r\n  9.22513977e-02  4.75600474e-02 -7.28711560e-02  4.11393214e-03\r\n -3.27286161e-02 -3.42148729e-02 -9.29743350e-02 -6.22671954e-02\r\n -7.87806790e-03  5.04693948e-03  1.51909823e-02  6.85868636e-02\r\n -5.93004487e-02 -2.59447042e-02  7.01026097e-02 -9.64850094e-03\r\n  1.14026219e-02  5.20743877e-02  1.79106928e-03  1.04113437e-01\r\n  1.21684037e-02 -7.34238848e-02  3.34012397e-02 -9.78091061e-02\r\n -4.58965227e-02  2.78538559e-02 -1.98339615e-02  9.23914686e-02\r\n -1.23828566e-02 -3.98118272e-02  5.08529507e-03  4.14596274e-02\r\n -8.42346847e-02  1.00746350e-02 -8.32033977e-02 -2.83304099e-02\r\n  4.24229316e-02  4.08155238e-03 -4.56181802e-02  5.45455925e-02\r\n  1.30894929e-02  5.93257509e-02  3.16439569e-02  1.33298235e-02\r\n  1.34292301e-02  5.42032495e-02  8.32033996e-03  8.84347260e-02\r\n  2.47976631e-02  3.48344892e-02 -1.57302599e-02 -9.23916139e-03\r\n -3.04034073e-02 -5.37000932e-02  4.26000878e-02 -9.55903251e-03\r\n  3.53703499e-02  2.62070466e-02 -1.59974173e-02 -2.27997378e-02\r\n  1.13233551e-02  3.48057449e-02 -1.15139170e-04  6.14551120e-02\r\n  2.60663908e-02 -3.49001703e-03 -2.68242657e-02  4.36767377e-02\r\n  1.96862146e-02  1.42173460e-02  4.13494073e-02  3.12109925e-02\r\n -2.94173625e-03 -5.59458956e-02  7.75543228e-03  7.96629488e-02\r\n  7.01818839e-02 -5.30647561e-02  8.65287241e-03 -1.44800048e-08\r\n  2.99871266e-02 -3.74180116e-02  6.35029897e-02  9.18339044e-02\r\n  5.34940287e-02  5.86865991e-02 -2.92609241e-02 -1.45442439e-02\r\n -3.18563916e-02  4.17883061e-02  5.59052750e-02  3.48980539e-02\r\n -3.88737209e-02 -5.25139980e-02  5.35428450e-02 -2.30162870e-02\r\n -2.96264552e-02  4.33764495e-02 -5.71561642e-02 -1.37616053e-01\r\n  3.65539044e-02  2.52274647e-02  2.29083188e-03 -3.21153738e-02\r\n  7.02529401e-03 -6.36366978e-02 -3.57009172e-02 -1.72419497e-03\r\n  1.16311871e-02 -6.13933019e-02 -1.34474589e-02  1.83892518e-01\r\n -7.69876363e-03 -1.57939177e-02  2.97547020e-02 -2.22598761e-02\r\n -9.80211049e-03 -1.19002592e-02  6.23303056e-02 -2.51287296e-02\r\n -4.21328209e-02 -5.61932549e-02 -4.12699766e-02 -3.24218832e-02\r\n -1.57817528e-02  4.64272611e-02  1.15918054e-03 -5.41495644e-02\r\n  3.64914089e-02 -6.65330216e-02 -4.34342101e-02 -2.28455123e-02\r\n  5.47489263e-02  7.31127188e-02  3.00164483e-02  6.17795885e-02\r\n  1.61923058e-02  1.22879585e-02 -5.36394771e-03 -8.56415648e-03\r\n  1.50863796e-01  6.81504086e-02  1.78656653e-02  1.12762554e-02]\r\nTraceback (most recent call last):\r\n  File \"D:\\.......\\semantic.py\", line 27, in <module>\r\n    chunker = SemanticChunker(\r\nTypeError: __init__() got an unexpected keyword argument 'similarity_threshold'\r\n```\r\n**Additional context**\r\nsentence transformer version - 2.3.0\r\nchonkie version - 0.2.2\r\npython version - 3.9.13\r\n\r\nNot sure if I am doing something silly, but I have been at it for a while changing versions of packages etc but I just can't seem to work.\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/93/comments",
+    "author": "armsp",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-15T11:56:12Z",
+        "body": "sorryyyyyy~! The documentation is lagging behind a lot! \n\ncould you try changing `similarity_threshold` to `threshold`? That should work...\n\nThanks 😃"
+      },
+      {
+        "user": "armsp",
+        "created_at": "2024-12-15T11:59:47Z",
+        "body": "I had tried that as well. But I get the error at the line `chunks = chunker.chunk(text)` -\r\n```\r\n  1.61923058e-02  1.22879585e-02 -5.36394771e-03 -8.56415648e-03\r\n  1.50863796e-01  6.81504086e-02  1.78656653e-02  1.12762554e-02]\r\nTraceback (most recent call last):\r\n  File \"D:\\......semantic.py\", line 39, in <module>\r\n    chunks = chunker.chunk(text)\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 516, in chunk\r\n    sentence_groups = self._group_sentences(sentences)\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 424, in _group_sentences\r\n    return self._group_sentences_window(sentences)\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 411, in _group_sentences_window\r\n    similarities = self._compute_pairwise_similarities(sentences)\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 256, in _compute_pairwise_similarities\r\n    return [\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 257, in <listcomp>\r\n    self._get_semantic_similarity(\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\chunker\\semantic.py\", line 243, in _get_semantic_similarity\r\n    similarity = self.embedding_model.similarity(embedding1, embedding2)\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\chonkie\\embeddings\\sentence_transformer.py\", line 77, in similarity\r\n    return self.model.similarity(u, v).item()\r\n  File \"C:\\Users\\joe\\AppData\\Local\\Programs\\Python\\Python39\\lib\\site-packages\\torch\\nn\\modules\\module.py\", line 1931, in __getattr__\r\n    raise AttributeError(\r\nAttributeError: 'SentenceTransformer' object has no attribute 'similarity'\r\n```\r\nIt seems like its got something to do with other packages...most probably Sentence Transformer"
+      },
+      {
+        "user": "armsp",
+        "created_at": "2024-12-15T14:53:05Z",
+        "body": "Sentence Transformers 3.0.0 works (i think thats the least version of sentence transformers that will work with chonkie). And I think Numpy should be less than 2.0.0\r\n\r\nFeel free to close this issue!"
+      },
+      {
+        "user": "shreyashnigam",
+        "created_at": "2024-12-23T17:35:17Z",
+        "body": "Fixed the docs with the latest accurate information. Thanks for flagging this! "
+      }
+    ]
+  },
+  {
+    "number": 90,
+    "title": "[Fix] WordChunker chunk_batch fail",
+    "created_at": "2024-12-12T14:42:16Z",
+    "closed_at": "2024-12-13T15:01:49Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/90",
+    "body": "Fix for #73 \r\nIssue was that lambdas are not serializable\r\n@bhavnicksm lmk if this works",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/90/comments",
+    "author": "sky-2002",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-12T14:53:39Z",
+        "body": "Hey @sky-2002! \r\n\r\nThanks for opening a PR! 🙌😁\r\n\r\nLooks good! If you could add test cases for WordChunker chunk_batch as well, that would be lovely~!\r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "sky-2002",
+        "created_at": "2024-12-12T15:10:50Z",
+        "body": "@bhavnicksm added tests, lmk if more test cases needed (i tend to miss)"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-13T15:03:27Z",
+        "body": "Hey @sky-2002, \r\n\r\nThanks for the PR~ 🤎\r\n\r\nMerged into development since I want to run some evaluations on it; will make it live in the next patch release for chonkie.\r\n\r\nThanks! 😊"
+      }
+    ]
+  },
+  {
+    "number": 89,
+    "title": "[Fix] #88: SemanticChunker raises UnboundLocalError: local variable 'threshold' referenced before assignment",
+    "created_at": "2024-12-12T12:12:52Z",
+    "closed_at": "2024-12-12T14:55:57Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/89",
+    "body": "Fix for #88, initiating the threshold outside the while loop",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/89/comments",
+    "author": "arpesenti",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-12T14:56:21Z",
+        "body": "Thanks for the bug fix, @arpesenti! 🦛🤎"
+      }
+    ]
+  },
+  {
+    "number": 88,
+    "title": "[BUG] SemanticChunker raises UnboundLocalError: local variable 'threshold' referenced before assignment ",
+    "created_at": "2024-12-12T11:55:01Z",
+    "closed_at": "2024-12-12T14:58:51Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/88",
+    "body": "When using the SemanticChunker with threshold='auto' and a piece of text containing only two identical (or very similar) sentences the following error is raised:\r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"/usr/lib/python3.10/concurrent/futures/process.py\", line 246, in _process_worker\r\n    r = call_item.fn(*call_item.args, **call_item.kwargs)\r\n  File \"model_store.py\", line 186, in _chunk\r\n    chunks = semantic_chunker.chunk(text)\r\n  File \"/virtualenv/lib/python3.10/site-packages/chonkie/chunker/semantic.py\", line 513, in chunk\r\n    self.similarity_threshold = self._calculate_similarity_threshold(sentences)\r\n  File \"/virtualenv/lib/python3.10/site-packages/chonkie/chunker/semantic.py\", line 365, in _calculate_similarity_threshold\r\n    return self._calculate_threshold_via_binary_search(sentences)\r\n  File \"/virtualenv/lib/python3.10/site-packages/chonkie/chunker/semantic.py\", line 349, in _calculate_threshold_via_binary_search\r\n    return threshold\r\nUnboundLocalError: local variable 'threshold' referenced before assignment\r\n```\r\n\r\n`threshold` is not defined because the while loop condition `abs(high - low) > self.threshold_step` is never met for the default `threshold_step` 0.01 or any small step if the sentences are identical. ",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/88/comments",
+    "author": "arpesenti",
+    "comments": [
+      {
+        "user": "arpesenti",
+        "created_at": "2024-12-12T12:14:13Z",
+        "body": "I have opened the pull request #89 to initialise threshold before the loop. "
+      },
+      {
+        "user": "arpesenti",
+        "created_at": "2024-12-12T12:19:47Z",
+        "body": "Actually the issue is reproducible also with any piece of text containing only two sentences: `low` and `high` are always equal in that case "
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-12T14:43:26Z",
+        "body": "Hey @arpesenti!\r\n\r\n😱 WOAH! That's such a good catch~! Thanks for the PR... will have a look right away!\r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-12T14:58:52Z",
+        "body": "Merged~! Closing issue for now... 😊"
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "[BUG] TokenChunker Batch_chunking gives wrong end_index ",
+    "created_at": "2024-12-09T18:11:48Z",
+    "closed_at": "2024-12-27T10:55:01Z",
+    "labels": [
+      "bug",
+      "in progress"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/84",
+    "body": "**Describe the bug**\r\n\r\nWhen using the `chunk_batch()` method, the resulting `Chunks` have a wrong `end.index`. The indexes seem to be counted in token units instead of string characters unit. This does not happen when using the single `.chunk()` method.\r\n\r\n**To Reproduce**\r\n\r\nSuppose that `text_ds` is a `list` of `str` that contains the texts you want to chunk.\r\n```\r\nchunker = TokenChunker(\r\n    tokenizer=tokenizer, \r\n    chunk_size=300,\r\n    chunk_overlap=20,\r\n)\r\n\r\nchunks = chunker.chunk_batch(text_ds)  \r\nprint(chunks[0][0].end_index)\r\n```\r\n\r\nthis prints `300` or whatever `chunk_size` is.\r\n\r\n**Expected behavior**\r\n\r\n`chunks[0][0].end_index` should return a greater `int` value.\r\n\r\n**Additional context**\r\n\r\nI could not check for other chunkers, I have the same issue as #73 . I tried to look in the code, maybe it originates from the `_process_batch` method of the `TokenChunker` class ? I'll try to go deeper if I have time.\r\n\r\nAnyway, thanks for your time and for the great package !\r\nCheers !\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/84/comments",
+    "author": "CharlesMoslonka",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-09T19:10:00Z",
+        "body": "Hey @CharlesMoslonka!\r\n\r\nThanks for opening an issue and the kind words 😊\r\n\r\nI understand the issue you are seeing, and I'll look into reproducing it so as to add a patch for it to Chonkie, at the earliest. Thanks to the detailed reproduction steps, I should be able to do that quickly.\r\n\r\nWill update regarding the progress on this bug here, \r\n\r\nThanks! ☺️"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-27T10:55:01Z",
+        "body": "Thanks for your patience~\r\n\r\nThe patch is in the source and will be released with the next patch release soon!\r\n\r\nThanks! 😊"
+      }
+    ]
+  },
+  {
+    "number": 83,
+    "title": "[BUG] Semantic Chunks are to Big",
+    "created_at": "2024-12-09T09:23:39Z",
+    "closed_at": "2024-12-16T16:45:52Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/83",
+    "body": "**Describe the bug**\r\nEven though chunk size is set 512 semantic chunking is returning one big chunk for my text with 3263 tokens\r\n\r\n\r\n**To Reproduce**\r\n```python\r\nfrom chonkie import SemanticChunker\r\n\r\n# Basic initialization with default parameters\r\nchunker = SemanticChunker(\r\n    embedding_model=\"minishlab/potion-base-8M\",  # Default model\r\n    threshold=0.6,                   # Similarity threshold (0-1)\r\n    chunk_size=512,                             # Maximum tokens per chunk\r\n    # initial_sentences=1                         # Initial sentences per chunk\r\n)\r\n\r\ntext = re.sub(r'[\\r\\n]+', ' ', text)\r\ntext = re.sub(r'[^A-Za-z0-9 ]+', '', text)\r\nchunks = chunker.chunk(text)\r\n\r\nfor chunk in chunks:\r\n    print(f\"Chunk text: {chunk.text}\")\r\n    print(f\"Token count: {chunk.token_count}\")\r\n    print(f\"Number of sentences: {len(chunk.sentences)}\")\r\n\r\n-- Output\r\n\r\nToken count: 3263\r\nNumber of sentences: 1\r\n```\r\n\r\n**Expected behavior**\r\nI expect to have least 7 chunks for the input text clustered by semantic similarity \r\n\r\n**Screenshots**\r\nIf applicable, add screenshots to help explain your problem.\r\n\r\n**Additional context**\r\nAdd any other context about the problem here.\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/83/comments",
+    "author": "aribornstein",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-09T13:20:52Z",
+        "body": "Hey @aribornstein!\r\n\r\nThanks for opening the issue! 😊\r\n\r\nI'll try to replicate the issue today. If you could pass me a colab notebook which replicates it, I would be able to create a fix for it sooner. If not, even a sample text piece to reproduce the issue would be helpful!\r\n\r\nWill update on this asap! Thanks! ☺️"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-12T17:17:51Z",
+        "body": "Hey @aribornstein!\r\n\r\nThis example is very clever! 😂\r\n\r\nI just noticed you removed all sentence markers, which means it treats the entire passage as a single sentence, and since we have `min_sentences` set to 1 by default, it would by-pass the `chunk_size` argument since `min_sentences` takes priority here.\r\n\r\nIf you have text without sentence delimiters like this, this would fail every SentenceChunker or SemanticChunker out there, I would suggest using `TokenChunker` or `WordChunker` as an alternative. \r\n\r\nWould love to hear if you have an alternate solution for this or feedback :)\r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-16T16:45:52Z",
+        "body": "Closing issue because it's expected behavior; please reopen the issue if there is any feedback or mods required.\r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "aribornstein",
+        "created_at": "2024-12-22T12:11:38Z",
+        "body": "This makes sense. I didn't realize that chonky relies on delimiters to segment text.  I would consider seeing if there is a way to use a light weight model to segment coherent text if the used doesn't provide sentences. Let me think about this as well."
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "[FEAT]Regarding the implementation principles of SemanticChunker and some flexibility requirements",
+    "created_at": "2024-12-01T06:35:04Z",
+    "closed_at": "2024-12-06T21:40:22Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/76",
+    "body": "First of all, thank you for your contributions, designing chunking out of the complex process is absolutely significant!\r\nMaster Roshi, may I ask about the implementation of \"SemanticChunker\"? Haha! From what I know, the implementation of semantic chunking might be: dividing the original text into semantic units (sentences/paragraphs/combinations of m sentences, etc.), calculating the similarity between each pair of units, and low-similarity parts will be used as breakpoints.\r\nI'm not sure if my understanding is correct?\r\n\r\nAdditionally, my working language is Chinese, and when it comes to word segmentation and other operations, I must be cautious with some open-source projects because language inconsistency may complicate issues. I look forward to you making some basic elements transparent or customizable, such as the determination conditions for sentence boundaries in \"SentenceChunker\" (English punctuation or including Chinese punctuation as well?).\r\n\r\nThank you again!\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/76/comments",
+    "author": "RemixaWorld",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-02T14:12:43Z",
+        "body": "Hey @RemixaWorld!\n\nThanks for raising an issue! 😁\n\nI would love to work further with you on incorporating support for Chinese as well. Chonkie always tries to be as open as possible but by default uses English. Except for pre-splitting in some chunkers, they are easily extended to languages other than English.\n\n\nIf you could tell me what punctuations you'd need for Chinese, I can add support for Chinese by default. Again, I want Chonkie to be the go to for you, so if multilingual support would help, I'd be happy to support it 😄 \n\nThanks! 🙏 \n\n"
+      },
+      {
+        "user": "RemixaWorld",
+        "created_at": "2024-12-03T04:52:23Z",
+        "body": "@bhavnicksm Thanks for your reply!\r\nIn terms of Chonkie's ease of use, absolutely!\r\nThe conventional demarcation punctuation in Chinese is\r\n- 。\r\n- ！\r\n- ？\r\nOr in conversation:\r\n- 。”\r\n- ！”\r\n- ？”"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-05T13:27:39Z",
+        "body": "Hey @RemixaWorld, awesome!\r\n\r\nThanks for the punctuations~ Will try to expose the separation punctuations on the chunkers so it's easy to extend to newer languages at the moment.\r\n\r\nOnce a proper scalable plan to support languages is finalised, it will eventually look something like a parameter on the chunkers like `lang='zh'` in the future. But that might still take a while. I hope you continue supporting Chonkie till it reaches that point. \r\n\r\nThanks! 😊"
+      },
+      {
+        "user": "RemixaWorld",
+        "created_at": "2024-12-05T16:44:02Z",
+        "body": "@bhavnicksm Sure, come on!"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-06T21:40:10Z",
+        "body": "Hey @RemixaWorld!\r\n\r\nAdded preliminary support by exposing the delimiters in #81, you can now do something of this sort:\r\n\r\n```python\r\nfrom chonkie import SemanticChunker\r\n\r\nsc = SemanticChunker(delim=\"。!?\")\r\n\r\nchunks = sc(\"some text here\") \r\n```\r\n\r\nLet me know if this works for you and any other suggestions you'd have! Closing this issue for now...\r\n\r\nThanks! 😊\r\n"
+      }
+    ]
+  },
+  {
+    "number": 74,
+    "title": "docs: update README.md",
+    "created_at": "2024-11-27T17:42:55Z",
+    "closed_at": "2024-12-09T13:22:13Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/74",
+    "body": "defualt -> default",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/74/comments",
+    "author": "eltociear",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-09T13:22:13Z",
+        "body": "Hey @eltociear! \r\n\r\nThanks for opening the PR! Sorry it took so long to reply back; I have added a fix for this and closing the PR at the moment. \r\n\r\nThanks! 😊"
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "[BUG] WordChunker's `chunk_batch` function fail",
+    "created_at": "2024-11-26T15:30:38Z",
+    "closed_at": "2024-12-21T17:25:04Z",
+    "labels": [
+      "bug",
+      "in progress"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/73",
+    "body": "When I call `chunk_batch` function in WordChunker, it will shows the error message as below:\r\n\r\n```\r\n    batch_chunks: List[List[Chunk]] = chunker.chunk_batch(text=texts)\r\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"/opt/conda/lib/python3.11/site-packages/chonkie/chunker/base.py\", line 214, in chunk_batch\r\n    return pool.map(self.chunk, text)\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"/opt/conda/lib/python3.11/multiprocessing/pool.py\", line 367, in map\r\n    return self._map_async(func, iterable, mapstar, chunksize).get()\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"/opt/conda/lib/python3.11/multiprocessing/pool.py\", line 774, in get\r\n    raise self._value\r\n  File \"/opt/conda/lib/python3.11/multiprocessing/pool.py\", line 540, in _handle_tasks\r\n    put(task)\r\n  File \"/opt/conda/lib/python3.11/multiprocessing/connection.py\", line 206, in send\r\n    self._send_bytes(_ForkingPickler.dumps(obj))\r\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"/opt/conda/lib/python3.11/multiprocessing/reduction.py\", line 51, in dumps\r\n    cls(buf, protocol).dump(obj)\r\nAttributeError: Can't pickle local object 'BaseChunker._get_tokenizer_counter.<locals>.<lambda>'\r\n```\r\n\r\nhere is the code that I run:\r\n\r\n```python\r\nfrom chonkie import WordChunker\r\nfrom autotiktokenizer import AutoTikTokenizer\r\n\r\ntokenizer = AutoTikTokenizer.from_pretrained(\"nvidia/Llama-3.1-Nemotron-70B-Instruct-HF\")\r\n\r\nchunker = WordChunker(\r\n    tokenizer=tokenizer,\r\n    chunk_size=chunk_size,\r\n    chunk_overlap=chunk_overlap,\r\n)\r\n\r\n# the `documents` is a `List[str]` object, it contains several articles.\r\ntexts: List[str] = []\r\nfor document in documents:\r\n     texts.append(document.content)\r\n\r\nlist_my_chunks: List[List[ChunkModel]] = []\r\nbatch_chunks: List[List[Chunk]] = chunker.chunk_batch(text=texts)\r\n```",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/73/comments",
+    "author": "kime541200",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-26T15:51:33Z",
+        "body": "Hey @kime541200!\r\n\r\nThanks for submitting an issue 😊\r\n\r\nJust a bit swamped at the moment; I'll get back to you after trying to reproduce the issue! \r\n\r\nThanks for the patience!"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-21T17:25:04Z",
+        "body": "Hey @kime541200!\r\n\r\nThis issue has been resolved with #96 in the source and would be available as of next release~\r\n\r\nThanks! 😊"
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "title": "Fixed similarity_percentile with sdpm chunker + added test",
+    "created_at": "2024-11-25T04:32:40Z",
+    "closed_at": "2024-12-06T23:01:47Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/65",
+    "body": "`similarity_percentile` was not working with spdm chunker because the `similarity_threshold` was not computed. I have added test to reproduce the same.\r\n\r\n**Fix**\r\nI moved the computation `similarity_threshold` into `_prepare_sentences`. This decouples the computation of `similarity_threshold` with other steps.",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/65/comments",
+    "author": "pratyushmittal",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-26T15:44:13Z",
+        "body": "Hey @pratyushmittal!\r\n\r\nThanks for submitting a PR! 😊\r\n\r\nSorry, just been involved with some work, so it might take a while, I'll review this PR as soon as possible again. \r\n\r\nThanks!"
+      },
+      {
+        "user": "pratyushmittal",
+        "created_at": "2024-12-04T04:40:29Z",
+        "body": "Hey @bhavnicksm, please let me know if you need any help in this PR.\r\n\r\nI am loving Chonkie. I want to try out `similarity_percentile` in `sdpm_chunker`. That is currently broken. This PR fixes it."
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-04T15:46:54Z",
+        "body": "Hey @pratyushmittal! \r\n\r\nSorry for the delayed response, I've been involved in some other aspects so couldn't look at this earlier. 😅\r\n\r\nI see the issue you mentioned here, and I don't think it has anything to do with decoupling than with not storing the `similarity_threshold` once computed. \r\n\r\nI added a patch fix for it by converting `similarity_threshold` to `self.similarity_threshold`, and it passes the test. \r\n\r\nIf you could refactor the PR to have a function in the class called `_compute_similarity_threshold` and then call it inside the `chunk` fn then, I could go ahead with merging the PR. \r\n\r\nIf not, I can add a patch for that in later versions. \r\n\r\nThanks~ 😊"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-12-06T23:01:47Z",
+        "body": "Hey @pratyushmittal!\r\n\r\nClosing this since I added a fix in #79 — this PR wouldn't have been possible without you pointing out the issue and emphasizing it.\r\n\r\nThank you so much for the PR~ Looking fwd to future contributions from you as well 😊\r\n\r\nThanks! \r\n"
+      },
+      {
+        "user": "pratyushmittal",
+        "created_at": "2024-12-07T06:27:09Z",
+        "body": "This is so good @bhavnicksm. Thanks a lot for reviewing the PR, providing the feedback and pushing the fix.\r\n\r\nYou are doing a wonderful work 🙌🏽!"
+      }
+    ]
+  },
+  {
+    "number": 56,
+    "title": "Update DOCS.md - fixed embeddings path after recent change",
+    "created_at": "2024-11-22T15:46:28Z",
+    "closed_at": "2024-11-22T19:28:42Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/56",
+    "body": "The default models are no longer sourced from `sentence-transformers`. Hence we need to give complete path.",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/56/comments",
+    "author": "pratyushmittal",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-22T16:58:38Z",
+        "body": "Hey Pratush!\r\n\r\nThanks for opening a PR 😊\r\n\r\nUh, that's true; passing the `all-minilm-l6-v2` wouldn't work anymore because the update on the `SentenceTransformerEmbeddings`, but it ideally should right? \r\n\r\nActually, the issue is in the Matching logic, the `EmbeddingsRegistry` does not give out an error when no match is found, which means the the `AutoEmbeddings.get_embeddings()` would return `None` which should not happen.\r\n\r\nDo you wish to take up this PR? "
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-22T17:01:07Z",
+        "body": "Another interesting thing to note is that it doesn't show up in the tests, because the `.match` function looks for `all-MiniLM-L6-v2` (with Capitals)\r\n\r\nSo if you pass in just `all-MiniLM-L6-v2` it seems to actually load up properly, but not in small. "
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-22T19:28:42Z",
+        "body": "Fixed in #57, closing PR"
+      }
+    ]
+  },
+  {
+    "number": 48,
+    "title": "Reconstruction Test",
+    "created_at": "2024-11-21T02:25:17Z",
+    "closed_at": "2024-11-21T13:27:05Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/48",
+    "body": "This tests checks whether concatenating all the chunks results in the reconstructed text.\r\n\r\nCurrently 4 our 5 chunkers fail this test. But Token chunker passes!",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/48/comments",
+    "author": "mrmps",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-21T10:21:38Z",
+        "body": "Thanks for the tests, @mrmps!\r\n\r\nLooking at why it fails now, I will let you know once I have a concrete fix...\r\n\r\nThanks!"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-21T11:08:09Z",
+        "body": "Hey @mrmps, \r\n\r\nI looked at the test and its a very good test! \r\n\r\nTo handle a complex markdown like the one in test, we would have to do a lot of fixes that are not conducive to the speed of Chonkie when it is not handling such complex markdown scenarios (by an order of 4 to 5 times!)\r\n\r\nBut of course, we can't neglect such scenarios in Chonkie, so I would make an alternate path to enable advanced features that would increase accuracy on complex scenarios, while maintaining a quick path which does fast chunking, to a decent accuracy. \r\n\r\nFrom what I see, the differences are coming mostly from white spaces and new line characters missing between the input and the chunked output, which would get fixed in the fast path itself, so you would see improvements there too. These white spaces and new lines get removed during the splitting process.\r\n\r\nWhat do you think about the idea? "
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-21T13:27:05Z",
+        "body": "@mrmps,\r\n\r\njust added #53 which adds the required tests in various files and refactored the chunkers for the fix\r\n\r\nPlease check and let me know if it works for you!\r\n\r\nClosing the PR for now, thanks!"
+      }
+    ]
+  },
+  {
+    "number": 33,
+    "title": "[BUG] TypeError: dataclass() got an unexpected keyword argument 'slots'",
+    "created_at": "2024-11-18T05:12:55Z",
+    "closed_at": "2024-11-18T07:16:17Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/33",
+    "body": "**Describe the bug**\r\nWhen I do a `from chonkie import TokenChunker` I get the error\r\n\r\n**To Reproduce**\r\nRun `from chonkie import TokenChunker` after a fresh install\r\n\r\n**Expected behavior**\r\nThe TokenChunker package should be imported without errors\r\n\r\n**Screenshots**\r\n```\r\nDownloading chonkie-0.2.0-py3-none-any.whl (23 kB)\r\nDownloading autotiktokenizer-0.2.1-py3-none-any.whl (8.9 kB)\r\nInstalling collected packages: autotiktokenizer, chonkie\r\nSuccessfully installed autotiktokenizer-0.2.1 chonkie-0.2.0\r\n(.llm_vnev) mis@mispl-lap-163:~ $ python3\r\nPython 3.8.10 (default, Sep 11 2024, 16:02:53) \r\n[GCC 9.4.0] on linux\r\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\r\n>>> from chonkie import TokenChunker\r\nTraceback (most recent call last):\r\n  File \"<stdin>\", line 1, in <module>\r\n  File \"/home/mis/Documents/docxtract/llm/.llm_vnev/lib/python3.8/site-packages/chonkie/__init__.py\", line 1, in <module>\r\n    from .chunker import (BaseChunker, Chunk, SDPMChunker, SemanticChunk,\r\n  File \"/home/mis/Documents/docxtract/llm/.llm_vnev/lib/python3.8/site-packages/chonkie/chunker/__init__.py\", line 1, in <module>\r\n    from .base import BaseChunker, Chunk\r\n  File \"/home/mis/Documents/docxtract/llm/.llm_vnev/lib/python3.8/site-packages/chonkie/chunker/base.py\", line 9, in <module>\r\n    @dataclass(slots=True)\r\nTypeError: dataclass() got an unexpected keyword argument 'slots'\r\n```\r\n\r\n**Additional context**\r\nDid a fresh install using `pip install chonkie` and tried to run the tool based on the given guide.\r\n\r\nAnything that I did is wrong?\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/33/comments",
+    "author": "AgentT30",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-18T06:44:39Z",
+        "body": "Hey @AgentT30!\r\n\r\nThanks for raising an issue 😊\r\n\r\nThe issue is with Python slots, which were introduced first in python3.10 as the parameter that I am using inside the `dataclass`. Before that, it was `__slots__` for versions 3.8 and 3.9, which needs to be added in the codebase.\r\n\r\nIt seems like it got missed as an error. As a workaround for now, could you try it with Python 3.10? \r\n\r\nI'll add a backward compatible version of slots into Chonkie in a patch release as soon as possible.\r\n\r\nThanks! "
+      },
+      {
+        "user": "AgentT30",
+        "created_at": "2024-11-18T06:53:26Z",
+        "body": "@bhavnicksm Works with python 3.10 and above.\r\n\r\nThanks!"
+      }
+    ]
+  },
+  {
+    "number": 30,
+    "title": "[DOCS] Fix typo for import tokenizer in quick start example",
+    "created_at": "2024-11-16T16:41:28Z",
+    "closed_at": "2024-11-17T04:44:17Z",
+    "labels": [
+      "documentation"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/30",
+    "body": "Import tokenizer from \"Tokenizer\" not \"tokenizer\"",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/30/comments",
+    "author": "jasonacox",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-17T04:42:58Z",
+        "body": "Hey @jasonacox! Thanks for correcting the typo! Will accept this into dev and then merge into main :)"
+      }
+    ]
+  },
+  {
+    "number": 29,
+    "title": "[BUG] Fix the start_index and end_index to point to character indices, not token indices",
+    "created_at": "2024-11-16T08:07:56Z",
+    "closed_at": "2024-11-16T09:33:50Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/pull/29",
+    "body": "Several chonkers were returning incorrect indexes, either relating to the tokens or otherwise wrong. This was due to how the tokens were kept track of.\r\n\r\nI'm not sure if the others I didn't modify are 100% correct, but they at least pass my simple tests\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/29/comments",
+    "author": "mrmps",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-16T08:22:05Z",
+        "body": "Hey @mrmps! \r\n\r\nCould you add the tests you used to verify the placement of token positions? \r\n\r\nInside the tests, the files `test_sentence_chunker.py`, `test_word_chunker.py` and `test_token_chunker.py` seem the most relevant to this PR~"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-16T09:33:38Z",
+        "body": "Hey @mrmps! I will be merging your code to development, so I can do some additional tests and simple changes (like the tokenization) to make sure none of the speed benchmarks are affected by the changes!\r\n\r\nThank you so much for the PR! And happy to have you as the first OS contributor for Chonkie 🦛❤️"
+      }
+    ]
+  },
+  {
+    "number": 25,
+    "title": "ImportError: cannot import name 'tokenizer' from 'tokenizers' (/usr/local/lib/python3.10/site-packages/tokenizers/__init__.py) ",
+    "created_at": "2024-11-13T02:08:05Z",
+    "closed_at": "2024-11-13T06:40:03Z",
+    "labels": [],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/25",
+    "body": "怎么解决？",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/25/comments",
+    "author": "abchbx",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-13T06:40:03Z",
+        "body": "Hey @abchbx!\r\n\r\nYou might be making a minor spelling mistake here, could you try with `Tokenizer` (capital T) instead, like this:\r\n\r\n```python\r\nfrom tokenizers import Tokenizer\r\n\r\ntokenizer = Tokenizer.from_pretrained(\"gpt2\")\r\n```\r\n\r\nHope this resolves the issue, closing the issue but you may re-open if you're still facing the same issue."
+      }
+    ]
+  },
+  {
+    "number": 19,
+    "title": "Add FastEmbed Support for Embedding Generation/Inference",
+    "created_at": "2024-11-10T17:12:07Z",
+    "closed_at": "2024-11-22T12:09:57Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/chonkie-ai/chonkie/issues/19",
+    "body": "Currently, Chonkie uses sentence-transformers for generating embeddings in semantic chunking. While this works well, FastEmbed offers several advantages that could enhance Chonkie's capabilities:\r\n\r\n1. **Broader Model Support**: FastEmbed supports more embedding models out of the box\r\n2. **Better Performance**: FastEmbed includes built-in optimizations for faster embedding generation\r\n3. **Additional Features**: Automatic batching, caching, and GPU support come built-in\r\n4. **Lightweight**: FastEmbed has minimal dependencies and is optimized for production use\r\n\r\n## Proposed Changes\r\n- Add FastEmbed as an optional dependency\r\n- Modify SemanticChunker and SDPMChunker to support FastEmbed models\r\n- Create an abstraction layer for embedding providers\r\n- Update documentation to reflect new capabilities\r\n\r\n## Implementation Details\r\nThe changes will:\r\n1. Create an EmbeddingProvider abstract class\r\n2. Implement concrete providers for both sentence-transformers and FastEmbed\r\n3. Update chunker classes to use the provider abstraction\r\n4. Add installation option: `pip install chonkie[fastembed]`\r\n\r\n## Benefits\r\n- Faster embedding generation\r\n- More model options for users\r\n- Better resource utilization\r\n- Maintained backward compatibility\r\n\r\n## Questions\r\n- Should we make FastEmbed the default embedding provider?\r\n- Should we support mixing providers in the same project?\r\n\r\n## Tasks\r\n- [ ] Create embedding provider abstraction\r\n- [ ] Implement FastEmbed provider\r\n- [ ] Update semantic chunkers\r\n- [ ] Add tests\r\n- [ ] Update documentation\r\n- [ ] Update benchmarks to include FastEmbed performance\r\n",
+    "comments_url": "https://api.github.com/repos/chonkie-ai/chonkie/issues/19/comments",
+    "author": "adithya-s-k",
+    "comments": [
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-10T23:16:19Z",
+        "body": "Hey @adithya-s-k ~!\r\n\r\nThanks for submitting the issue 😄 \r\n\r\nHere are some of my comments (in no particular order): \r\n\r\n- Let's create a structured way to add embedding providers as you mentioned, that makes sense. I will probably create a sub-directory in the package named `embedding` and have a `BaseEmbedding` class that would implement the `encode` function. The `BaseEmbedding` should also store the `tokenizer` for the embedding -- which would be useful when we have embeddings that don't come with their own tokenizers. \r\n- We need benchmarks on the speed-up of FastEmbed before we make it the default provider. Possibly benchmarks comparing the fastest optimized SentenceTransformer vs. FastEmbed on just encoding text serially (without chunking) would be enough. Could you tell me if there are any limitations to using it? Is it as generally applicable as SentenceTransformers is? \r\n- SemanticChunkers would be able to access BaseEmbeddings or str as input and can initialize on the fly if required.\r\n-  For us to integrate FastEmbed as a default, it should be able to output `token-encodings` as well, since we need those for `LateChunking` that would be adding in the future. \r\n\r\n"
+      },
+      {
+        "user": "adithya-s-k",
+        "created_at": "2024-11-12T20:30:29Z",
+        "body": "\r\nHey @bhavnicksm  ~! Thanks for the detailed feedback! Here’s my take on the points you raised:\r\n\r\n1. **Embedding Provider Structure**: Agreed, creating a structured setup with a sub-directory named `embedding` makes sense. The `BaseEmbedding` class could define an `encode` method and store the tokenizer if applicable. This approach would allow us to keep the logic modular, making it easy to extend support for other embedding models in the future.\r\n\r\n2. **Benchmarks for FastEmbed**: I’ll run some initial benchmarks comparing FastEmbed against an optimized SentenceTransformer, focusing on single-instance encoding to get a pure performance view. FastEmbed does seem broadly applicable, but I’ll review any specific limitations (e.g., model restrictions or API specifics) that might impact compatibility with `LateChunking`.\r\n\r\n3. **Flexible Input Support**: Allowing `SemanticChunkers` to access `BaseEmbeddings` or simply initialize with a string identifier sounds practical. This will provide flexibility for on-the-fly instantiation, especially beneficial when users dynamically switch between different embedding providers.\r\n\r\n4. **FastEmbed as Default**: We can decide on making FastEmbed the default once we verify its performance and compatibility for token encoding, as you mentioned. If it delivers the token-encoding functionality we need for `LateChunking`, it could be a strong candidate.\r\n\r\nI’ll move ahead with the structure you proposed and keep you updated on benchmarks and potential limitations. Let me know if there are any other considerations I should factor in as I start on this!\r\n\r\n"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-12T20:52:10Z",
+        "body": "@adithya-s-k, \r\n\r\nYes! LGTM! \r\n\r\nI have an initial `BaseEmbedding` in mind, which I plan to add in the next couple of hours - if it doesn't need any refinement.\r\n\r\nThis is roughly what it would be like:\r\n\r\n```python\r\nclass BaseEmbeddings(ABC):\r\n    \"\"\"Base class for all embedding implementations\"\"\"\r\n\r\n    @abstractmethod\r\n    def encode(self, texts: Union[str, List[str]]):\r\n        \"\"\"Encode text into embeddings\"\"\"\r\n        raise NotImplementedError\r\n        \r\n    @abstractmethod\r\n    def get_token_count(self, text: Union[str, List[str]]):\r\n        \"\"\"Get token count for text\"\"\"\r\n        raise NotImplementedError\r\n    \r\n    @property\r\n    @abstractmethod\r\n    def dimension(self) -> int:\r\n        \"\"\"Get embedding dimension\"\"\"\r\n        raise NotImplementedError\r\n    \r\n    @classmethod\r\n    def is_available(cls) -> bool:\r\n        \"\"\"\r\n        Check if this embeddings implementation is available (dependencies installed).\r\n        Override this method to add custom dependency checks.\r\n        \"\"\"\r\n        return True\r\n```\r\n\r\nAdded `get_token_count` instead of a tokenizer function for now, still considering if I should go with `tokenizer` or `token_counters`, since most chunking methods beyond `TokenChunker` do not use the `tokenizer` for encoding or decoding but only to count tokens. \r\n\r\nPlus, `token_counter` namespace has the added benefit of allowing the user to implement random functions of the type `def custom_token_counter(text: str) -> int` as a replacement for `tokenizers`\r\n\r\nWhat are your thoughts on the `BaseEmbeddings`? Do you think we need to add or remove something here?"
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-12T23:11:22Z",
+        "body": "Hey @adithya-s-k! \r\n\r\nAdded BaseEmbeddings in #24,  have a look! "
+      },
+      {
+        "user": "bhavnicksm",
+        "created_at": "2024-11-22T12:09:57Z",
+        "body": "Since Chonkie has moved ahead with Model2Vec, this issue becomes stale! \r\n\r\nPlease re-open the issue if this feature is requried, thanks!"
+      }
+    ]
+  }
+]

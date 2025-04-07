@@ -1,0 +1,187 @@
+[
+  {
+    "number": 84174,
+    "title": "PseudoTerminal.open isn't called in some circumstances",
+    "created_at": "2019-11-08T00:13:00Z",
+    "closed_at": "2019-11-19T18:57:32Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "verified",
+      "terminal"
+    ],
+    "url": "https://github.com/microsoft/vscode/issues/84174",
+    "body": "I have the following problem in one of the extensions:\r\n- Extension uses Terminal.create with Pseudoterminal API\r\n- In some circumstances pseudoterminal.open isn't called, though, when I resize and close it, events come\r\n\r\nIn extHostTerminalService I found the following code:\r\n```\r\n\t\tlet retries = 5;\r\n\t\twhile (retries-- > 0) {\r\n\t\t\tif (this._terminalProcesses[id]) {\r\n\t\t\t\t(this._terminalProcesses[id] as ExtHostPseudoterminal).startSendingEvents(initialDimensions);\r\n\t\t\t\treturn;\r\n\t\t\t}\r\n\t\t\tawait timeout(50);\r\n\t\t}\r\n```\r\n\r\nIt gives only 250ms for terminal to create and it seems that in my circumstances it's not enough. What's worse not even an error message is displayed. It's completely ignored. Could you do something around it, please?",
+    "comments_url": "https://api.github.com/repos/microsoft/vscode/issues/84174/comments",
+    "author": "solomatov",
+    "comments": [
+      {
+        "user": "connor4312",
+        "created_at": "2019-12-05T21:59:50Z",
+        "body": "@Tyriar could you add steps for this?"
+      },
+      {
+        "user": "Tyriar",
+        "created_at": "2019-12-05T22:11:41Z",
+        "body": "@connor4312 I don't know how to reproduce the problem, an extra code review of the PR might be good enough?\r\n\r\n@solomatov could you verify whether the fix worked?"
+      },
+      {
+        "user": "connor4312",
+        "created_at": "2019-12-05T22:16:20Z",
+        "body": "Code lgtm"
+      },
+      {
+        "user": "solomatov",
+        "created_at": "2019-12-06T04:14:23Z",
+        "body": "@Tyriar The PR fixes the repro for the problem I had. I haven't encountered this error in other circumstance.s"
+      },
+      {
+        "user": "Tyriar",
+        "created_at": "2019-12-06T18:02:41Z",
+        "body": "@solomatov thanks, the best verification is from the OP \ud83d\ude03 "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Addresses the race condition where terminal creation might take longer than 250ms",
+      "Ensures failed terminal creation attempts produce visible errors",
+      "Maintains backward compatibility with existing extension implementations"
+    ]
+  },
+  {
+    "number": 20769,
+    "title": "Ctrl-C kills VSCode if started from command prompt",
+    "created_at": "2017-02-16T22:41:00Z",
+    "closed_at": "2017-11-23T14:52:47Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "windows",
+      "workbench-os-integration"
+    ],
+    "url": "https://github.com/microsoft/vscode/issues/20769",
+    "body": "- VSCode Version: 1.9.1\r\n- OS Version: Windows 10 Anniversary Update\r\n\r\nSteps to Reproduce:\r\n\r\n1. From the command prompt, run \"C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe\". \r\n2. Press Ctrl-C from command prompt, VSCode exits immediately",
+    "comments_url": "https://api.github.com/repos/microsoft/vscode/issues/20769/comments",
+    "author": "wm1",
+    "comments": [
+      {
+        "user": "joaomoreno",
+        "created_at": "2017-02-17T10:06:38Z",
+        "body": "This is as expected."
+      },
+      {
+        "user": "wm1",
+        "created_at": "2017-02-17T17:46:33Z",
+        "body": "Why such a behavior is expected? A child process (at least on Windows) started from cmd.exe is not supposed to be killed when the parent process receives a Ctrl-C.\r\n\r\nI work from command line all the time, and start Code there. Ctrl-C killing the editor is not a great experience for me."
+      },
+      {
+        "user": "joaomoreno",
+        "created_at": "2017-02-17T20:19:42Z",
+        "body": "What should Ctrl C do, then?"
+      },
+      {
+        "user": "wm1",
+        "created_at": "2017-02-17T21:06:27Z",
+        "body": "Depends on whether the child process shares the console with the parent cmd process or not.\r\n- For child console process that shares console, Ctrl-C would likely kill the running child process;\r\n- For child GUI process that does not have a console at all, Ctrl-C on the parent cmd process should have no impact on it."
+      },
+      {
+        "user": "joaomoreno",
+        "created_at": "2017-02-18T07:37:26Z",
+        "body": "Code.exe **is** a child console process. That's just how Chromium works.\r\n\r\nIf you don't want that, I suggest to use what we put in the `PATH`: simply type `code`. It should point to `...\\Microsoft VS Code\\bin\\code.cmd`. This will get you a detached Code."
+      },
+      {
+        "user": "wm1",
+        "created_at": "2017-02-18T16:06:27Z",
+        "body": "Before replying last time I did check that code.exe is a gui process:\r\n\r\n`link.exe /dump /headers \"C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe\" | findstr subsystem\r\n               2 subsystem (Windows `**GUI**`)`\r\n\r\nAnyhow, code.cmd solves my problem. And I guess that is why nobody complains about this issue. I was not aware of this script as I never allow programs to update PATH.\r\n\r\nIn the meantime, I figure out that \"start **/b** <path-to-code.exe>\" also works, which basically sets CREATE_NEW_PROCESS_GROUP and thus the new process won't receive Ctrl-C targeting the original group."
+      },
+      {
+        "user": "joaomoreno",
+        "created_at": "2017-11-23T14:52:47Z",
+        "body": "To keep the number of issues in our inbox on a manageable level, we're closing issues that have been on the backlog for a long time but haven't gained traction: We look at the number of votes the issue has received and the number of duplicates issues filed.\r\n\r\nThanks for your understanding. Happy coding!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why Code.exe terminates with Ctrl-C when launched directly",
+      "Method to launch VSCode without inheriting console process group",
+      "Clarification of process type (GUI vs console) expectations",
+      "Alternative launch method that maintains workflow efficiency"
+    ]
+  },
+  {
+    "number": 2091,
+    "title": "Ctrl-Up and Ctrl-Down don't advance cursor when hits page limit",
+    "created_at": "2016-01-18T17:03:05Z",
+    "closed_at": "2017-11-22T15:12:33Z",
+    "labels": [
+      "help wanted",
+      "feature-request",
+      "editor-core"
+    ],
+    "url": "https://github.com/microsoft/vscode/issues/2091",
+    "body": "I use the Ctrl-Up and Ctrl-Down feature very often, so I can scroll a limited amount of distance without losing my place. This has the advantage of allowing me to use the mouse less for view adjustment.\n\nI've noticed that there is a difference between how this behaves in the full Visual Studio and in Code. In Visual Studio, when you use Ctrl-Up/Down and the view moves such that the cursor is at the limit of the screen, then the editor will advance the cursor such that it remains on the last line visible. Code, however, does not do this, so the next time you hit a key (e.g. a cursor key without pressing Ctrl) then the view resets back to the line you were originally on which is quite jarring.\n",
+    "comments_url": "https://api.github.com/repos/microsoft/vscode/issues/2091/comments",
+    "author": "fractos",
+    "comments": [
+      {
+        "user": "rob3c",
+        "created_at": "2016-02-19T17:12:10Z",
+        "body": "First of all, I just wanted to say it's great to finally have keyboard scrolling in VS Code! That said, this unexpected behavior can be quite frustrating for some of us as it breaks your flow when coding in addition to not matching the feature in other editors.\n\nHowever, I can see how others might like the current behavior so they can scroll a bit to see some code for reference and then snap back to the original context that's possibly offscreen (maybe that's why the original author did it that way?)\n\nPerhaps this is best made into a configuration flag instead of just 'fixing' it as a bug?\n"
+      },
+      {
+        "user": "Tyriar",
+        "created_at": "2016-02-19T19:05:52Z",
+        "body": "I agree it would be good to have this configurable, I prefer the current method.\n"
+      },
+      {
+        "user": "rob3c",
+        "created_at": "2016-05-10T17:25:56Z",
+        "body": "I think it should still be labeled a bug, as the current behavior doesn't allow for you to remain in the newly-scrolled screen without using the mouse to put focus in the new position. This is because the cursor stays put even when it completely scrolls out of view. Since this is all about keyboard navigation, then requiring the mouse seems counter to the spirit of it.\n\nMost editors have the cursor follow along at the top or bottom of the screen (depending on scroll direction) when scrolling beyond the current view. In that way, there's no jarring snap back to another location off-screen when you start moving the cursor with arrow keys again or start typing.\n\nHowever, some editors additionally allow you to hit ESC to snap back to the original position in the cases where you're scrolling just to take a peek instead of wanting to stay in the new location.\n\n\n---\n\n@alexandrudima I can understand this may not be a high priority item and hasn't been addressed yet, even though it's quite frustrating for some of us on a daily basis. However, would you mind explaining why you removed the bug label in light of my previous comment?\n"
+      },
+      {
+        "user": "Tyriar",
+        "created_at": "2016-05-12T06:16:21Z",
+        "body": "@rob3c it's not a bug as it's working as intended currently, making this configurable would be adding functionality rather than fixing it.\n\nThis is probably the sort of thing we'd accept a PR for because of the priority of it, @alexandrudima do you want to add the help wanted label?\n"
+      },
+      {
+        "user": "jkristia",
+        "created_at": "2016-06-07T13:38:33Z",
+        "body": "+1 for adding this functionality and have it configurable (or enabled).\nThis will provide same behavior as in Visual Studio, and will allow you to stay on the keyboard and not use the mouse.\n"
+      },
+      {
+        "user": "rob3c",
+        "created_at": "2016-06-07T19:48:09Z",
+        "body": "In addition to Visual Studio, it would also provide the same behavior as in many other editors like Sublime Text, Notepad++, etc.\n\nJetBrains editors (IntelliJ IDEA, WebStorm, etc.) use the current VSCode behavior by default. It's clear that they've recognized it as non-obvious and disorienting for many users since they attempt to make it less jarring by leading the eye with a smooth reverse scrolling animation back to the offscreen cursor position. They also offer separate \"move if necessary\" versions of each up/down scroll command to get the behavior desired in this thread.\n"
+      },
+      {
+        "user": "Bill-Stewart",
+        "created_at": "2016-09-19T21:42:50Z",
+        "body": "I like that we now have `editorScroll` function for scrolling up and down with `revealCursor` parameter set to `true`. However I would like to disable the behavior of how the cursor jumps to the first non-whitespace character of the next line when scrolling down or previous line when scrolling up. I will open a separate issue for my idea.\n"
+      },
+      {
+        "user": "alexdima",
+        "created_at": "2017-11-22T15:12:33Z",
+        "body": "To keep the number of issues in our inbox at a manageable level, we're closing issues that have been on the backlog for a long time but haven't gained traction: we look at the number of votes the issue has received and the number of duplicate issues filed. Thank you for your time and understanding.\r\n\r\nP.S. If you disagree and feel that this issue is crucial: we're happy to listen and to reconsider.\r\n\r\n---\r\n\r\nFor this particular issue, the following \"workaround\" exists (in `keybindings.json`). e.g. for going down:\r\n\r\n```\r\n    {\r\n        \"key\": \"ctrl+down\",\r\n        \"command\": \"editorScroll\",\r\n        \"args\": {\r\n            \"to\": \"down\",\r\n            \"by\": \"line\",\r\n            \"revealCursor\": true\r\n        }\r\n    }\r\n```\r\n"
+      },
+      {
+        "user": "fractos",
+        "created_at": "2017-11-22T15:19:20Z",
+        "body": "@alexandrudima Ah! I didn't know there was a workaround. Will try that and feedback. Thanks.\n\n---\n\n@alexandrudima Pretty much ideal with the workaround, for me (although when scrolling up the cursor stays on the penultimate line for some reason). Anyway - thanks for posting that!"
+      },
+      {
+        "user": "jkristia",
+        "created_at": "2017-11-22T15:24:08Z",
+        "body": "Thank you so much for the work around. I have been waiting for this 'fix'"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2017-11-23T22:14:47Z",
+        "body": "Just tried the workaround:\r\n\r\n```\r\n\t{\r\n\t\t\"key\": \"ctrl+up\",\r\n\t\t\"command\": \"editorScroll\",\r\n\t\t\"when\": \"editorTextFocus\",\r\n\t\t\"args\": \r\n\t\t{\r\n\t\t\t\"to\": \"up\",\r\n\t\t\t\"by\": \"line\",\r\n\t\t\t\"revealCursor\": true\r\n\t\t}\r\n\t},\r\n\t{\r\n\t\t\"key\": \"ctrl+down\",\r\n\t\t\"command\": \"editorScroll\",\r\n\t\t\"when\": \"editorTextFocus\",\r\n\t\t\"args\": \r\n\t\t{\r\n\t\t\t\"to\": \"down\",\r\n\t\t\t\"by\": \"line\",\r\n\t\t\t\"revealCursor\": true\r\n\t\t}\r\n\t}\r\n```\r\n\r\nUp works fine; down sometimes scrolls several lines than stops as if it has reached the end of the file; most of the time down does not respond at all.\r\n\r\nVisual Studio Code version: 1.18.1, 2017-11-16\r\n\r\n* Happens in a js file with folded functions; without folding seems to work fine."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Cursor remains within the visible viewport after keyboard scrolling",
+      "Supports keyboard-only navigation flow",
+      "Configurable scrolling behavior",
+      "Avoids disorienting context shifts"
+    ]
+  }
+]

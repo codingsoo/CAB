@@ -1,0 +1,34 @@
+[
+  {
+    "number": 13080,
+    "title": "Angular Storybook: Using a service Dependency Injection in a child component",
+    "created_at": "2020-11-11T09:11:21Z",
+    "closed_at": "2020-11-13T08:05:46Z",
+    "labels": [
+      "question / support",
+      "help wanted",
+      "angular"
+    ],
+    "url": "https://github.com/storybookjs/storybook/issues/13080",
+    "body": "### Bug or support request summary\r\nUsing a service DI in a child component that uses data from the same service that was previously initiated by a parent component.\r\n \r\nI expected there to be a way in the story of the child component, to initiate the service with the mockup data i want (before the story rendering) so then the child component can use it as happens in my app.\r\n\r\n### Steps to reproduce\r\nIn my app.component I use the service and send it some data\r\napp.component.ts\r\n\r\n```js\r\n  constructor(\r\n    private transferStateService: TransferStateService,\r\n    private pricingService: PricingService,\r\n  ) {\r\n  }\r\n  async ngOnInit(): Promise<void> {\r\n    const state = this.transferStateService.getState();\r\n    this.pricingService.initPricing(state.pricing, state.currency);\r\n  }\r\n```\r\n\r\nafter using this.pricingService.initPricing(state.pricing, state.currency)  I now have some data in the service.\r\nIn a child component I use the same service:\r\n\r\npricing.component.ts\r\n```js\r\n  constructor(\r\n    private pricingService: PricingService\r\n  ) { }\r\n\r\n  ngOnInit(): void {\r\n    this.pricing = this.pricingService.getPricing();\r\n  }\r\n```\r\n\r\nThe reason I can use this.pricingService.getPricing() is only that in app.component I already passed to the service all the needed data by calling this.pricingService.initPricing(state.pricing, state.currency)\r\n\r\nIn my pricing.component.ts story i want to somehow call the pricingService.initPricing with my mockup data so the when the component story is rendered I can use my service there to receive the data.\r\n\r\nCurrently my pricing.component story: \r\n```js\r\nexport default {\r\n  title: 'core/pricing',\r\n  component: PricingComponent,\r\n  decorators: [\r\n    moduleMetadata({\r\n      imports: [PipesModule, DirectivesModule, BodyModule],\r\n      declarations: [AppComponent]\r\n    })\r\n  ]\r\n} as Meta;\r\n\r\nconst Template: Story<PricingComponent> = (args: PricingComponent) => ({\r\n  component: PricingComponent,\r\n  props: args,\r\n});\r\n\r\nexport const Primary = Template.bind({});\r\nPrimary.args = {\r\n};\r\n```\r\n\r\n### Version\r\n\r\n    \"@storybook/addon-actions\": \"^6.0.26\",\r\n    \"@storybook/addon-essentials\": \"^6.0.26\",\r\n    \"@storybook/addon-links\": \"^6.0.26\",\r\n    \"@storybook/angular\": \"^6.0.26\",\r\n    \"@storybook/storybook-deployer\": \"^2.8.7\",\r\n\r\n    \"@angular/common\": \"~10.0.6\",\r\n    \"@angular/compiler\": \"~10.0.6\",\r\n    \"@angular/core\": \"~10.0.6\",",
+    "comments_url": "https://api.github.com/repos/storybookjs/storybook/issues/13080/comments",
+    "author": "misha1109",
+    "comments": [
+      {
+        "user": "Marklb",
+        "created_at": "2020-11-11T19:35:31Z",
+        "body": "@misha1109 Will `APP_INITIALIZER` work?\r\n\r\nExample:\r\n```ts\r\nexport default {\r\n  title: 'core/pricing',\r\n  component: PricingComponent,\r\n  decorators: [\r\n    moduleMetadata({\r\n      imports: [PipesModule, DirectivesModule, BodyModule],\r\n      declarations: [AppComponent]\r\n    })\r\n  ]\r\n} as Meta;\r\n\r\nfunction initPricingFactory(pricingService: PricingService) {\r\n  return () => pricingService.initPricing(mockPricing, mockCurrency)\r\n}\r\n\r\nconst Template: Story<PricingComponent> = (args: PricingComponent) => ({\r\n  moduleMetadata: {\r\n    providers: [\r\n      {\r\n        provide: APP_INITIALIZER,\r\n        useFactory: initPricingFactory,\r\n        multi: true,\r\n        deps: [PricingService]\r\n      }\r\n    ]\r\n  },\r\n  component: PricingComponent,\r\n  props: args,\r\n});\r\n\r\nexport const Primary = Template.bind({});\r\nPrimary.args = {\r\n};\r\n```\r\n\r\nWithout knowing more about your data and service, I don't know if the following would work, but could you just inject an alternate class for PricingService? That way you could just avoid the calculations also, since the data is just mocked anyway.\r\n\r\nExample:\r\n```ts\r\nexport default {\r\n  title: 'core/pricing',\r\n  component: PricingComponent,\r\n  decorators: [\r\n    moduleMetadata({\r\n      imports: [PipesModule, DirectivesModule, BodyModule],\r\n      declarations: [AppComponent]\r\n    })\r\n  ]\r\n} as Meta;\r\n\r\nclass MockPricingService implements Partial<PricingService> {\r\n  getPricing = () => mockPricingData\r\n}\r\n\r\nconst Template: Story<PricingComponent> = (args: PricingComponent) => ({\r\n  moduleMetadata: {\r\n    providers: [\r\n      { provide: PricingService, useClass: MockPricingService }\r\n    ]\r\n  },\r\n  component: PricingComponent,\r\n  props: args,\r\n});\r\n\r\nexport const Primary = Template.bind({});\r\nPrimary.args = {\r\n};\r\n```"
+      },
+      {
+        "user": "misha1109",
+        "created_at": "2020-11-13T08:02:49Z",
+        "body": "APP_INITIALIZER works perfectly!\r\n\r\nThank you very much for your reply and for creating such an awesome tool as Storybook. Its a wonder:)"
+      },
+      {
+        "user": "ravianand1988",
+        "created_at": "2022-08-22T12:53:16Z",
+        "body": "@Marklb Awesome stuff, Thanks for the examples. :) "
+      }
+    ]
+  }
+]

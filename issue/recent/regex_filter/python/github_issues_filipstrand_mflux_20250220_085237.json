@@ -1,0 +1,631 @@
+[
+  {
+    "number": 118,
+    "title": "support multiple seeds batch generation",
+    "created_at": "2025-01-22T02:23:21Z",
+    "closed_at": "2025-01-22T18:58:51Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/118",
+    "body": "This partially addresses the requests in #112 and #115.\r\n\r\nIterating on `seed` values while keeping all other values constant is the easiest of all the variable parameters. I think this satisfies a common user intent where they just want to see many variations of the same prompt/configs without reloading the model files.\r\n\r\nIn this PR, I attempt to:\r\n\r\n- keep the `--seed` arg as is, but allow it to support n > 1 args.\r\n- introduce a `--auto-seeds` arg, where you can allow the program to generate N seeds, giving up control of how the seeds are generated (it's just `random` library underneath)\r\n- when seed count > 1, _smartly_ manipulate the `--output` name to embed each output file with the seed value so each file in the batch is named differently\r\n\r\n# Examples\r\n\r\n```sh\r\nmflux-generate --model schnell --steps 4 \\\r\n  --prompt \"a male lion protects his lion cub at Pride Rock\" \\\r\n  --seed 1 2 3\r\n```\r\n\r\nproduces `image_seed_1.png` `image_seed_2.png` `image_seed_3.png`\r\n\r\n```sh\r\nmflux-generate --model schnell --steps 4 \\\r\n  --prompt \"a male lion protects his lion cub at Pride Rock\" \\\r\n  --auto-seeds 5\r\n```\r\n\r\nproduces something like: `image_seed_1561024.png` `image_seed_4756892.png` `image_seed_5976159.png` `image_seed_6479222.png` `image_seed_9434512.png`\r\n\r\n\r\n# Future\r\n\r\nIt's possible to keep the model files loaded and iterate over N values of `width`, `height`, `steps`, `guidance`, and `init_image_*` values, but supporting all of those possible combinations can make the library code very complicated, so we may have to stop here for the official CLIs.\r\n\r\nIn my personal work, I have custom Python scripts that iterate over the configs without reloading model files, so we should just provide cookbook recipes for more complex examples, or defer to a separate CLI to be developed later in-library or as a third party tool.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/118/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2025-01-22T18:58:31Z",
+        "body": "This looks great! "
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "title": "Is there a way to keep model running instead of loading again each time I want to generate an image?",
+    "created_at": "2025-01-14T16:30:15Z",
+    "closed_at": "2025-01-22T19:00:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/filipstrand/mflux/issues/115",
+    "body": "Currently if i want to generate an image, every time i gotta load flux model again, is there a way to keep model running?",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/115/comments",
+    "author": "Baitur5",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2025-01-17T01:48:46Z",
+        "body": "I think this dupes #112"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2025-01-19T20:02:18Z",
+        "body": "Yes this is effectively what #112 also asks for. Good to note as this might be something worth supporting natively as more people ask for it... \n\n@Baitur5 I assume you are using the command line, but if you are using Python it is as easy as wrapping the `generate_image` code in a for loop (in this example I loop 10 times producing 10 images, but only load the model once):\n\n```python\nfrom mflux import Flux1, Config\n\n# Load the model\nflux = Flux1.from_alias(\n   alias=\"schnell\",       # \"schnell\" or \"dev\"\n   quantize=8,            # 4 or 8\n)\n\n# Generate an image\nfor i in range(10):\n    image = flux.generate_image(\n    seed=i,\n    prompt=\"Luxury food photograph\",\n    config=Config(\n        num_inference_steps=2,  # \"schnell\" works well with 2-4 steps, \"dev\" works well with 20-25 steps\n        height=1024,\n        width=1024,\n    )\n    )\n\n    image.save(path=\"image.png\")\n```  "
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2025-01-20T04:58:54Z",
+        "body": "I refactored the argparser components so we could add more interfaces like this without duplicating the arg logic. I propose creating new entry points that are specifically for batch modes, would allow for the batch flags to not clutter up the single gen interface."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2025-01-21T19:49:22Z",
+        "body": "That sounds like a good idea! "
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2025-01-22T19:00:31Z",
+        "body": "This feature is now in main and will be included in the upcoming v.0.6.0 release thanks to Anthony."
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "title": "Update README.md",
+    "created_at": "2024-11-15T17:42:45Z",
+    "closed_at": "2024-11-16T15:00:49Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/96",
+    "body": "M4 Max results added",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/96/comments",
+    "author": "ivanfioravanti",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-11-16T15:00:52Z",
+        "body": "Nice!"
+      }
+    ]
+  },
+  {
+    "number": 81,
+    "title": "support metadata files as CLI arg supplier",
+    "created_at": "2024-10-19T14:21:28Z",
+    "closed_at": "2024-10-27T20:15:38Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/81",
+    "body": "Oct 19 - this is a preview of a big change that I think we'll discuss for several days. It probably should be in the (n+1)th release. I expect we'll go back and forth a few times here because the decisions here influence how other subsequent features are done.\r\n\r\n-----\r\n\r\n# Change\r\n\r\n1. Add a new CLI option to consume the run configs (but not the model configs) from `.json` files. This allows for very long commands with many path args to be easily re-usable for subsequent runs. You can imagine this being useful for anyone experimenting with _changing one thing_ and seeing how that single variable affects the outcome.\r\n1. Promote the utility of the existing metadata upgrade files to serve as the input for run configs. The configs are simple enough to be handcrafted, but the metadata output is the automatically compatible one we will offer.\r\n1. There is some metadata schema change here, but it was not consumed anywhere by mflux so I would not consider this compatibility breaking for SemVar purposes.\r\n1. See more inline comments for todos and design concerns.\r\n\r\n# UX Demo\r\n\r\nWhat the change allows are commands like:\r\n\r\n1. `mflux-generate --model dev --metadata --config-from-metadata <file>` - re-generate from yours or other's prior run configs. You can use these as references for checking into team repos, or to use as the control config in a test suite where the before/after of a image gen change can from the same config file defined in a repo.\r\n1. `mflux-generate --model schnell --metadata --config-from-metadata <file from dev run>` - re-do the image gen, but using a diff model than the one that saved the config\r\n1. `mflux-generate --model dev --metadata --config-from-metadata <file> --guidance 5.0` - re-genenerate, but change 1 variable\r\n1. `mflux-generate --model dev --metadata --config-from-metadata <file> --quantize 4` - re-generate, but with the lighter quantized model\r\n1. put it in a for-loop somewhere (shell or python), and each iteration you change one thing. This is where my output namer proposal in #80 is relevant, i.e. I don't want to rename things as I iterate through large batches, I would opt into a smart auto-namer in that scenario.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/81/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-20T03:02:42Z",
+        "body": "@filipstrand in this PR I made major changes to the argparser expectations via adding the new config from file feature, so I added a test suite for all the various entry points. If you find any problems in `main`, we can:\r\n\r\n1. port some of these fixes and tests to main, and we stay in PR to discuss the config loader feature as a 0.5.0 release\r\n2. you find this PR acceptable as part of 0.4.0 release scope and we go out with the new tests"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-26T15:56:41Z",
+        "body": "@anthonywu I think this PR is looking really good and this is a nice feature that takes advantage of the metadata files - I initially just added them in case it was tricky for people to read the metadata embedded in the generated images themselves, and I was thinking that maybe it was a bit of a redundant feature to have, but now it feels like they have a proper purpose! \r\n\r\nJust had some smaller comments on this PR, if you mind having a look again.  After that, I think we can merge this and do a `0.4.0 release` (I'll just add a img2img example in the readme after this one is merged). \r\n\r\nBtw, I sent you an invite as a formal collaborator. Really appreciate your continuous involvement with this project!!"
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "Make binary adhere to signals",
+    "created_at": "2024-10-17T09:26:14Z",
+    "closed_at": "2024-10-31T07:11:12Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/79",
+    "body": "Hi, `CTRL-C`'ing does not stop the binary right now. I can't stop a heavy gen and my laptop flies away ;p",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/79/comments",
+    "author": "Morriz",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-17T17:33:03Z",
+        "body": "This is done but just needs a new pypi release. #59 and #70 implements Ctrl-C handling. I can confirm that in the latest mflux installed from repo main, Ctrl-C will be respected.\r\n\r\n@filipstrand can close this issue when 0.4.0+ is released."
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "running lora B on saved quantized model with lora A on disk",
+    "created_at": "2024-10-11T05:55:00Z",
+    "closed_at": "2024-10-12T06:16:47Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/76",
+    "body": "“Hi, I was wondering if it’s possible to add a LoRA to a model that has already been saved with another LoRA using mflux-save? I tried, but I encountered an error. I’m not sure if it might be due to the limitation ‘LoRA weights are only supported for the transformer part of the network.’ Any guidance or explanation  would be greatly appreciated!”\r\n\r\n\r\n\r\n```\r\n  File \"/Users/xxxx/miniconda3/envs/diffusionkit/bin/mflux-generate\", line 8, in <module>\r\n    sys.exit(main())\r\n             ^^^^^^\r\n  File \"/Volumes/NewHome/mflux/src/mflux/generate.py\", line 36, in main\r\n    flux = Flux1(\r\n           ^^^^^^\r\n  File \"/Volumes/NewHome/mflux/src/mflux/flux/flux.py\", line 51, in __init__\r\n    weights = WeightHandler(\r\n              ^^^^^^^^^^^^^^\r\n  File \"/Volumes/NewHome/mflux/src/mflux/weights/weight_handler.py\", line 28, in __init__\r\n    LoraUtil.apply_loras(self.transformer, lora_paths, lora_scales)\r\n  File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 18, in apply_loras\r\n    LoraUtil._apply_lora(transformer, lora_file, lora_scale)\r\n  File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 37, in _apply_lora\r\n    LoraUtil._apply_transformer(transformer, lora_transformer, lora_scale)\r\n  File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 87, in _apply_transformer\r\n    weight = transWeight + lora_scale * (lora_b @ lora_a)\r\n             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\nValueError: Shapes (3072,768) and (3072,3072) cannot be broadcast.\r\n\r\n```\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/76/comments",
+    "author": "azrahello",
+    "comments": [
+      {
+        "user": "YAY-3M-TA3",
+        "created_at": "2024-10-12T00:56:28Z",
+        "body": "> “Hi, I was wondering if it’s possible to add a LoRA to a model that has already been saved with another LoRA using mflux-save? I tried, but I encountered an error. I’m not sure if it might be due to the limitation ‘LoRA weights are only supported for the transformer part of the network.’ Any guidance or explanation would be greatly appreciated!”\r\n> \r\n> ```\r\n>   File \"/Users/xxxx/miniconda3/envs/diffusionkit/bin/mflux-generate\", line 8, in <module>\r\n>     sys.exit(main())\r\n>              ^^^^^^\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/generate.py\", line 36, in main\r\n>     flux = Flux1(\r\n>            ^^^^^^\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/flux/flux.py\", line 51, in __init__\r\n>     weights = WeightHandler(\r\n>               ^^^^^^^^^^^^^^\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/weights/weight_handler.py\", line 28, in __init__\r\n>     LoraUtil.apply_loras(self.transformer, lora_paths, lora_scales)\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 18, in apply_loras\r\n>     LoraUtil._apply_lora(transformer, lora_file, lora_scale)\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 37, in _apply_lora\r\n>     LoraUtil._apply_transformer(transformer, lora_transformer, lora_scale)\r\n>   File \"/Volumes/NewHome/mflux/src/mflux/weights/lora_util.py\", line 87, in _apply_transformer\r\n>     weight = transWeight + lora_scale * (lora_b @ lora_a)\r\n>              ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n> ValueError: Shapes (3072,768) and (3072,3072) cannot be broadcast.\r\n> ```\r\n\r\nShapes error: Currently when you quantize a model + LoRA, you can't mix this with an unquantized LoRA.  You'll need to be all quantized(re-quantize your model with both LoRAs or keep everything unquantized)"
+      },
+      {
+        "user": "azrahello",
+        "created_at": "2024-10-12T06:16:47Z",
+        "body": "@YAY-3M-TA3 Thanks for explanations!"
+      }
+    ]
+  },
+  {
+    "number": 75,
+    "title": "argparser refactor",
+    "created_at": "2024-10-10T22:27:21Z",
+    "closed_at": "2024-10-12T12:41:17Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/75",
+    "body": "Following on my simpler proposal option in #66 \r\n\r\nThis keeps the `mflux-{generate,generate_controlnet,save}` CLI as is without refactoring into sub parsers where the calling semantic would be `mflux <subcommand>`.\r\n\r\nFor now, the duplication is addressed, so we can add variants of CLI scripts for different use cases without drifting on the arg expectations and docs.\r\n\r\n## testing\r\n\r\n- does not affect python-level `pytest`s\r\n- I will visit the CLI using the `.sh` script from #59 ",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/75/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-12T12:41:10Z",
+        "body": "Great refactoring! The arg parser absolutely deserved its own class and I like how you segmented up the different types of args. I added a small commit with type hinting for the parser."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "design discussion: generators yield",
+    "created_at": "2024-10-10T16:02:30Z",
+    "closed_at": "2024-11-22T00:47:09Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/73",
+    "body": "For now, just draft PR to discuss potential interface change with @filipstrand \r\n\r\n# Motivation\r\n\r\n- I want to create CLI and UI interfaces that generate many images at once\r\n- However, due to limited compute for target users, generating one image to finish takes too long when user wants to iterate over e.g. N seeds or N prompt variations without waiting for one image to finish at a time\r\n\r\n# Proposed Change\r\n\r\nI don't like to break existing interfaces, or introduce complexity, so this proposal is an option that does not break existing docs, but does introduce behavior developers need to know (when to use it like a iterator, when to use it like a normal function)\r\n\r\nFuture work this enables:\r\n\r\n- a different CLI e.g. `mflux-generate-many --attempts 5` or `mflux-generate-many --seeds 1 2 3 4 5` or `mflux-generate-prompts --prompt-file <some file in some format>`\r\n- for now, I hijack the existing `mflux-generate` to demo the proposed iterator behavior - I would isolate the \"create-many\" behavior into a new script in the final implementation.\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/73/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-19T15:15:08Z",
+        "body": "Finally got around to looking at this :) \r\n\r\nI definitely find your use cases here valid and I think the idea of returning a generator is a more general approach than to return the final image as `generate_image` currently does. It adds slightly more abstraction, but it think the uses cases here are valid. \r\n\r\nPlease correct me if I am wrong, but yielding the `stepwise_output` in the time_step loop effectively returns that step to the caller and then some other piece of code would be responsible for iterating and actually doing something with with the output, like\r\n\r\n```\r\nwhile True:\r\n     stepwise_output = next(image_gen_steps)\r\n     print(f\"Stepwise output: {stepwise_output}\")\r\n```\r\n\r\nIf so, I guess what we are doing here is really exposing each generation step to the \"outside\" to enable more flexibility. I feel this is natural and the caller would have more control over each generator to progress as they want it to (like in your example of having many parallel ones all executing one step at a time or similar).  \r\n\r\nI like your default approach of not breaking any existing interface when proposing a feature, and maybe this example was only temporary,  but if we were to go this route, I feel it is a bit weird to have `generate_image()` returning *either* a `GeneratedImage` or the `stepwise_output` as a generator. Would it not be clearer to always yield the stepwise_output? Then it would be the responsibility of another piece of code to actually decide what to do with the step (like saving it, not saving it and only returning the final image etc).  "
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-19T15:33:06Z",
+        "body": "Just a short comment regarding generating multiple image at a time: \r\n\r\nAnother way to do it would be a more low-level approach by creating several initial latent arrays and concatenating them and doing the matrix math on this concatenated array (I think the mlx-examples have support for this). \r\n\r\nI guess depending on what mlx does under the hood, it could be faster than doing it for one image at a time as we do now. However, I guess this approach would not allow us to cancel certain images halfway through the generation (since the math would be done on the full concatenated array). Also, I purposely avoided taking this approach when starting the project to keep things simple and not having to worry about concatenating/slicing arrays and whatever complications that might bring (maybe this is actually easy - e.g just concatenating each new latent instance along a new dimension - but I have not investigated this yet). "
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-19T16:15:28Z",
+        "body": "We can hold on this significant operational change for now and re-engage after higher visibility feature releases.\n\nSince posting the draft PR I have also been using some system level locks to run/queue multiple mflux programs at a time. Look for those proposals in coming weeks."
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-11-22T00:47:09Z",
+        "body": "Withdrawing this PR for now due to its staleness. I think the stepwise functionality and interruptibility can be improved but I will re-approach this at a later time."
+      }
+    ]
+  },
+  {
+    "number": 71,
+    "title": "introduce pre-commit typos check",
+    "created_at": "2024-10-09T21:21:53Z",
+    "closed_at": "2024-10-10T18:31:21Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/71",
+    "body": "@filipstrand I see you've already done some of this cleanup in #70, but here's the formal introduction to the repo.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/71/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-10T18:31:13Z",
+        "body": "Nice tool to have!"
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "Add stepwise handler",
+    "created_at": "2024-10-09T14:50:37Z",
+    "closed_at": "2024-10-10T05:47:44Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/70",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/70/comments",
+    "author": "filipstrand",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-09T21:03:49Z",
+        "body": "@anthonywu Also finally got around to adding some proper tests. Right now, they are pretty broad - effectively comparing the results at an image-level compared to a reference image (i.e no lower level unit tests for the ml-math yet). At least they should catch scenarios where the image generation is obviously broken. However, when there is an error they will probably be pretty hard to debug, since we would only get an indication that some pixels in the output image are wrong, for example:\r\n\r\n```python\r\nE            ACTUAL: array([[[ 53,  35,  23],\r\nE                   [ 54,  32,  20],\r\nE                   [ 53,  33,  19],...\r\nE            DESIRED: array([[[ 45,  24,  14],\r\nE                   [ 45,  21,  12],\r\nE                   [ 45,  23,  13],...\r\n```"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-09T21:07:32Z",
+        "body": "I also removed `test_readme_example.sh`, as I think the new tests will serve the same purpose and will also be checked against the corresponding reference images. If you had any other intentions with this script besides a temporary/convenient way to generate and manually inspect some test cases, please let me know :)"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-09T21:14:52Z",
+        "body": "I also added a LoRA file (`FLUX-dev-lora-MiaoKa-Yarn-World.safetensors`) in the test setup just to test that feature. The bad thing is that it increased the repo size by ~20MB (I tried to pick a smaller Lora for this purpose but it might not be good practice to start including bigger resource files in the repo?)"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-09T21:25:40Z",
+        "body": "On my older M1 Pro MacBook, these tests take around 13 minutes to complete, which is quite lengthy for a local test suite. I view them more as ‘integration’ tests—something to run occasionally, perhaps before submitting a PR. In that context, the longer runtime feels a bit more acceptable.\r\n\r\nAs a simple check to ensure the program functions correctly, I think it would likely be fine to run these image generations with fewer steps and at a lower resolution. But I also like having reference images that look like fully rendered, ‘proper’ images."
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-09T22:02:20Z",
+        "body": "agree on the test speed being impractical as part of automatic flows (e.g. `pre-commit` to run tests)\r\n"
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-10T01:06:35Z",
+        "body": "I suggest noting the stepwise features as \"experimental\" for now to give yourself time to refine it over some weeks, without pre-committing to CLI and Python interfaces."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-10T05:45:57Z",
+        "body": "> I suggest noting the stepwise features as \"experimental\" for now to give yourself time to refine it over some weeks, without pre-committing to CLI and Python interfaces.\r\n\r\nGood suggestion. I have added that to the description for that arg"
+      }
+    ]
+  },
+  {
+    "number": 69,
+    "title": "`seed` can't be `None`",
+    "created_at": "2024-09-30T21:40:43Z",
+    "closed_at": "2024-10-02T09:07:47Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/69",
+    "body": "Specifying `seed` to be None as the docs say should result in a date derived seed:\r\n\r\n```\r\n--seed (optional, int, default: None): Seed for random number generation. Default is time-based.\r\n```\r\n\r\nbut instead results in an error as that does not seem implemented and the function expects an `int`:\r\n\r\n```py\r\n    def generate_image(self, seed: int, prompt: str, config: Config = Config()) -> GeneratedImage:\r\n        ...\r\n        latents = mx.random.normal(\r\n            ...\r\n            key=mx.random.key(seed)\r\n        )  # fmt: off\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/69/comments",
+    "author": "Morriz",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-01T01:47:05Z",
+        "body": "the `None` handling is only available when called from the CLI, implemented in `src/mflux/generate.py`\r\n\r\n```py\r\n    # Generate an image\r\n    image = flux.generate_image(\r\n        seed=int(time.time()) if args.seed is None else args.seed,  # see here\r\n        prompt=args.prompt,\r\n        config=Config(\r\n            num_inference_steps=args.steps,\r\n            height=args.height,\r\n            width=args.width,\r\n            guidance=args.guidance,\r\n        ),\r\n    )\r\n```\r\n\r\nI think the quickest fix for you @Morriz is to do the same in your **controller** of the image generator, when you don't have a value, pass in your preferred seed.\r\n\r\nAs for changing the mflux implementation, I think there's a valid argument for `generate_image(...)` handler to expect a not-`None` seed, because that's part of the \"formula\", whereas giving a default value for `seed=None` is more of a \"user interface\" / controller opinion."
+      },
+      {
+        "user": "Morriz",
+        "created_at": "2024-10-01T19:36:50Z",
+        "body": "Tnx for the update. So your suggestion will end up in your code base then, yes?"
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-02T05:36:05Z",
+        "body": "@Morriz if you're on the shell calling `mflux-generate`, aren't you going through the CLI that automatically converts a `None` to a time based seed?\r\n\r\nOtherwise, if you're calling the Python function directly, then **your code** is the controller and you have agency to pass a default non-`None` value to `generate_image(...)`. I guess I'm confused about the original request - did you somehow find the problem by using the CLI, or you copied the example code into **your workspace**, and you now have `.py` file on your computer calling `generate_image(...)` - if that's the case, you just have to pass in any `int` for `seed` arg in the `.py` code that you control.\r\n\r\nThat is - I agree with @filipstrand's original implementation to expect `seed: int` in `generate_image(...)` and I do not recommend changing it to expect a `None`. The `seed` default to None is only guaranteed/provided/implemented from the **Command Line Arguments** and therefore do not apply to python callables deeper in the implementation."
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "title": "quality of life maintenance for ruff/pre-commit",
+    "created_at": "2024-09-21T22:04:17Z",
+    "closed_at": "2024-09-22T08:51:40Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/61",
+    "body": "Follow-up to today's PR discussions in #58 etc",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/61/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-22T08:51:15Z",
+        "body": "@anthonywu Thanks for these qol updates! This is better than what I did with ignoring whole files. I think this looks good and will merge as is."
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "title": "option to save stepwise and composite images, add interruptibility",
+    "created_at": "2024-09-20T20:18:44Z",
+    "closed_at": "2024-10-09T14:44:35Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/59",
+    "body": "This is my own original take on the objectives of #21 by user @madroidmaq, who wanted the stepwise images to be saved to disk. I commented in the PR that I'd like to see the objective completed.\r\n\r\nIn this PR, I am proposing:\r\n\r\n1. make the generation flow more CLI `Ctrl-C` friendly during long generations, especially relevant with `dev` model and 10+ steps. This opens up the possibility that users can quit early if the early steps do not fit their expectations for any reason. (todo: a diff interrupt mechanism needs to be introduced for hypothetical GUI operations, TBD)\r\n2. You can choose to output the stepwise images one by one as they become available, or wait for the end and a composite will be stitched together for you. The panel can help users evaluate diff time/quality tradeoffs in adjusting the steps parameter.\r\n3. there is some duplication of structure and code in `src/mflux/flux/flux.py` vs `src/mflux/controlnet/flux_controlnet.py`, but in prior PRs I think @filipstrand you were okay with the (hopefully) temporary duplication, and now that we have a working baseline, we can use the tests to refactor forward (I can help, but it'll be a P2/P3 given things work well right now)\r\n\r\n- [x] This is a PR that will need to be rebased on expected major formatting changes in other pending PRs.\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/59/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-23T17:00:41Z",
+        "body": "This looks interesting, and it’s good that this feature has come back into focus again. I’ll finish the last part of the ControlNet additions, then after that I'll take a look at this feature."
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-09-23T21:40:47Z",
+        "body": "a self-concern I have right now is how to properly name the stepwise output files, I would like to find a way to auto-name and auto-index the output files by prompt content, perhaps using some reliable NLP library to summarize the prompt in 5-6 words and use that summary + the unix timestamp of generation start time to always uniquely identify each set of images (stepwise, composite, final)"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-05T12:25:55Z",
+        "body": "@anthonywu Apologies for the late response, been a bit busy the last week, but will finally have some time to look at this again :) "
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-05T22:00:47Z",
+        "body": "> @anthonywu Apologies for the late response, been a bit busy the last week, but will finally have some time to look at this again :) \n\nThere is plenty of work to follow-up, such as having a UI (Gradio, Jupyter notebook, etc) that show and cache the partially computed image from many variations, then the user can continue or stop any images based on early signs of goodness. I think this is especially relevant for local compute where images come back after many minutes, and only one image can reliably run at a time on the GPU."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-10-08T07:10:26Z",
+        "body": "@anthonywu I have tried running this and it looks very good. Thanks for the great job! \r\n\r\nI wanted to hear your opinion on the following: I kind of think of this feature as important and a good UX, but also as a smaller thing that should not be that visible in the main flow. I was thinking of ways to hide it a bit, and one solution could be to introduce a `StepwiseHandler` or similar that could handle the stepwise outputs. Since it could be configured at init time to be active/inactive based on the `stepwise_output_dir` args, we would not need to check if we should call it, but simply do `stepwise_handler.process_step(t, latents)` and it would internally know if it should produce the outputs or not. \r\n\r\nThe end result could be something like this (have not had time to test it thoroughly, will try to do so later today), but I think it makes overall flow a bit more easy to glance at:\r\n\r\n```python\r\n    def generate_image(\r\n        self,\r\n        seed: int,\r\n        prompt: str,\r\n        config: Config = Config(),\r\n        stepwise_output_dir: Path = None,\r\n    ) -> GeneratedImage:\r\n        # Create a new runtime config based on the model type and input parameters\r\n        config = RuntimeConfig(config, self.model_config)\r\n        time_steps = tqdm(range(config.num_inference_steps))\r\n        stepwise_handler = StepwiseHandler(\r\n            flux=self,\r\n            config=config,\r\n            seed=seed,\r\n            prompt=prompt,\r\n            time_steps=time_steps,\r\n            output_dir=stepwise_output_dir,\r\n        )\r\n\r\n        # 1. Create the initial latents\r\n        latents = mx.random.normal(\r\n            shape=[1, (config.height // 16) * (config.width // 16), 64],\r\n            key=mx.random.key(seed)\r\n        )  # fmt: off\r\n\r\n        # 2. Embed the prompt\r\n        t5_tokens = self.t5_tokenizer.tokenize(prompt)\r\n        clip_tokens = self.clip_tokenizer.tokenize(prompt)\r\n        prompt_embeds = self.t5_text_encoder.forward(t5_tokens)\r\n        pooled_prompt_embeds = self.clip_text_encoder.forward(clip_tokens)\r\n\r\n        for t in time_steps:\r\n            try:\r\n                # 3.t Predict the noise\r\n                noise = self.transformer.predict(\r\n                    t=t,\r\n                    prompt_embeds=prompt_embeds,\r\n                    pooled_prompt_embeds=pooled_prompt_embeds,\r\n                    hidden_states=latents,\r\n                    config=config,\r\n                )\r\n\r\n                # 4.t Take one denoise step\r\n                dt = config.sigmas[t + 1] - config.sigmas[t]\r\n                latents + noise * dt\r\n\r\n                # Handle stepwise output if enabled\r\n                stepwise_handler.process_step(t, latents)\r\n\r\n                # Evaluate to enable progress tracking\r\n                mx.eval(latents)\r\n\r\n            except KeyboardInterrupt:\r\n                stepwise_handler.handle_interruption()\r\n                raise StopImageGenerationException(f\"Stopping image generation at step {t + 1}/{len(time_steps)}\")\r\n\r\n        # 5. Decode the latent array and return the image\r\n        latents = ArrayUtil.unpack_latents(latents, config.height, config.width)\r\n        decoded = self.vae.decode(latents)\r\n        return ImageUtil.to_image(\r\n            decoded_latents=decoded,\r\n            seed=seed,\r\n            prompt=prompt,\r\n            quantization=self.bits,\r\n            generation_time=time_steps.format_dict[\"elapsed\"],\r\n            lora_paths=self.lora_paths,\r\n            lora_scales=self.lora_scales,\r\n            config=config,\r\n        )\r\n```\r\n\r\nAny thoughts on this? It will add another class, so some complexity there I guess. Any other downsides you can think of? \r\nIf you agree on this, I think we could merge this PR and then I could to this kind of refactoring soon thereafter. "
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-10-09T20:12:00Z",
+        "body": "Slow reply due to travel. The extraction into stepwise handler pattern LGTM, I will check out #70 now."
+      }
+    ]
+  },
+  {
+    "number": 57,
+    "title": "Introduce project makefile for setup and contributor operation",
+    "created_at": "2024-09-20T17:06:11Z",
+    "closed_at": "2024-09-21T11:45:11Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/57",
+    "body": "This `Makefile` enables contributors to use consistent and recommended commands to achieve contributor guidelines that will be forthcoming, e.g. formatting/linting requirements as well as running a test suite.\r\n\r\nThe major change is officially recommending `uv venv` to drive the setup process. It's an opinion that I think is acceptable for a new project from August 2024.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/57/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-21T10:09:14Z",
+        "body": "@anthonywu Tried this out and it works really well. This is a great addition to the project and makes it much more welcoming for both users and devs. Being somewhat new to the Python ecosystem and tooling (coming from a Java background), I also learn a lot about best practises from your comments and explanations :) Thank you very much for the initiative! I will merge this one and continue to look through the subsequent PRs soon."
+      }
+    ]
+  },
+  {
+    "number": 55,
+    "title": "dev ux: simplify import paths of frequently used items in scripts and demos",
+    "created_at": "2024-09-16T17:32:48Z",
+    "closed_at": "2024-09-21T08:36:27Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/55",
+    "body": "I propose making common scripts/demos less verbose (i.e. developer onboarding), we can make the most commonly imported objects auto-imported at the top level of the package.\r\n\r\nbefore\r\n\r\n```py\r\nfrom mflux.config.model_config import ModelConfig\r\nfrom mflux.config.config import Config\r\nfrom mflux.flux.flux import Flux1\r\n```\r\n\r\nafter\r\n\r\n```py\r\nfrom mflux import Flux1, Config, ModelConfig\r\n```\r\n\r\nconsiderations:\r\n\r\n- any package/module re-organizations in the future can be transparent to the user\r\n- this is soft change, any pre-existing code that does the full path import will still work\r\n- imports within the package implementation should still use full path imports following `explicit is better than implicit` value, as code at that level is meant for maintainers\r\n- added a basic test that would exercise the `import`s via `generate.py`\r\n\r\n-----\r\n\r\nalso taking opportunity to address the seemingly unnecessary (probably debug artifact from the past):\r\n\r\n`os.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))`\r\n\r\nis `src/mflux` and was being inserted as the first element of `sys.path`, which probably fixed an import path error in the past. I think this is a no-op removal.\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/55/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-21T08:31:05Z",
+        "body": "I like it. Will make similar changes to the new controlnet file in latest main"
+      }
+    ]
+  },
+  {
+    "number": 51,
+    "title": "ruff patch for one-time linter/formatter catchup",
+    "created_at": "2024-09-16T00:00:28Z",
+    "closed_at": "2024-09-20T17:55:25Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/51",
+    "body": "Following the `ruff format` and `ruff check` contributor proposal in #50, this would be the one time big patch to cleanse the repo state, from which point a pre-commit hook or a server-side CI check can be introduced to enforce future deviations.\r\n\r\nIf accepted, we should allow a few more ongoing PRs to merge to `main` first, then come back to this branch to `rebase` and do another catch up format/check.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/51/comments",
+    "author": "anthonywu",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2024-09-19T01:56:02Z",
+        "body": "this PR is easy to re-generate after a `rebase`, waiting for `main` dust to settle first then will re-approach"
+      },
+      {
+        "user": "anthonywu",
+        "created_at": "2024-09-20T17:55:24Z",
+        "body": "Closing this preview PR for now, this big diff should be re-done following agreement in #58\r\n\r\n@filipstrand maybe you ought to be the first user of the ruff configs, own this big change, and keep the `git` line ownership to you. It would be less confusing on line-level contributor stats =)"
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-21T13:23:25Z",
+        "body": "@anthonywu Yes, I can be the one who ultimately applies the formatting updates :) I may make some small tweaks to the ruff setup also, but from my initial testing the ones in #58 looks very reasonable. "
+      }
+    ]
+  },
+  {
+    "number": 41,
+    "title": "Can't install",
+    "created_at": "2024-09-08T04:32:32Z",
+    "closed_at": "2024-09-24T16:11:56Z",
+    "labels": [
+      "installation"
+    ],
+    "url": "https://github.com/filipstrand/mflux/issues/41",
+    "body": "No matter how hard I try or what packages I install, and --force uninstall, and ignore installed. It won't let me download the packages from pip. AI can't figure it out either\r\n\r\n```\r\nllected packages: wcwidth, sortedcontainers, mpmath, xmod, urllib3, tzdata, typing-extensions, tqdm, tenacity, sympy, sniffio, six, safetensors, regex, readchar, pyyaml, python-dotenv, pysocks, psutil, packaging, orjson, numpy, networkx, mypy-extensions, multidict, MarkupSafe, jsonpointer, jiter, idna, h11, fsspec, frozenlist, filelock, distro, charset-normalizer, certifi, attrs, annotated-types, aiohappyeyeballs, yarl, wsproto, typing-inspect, SQLAlchemy, runs, requests, pydantic-core, outcome, marshmallow, jsonpatch, jinja2, httpcore, faiss-cpu, blessed, anyio, aiosignal, webdriver-manager, trio, torch, tiktoken, pydantic, huggingface-hub, httpx, editor, dataclasses-json, aiohttp, trio-websocket, openai, langsmith, inquirer, accelerate, selenium, langchain-core, langchain-text-splitters, langchain-openai, langchain, langchain-community, lib-resume-builder-aihawk\r\nERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\nopen-interpreter 0.1.0 requires openai<0.28.0,>=0.27.8, but you have openai 1.44.0 which is incompatible.\r\nopen-interpreter 0.1.0 requires tiktoken<0.5.0,>=0.4.0, but you have tiktoken 0.7.0 which is incompatible.\r\ntorchaudio 2.4.0 requires torch==2.4.0, but you have torch 2.4.1 which is incompatible.\r\ntokentrim 0.1.6 requires tiktoken<0.5.0,>=0.4.0, but you have tiktoken 0.7.0 which is incompatible.\r\nspaces 0.29.3 requires psutil<6,>=2, but you have psutil 6.0.0 which is incompatible.\r\ntorchvision 0.19.0 requires torch==2.4.0, but you have torch 2.4.1 which is incompatible.\r\nSuccessfully installed MarkupSafe-2.1.5 SQLAlchemy-2.0.34 accelerate-0.33.0 aiohappyeyeballs-2.4.0 aiohttp-3.10.5 aiosignal-1.3.1 annotated-types-0.7.0 anyio-4.4.0 attrs-24.2.0 blessed-1.20.0 certifi-2024.8.30 charset-normalizer-3.3.2 dataclasses-json-0.6.7 distro-1.9.0 editor-1.6.6 faiss-cpu-1.8.0.post1 filelock-3.16.0 frozenlist-1.4.0 fsspec-2024.9.0 h11-0.14.0 httpcore-1.0.5 httpx-0.27.2 huggingface-hub-0.24.6 idna-3.8 inquirer-3.1.3 jinja2-3.1.4 jiter-0.5.0 jsonpatch-1.33 jsonpointer-3.0.0 langchain-0.2.16 langchain-community-0.2.16 langchain-core-0.2.38 langchain-openai-0.1.23 langchain-text-splitters-0.2.2 langsmith-0.1.93 lib-resume-builder-aihawk-0.2 marshmallow-3.22.0 mpmath-1.3.0 multidict-6.0.4 mypy-extensions-1.0.0 networkx-3.3 numpy-1.26.4 openai-1.44.0 orjson-3.10.7 outcome-1.3.0.post0 packaging-24.1 psutil-6.0.0 pydantic-2.9.0 pydantic-core-2.23.2 pysocks-1.7.1 python-dotenv-1.0.1 pyyaml-6.0.2 readchar-4.2.0 regex-2024.7.24 requests-2.32.3 runs-1.2.2 safetensors-0.4.4 selenium-4.9.1 six-1.16.0 sniffio-1.3.1 sortedcontainers-2.4.0 sympy-1.13.2 tenacity-8.5.0 tiktoken-0.7.0 torch-2.4.1 tqdm-4.66.5 trio-0.26.2 trio-websocket-0.11.1 typing-extensions-4.12.2 typing-inspect-0.9.0 tzdata-2024.1 urllib3-2.2.2 wcwidth-0.2.6 webdriver-manager-4.0.2 wsproto-1.2.0 xmod-1.8.1 yarl-1.9.2\r\nck@StarlinkPro mflux-ai % \r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/41/comments",
+    "author": "ckizer",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-08T07:28:59Z",
+        "body": "Quickly looked at your output here and I see `mflux-ai` which is not our package. Have you tried with `pip install -U mflux`? "
+      },
+      {
+        "user": "ckizer",
+        "created_at": "2024-09-08T14:58:33Z",
+        "body": "> Quickly looked at your output here and I see `mflux-ai` which is not our package. Have you tried with `pip install -U mflux`?\r\n\r\nThis is what happens when I have to many GitHub repo windows open 😂 Thanks Filipstrand trying to get Mac flux to work so I can used my custom trained lora"
+      },
+      {
+        "user": "ckizer",
+        "created_at": "2024-09-08T14:59:51Z",
+        "body": "Actually my errors happen when I run your command from the front of your repo exactly \"pip install -U mflux\"\r\nI may have installed other projects but I cant't get your repo working on Mac. I do have Mac ComfyUI running and uninstalled any of it's dependencies to try and get your repo working."
+      },
+      {
+        "user": "ckizer",
+        "created_at": "2024-09-08T15:00:47Z",
+        "body": "`on ttys022\r\nck@StarlinkPro question-cards % pip install -U mflux\r\nCollecting mflux\r\n  Using cached mflux-0.2.0-py3-none-any.whl.metadata (19 kB)\r\nRequirement already satisfied: mlx>=0.16.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (0.17.2)\r\nCollecting numpy>=2.0.0 (from mflux)\r\n  Using cached numpy-2.1.1-cp311-cp311-macosx_14_0_arm64.whl.metadata (60 kB)\r\nRequirement already satisfied: pillow>=10.4.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (10.4.0)\r\nRequirement already satisfied: transformers>=4.44.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (4.44.2)\r\nRequirement already satisfied: sentencepiece>=0.2.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (0.2.0)\r\nRequirement already satisfied: torch>=2.3.1 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (2.4.1)\r\nRequirement already satisfied: tqdm>=4.66.5 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (4.66.5)\r\nRequirement already satisfied: huggingface-hub>=0.24.5 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (0.24.6)\r\nRequirement already satisfied: safetensors>=0.4.4 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (0.4.4)\r\nRequirement already satisfied: piexif>=1.1.3 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from mflux) (1.1.3)\r\nRequirement already satisfied: filelock in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (3.16.0)\r\nRequirement already satisfied: fsspec>=2023.5.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (2024.9.0)\r\nRequirement already satisfied: packaging>=20.9 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (24.1)\r\nRequirement already satisfied: pyyaml>=5.1 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (6.0.2)\r\nRequirement already satisfied: requests in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (2.32.3)\r\nRequirement already satisfied: typing-extensions>=3.7.4.3 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from huggingface-hub>=0.24.5->mflux) (4.12.2)\r\nRequirement already satisfied: sympy in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from torch>=2.3.1->mflux) (1.13.2)\r\nRequirement already satisfied: networkx in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from torch>=2.3.1->mflux) (3.3)\r\nRequirement already satisfied: jinja2 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from torch>=2.3.1->mflux) (3.1.4)\r\nRequirement already satisfied: regex!=2019.12.17 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from transformers>=4.44.0->mflux) (2024.7.24)\r\nRequirement already satisfied: tokenizers<0.20,>=0.19 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from transformers>=4.44.0->mflux) (0.19.1)\r\nRequirement already satisfied: MarkupSafe>=2.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from jinja2->torch>=2.3.1->mflux) (2.1.5)\r\nRequirement already satisfied: charset-normalizer<4,>=2 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from requests->huggingface-hub>=0.24.5->mflux) (3.3.2)\r\nRequirement already satisfied: idna<4,>=2.5 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from requests->huggingface-hub>=0.24.5->mflux) (3.8)\r\nRequirement already satisfied: urllib3<3,>=1.21.1 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from requests->huggingface-hub>=0.24.5->mflux) (2.2.2)\r\nRequirement already satisfied: certifi>=2017.4.17 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from requests->huggingface-hub>=0.24.5->mflux) (2024.8.30)\r\nRequirement already satisfied: mpmath<1.4,>=1.1.0 in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (from sympy->torch>=2.3.1->mflux) (1.3.0)\r\nUsing cached mflux-0.2.0-py3-none-any.whl (52 kB)\r\nUsing cached numpy-2.1.1-cp311-cp311-macosx_14_0_arm64.whl (5.4 MB)\r\nInstalling collected packages: numpy, mflux\r\n  Attempting uninstall: numpy\r\n    Found existing installation: numpy 1.26.4\r\n    Uninstalling numpy-1.26.4:\r\n      Successfully uninstalled numpy-1.26.4\r\nERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\nlangchain-community 0.2.16 requires numpy<2,>=1; python_version < \"3.12\", but you have numpy 2.1.1 which is incompatible.\r\nfaiss-cpu 1.8.0.post1 requires numpy<2.0,>=1.0, but you have numpy 2.1.1 which is incompatible.\r\naccelerate 0.33.0 requires numpy<2.0.0,>=1.17, but you have numpy 2.1.1 which is incompatible.\r\nlangchain 0.2.16 requires numpy<2,>=1; python_version < \"3.12\", but you have numpy 2.1.1 which is incompatible.\r\nspaces 0.29.3 requires psutil<6,>=2, but you have psutil 6.0.0 which is incompatible.\r\ntorchvision 0.19.0 requires torch==2.4.0, but you have torch 2.4.1 which is incompatible.\r\nSuccessfully installed mflux-0.2.0 numpy-2.1.1\r\nck@StarlinkPro question-cards % \r\n`\r\n\r\nI tried uninstalling on the conflicting versions of pip packages, reinstalling the exact version you require manually, but no dice."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-09T17:00:34Z",
+        "body": "Hi @ckizer, some people have had issues installing the project. I have now updated the readme with an additional instruction of setting up a new virtual environment before installing the project. If you follow these steps does it work for you?"
+      },
+      {
+        "user": "ckizer",
+        "created_at": "2024-09-15T00:44:09Z",
+        "body": "I'll give it a try now."
+      }
+    ]
+  },
+  {
+    "number": 33,
+    "title": "Question about generation speed",
+    "created_at": "2024-09-06T19:45:51Z",
+    "closed_at": "2024-12-27T17:33:29Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/33",
+    "body": "Hi! Can someone explain why different tools using the same models show dramatically different results? I tried generating images using Draw Things and mflux with the same settings and prompt and got the following results:\r\n- Draw Things: ~1m20s\r\n- mflux with -q 8 setting: ~3m30s\r\n- mflux without -q setting: ~7m\r\n\r\nI have a weak laptop (MacBook 2021, M1 Pro, 16GB), but the difference in performance is significant. Maybe I make something wrong?\r\nThank you.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/33/comments",
+    "author": "TuiKiken",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-15T10:31:49Z",
+        "body": "@TuiKiken Hi. I have not looked into `Draw Things` but it is indeed impressive on their end if the difference is that large for similar settings. The generation speed depends on a few factors, such as the hardware, image resolution, quantization etc. The more RAM available the faster it will run (so closing other application in the background can help). If maxing out the memory it will typically resort to swap memory (disk storage) which slows things down."
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "title": "Fix width and height in config",
+    "created_at": "2024-09-05T18:11:12Z",
+    "closed_at": "2024-09-06T08:02:46Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/31",
+    "body": "Since PR #16 has fallen behind in priority, I thought of bringing here the fix for the width and height mix-up in the config class \r\n\r\nThis PR:\r\n- fixes a bug in config, where width and height are mixed\r\n- this was not causing any issues downstream and is just a code cleanup\r\n",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/31/comments",
+    "author": "Xuzzo",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-06T08:02:40Z",
+        "body": "@Xuzzo Oh, great suggestion! Will merge this fix right away.\r\n\r\nYes sorry about having #16 open for a while with no updates... Have not forgotten about it, just that it has fallen a bit behind in priority as you said, will pick this one up again eventually :) "
+      }
+    ]
+  },
+  {
+    "number": 26,
+    "title": "Feature Request: Show Prompt Metadata in Get Info",
+    "created_at": "2024-09-01T11:13:17Z",
+    "closed_at": "2024-09-06T18:37:20Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/26",
+    "body": "I have a quick suggestion for the Flux MLX project. It would be awesome if the \"Get Info\" window for generated images could display some key metadata like: Prompt, Seed, CFG Guidance, Model, or even time it took to generate.\r\nHaving this info readily available would make it easier for users to manage and reproduce their work without digging separate logs. \r\n\r\nI think 'Getinfo' in finder or in Preview app show inspector can easily display meta data, such as 'keywords' embedded text via IPTC or exif xml",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/26/comments",
+    "author": "vincyb",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-01T13:17:47Z",
+        "body": "@vincyb Great idea. I have also briefly thought about the idea of exporting metadata along with an image, but I was thinking something more primitive like exporting a json file or similar. Your suggestion is much more elegant, will add this feature soon! "
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-06T18:37:20Z",
+        "body": "This feature is now in main! Could not get it to work in the  \"Get Info\" window, but at least the internal refactoring in the project will make it easier to add this in the future. \r\n\r\nI use a tool like `exiftool` to inspect the metadata\r\n\r\n ```\r\n exiftool image.png\r\n ```\r\n \r\nThere is also an option to save this to disk by passing in the `--metadata` flag. The metadata file will be named the same as the image. "
+      }
+    ]
+  },
+  {
+    "number": 21,
+    "title": "Add Stream generate image functions",
+    "created_at": "2024-08-23T16:21:58Z",
+    "closed_at": "2024-09-23T03:01:44Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/21",
+    "body": "Add the `stream_generate_image` function to expose the results of each step of the inference for follow-up GUI interaction. \r\n\r\nThe usage would look something like this:\r\n\r\n```python\r\ndef stream_demo(args):\r\n    seed = int(time.time()) if args.seed is None else args.seed\r\n\r\n    flux = Flux1.from_alias(args.model)\r\n\r\n    stream = flux.stream_generate_image(\r\n        seed=seed,\r\n        prompt=args.prompt,\r\n        report_step=5,\r\n        config=Config(\r\n            num_inference_steps=args.steps,\r\n            height=args.height,\r\n            width=args.width,\r\n            guidance=args.guidance,\r\n        ),\r\n    )\r\n\r\n    step_count = 0\r\n\r\n    for image in stream:\r\n        step_count += 1\r\n\r\n        intermediate_output_path = f\"{args.output}_report_step_{step_count}.png\"\r\n        ImageUtil.save_image(image, \"build/stream/\" + intermediate_output_path)\r\n\r\n    print(f\"Generation complete. Total steps: {step_count}\")\r\n\r\nstream_demo()\r\n```",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/21/comments",
+    "author": "madroidmaq",
+    "comments": [
+      {
+        "user": "anthonywu",
+        "created_at": "2024-09-23T02:02:04Z",
+        "body": "@madroidmaq check out PR #59 to see if that satisfies your original intent."
+      },
+      {
+        "user": "madroidmaq",
+        "created_at": "2024-09-23T03:01:44Z",
+        "body": "@anthonywu Good jobs ! My initial goal was to see the image generation process in Streamlit, and the implementation on my machine looks pretty good. I see your support is even stronger, so I think I can close this PR. In the future, if others have similar needs, they can refer to your PR."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-09-23T16:53:37Z",
+        "body": "@madroidmaq sorry this PR and feature were deprioritized for a bit. I'll review the open PR once the ControlNet feature is merged."
+      }
+    ]
+  },
+  {
+    "number": 5,
+    "title": "Add CLI args for easier execution",
+    "created_at": "2024-08-17T15:34:03Z",
+    "closed_at": "2024-08-19T16:05:32Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/5",
+    "body": "Add `argparse` CLI options.\r\n\r\n- prompt\r\n- seed\r\n- model\r\n- steps\r\n- output\r\n- width\r\n- height",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/5/comments",
+    "author": "explorigin",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-08-18T05:49:18Z",
+        "body": "Thanks for the updates to the CLI args and also for your performance report! After this PR is updated and merged, I can update the README a bit with the new performance numbers."
+      },
+      {
+        "user": "explorigin",
+        "created_at": "2024-08-19T13:47:27Z",
+        "body": "Sorry, I rebased instead of merged. It's pretty small though."
+      },
+      {
+        "user": "filipstrand",
+        "created_at": "2024-08-19T16:05:45Z",
+        "body": "> Sorry, I rebased instead of merged. It's pretty small though.\r\n\r\nNo worries, looks good!"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "Generate image at different resolutions",
+    "created_at": "2024-08-16T15:01:51Z",
+    "closed_at": "2024-08-17T21:01:27Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/4",
+    "body": "Hello and thanks for your work.\r\n\r\nIn this PR I have included the possibility to generate images at different resolutions.\r\nThis can be selected though the `width` and `height` arguments in the `Config` class.",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/4/comments",
+    "author": "Xuzzo",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-08-17T21:01:17Z",
+        "body": "@Xuzzo Thank you very much for this addition. As a last test, I also ran the same prompt and a fixed latent on the Diffusers implementation and it looks identical to mflux for the other resolutions as well. Great job!"
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Added .gitignore",
+    "created_at": "2024-08-15T05:56:08Z",
+    "closed_at": "2024-08-15T18:02:33Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/pull/3",
+    "body": "Without .gitignore the IDE struggles to parse the content of the project after the initial install",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/3/comments",
+    "author": "naz",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-08-15T18:02:25Z",
+        "body": "Looks good! "
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "How much memory is needed?",
+    "created_at": "2024-08-14T04:34:59Z",
+    "closed_at": "2024-08-14T07:50:58Z",
+    "labels": [],
+    "url": "https://github.com/filipstrand/mflux/issues/1",
+    "body": "Great work, I want to try running flux on a Mac Pro, how much memory is required for the smallest model version?",
+    "comments_url": "https://api.github.com/repos/filipstrand/mflux/issues/1/comments",
+    "author": "Senwang98",
+    "comments": [
+      {
+        "user": "filipstrand",
+        "created_at": "2024-08-14T06:33:05Z",
+        "body": "Thank you! I have personally only developed and tested this on two MacBook Pro's with 32GB of ram (M1 Pro and M2 Max). Would be interesting to know if it works with only 16GB. But since you are talking about a Mac Pro I would assume this would be no problem to run (as long as it is equipped with the newer M-chips)"
+      },
+      {
+        "user": "Senwang98",
+        "created_at": "2024-08-14T07:50:56Z",
+        "body": "Okay, thanks for reply!"
+      }
+    ]
+  }
+]

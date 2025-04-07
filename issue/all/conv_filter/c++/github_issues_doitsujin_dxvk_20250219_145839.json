@@ -1,0 +1,62 @@
+[
+  {
+    "number": 3466,
+    "title": "Analyze v17 DXVK state cache entry",
+    "created_at": "2023-05-31T21:22:13Z",
+    "closed_at": "2023-06-01T19:20:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/doitsujin/dxvk/issues/3466",
+    "body": "I'm analyzing DXVK state cache files in Kotlin.\r\n\r\n**Basically I just need to know ByteArray size and shifting of the new header values.**\r\n\r\n```cpp\r\nstruct DxvkStateCacheEntryHeader {\r\n    uint32_t entryType : 1;\t\t/* New */\r\n    uint32_t stageMask : 5;\t\t/* Changed */\r\n    uint32_t entrySize : 26;\t/* Changed */\r\n};\r\n```\r\n\r\n\r\n## My previous implementation (7 < Version < 17)\r\n\r\nThis information is probably not needed, however I'll just provide it here if so\r\n\r\n### DXVK state cache header\r\n\r\n```kotlin\r\n/* Reading state cache header, still working as nothing changed */\r\n\r\nDxvkStateCacheHeader(\r\n    val magic: String,\r\n    val version: UInt,\r\n    val entrySize: UInt\r\n) {\r\n    companion object {\r\n        fun fromReader(reader: FileChannel): DxvkStateCacheHeader {\r\n            val magic = ByteBuffer.allocate(4)\r\n            reader.read(magic)\r\n\r\n            return DxvkStateCacheHeader(\r\n\t\t\t\tmagic = String(magic.array()),\r\n\t\t\t\tversion = reader.readU32(ByteOrder.LITTLE_ENDIAN),\r\n\t\t\t\tentrySize = reader.readU32(ByteOrder.LITTLE_ENDIAN)\r\n\t\t\t)\r\n        }\r\n    }\r\n}\r\n```\r\n\r\n### DXVK entry header\r\n\r\n```kotlin\r\n/* Reading entry header, not working as it changed */\r\n\r\nDxvkEntryHeader(\r\n    val stageMask: UInt,\r\n    val entrySize: UInt\r\n) {\r\n    companion object {\r\n        fun fromReader(reader: FileChannel): DxvkEntryHeader {\r\n            val magic = ByteBuffer.allocate(4)\r\n            reader.read(magic)\r\n\r\n            return DxvkEntryHeader(\r\n\t\t\t\tstageMask = reader.readU8(),\r\n\t\t\t\tentrySize = reader.readU24(ByteOrder.LITTLE_ENDIAN)\r\n\t\t\t)\r\n        }\r\n    }\r\n}\r\n```\r\n\r\n### Read(ing) methods\r\n\r\n```kotlin\r\nfun FileChannel.readU32(order: ByteOrder? = null): UInt {\r\n    val bytes = ByteBuffer.allocate(4)\r\n    order?.let { bytes.order(it) }\r\n    val state = this.read(bytes)\r\n\r\n    if (state == -1) {\r\n        throw Exception(\"EOF while reading U32\")\r\n    }\r\n\r\n    return bytes[0].unsignedInt(order) +\r\n                bytes[1].unsignedShl(8, order) +\r\n                bytes[2].unsignedShl(16, order) +\r\n                bytes[3].unsignedShl(24, order)\r\n}\r\n\r\nfun FileChannel.readU24(order: ByteOrder? = null): UInt {\r\n    val bytes = ByteBuffer.allocate(3)\r\n    order?.let { bytes.order(it) }\r\n    val state = this.read(bytes)\r\n\r\n    if (state == -1) {\r\n        throw Exception(\"EOF while reading U24\")\r\n    }\r\n\r\n    return bytes[0].unsignedInt(order) +\r\n                bytes[1].unsignedShl(8, order) +\r\n                bytes[2].unsignedShl(16, order)\r\n}\r\n\r\nfun FileChannel.readU8(order: ByteOrder? = null): UInt {\r\n    val bytes = ByteBuffer.allocate(1)\r\n    order?.let { bytes.order(it) }\r\n    val state = this.read(bytes)\r\n\r\n    if (state == -1) {\r\n        throw Exception(\"EOF while reading U8\")\r\n    }\r\n\r\n    return bytes[0].unsignedInt(order)\r\n}\r\n```\r\n\r\n### Byte reading & shifting\r\n\r\n```kotlin\r\nfun Byte.unsignedInt(order: ByteOrder?): UInt {\r\n    val byte = this.toUByte()\r\n    return if (order == ByteOrder.LITTLE_ENDIAN) {\r\n        byte.toUShort().toUInt()\r\n    } else {\r\n        byte.toUInt()\r\n    }\r\n}\r\n\r\nfun Byte.unsignedShl(bitCount: Int, order: ByteOrder?): UInt {\r\n    return unsignedInt(order).shl(bitCount)\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/doitsujin/dxvk/issues/3466/comments",
+    "author": "DatL4g",
+    "comments": [
+      {
+        "user": "doitsujin",
+        "created_at": "2023-05-31T21:28:55Z",
+        "body": "`DxvkStateCacheEntryHeader` is a single 32-bit bitfield with `entryType` being stored in the least significant bit, then 5 bits for the stage mask (shifted by 1).\r\n\r\nWe should make this more explicit on our end actually since I don't think the exact layout is guaranteed per spec."
+      },
+      {
+        "user": "DatL4g",
+        "created_at": "2023-06-01T18:52:21Z",
+        "body": "Aight got it, thanks.\r\nCan be closed if you don't wanna keep it open for documentation purposes."
+      }
+    ]
+  },
+  {
+    "number": 848,
+    "title": "(Shader/dxbc) Reasons to use opNMax,min,clamp instead of opFxxx one?",
+    "created_at": "2019-01-08T09:48:55Z",
+    "closed_at": "2019-01-21T14:11:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/doitsujin/dxvk/issues/848",
+    "body": "Hi, I am trying to use your dxbc funcs to convert some pre-compiled dx11 shaders to spirv,\r\nthen convert it back to pseudo-hlsl with spirv-cross --hlsl --shader-model 40.\r\n\r\nThe problem is spirv-cross does not process opcodes like unsupported_glsl450_nmax,nmin,nclamp.\r\nI do not know well about shader standards actually.\r\nSo is it safe to change those nmax,nmin,nclamp in your dxbc funcs to FMax,FMin,FClamp?\r\n",
+    "comments_url": "https://api.github.com/repos/doitsujin/dxvk/issues/848/comments",
+    "author": "Klanly",
+    "comments": [
+      {
+        "user": "doitsujin",
+        "created_at": "2019-01-08T10:05:23Z",
+        "body": "The difference between `NMin` and `FMin` is how NaN operands are handled, and `NMin` is needed to emulate Direct3D behaviour. If you know that your shaders don't generate NaNs, then it is safe to make the change."
+      },
+      {
+        "user": "Klanly",
+        "created_at": "2019-01-08T14:51:13Z",
+        "body": "Ok thanks.\r\nBTW I also found that I have to make this change\r\n\r\n const uint32_t stageOffset = 0; //128 + 160 * uint32_t(shaderStage);\r\n\r\nin **computeResourceSlotId** to let fxc compile the generated code (otherwise it says \"maximum cbuffer exceeded\").\r\n\r\nIs that made for some optimization (not for exact code translating)?\r\nAre there other places also contains this kind of trick(?)s ?\r\n"
+      },
+      {
+        "user": "doitsujin",
+        "created_at": "2019-01-08T15:05:11Z",
+        "body": "It's not an optimization, it's done to map the D3D11 binding model to something that DXVK can more easily work with internally.\r\n\r\nThere are a lot of DXVK-specific things in the generated code since a lot of D3D11 abstractions don't exist in Vulkan at all (like append/consume buffers) or are handled differently (like raw and structured buffers), and the generated shader code **will** reflect that."
+      },
+      {
+        "user": "Klanly",
+        "created_at": "2019-01-09T03:26:39Z",
+        "body": "Ok I understand :)"
+      }
+    ]
+  }
+]

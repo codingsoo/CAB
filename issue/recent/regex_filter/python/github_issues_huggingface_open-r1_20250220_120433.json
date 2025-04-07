@@ -1,0 +1,520 @@
+[
+  {
+    "number": 354,
+    "title": "Fail to reproduce MATH-500 Score on DeepSeek-R1-Distill-Qwen-1.5B",
+    "created_at": "2025-02-18T06:08:31Z",
+    "closed_at": "2025-02-20T03:48:50Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/354",
+    "body": "Here is my script and the corresponding results:\n```\nMODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B\nTASK=math_500\nOUTPUT_DIR=data/evals/$MODEL\n\nNUM_GPUS=1\nMODEL_ARGS=\"pretrained=$MODEL,dtype=bfloat16,max_model_length=32768,gpu_memory_utilisation=0.8,tensor_parallel_size=$NUM_GPUS\"\nlighteval vllm $MODEL_ARGS \"custom|$TASK|0|0\" \\\n    --custom-tasks src/open_r1/evaluate.py \\\n    --use-chat-template \\\n    --output-dir $OUTPUT_DIR\n```\n```\n[2025-02-18 06:01:32,413] [    INFO]: --- COMPUTING METRICS --- (pipeline.py:299)\n[2025-02-18 06:01:42,431] [    INFO]: --- DISPLAYING RESULTS --- (pipeline.py:342)\n|      Task       |Version|     Metric     |Value|   |Stderr|\n|-----------------|------:|----------------|----:|---|-----:|\n|all              |       |extractive_match|0.766|_  | 0.019|\n|custom:math_500:0|      1|extractive_match|0.766|_  | 0.019|\n```\nThe score is 5 points lower than the one reported in the README.\n\nI also referred to issue #194 but was unable to reproduce the reported score of 81.6.\nMy environment:\n```\n# CUDA 12.4\ntorch                             2.5.1\nlatex2sympy2_extended             1.0.6\nvllm                              0.7.2 \nmath-verify                       0.5.2\nlighteval                         0.6.0.dev0\n```\n\nAre there any additional steps I can try to debug or improve my results? Any suggestions would be greatly appreciated.",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/354/comments",
+    "author": "superdocker",
+    "comments": [
+      {
+        "user": "gauss-clb",
+        "created_at": "2025-02-19T07:53:00Z",
+        "body": "I get the score of 0.836."
+      },
+      {
+        "user": "superdocker",
+        "created_at": "2025-02-20T03:48:51Z",
+        "body": "@gauss-clb - Thanks for your response.\n\nI’m not sure why, but when I ran it on a different A100 server, I got a result of 83.6.\nI still don’t know the reason—despite using the same Docker image, the same requirements.txt, the same model files, and the same script, the results were normal on a different server.\n\nAnyway, I appreciate your help."
+      }
+    ]
+  },
+  {
+    "number": 324,
+    "title": "fix bug: text.split() not token list",
+    "created_at": "2025-02-14T07:05:04Z",
+    "closed_at": "2025-02-14T09:18:54Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/324",
+    "body": "if text = \"abcdefg\", text.split() will get [\"abcdefg\"]， need using list(text)",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/324/comments",
+    "author": "hellen9527",
+    "comments": [
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-14T09:18:54Z",
+        "body": "I think that in general we do n-grams across words, not letters, so we split on whitespace `  `"
+      },
+      {
+        "user": "hellen9527",
+        "created_at": "2025-02-14T09:48:48Z",
+        "body": "> I think that in general we do n-grams across words, not letters, so we split on whitespace ` `\r\n\r\nI understand now. It's a matter of language differences. In non-English domains, there often aren't natural delimiters, so it's necessary to convert the text into a token list using a list."
+      }
+    ]
+  },
+  {
+    "number": 293,
+    "title": "Why should acc_reward be set to 1.0 when the formula cannot be parsed?",
+    "created_at": "2025-02-12T11:57:13Z",
+    "closed_at": "2025-02-12T12:26:39Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/293",
+    "body": "I don't understand this piece of code. Why is the acc_reward set to 1.0 when the formula cannot be parsed? Shouldn't it be set to the smallest value, 0? If it’s set to 1.0, wouldn't that encourage the model to generate unparseable results?\n```\ndef accuracy_reward(completions, solution, **kwargs):\n    \"\"\"Reward function that checks if the completion is the same as the ground truth.\"\"\"\n    contents = [completion[0][\"content\"] for completion in completions]\n    rewards = []\n    for content, sol in zip(contents, solution):\n        gold_parsed = parse(\n            sol,\n            extraction_mode=\"first_match\",\n            extraction_config=[LatexExtractionConfig()],\n        )\n        if len(gold_parsed) != 0:\n            # We require the answer to be provided in correct latex (no malformed operators)\n            answer_parsed = parse(\n                content,\n                extraction_config=[\n                    LatexExtractionConfig(\n                        normalization_config=NormalizationConfig(\n                            nits=False,\n                            malformed_operators=False,\n                            basic_latex=True,\n                            equations=True,\n                            boxed=\"all\",\n                            units=True,\n                        ),\n                        # Ensures that boxed is tried first\n                        boxed_match_priority=0,\n                        try_extract_without_anchor=False,\n                    )\n                ],\n                extraction_mode=\"first_match\",\n            )\n            # Reward 1 if the content is the same as the ground truth, 0 otherwise\n            reward = float(verify(answer_parsed, gold_parsed))\n        else:\n            # If the gold solution is not parseable, we reward 1 to skip this example\n            reward = 1.0\n            print(\"Failed to parse gold solution: \", sol)\n        rewards.append(reward)\n\n    return rewards\n```",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/293/comments",
+    "author": "hellen9527",
+    "comments": [
+      {
+        "user": "TimeLovercc",
+        "created_at": "2025-02-15T03:54:39Z",
+        "body": "I have the same question. "
+      },
+      {
+        "user": "hellen9527",
+        "created_at": "2025-02-15T09:56:28Z",
+        "body": "> I have the same question.\n\ntarget无法解析的时候给了1.0，意思是不要这条数据了可能，不过我们可以提前过滤到这种数据，如果是answer无法解析的话应该是0."
+      }
+    ]
+  },
+  {
+    "number": 278,
+    "title": "Attention bias and Query/Key/Value should be on the same device",
+    "created_at": "2025-02-11T03:33:19Z",
+    "closed_at": "2025-02-12T01:13:20Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/278",
+    "body": "using GRPO\n\n\n[rank0]: ValueError: Error in model execution (input dumped to /tmp/err_execute_model_input_20250211-033220.pkl): Attention bias and Query/Key/Value should be on the same device\n[rank0]:   query.device: cuda:2\n[rank0]:   attn_bias   : cuda:0",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/278/comments",
+    "author": "calledice",
+    "comments": [
+      {
+        "user": "ashenwitch",
+        "created_at": "2025-02-11T11:54:52Z",
+        "body": "same here"
+      },
+      {
+        "user": "anirudhb11",
+        "created_at": "2025-02-11T19:46:51Z",
+        "body": "I'm also facing a similar issue here, I'm running on 2 GPUs (1 for training and 1 for inference). My configuration is as follows:\n\n```\nPyTorch Version: 2.5.1+cu124\nCUDA Available: True\nCUDA Version: 12.4\nGPU Details: [{'GPU Name': 'Quadro RTX 8000', 'Total Memory (MB)': 45539.0, 'CUDA Capability': '7.5'}, {'GPU Name': 'Quadro RTX 8000', 'Total Memory (MB)': 45539.0, 'CUDA Capability': '7.5'}]\n```\n\nJust to highlight I'm using a RTX 8000 which doesn't support `bfloat16` - so I'm not sure if this is causing the issue. To enable running in `float16` I change the config file to include  `--vllm-dtype float16` and change the `torch_dtype` in the config file to `float16`\n\nThis is the traceback I see;\n\n```\n\n[rank0]: Traceback (most recent call last):\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/src/open_r1/grpo.py\", line 279, in <module>\n[rank0]:     main(script_args, training_args, model_args)\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/src/open_r1/grpo.py\", line 214, in main\n[rank0]:     trainer = GRPOTrainer(\n[rank0]:               ^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/trl/trainer/grpo_trainer.py\", line 404, in __init__\n[rank0]:     self.llm = LLM(\n[rank0]:                ^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/utils.py\", line 1039, in inner\n[rank0]:     return fn(*args, **kwargs)\n[rank0]:            ^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/entrypoints/llm.py\", line 240, in __init__\n[rank0]:     self.llm_engine = self.engine_class.from_engine_args(\n[rank0]:                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 482, in from_engine_args\n[rank0]:     engine = cls(\n[rank0]:              ^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 274, in __init__\n[rank0]:     self._initialize_kv_caches()\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 414, in _initialize_kv_caches\n[rank0]:     self.model_executor.determine_num_available_blocks())\n[rank0]:     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/executor/executor_base.py\", line 99, in determine_num_available_blocks\n[rank0]:     results = self.collective_rpc(\"determine_num_available_blocks\")\n[rank0]:               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/executor/uniproc_executor.py\", line 49, in collective_rpc\n[rank0]:     answer = run_method(self.driver_worker, method, args, kwargs)\n[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/utils.py\", line 2208, in run_method\n[rank0]:     return func(*args, **kwargs)\n[rank0]:            ^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\n[rank0]:     return func(*args, **kwargs)\n[rank0]:            ^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/worker/worker.py\", line 228, in determine_num_available_blocks\n[rank0]:     self.model_runner.profile_run()\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\n[rank0]:     return func(*args, **kwargs)\n[rank0]:            ^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/worker/model_runner.py\", line 1236, in profile_run\n[rank0]:     self._dummy_run(max_num_batched_tokens, max_num_seqs)\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/worker/model_runner.py\", line 1347, in _dummy_run\n[rank0]:     self.execute_model(model_input, kv_caches, intermediate_tensors)\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\n[rank0]:     return func(*args, **kwargs)\n[rank0]:            ^^^^^^^^^^^^^^^^^^^^^\n[rank0]:   File \"/home/mila/b/buvanesa/code/open-r1/openr1/lib/python3.11/site-packages/vllm/worker/model_runner_base.py\", line 152, in _wrapper\n[rank0]:     raise type(err)(\n[rank0]: ValueError: Error in model execution (input dumped to /tmp/err_execute_model_input_20250211-144354.pkl): Attention bias and Query/Key/Value should be on the same device\n[rank0]:   query.device: cuda:1\n[rank0]:   attn_bias   : cuda:0\n\n[rank0]:[W211 14:43:54.574278762 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())\n```"
+      },
+      {
+        "user": "PascalPolygon",
+        "created_at": "2025-02-11T19:58:14Z",
+        "body": "Same problem"
+      },
+      {
+        "user": "calledice",
+        "created_at": "2025-02-12T01:11:52Z",
+        "body": "> same here\n\nin config_demo.yaml you can set \nvllm_device: cuda:0\n"
+      },
+      {
+        "user": "byhteng",
+        "created_at": "2025-02-14T03:01:37Z",
+        "body": "this problem can be resolved in this way:\n1. find vllm/attention/backends/xformers.py in our conda env\n2. at line 733, change to `attn_bias=attn_bias[0].to(query.device),`\nthis problem seems to result from the initialization af attention bias without specifying the device of the vllm process, but using the device of the main process"
+      }
+    ]
+  },
+  {
+    "number": 249,
+    "title": "ValueError: The global train batch size (7 x 1) must be evenly divisible by the number of generations per prompt (8). Given the current train batch size, the valid values for the number of generations are: [7]",
+    "created_at": "2025-02-09T02:31:20Z",
+    "closed_at": "2025-02-09T07:42:48Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/249",
+    "body": "[rank1]: Traceback (most recent call last):\n[rank1]:   File \"/mnt/pfs-guan-ssai/nlu/xinhongsheng/v6_16b_scripts_new/open-r1/src/open_r1/grpo.py\", line 241, in <module>\n[rank1]:     main(script_args, training_args, model_args)\n[rank1]:   File \"/mnt/pfs-guan-ssai/nlu/xinhongsheng/v6_16b_scripts_new/open-r1/src/open_r1/grpo.py\", line 174, in main\n[rank1]:     trainer = GRPOTrainer(\n[rank1]:   File \"/opt/conda/lib/python3.10/site-packages/trl/trainer/grpo_trainer.py\", line 321, in __init__\n[rank1]:     raise ValueError(\n[rank1]: ValueError: The global train batch size (7 x 1) must be evenly divisible by the number of generations per prompt (8). Given the current train batch size, the valid values for the number of generations are: [7].\n",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/249/comments",
+    "author": "hongshengxin",
+    "comments": [
+      {
+        "user": "Lineark",
+        "created_at": "2025-02-09T05:51:51Z",
+        "body": "You should set num_generations: 7 in the .yaml file. The error message suggests that (num_processes * per_device_train_batch_size) % num_generations must be 0. They've fixed this in the new version: open-r1/recipes/Qwen2.5-Math-7B/grpo/config_simple_rl.yaml"
+      },
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-09T07:42:48Z",
+        "body": "Thanks @Lineark , that is correct. Closing"
+      }
+    ]
+  },
+  {
+    "number": 209,
+    "title": "Update CUDA",
+    "created_at": "2025-02-06T15:20:33Z",
+    "closed_at": "2025-02-06T15:31:13Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/209",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/209/comments",
+    "author": "lewtun",
+    "comments": [
+      {
+        "user": "Ryan-ly",
+        "created_at": "2025-02-13T10:03:09Z",
+        "body": "Can I know the reason for upgrading CUDA from version 12.1 to 12.4? We are currently reproducing openr1, but we have already installed CUDA 12.1 and the corresponding nvidia driver.  Would there be any impact if we don't upgrade CUDA?"
+      }
+    ]
+  },
+  {
+    "number": 203,
+    "title": "Optimize the  code ",
+    "created_at": "2025-02-06T08:24:54Z",
+    "closed_at": "2025-02-09T07:39:03Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/203",
+    "body": "Optimize the code repository by improving performance and readability.\n\n* **Makefile**: Add parallel execution for `style` and `quality` targets.\n* **README.md**: Add a new section on optimization techniques and best practices.\n* **scripts/run_benchmarks.py**: Add an `optimization_level` argument to the `ScriptArguments` class and pass it to the `run_benchmark_jobs` function.\n* **src/open_r1/generate.py**: Add an `optimization_level` argument to the `generate_pipeline` function and pass it to the `generation_kwargs`.\n* **src/open_r1/grpo.py**: Add an `optimization_level` argument to the `ScriptArguments` class and pass it to the model initialization.\n* **src/open_r1/sft.py**: Improve data loading efficiency by using `datasets.load_dataset` with `streaming=True`. Add an `optimization_level` argument to the model initialization.\n* **src/open_r1/utils/hub.py**: Add a new function `optimize_hub_interactions` to optimize interactions with the Hugging Face Hub.\n* **setup.py**: Remove unnecessary dependencies such as `liger_kernel` and `math-verify`. Update versions of dependencies to the latest stable releases.\n* **slurm/evaluate.slurm**: Add resource constraints for memory and CPU usage. Improve job scheduling by adding `--dependency=singleton`.\n* **src/open_r1/evaluate.py**: Refactor the `aime_prompt_fn` function to improve readability by adding a docstring.\n\n",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/203/comments",
+    "author": "HendricksJudy",
+    "comments": [
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-06T13:12:47Z",
+        "body": "@HendricksJudy I am unsure what functionality this aims to achieve, there is an optimization flag that has been added but it does not do anything, can you explain more what you are trying to achieve?"
+      },
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-09T07:39:03Z",
+        "body": "Closing as I think this PR is AI generated garbage. Feel free to reopen if you can justify the changes."
+      }
+    ]
+  },
+  {
+    "number": 200,
+    "title": "Why train from Qwen2.5-1.5B-Instruct",
+    "created_at": "2025-02-06T02:08:25Z",
+    "closed_at": "2025-02-06T05:43:45Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/200",
+    "body": "In SFT and GRPO train, why don't base models start training instead of instruct models, R1's technical reports are all based on base models.  And the graph in the Plan of attack is also the base model",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/200/comments",
+    "author": "RyanOvO",
+    "comments": [
+      {
+        "user": "Lineark",
+        "created_at": "2025-02-06T03:33:26Z",
+        "body": "The GRPO training starts from deepseek distilled models per the current settings:\n```\nopen-r1/recipes/deepseek/DeepSeek-R1-Distill-Qwen-7B/grpo/config_full.yaml\nmodel_name_or_path: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B\n```\nBy the way, they currently set max_completion_length: 1024, this is unlikely to be long enough to produce satisfactory results. Indeed, training with longer completion length takes much more memory and will be much slower."
+      }
+    ]
+  },
+  {
+    "number": 188,
+    "title": "fix uv env path + details",
+    "created_at": "2025-02-05T08:59:52Z",
+    "closed_at": "2025-02-05T22:59:25Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/188",
+    "body": "#91 broke the slurm scripts, this PR updates them and fixes a bug with pushing details",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/188/comments",
+    "author": "edbeeching",
+    "comments": [
+      {
+        "user": "lewtun",
+        "created_at": "2025-02-05T22:56:40Z",
+        "body": "I'm merging since I need this for #196 "
+      }
+    ]
+  },
+  {
+    "number": 177,
+    "title": "GRPO training args fixes",
+    "created_at": "2025-02-04T14:51:32Z",
+    "closed_at": "2025-02-05T08:09:45Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/177",
+    "body": "Adds flash attn args to GRPO + some other options",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/177/comments",
+    "author": "edbeeching",
+    "comments": [
+      {
+        "user": "kashif",
+        "created_at": "2025-02-04T15:02:26Z",
+        "body": "might need to run `make` to fix the formatting"
+      },
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-04T15:15:03Z",
+        "body": "Looks like someone pushed to main directly and broke the styling, I will wait for them to update"
+      }
+    ]
+  },
+  {
+    "number": 157,
+    "title": "Allow Whitespaces Between XML Tags for Format Reward",
+    "created_at": "2025-02-02T03:45:40Z",
+    "closed_at": "2025-02-10T17:36:27Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/157",
+    "body": "As the title suggested.\r\n\r\nOne common pattern I've observed with the existing system message is that, smaller models (<= 7b) like to produce extra whitespace or newlines in between the `<think> .. </think>` and `<answer> .. </answer>` blocks.\r\n\r\nIn the system prompt, although there's one-shot example, it is not 100% to the LLM that no space is allowed in between these tags.\r\n\r\nThis one-line fix will allow the smaller models to quickly get this reward without a lot of trial and errors, essentially speeding up the convergence imo.",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/157/comments",
+    "author": "andyl98",
+    "comments": [
+      {
+        "user": "lewtun",
+        "created_at": "2025-02-10T09:42:41Z",
+        "body": "@andyl98 would you mind resolving the merge conflicts and then we can merge this?"
+      },
+      {
+        "user": "andyl98",
+        "created_at": "2025-02-10T17:36:27Z",
+        "body": "Oh seems you guys already have a fix for this. Closing it"
+      },
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-02-10T17:41:40Z",
+        "body": "Actually I think we don't have the `DOTALL`"
+      },
+      {
+        "user": "andyl98",
+        "created_at": "2025-02-10T19:16:57Z",
+        "body": "Prev:\r\n```\r\n    -pattern = r\"^<think>.*?</think>\\s*<answer>.*?</answer>$\"\r\n    -matches = [re.match(pattern, content, re.DOTALL | re.MULTILINE) for content in completion_contents]\r\n```\r\nNow:\r\n```python\r\n   +matches = [re.match(pattern, content) for content in completion_contents]\r\n   +pattern = re.compile(r\"^<think>.*?</think>\\s*<answer>.*?</answer>$\", re.DOTALL)\r\n```\r\n\r\nI think the \\s* part should have already captured the corner cases"
+      }
+    ]
+  },
+  {
+    "number": 149,
+    "title": "Update grpo.py with working imports",
+    "created_at": "2025-02-01T05:44:06Z",
+    "closed_at": "2025-02-06T13:06:01Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/149",
+    "body": "Fix for wrong imports of open_r1 instead of src.open_r1\r\n\r\nreplace open_r1 imports with \r\n`from src.open_r1.configs import GRPOConfig`\r\n`from src.open_r1.utils.callbacks import get_callback`",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/149/comments",
+    "author": "saidineshpola",
+    "comments": [
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-06T13:06:01Z",
+        "body": "@saidineshpola thanks for your PR but I think you have not installed the package correctly, please follow the instructions in the README."
+      }
+    ]
+  },
+  {
+    "number": 147,
+    "title": "Update: Fix eval crash by disabling vLLM when using DeepSpeed",
+    "created_at": "2025-02-01T04:02:12Z",
+    "closed_at": "2025-02-12T17:09:26Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/147",
+    "body": "What’s broken:\r\nIn #145 evaluation crashes with AttributeError: model has no 'optimizer' because DeepSpeed Zero-3 hides the optimizer (it’s managed separately), and vLLM’s setup clashes with this.\r\n\r\nThe fix:\r\nDisable vLLM in recipes/qwen/Qwen2.5-1.5B-Instruct/grpo/confg_full.yaml. This stops the conflict and DeepSpeed now handles everything correctly.",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/147/comments",
+    "author": "ATaylorAerospace",
+    "comments": [
+      {
+        "user": "Some-random",
+        "created_at": "2025-02-01T19:48:43Z",
+        "body": "I seem to be having tensor size mismatch error after changing use_vllm to false\r\n\r\n```\r\nInvalidate trace cache @ step 0 and module 740: cache has only 0 modules\r\n[rank3]: Traceback (most recent call last):\r\n[rank3]:   File \"/fsx/ubuntu/open-r1/src/open_r1/grpo.py\", line 237, in <module>\r\n[rank3]:     main(script_args, training_args, model_args)\r\n[rank3]:   File \"/fsx/ubuntu/open-r1/src/open_r1/grpo.py\", line 189, in main\r\n[rank3]:     train_result = trainer.train(resume_from_checkpoint=checkpoint)\r\n[rank3]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/trainer.py\", line 2175, in train\r\n[rank3]:     return inner_training_loop(\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/trainer.py\", line 2490, in _inner_training_loop\r\n[rank3]:     tr_loss_step = self.training_step(model, inputs, num_items_in_batch)\r\n[rank3]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/trainer.py\", line 3598, in training_step\r\n[rank3]:     loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/trl/trainer/grpo_trainer.py\", line 422, in compute_loss\r\n[rank3]:     prompt_completion_ids = unwrapped_model.generate(\r\n[rank3]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\r\n[rank3]:     return func(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/generation/utils.py\", line 2224, in generate\r\n[rank3]:     result = self._sample(\r\n[rank3]:              ^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/generation/utils.py\", line 3208, in _sample\r\n[rank3]:     outputs = model_forward(**model_inputs, return_dict=True)\r\n[rank3]:               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1736, in _wrapped_call_impl\r\n[rank3]:     return self._call_impl(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1844, in _call_impl\r\n[rank3]:     return inner()\r\n[rank3]:            ^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1790, in inner\r\n[rank3]:     result = forward_call(*args, **kwargs)\r\n[rank3]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/utils/deprecation.py\", line 172, in wrapped_func\r\n[rank3]:     return func(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py\", line 824, in forward\r\n[rank3]:     outputs = self.model(\r\n[rank3]:               ^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1736, in _wrapped_call_impl\r\n[rank3]:     return self._call_impl(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1747, in _call_impl\r\n[rank3]:     return forward_call(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py\", line 567, in forward\r\n[rank3]:     layer_outputs = self._gradient_checkpointing_func(\r\n[rank3]:                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/_compile.py\", line 32, in inner\r\n[rank3]:     return disable_fn(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/_dynamo/eval_frame.py\", line 632, in _fn\r\n[rank3]:     return fn(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/utils/checkpoint.py\", line 496, in checkpoint\r\n[rank3]:     ret = function(*args, **kwargs)\r\n[rank3]:           ^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1736, in _wrapped_call_impl\r\n[rank3]:     return self._call_impl(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1747, in _call_impl\r\n[rank3]:     return forward_call(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py\", line 260, in forward\r\n[rank3]:     hidden_states, self_attn_weights = self.self_attn(\r\n[rank3]:                                        ^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1736, in _wrapped_call_impl\r\n[rank3]:     return self._call_impl(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1747, in _call_impl\r\n[rank3]:     return forward_call(*args, **kwargs)\r\n[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py\", line 167, in forward\r\n[rank3]:     query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)\r\n[rank3]:                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n[rank3]:   File \"/fsx/ubuntu/miniconda3/envs/openr1/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py\", line 90, in apply_rotary_pos_emb\r\n[rank3]:     q_embed = (q * cos) + (rotate_half(q) * sin)\r\n[rank3]:                ~~^~~~~\r\n[rank3]: RuntimeError: The size of tensor a (735) must match the size of tensor b (736) at non-singleton dimension 2\r\n```"
+      },
+      {
+        "user": "ctjlewis",
+        "created_at": "2025-02-02T09:07:51Z",
+        "body": "@Some-random, ran into the same series of issues as you and OP. Just turned off vllm. cc @qgallouedec "
+      },
+      {
+        "user": "pyh314",
+        "created_at": "2025-02-03T14:52:47Z",
+        "body": "@Some-random  I have the same error as yours after I changed the use_vllm=false. The approach in this conversation seems not work."
+      },
+      {
+        "user": "Some-random",
+        "created_at": "2025-02-03T16:54:25Z",
+        "body": "Another workaround is to change deepspeed stage to 2 and keep vllm on"
+      }
+    ]
+  },
+  {
+    "number": 134,
+    "title": "Update grpo.py",
+    "created_at": "2025-01-31T04:04:57Z",
+    "closed_at": "2025-02-07T14:23:52Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/134",
+    "body": "**Improved Exception Handling:** Exceptions are caught and the reward is set to 0 to ensure the code continues to run even if an unexpected error occurs.",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/134/comments",
+    "author": "wzy6642",
+    "comments": [
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-02-07T14:23:52Z",
+        "body": "Duplicate #158 "
+      }
+    ]
+  },
+  {
+    "number": 130,
+    "title": "RayTaskError with hf_transfer or ray.init()",
+    "created_at": "2025-01-30T17:28:28Z",
+    "closed_at": "2025-02-03T09:07:40Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/130",
+    "body": "I have met the error as follows, the error output is so long that I have to copy the last lines:\nRayTaskError(RuntimeError): [36mray::run_inference_one_model()[39m (pid=602229, ip=115.154.137.9)\nException: Failed too many failures in parallel (3): Request: error decoding response body (no permits available)\n\nThe above exception was the direct cause of the following exception:\n\n[36mray::run_inference_one_model()[39m (pid=602229, ip=115.154.137.9)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/lighteval/models/vllm/vllm_model.py\", line 336, in \nrun_inference_one_model\n    llm = LLM(**model_args)\n          ^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/utils.py\", line 986, in inner\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/entrypoints/llm.py\", line 230, in __init__\n    self.llm_engine = self.engine_class.from_engine_args(\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 517, in \nfrom_engine_args\n    engine = cls(\n             ^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 273, in __init__\n    self.model_executor = executor_class(vllm_config=vllm_config, )\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/distributed_gpu_executor.py\", line 26, in\n__init__\n    super().__init__(*args, **kwargs)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/executor_base.py\", line 36, in __init__\n    self._init_executor()\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 64, in \n_init_executor\n    self._init_workers_ray(placement_group)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 278, in \n_init_workers_ray\n    self._run_workers(\"load_model\",\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 407, in \n_run_workers\n    self.driver_worker.execute_method(method, *driver_args,\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker_base.py\", line 468, in \nexecute_method\n    raise e\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker_base.py\", line 459, in \nexecute_method\n    return executor(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker.py\", line 155, in load_model\n    self.model_runner.load_model()\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/model_runner.py\", line 1096, in load_model\n    self.model = get_model(vllm_config=self.vllm_config)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/__init__.py\", line 12,\nin get_model\n    return loader.load_model(vllm_config=vllm_config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 366, \nin load_model\n    loaded_weights = model.load_weights(\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/qwen2.py\", line 506, in \nload_weights\n    return loader.load_weights(weights)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 237, in \nload_weights\n    autoloaded_weights = set(self._load_module(\"\", self.module, weights))\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 189, in \n_load_module\n    for child_prefix, child_weights in self._groupby_prefix(weights):\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 103, in \n_groupby_prefix\n    for prefix, group in itertools.groupby(weights_by_parts,\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 100, in \n<genexpr>\n    weights_by_parts = ((weight_name.split(\".\", 1), weight_data)\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 342, \nin _get_all_weights\n    yield from self._get_weights_iterator(primary_weights)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 298, \nin _get_weights_iterator\n    hf_folder, hf_weights_files, use_safetensors = self._prepare_weights(\n                                                   ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 251, \nin _prepare_weights\n    hf_folder = download_weights_from_hf(\n                ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/weight_utils.py\", line\n255, in download_weights_from_hf\n    hf_folder = snapshot_download(\n                ^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py\", line 114, in \n_inner_fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 294, in \nsnapshot_download\n    _inner_hf_hub_download(file)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 270, in \n_inner_hf_hub_download\n    return hf_hub_download(\n           ^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py\", line 114, in \n_inner_fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 860, in \nhf_hub_download\n    return _hf_hub_download_to_cache_dir(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 1009, in \n_hf_hub_download_to_cache_dir\n    _download_to_tmp_and_move(\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 1543, in \n_download_to_tmp_and_move\n    http_get(\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 437, in \nhttp_get\n    raise RuntimeError(\nRuntimeError: An error occurred while downloading using `hf_transfer`. Consider disabling HF_HUB_ENABLE_HF_TRANSFER for better \nerror handling.\n(run_inference_one_model pid=602235) Calling ray.init() again after it has already been called. [repeated 7x across cluster]RayTaskError(RuntimeError): [36mray::run_inference_one_model()[39m (pid=602229, ip=115.154.137.9)\nException: Failed too many failures in parallel (3): Request: error decoding response body (no permits available)\n\nThe above exception was the direct cause of the following exception:\n\n[36mray::run_inference_one_model()[39m (pid=602229, ip=115.154.137.9)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/lighteval/models/vllm/vllm_model.py\", line 336, in \nrun_inference_one_model\n    llm = LLM(**model_args)\n          ^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/utils.py\", line 986, in inner\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/entrypoints/llm.py\", line 230, in __init__\n    self.llm_engine = self.engine_class.from_engine_args(\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 517, in \nfrom_engine_args\n    engine = cls(\n             ^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/engine/llm_engine.py\", line 273, in __init__\n    self.model_executor = executor_class(vllm_config=vllm_config, )\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/distributed_gpu_executor.py\", line 26, in\n__init__\n    super().__init__(*args, **kwargs)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/executor_base.py\", line 36, in __init__\n    self._init_executor()\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 64, in \n_init_executor\n    self._init_workers_ray(placement_group)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 278, in \n_init_workers_ray\n    self._run_workers(\"load_model\",\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/executor/ray_gpu_executor.py\", line 407, in \n_run_workers\n    self.driver_worker.execute_method(method, *driver_args,\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker_base.py\", line 468, in \nexecute_method\n    raise e\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker_base.py\", line 459, in \nexecute_method\n    return executor(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/worker.py\", line 155, in load_model\n    self.model_runner.load_model()\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/worker/model_runner.py\", line 1096, in load_model\n    self.model = get_model(vllm_config=self.vllm_config)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/__init__.py\", line 12,\nin get_model\n    return loader.load_model(vllm_config=vllm_config)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 366, \nin load_model\n    loaded_weights = model.load_weights(\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/qwen2.py\", line 506, in \nload_weights\n    return loader.load_weights(weights)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 237, in \nload_weights\n    autoloaded_weights = set(self._load_module(\"\", self.module, weights))\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 189, in \n_load_module\n    for child_prefix, child_weights in self._groupby_prefix(weights):\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 103, in \n_groupby_prefix\n    for prefix, group in itertools.groupby(weights_by_parts,\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/models/utils.py\", line 100, in \n<genexpr>\n    weights_by_parts = ((weight_name.split(\".\", 1), weight_data)\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 342, \nin _get_all_weights\n    yield from self._get_weights_iterator(primary_weights)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 298, \nin _get_weights_iterator\n    hf_folder, hf_weights_files, use_safetensors = self._prepare_weights(\n                                                   ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/loader.py\", line 251, \nin _prepare_weights\n    hf_folder = download_weights_from_hf(\n                ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/vllm/model_executor/model_loader/weight_utils.py\", line\n255, in download_weights_from_hf\n    hf_folder = snapshot_download(\n                ^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py\", line 114, in \n_inner_fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 294, in \nsnapshot_download\n    _inner_hf_hub_download(file)\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/_snapshot_download.py\", line 270, in \n_inner_hf_hub_download\n    return hf_hub_download(\n           ^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py\", line 114, in \n_inner_fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 860, in \nhf_hub_download\n    return _hf_hub_download_to_cache_dir(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 1009, in \n_hf_hub_download_to_cache_dir\n    _download_to_tmp_and_move(\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 1543, in \n_download_to_tmp_and_move\n    http_get(\n  File \"/home/yhpeng/anaconda3/envs/openr1/lib/python3.11/site-packages/huggingface_hub/file_download.py\", line 437, in \nhttp_get\n    raise RuntimeError(\nRuntimeError: An error occurred while downloading using `hf_transfer`. Consider disabling HF_HUB_ENABLE_HF_TRANSFER for better \nerror handling.\n(run_inference_one_model pid=602235) Calling ray.init() again after it has already been called. [repeated 7x across cluster]\nI use 4 cards Geforce RTX 4090, could anyone help me? Thanks！",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/130/comments",
+    "author": "pyh314",
+    "comments": [
+      {
+        "user": "sam-schorb",
+        "created_at": "2025-01-30T22:06:06Z",
+        "body": "The error comes from Hugging Face's experimental \"hf_transfer\" downloader. Try this:\n1. **Quickest fix**: Disable hf_transfer by running:\n```bash\nexport HF_HUB_ENABLE_HF_TRANSFER=\"false\"\npython your_script.py\n```\n\n2. **Offline approach**: Download model weights locally and point VLLM to the local path:\n```python\nmodel = LLM(model=\"<local folder path>\", ...)\n```\n\n3. **Update dependencies**: Ensure you have recent versions:\n```bash\npip install --upgrade huggingface_hub transformers vllm\n```\n"
+      },
+      {
+        "user": "pyh314",
+        "created_at": "2025-02-03T09:07:40Z",
+        "body": "The first fix works. "
+      }
+    ]
+  },
+  {
+    "number": 120,
+    "title": "Recipes for optimzing training scripts",
+    "created_at": "2025-01-30T02:59:55Z",
+    "closed_at": "2025-01-31T11:41:53Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/120",
+    "body": "R1 series is very popular, many new R1 models are coming, we need a `recipes folder` to put different model configurations to optimize the training command line.",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/120/comments",
+    "author": "LoserCheems",
+    "comments": [
+      {
+        "user": "kashif",
+        "created_at": "2025-01-30T09:29:39Z",
+        "body": "@LoserCheems thanks, My apologies for the grpo merge conflicts... could you kindly have a look at the new configuration arguments, `--use_vlllm` as well as the `num_processes`  "
+      },
+      {
+        "user": "LoserCheems",
+        "created_at": "2025-01-30T09:37:41Z",
+        "body": "Thank you @edbeeching @lewtun @kashif, I am working on these issues and will update soon!"
+      },
+      {
+        "user": "kashif",
+        "created_at": "2025-01-30T10:59:25Z",
+        "body": "@LoserCheems reopening and then i can also help in the merge conflicts "
+      },
+      {
+        "user": "LoserCheems",
+        "created_at": "2025-01-30T11:47:22Z",
+        "body": "Thank you @kashif,  I have successfully dealt with these issues."
+      },
+      {
+        "user": "edbeeching",
+        "created_at": "2025-01-30T12:52:46Z",
+        "body": "@LoserCheems can you remove remove all the recipes related to the DOGE models? I don't think we want to be associated with it having these crypto / US political links now. The initial Qwen configs you put are fine, thanks."
+      },
+      {
+        "user": "LoserCheems",
+        "created_at": "2025-01-30T12:55:57Z",
+        "body": "Sorry @edbeeching, I've removed the model recipe."
+      }
+    ]
+  },
+  {
+    "number": 91,
+    "title": "Change conda for uv",
+    "created_at": "2025-01-28T12:50:00Z",
+    "closed_at": "2025-01-28T20:16:49Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/91",
+    "body": "Adapted the virtual environment to use `uv` instead of `conda`. Some of the installs were bugging with `uv`, so I kept `pip` for those, but install speed is the same between using `pip` in `conda` or `pip` in `uv`. \r\nI tested this by following the readme in the cluster and launching the first accelerate command, which works. ",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/91/comments",
+    "author": "andimarafioti",
+    "comments": [
+      {
+        "user": "pepinu",
+        "created_at": "2025-01-28T17:46:09Z",
+        "body": "Whats the reason?"
+      },
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-01-28T18:20:22Z",
+        "body": "Thanks for the suggestion! While uv is a great tool and offers performance benefits, I'd prefer to keep pip in the README since it's the default package manager and doesn't require additional installation. This ensures that the guide remains accessible to all users, especially those unfamiliar with uv. Those who prefer uv can easily use it on their own. Thanks again for the input!"
+      },
+      {
+        "user": "andimarafioti",
+        "created_at": "2025-01-28T19:48:43Z",
+        "body": "But you're using conda in the README 😅 If you would prefer to use purely pip, I can change to create the virtual env with pip directly, would that be better?"
+      },
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-01-28T19:50:34Z",
+        "body": "Fair enough"
+      },
+      {
+        "user": "edbeeching",
+        "created_at": "2025-02-05T08:51:50Z",
+        "body": "Hi @andimarafioti , I think the slurm scripts still reference the conda envs and should have been updated in this PR.\r\nAlso, I am not sure what the advantage of using uv as described in the README, as we are still using pip to install the deps?\r\n\r\nI will make a PR to fix."
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "Added dependabot integration for Python and GitHub Actions",
+    "created_at": "2025-01-27T10:29:42Z",
+    "closed_at": "2025-01-27T14:11:49Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/70",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/70/comments",
+    "author": "ygdrax",
+    "comments": [
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-01-27T11:56:34Z",
+        "body": "I think this dependant bot needs either `requirements.txt` or `pyproject.toml`, no?"
+      },
+      {
+        "user": "neoleeax",
+        "created_at": "2025-01-27T13:33:05Z",
+        "body": "> I think this dependant bot needs either `requirements.txt` or `pyproject.toml`, no?\r\n\r\nWorks on projects that use setup.py, pyproject.toml or requirements.txt."
+      }
+    ]
+  },
+  {
+    "number": 55,
+    "title": "Reward verification and evaluation fixes",
+    "created_at": "2025-01-26T13:09:27Z",
+    "closed_at": "2025-01-26T17:35:48Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/55",
+    "body": "- bumps math-verify to the newest version\r\n- fixes aime evaluation by using the answer column directly (this would be problem for few-shot, but since we don't use it I think it's fine)\r\n- Changes rewards evaluation: \r\n         1 .The answer from model must be clearly preceded by answer is xxx or by be in \\boxed env (with the boxed env being tried first).\r\n         2. No latex malformed operators + nits are applied to the resulting latex, meaning model has to output correct latex. \r\n         3. the gold must be in latex format, this ensures that the extracted gold is exactly what we want to compare against\r\n         4. Removed the try/catch it's handled in math-verify now\r\n\r\n\r\ncc @qgallouedec, I am not sure whether returning 1 if the gold is not found is the correct way to do this. It assumes that if rewards is 1 no gradient change is enforced is that correct? ",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/55/comments",
+    "author": "hynky1999",
+    "comments": [
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-01-26T14:44:58Z",
+        "body": "> cc @qgallouedec, I am not sure whether returning 1 if the gold is not found is the correct way to do this. It assumes that if rewards is 1 no gradient change is enforced is that correct?\r\n\r\nYou can return any value here: the model generates a _group_ of completions for one prompt, then these completions are rewarded, then normalised. If all completions get the same reward (because the common prompt is not parsable here), then the normalisation outputs a tensor of 0s. So no gradient."
+      }
+    ]
+  },
+  {
+    "number": 44,
+    "title": "能否支持NPU？",
+    "created_at": "2025-01-26T03:26:49Z",
+    "closed_at": "2025-01-26T09:00:47Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/issues/44",
+    "body": "你好，\n\n 感谢出色的分享，请问我们使用的是NPU的服务器，我们的代码，有计划支持NPU的服务器吗？\n\n\n谢谢！",
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/44/comments",
+    "author": "laozhuang727",
+    "comments": [
+      {
+        "user": "harmony2ww",
+        "created_at": "2025-01-26T05:50:52Z",
+        "body": "半年后应该可以\n"
+      },
+      {
+        "user": "qgallouedec",
+        "created_at": "2025-01-26T09:00:31Z",
+        "body": "English only please"
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "Add configs and stuff",
+    "created_at": "2025-01-24T19:04:56Z",
+    "closed_at": "2025-01-24T19:05:18Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/open-r1/pull/2",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/huggingface/open-r1/issues/2/comments",
+    "author": "lewtun",
+    "comments": [
+      {
+        "user": "StEvUgnIn",
+        "created_at": "2025-02-11T13:48:45Z",
+        "body": "Shouldn't you add DeepSpeed as a dependency? "
+      }
+    ]
+  }
+]

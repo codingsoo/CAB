@@ -1,0 +1,53 @@
+[
+  {
+    "number": 12,
+    "title": "GPU implementation for arbitrary data types",
+    "created_at": "2024-09-28T08:28:06Z",
+    "closed_at": "2024-09-28T17:49:53Z",
+    "labels": [],
+    "url": "https://github.com/bytedance/ABQ-LLM/issues/12",
+    "body": "Hello, it is an excellent work with ABQ-LLM—it has been incredibly helpful. I have a small question regarding the GPU implementation for arbitrary data types, specifically concerning your use of bit-level binary tensor cores to implement multiplication between data widths.\r\nSince each quantized weight and activation has its own scale and zero point, it appears that direct multiplication between quantized integer data types isn’t feasible. For example, the weight data would be represented as `(scale_w * INT_w + zero_w)` and the activation data as `(scale_a * INT_a + zero_a)`, leading to a product of:\r\n`(scale_w * scale_a * INT_w * INT_a + scale_w * INT_w * zero_a + scale_a * INT_a * zero_w + zero_w * zero_a)`\r\nThis seems that the multiplication cannot be simply reduced to `INT_w * INT_a` (just as the paper said). How did you address this issue in your implementation? I couldn't find a specific explanation in the code.\r\nThank you for your assistance.",
+    "comments_url": "https://api.github.com/repos/bytedance/ABQ-LLM/issues/12/comments",
+    "author": "KoalaYuFeng",
+    "comments": [
+      {
+        "user": "lswzjuer",
+        "created_at": "2024-09-28T13:25:01Z",
+        "body": "Good question.\r\n\r\nAfter counting the mainstream inference engines or quantization algorithm solutions, you will find that the weights usually use symmetric quantization, which means that zero_w is 0, so the actual problem we need to deal with is scale_w * scale_a * INT_w * INT_a + scale_w * INT_w * zero_a. scale_w * scale_a will be integrated into the correction parameters of \"Reduction In SMEM\" (Fig4.step6), which does not introduce any additional time consumption, and scale_w * INT_w * zero_a will be calculated and stored offline, and directly integrated into the +bias operation in the tail processing of GEMM."
+      },
+      {
+        "user": "KoalaYuFeng",
+        "created_at": "2024-09-28T17:49:46Z",
+        "body": "Ok, thanks. It solves my question. :-) "
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "2bit Packing logic post Bit Balance Strategy",
+    "created_at": "2024-09-10T03:38:21Z",
+    "closed_at": "2024-09-18T09:00:43Z",
+    "labels": [],
+    "url": "https://github.com/bytedance/ABQ-LLM/issues/4",
+    "body": "I want some more understanding on how to pack the 2 bit weights after using bit balance strategy. \r\n\r\nWhile running blockwise quantization we have increased our range from 4 to 5 and values to {-2,-1,0,1,2}. After running the ABQ LLM for 2 bit, I will be having float weights which are good to quantize to 2 bits, but the problem here is with the packing logic. \r\n1.  How to represent the above range using 2 bits and pack them ?\r\n2.  If we use default 2 bit quantization, won't I lose the benefit of bit balance strategy ?",
+    "comments_url": "https://api.github.com/repos/bytedance/ABQ-LLM/issues/4/comments",
+    "author": "gdsaikrishna",
+    "comments": [
+      {
+        "user": "lswzjuer",
+        "created_at": "2024-09-11T02:40:30Z",
+        "body": "After 2-bit balancing is done, the W3Ax kernel needs to be called for acceleration. Although the bit balancing strategy means that the weight will be degraded by one bit, ABQ's innovative Kernel implementation ensures the linearity of the acceleration gain, which means that the speed will only be slightly degraded."
+      },
+      {
+        "user": "gdsaikrishna",
+        "created_at": "2024-09-11T08:17:57Z",
+        "body": "Ok, got it. \r\n1. What about the size of the model ? After 2 bit balancing is done, we save the weights in 3 bits? Which means the new 2 bit balance quantized model will be of same size as 3bit quantized model?\r\n"
+      },
+      {
+        "user": "lswzjuer",
+        "created_at": "2024-09-13T01:23:30Z",
+        "body": "yes,the simplest way is to store it directly in 3 bits\n\n\n\n\n\n\n\n\n\n\n-----原始邮件-----\n发件人:\"Durga Sai Krishna Gundimeda\" ***@***.***>\n发送时间:2024-09-11 16:18:20 (星期三)\n收件人: bytedance/ABQ-LLM ***@***.***>\n抄送: lswzjuer ***@***.***>, Comment ***@***.***>\n主题: Re: [bytedance/ABQ-LLM] 2bit Packing logic post Bit Balance Strategy (Issue #4)\n\n\n\n\n\n\nOk, got it.\n\nWhat about the size of the model ? After 2 bit balancing is done, we save the weights in 3 bits? Which means the new 2 bit balance quantized model will be of same size as 3bit quantized model?\n\n—\nReply to this email directly, view it on GitHub, or unsubscribe.\nYou are receiving this because you commented.Message ID: ***@***.***>"
+      }
+    ]
+  }
+]

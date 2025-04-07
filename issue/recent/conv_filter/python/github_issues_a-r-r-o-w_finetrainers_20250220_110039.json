@@ -1,0 +1,134 @@
+[
+  {
+    "number": 143,
+    "title": "nan loss",
+    "created_at": "2024-12-24T08:21:25Z",
+    "closed_at": "2024-12-26T01:43:07Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/143",
+    "body": "### System Info / \u7cfb\u7d71\u4fe1\u606f\r\n\r\nCUDA:  12.4  \r\npython: 3.10\r\ndiffusers: 0.33.0.dev0\r\n\r\n### Information / \u95ee\u9898\u4fe1\u606f\r\n\r\n- [ ] The official example scripts / \u5b98\u65b9\u7684\u793a\u4f8b\u811a\u672c\r\n- [X] My own modified scripts / \u6211\u81ea\u5df1\u4fee\u6539\u7684\u811a\u672c\u548c\u4efb\u52a1\r\n\r\n### Reproduction / \u590d\u73b0\u8fc7\u7a0b\r\n\r\n1. I randomly selected a few videos to fine-tune hunyuanvideo\r\n2. But I ended up with nan loss at the first step.\r\n3. the log is \r\n`Training steps:   2%|\u2588\u2588                                                                                                        | 1/50 [00:56<46:19, 56.73s/it, loss=nan, lr=2e-7]`\r\n\r\n\r\n\r\n\r\n\r\n### Expected behavior / \u671f\u5f85\u8868\u73b0\r\n\r\nGet the correct loss value.",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/143/comments",
+    "author": "tanshuai0219",
+    "comments": [
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-25T22:24:39Z",
+        "body": "@tanshuai0219 I believe we interacted in the Diffusers issue too. Upgrading pytorch to 2.5.1 has been confirmed to fix the nan training loss problem by atleast 3 other people now. Could you give it a try?"
+      },
+      {
+        "user": "tanshuai0219",
+        "created_at": "2024-12-26T01:43:07Z",
+        "body": "> @tanshuai0219 I believe we interacted in the Diffusers issue too. Upgrading pytorch to 2.5.1 has been confirmed to fix the nan training loss problem by atleast 3 other people now. Could you give it a try?\r\n\r\nYes,it works for me~ The loss value is normal now. Thanks!"
+      },
+      {
+        "user": "BlackTea-c",
+        "created_at": "2025-01-17T03:42:20Z",
+        "body": "same problem.butmy torch version is 2.5.1"
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "Why Batch size 4 training is much slower than Batch size 1 training under deepspeed yaml",
+    "created_at": "2024-12-04T02:00:58Z",
+    "closed_at": "2025-01-02T14:27:37Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/111",
+    "body": "### System Info / \u7cfb\u7d71\u4fe1\u606f\n\nThis part is correct, everything works.\n\n### Information / \u95ee\u9898\u4fe1\u606f\n\n- [X] The official example scripts / \u5b98\u65b9\u7684\u793a\u4f8b\u811a\u672c\n- [ ] My own modified scripts / \u6211\u81ea\u5df1\u4fee\u6539\u7684\u811a\u672c\u548c\u4efb\u52a1\n\n### Reproduction / \u590d\u73b0\u8fc7\u7a0b\n\nI am using 8 A800 GPUS to train the cogvideo 5b model sft, and I realize the training speed is slower when I set batch size to 4 compared with when I set batch size equal to 1. Below is an example of the speed difference. I am using the deepspeed setup to help training.\r\n\r\nGPU train 4 batch 8 gpu:\r\nSteps:   0%|\u258f                                                                                                                                                          | 18/20000 [23:57<403:54:45, 72.77s/it, loss=0.0777, lr=2.25e-6]\r\ntrain 1 batch 8 gpu:\r\nSteps:   0%|\u258f                                                                                                                                                           | 17/20000 [07:43<119:15:51, 21.49s/it, loss=0.118, lr=2.13e-6]\r\n\r\n\n\n### Expected behavior / \u671f\u5f85\u8868\u73b0\n\nShouldn't it be the other way around, the training should be faster with batch size 4? Maybe it is because of the cpu offload option in the deepspeed?",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/111/comments",
+    "author": "Bensong0506",
+    "comments": [
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-04T05:23:27Z",
+        "body": "When you increase batch_size, you are doing more computation per step, so this is expected behaviour. In fact, your training is indeed happening slightly faster, because at `batch_size=1`, I see each step taking about `21` seconds, and at `batch_size=4` it's taking a little less than 4x that.\r\n\r\nHowever, note that when you set `batch_size=1`, you are training for `8 GPU x 1 batch_size x 20000 steps` for an effective `160000` sample data points. But for `batch_size=4`, you are training for `8 GPU x 4 batch_size x 20000 steps` for an effective `640000` sample data points. In order to do the comparison fairly, you should reduce the number of training steps to 5000, so that the effective number of samples seen by the model is the same (this will however reduce the number of gradient updates that happen, but that is what is expected when increasing batch_size and keeping effective number of samples seen by the model the same).\r\n\r\nThen, the time taken by `batch_size=1` run would be roughly `21 * 20000 = 420000 seconds`, and the time taken by `batch_size=4` run would be roughly `72 * 5000 = 360000 seconds`, which is indeed lower."
+      },
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-04T05:27:49Z",
+        "body": "On another note, yes DeepSpeed training is a bit slower but it lets you squeeze in higher batch size, due to the gradient offloading and optimizer state existing on the CPU. I would recommend using torch.compile with dynamic=True (if you're doing multiresolution, otherwise dynamic=False would be better) to speed up training quite a bit"
+      },
+      {
+        "user": "lijain",
+        "created_at": "2024-12-04T07:20:50Z",
+        "body": "> to speed up training quite a bit\r\nDo you want to ask why bs=1 itertime=21.49, bs=4 itertime=72.77, why the itertime of a single card is so large, and then why the multiple cards are multiplied\r\n"
+      },
+      {
+        "user": "Bensong0506",
+        "created_at": "2024-12-04T08:39:50Z",
+        "body": "Thanks a lot for your kind reply. This really helps a lot! "
+      }
+    ]
+  },
+  {
+    "number": 101,
+    "title": "does sft training  need  consider   vae.config.invert_scale_latents       1.5 I2V",
+    "created_at": "2024-11-28T06:31:26Z",
+    "closed_at": "2025-01-02T14:30:54Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/101",
+    "body": "### System Info / \u7cfb\u7d71\u4fe1\u606f\r\n\r\ndiffusers                 0.32.0.dev0  \r\n\r\n### Information / \u95ee\u9898\u4fe1\u606f\r\n\r\n- [ ] The official example scripts / \u5b98\u65b9\u7684\u793a\u4f8b\u811a\u672c\r\n- [X] My own modified scripts / \u6211\u81ea\u5df1\u4fee\u6539\u7684\u811a\u672c\u548c\u4efb\u52a1\r\n\r\n### Reproduction / \u590d\u73b0\u8fc7\u7a0b\r\n\r\n(1)When testing, the determination of whether to multiply or divide by the vae_scaling_factor_image is based on the vae.config.invert_scale_latents parameter. \r\n        if not self.vae.config.invert_scale_latents:\r\n            image_latents = self.vae_scaling_factor_image * image_latents\r\n        else:\r\n            # This is awkward but required because the CogVideoX team forgot to multiply the\r\n            # scaling factor during training :)\r\n            image_latents = 1 / self.vae_scaling_factor_image * image_latents\r\n\r\nwhy is it that when invert_scaling_latents is set to true, it divides by the VAE scaling factor instead of not multiplying? The latent representations of the images differ by a square when this parameter is true versus false.?\r\n\r\n(2) In my case\uff0cthe SFT training process did not handle this parameter, resulting in darker test outputs. \r\nThe impact of the first frame image is becoming increasingly insignificant.\r\n\r\n### Expected behavior / \u671f\u5f85\u8868\u73b0\r\n\r\nNormal brightness\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/101/comments",
+    "author": "zy0406",
+    "comments": [
+      {
+        "user": "sayakpaul",
+        "created_at": "2024-11-29T12:29:18Z",
+        "body": "Cc: @zRzRzRzRzRzRzR @a-r-r-o-w "
+      },
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-01T18:35:35Z",
+        "body": "As the comment explains, the scaling factor was not multiplied during training, and I believe it was divided instead. This is what causes the squared difference, but I will let @zRzRzRzRzRzRzR, from the CogVideoX team, comment further. I don't think the scripts in this repo take this into account yet. I will run some finetuning tests and report my results"
+      },
+      {
+        "user": "zRzRzRzRzRzRzR",
+        "created_at": "2024-12-05T07:18:49Z",
+        "body": "Thank you for your help @a-r-r-o-w.\r\nWhen CogVideoX 1.5 was trained, the image condition was not multiplied, so during inference, the image condition cannot be multiplied, but before the final decode, it still needs to be divided by the scale factor."
+      },
+      {
+        "user": "zRzRzRzRzRzRzR",
+        "created_at": "2024-12-05T07:19:58Z",
+        "body": "Therefore, during training, an image condition is needed, and during reasoning, when using the decoder, it is necessary to divide by the scale factor"
+      },
+      {
+        "user": "zy0406",
+        "created_at": "2024-12-05T07:32:27Z",
+        "body": "> Therefore, during training, an image condition is needed, and during reasoning, when using the decoder, it is necessary to divide by the scale factor\r\n\r\nThank you for your reply. I have indeed tried training using the method described below, and the generated videos are relatively normal.\r\n\r\n\r\n```\r\n                if not vae.config.invert_scale_latents:\r\n                    image_latents = image_latent_dist.sample() * VAE_SCALING_FACTOR\r\n                else:\r\n                     image_latents =  image_latent_dist.sample()\r\n                image_latents = image_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]\r\n                image_latents = image_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype) \r\n                video_latents = latent_dist.sample() * VAE_SCALING_FACTOR\r\n```"
+      },
+      {
+        "user": "sayakpaul",
+        "created_at": "2025-01-02T14:30:54Z",
+        "body": "Closing the issue then. Feel free to reopen."
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "How to load the fine-tuned I2V model's LoRA module",
+    "created_at": "2024-10-16T17:25:21Z",
+    "closed_at": "2024-10-16T18:07:54Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/40",
+    "body": "I have successfully fine-tuned an I2V model (locally, without pushing to HF) and would like to load it for inference. I use the following code suggested in the readme\r\n\r\n```\r\nmodel_name = \"THUDM/CogVideoX-5b-I2V\" \r\npipe = CogVideoXImageToVideoPipeline.from_pretrained(\r\n    model_name, torch_dtype=torch.bfloat16\r\n).to(\"cuda\")\r\n\r\npipe.load_lora_weights(\"MyLocalLoRAPath\", adapter_name=[\"cogvideox-lora\"])\r\npipe.set_adapters([\"cogvideox-lora\"], [1.0])\r\n```\r\n\r\nHowever I encounter the error \r\n\r\n```\r\nFile ~/anaconda3/envs/cogvideox-i2v/lib/python3.11/site-packages/diffusers/loaders/lora_pipeline.py:2451, in CogVideoXLoraLoaderMixin.load_lora_into_transformer(cls, state_dict, transformer, adapter_name, _pipeline):\r\n\r\nif adapter_name in getattr(transformer, \"peft_config\", {}):\r\naise ValueError(\r\n   f\"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name.\"    )\r\n\r\nTypeError: unhashable type: 'list'\r\n```\r\n\r\nNote: in the trained LoRA folders, there is only a `pytorch_lora_weights.safetensors`",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/40/comments",
+    "author": "Yuancheng-Xu",
+    "comments": [
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-10-16T17:48:29Z",
+        "body": "In pipe.load_lora_weights, please pass just the string for adapter_name and not a list. Just saw that the README has a mistake. Will fix asap"
+      },
+      {
+        "user": "Yuancheng-Xu",
+        "created_at": "2024-10-16T18:07:54Z",
+        "body": "Yep it works Thank you!"
+      },
+      {
+        "user": "euminds",
+        "created_at": "2024-12-03T03:01:22Z",
+        "body": "> I have successfully fine-tuned an I2V model (locally, without pushing to HF) and would like to load it for inference. I use the following code suggested in the readme\r\n> \r\n> ```\r\n> model_name = \"THUDM/CogVideoX-5b-I2V\" \r\n> pipe = CogVideoXImageToVideoPipeline.from_pretrained(\r\n>     model_name, torch_dtype=torch.bfloat16\r\n> ).to(\"cuda\")\r\n> \r\n> pipe.load_lora_weights(\"MyLocalLoRAPath\", adapter_name=[\"cogvideox-lora\"])\r\n> pipe.set_adapters([\"cogvideox-lora\"], [1.0])\r\n> ```\r\n> \r\n> However I encounter the error\r\n> \r\n> ```\r\n> File ~/anaconda3/envs/cogvideox-i2v/lib/python3.11/site-packages/diffusers/loaders/lora_pipeline.py:2451, in CogVideoXLoraLoaderMixin.load_lora_into_transformer(cls, state_dict, transformer, adapter_name, _pipeline):\r\n> \r\n> if adapter_name in getattr(transformer, \"peft_config\", {}):\r\n> aise ValueError(\r\n>    f\"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name.\"    )\r\n> \r\n> TypeError: unhashable type: 'list'\r\n> ```\r\n> \r\n> Note: in the trained LoRA folders, there is only a `pytorch_lora_weights.safetensors`\r\n\r\n\r\nIs your device a 4090 24GB or H100 or A100?\r\n"
+      }
+    ]
+  }
+]

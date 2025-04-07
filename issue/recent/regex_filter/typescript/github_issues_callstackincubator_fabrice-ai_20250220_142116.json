@@ -1,0 +1,542 @@
+[
+  {
+    "number": 139,
+    "title": "feat: http request tool + example checking on the latest `fabrice` issues",
+    "created_at": "2024-12-18T14:58:24Z",
+    "closed_at": "2024-12-20T05:43:20Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/139",
+    "body": "Related to #74 \r\nTODO: add `bdd` tests after merging #137 in",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/139/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-19T23:05:29Z",
+        "body": "LOL.\r\n\r\nDoes it really work? Inane, this is not much code to write at all! I guess what would be even more amazing is to finish implementing those AI workflows in Cali, where this could be really helpful! \r\n\r\nI hope to finish that over the weekend!"
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "fix: add missing `RequiredOptionals<T>` type",
+    "created_at": "2024-12-14T11:57:42Z",
+    "closed_at": "2024-12-15T17:45:03Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/124",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/124/comments",
+    "author": "threepointone",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-15T17:45:03Z",
+        "body": "The last references are fixed by #123 and #129. The `RequiredOptionals` are no longer needed, but we somehow missed two last references. That's why you experienced the issue :) Anyway, thanks for your time and the fix! This time, we can not accept this PR (as described above), but please help us make `fabrice-ai` better with the next PR that we will surely accept! "
+      },
+      {
+        "user": "threepointone",
+        "created_at": "2024-12-15T19:32:22Z",
+        "body": "No problem, glad it's fixed either way! "
+      }
+    ]
+  },
+  {
+    "number": 121,
+    "title": "fix: supervisor not producing desired output",
+    "created_at": "2024-12-14T04:53:57Z",
+    "closed_at": "2024-12-14T06:24:27Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/121",
+    "body": "This PR started as a quick work to clean-up examples, but it quickly revealed a bug in supervisor that I decided to fix, and test.\r\n\r\n## Motivation\r\n\r\nFirst of all, let me start with cosmetic changes to examples and motivations behind them. I wanted to make sure the examples use the following rules:\r\n\r\n**Workflow:**\r\n\r\n- Description: Use it to describe the task to be done. Do not include information about what is the output. Just the tasks on how to achieve it.\r\n- Knowledge: Use it to describe universal information about the tasks, useful for both supervisor and agents, such as \"why are we doing this\" or \"information about patient\".\r\n- Output: Use it to describe what must be produced.\r\n\r\n**Agent:**\r\n- Description: Describe agent's behavior and capabilities. Do not describe \"tasks\".\r\n\r\nI have provided inline comments alongside examples to point out real examples.\r\n\r\n## Bug\r\n\r\nThen, I quickly discovered the bug, that supervisor is often returning `null` and not producing desired output, despite finishing all the steps. \r\n\r\nI console.logged reasoning and here's what I found:\r\n\r\n```\r\n{\r\n  task: null,\r\n  reasoning: \"Both questions allowed by the workflow have been asked: one about symptoms and another about medications and allergies. The responses provided cover the necessary information for the pre-visit report. The patient reported a sore throat as a symptom, is taking ibuprofen, and has an allergy to ibuprofen. With this information, I can now generate the comprehensive markdown pre-visit report as requested in the output.\",\r\n}\r\n```\r\n\r\nor\r\n\r\n```\r\n{\r\n  task: null,\r\n  reasoning: \"All tasks in the workflow have been completed. Information about John III Sobieski was successfully found and stored in the vector store. Sentences related to both 'Battle of Vienna' and 'John III later years and death' have been looked up and retrieved from the vector store. Therefore, the output, which is a list of sentences for each topic, can now be generated.\",\r\n}\r\n```\r\n\r\nAs you can see, supervisor was thinking the workflow was completed when all the steps were finished, returning `null`. This is somewhat true, but also, the last and final task should always be to produce the desired output. \r\n\r\n**I slightly changed the workflow request to include generating output as a last step.** \r\n\r\n---\r\n\r\n## Examples\r\n\r\n### Medical Surevy Output\r\n\r\n<details>\r\n\r\n```md\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ nurse Working on: Ask the first question to the patient: 'What symptoms are you currently experiencing?'\r\n\r\nsupervisor \r\n  └─▶ nurse Waiting for tools: askPatient\r\n\r\n❔What symptoms are you currently experiencing?\r\nsore throat\r\nsupervisor \r\n  └─▶ nurse Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ nurse Working on: Ask the second question to the patient: 'Are you currently taking any medications for your sore throat or any other condition?'\r\n\r\nsupervisor \r\n  └─▶ nurse Waiting for tools: askPatient\r\n\r\n❔Are you currently taking any medications for your sore throat or any other condition?\r\nibuprofen\r\nsupervisor \r\n  └─▶ nurse Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ nurse Working on: Ask the third question to the patient: 'Do you have any known allergies, especially to medications?'\r\n\r\nsupervisor \r\n  └─▶ nurse Waiting for tools: askPatient\r\n\r\n❔Do you have any known allergies, especially to medications?\r\nnot aware\r\nsupervisor \r\n  └─▶ nurse Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ nurse Working on: Ask the fourth question to the patient: 'Have you experienced any other symptoms or health issues recently that you think might be relevant?'\r\n\r\nsupervisor \r\n  └─▶ nurse Waiting for tools: askPatient\r\n\r\n❔Have you experienced any other symptoms or health issues recently that you think might be relevant?\r\nsmall fatigue\r\nsupervisor \r\n  └─▶ nurse Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ nurse Working on: Ask the fifth question to the patient: 'Have you visited any healthcare provider recently or had any medical tests done?'\r\n\r\nsupervisor \r\n  └─▶ nurse Waiting for tools: askPatient\r\n\r\n❔Have you visited any healthcare provider recently or had any medical tests done?\r\nno\r\nsupervisor \r\n  └─▶ nurse Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ reporter Working on: Create a comprehensive markdown pre-visit report that covers the patient's symptoms, medications, allergies, and any other relevant information.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor Looking for next task...\r\n\r\n# Patient Pre-Visit Report\r\n\r\n## Patient Symptoms\r\n- **Primary Symptom:** Sore throat\r\n- **Additional Symptoms:** Small fatigue\r\n\r\n## Current Medications\r\n- **Medication:** Ibuprofen (taken for sore throat or another condition)\r\n\r\n## Allergies\r\n- **Known Allergies:** The patient has no known allergies, including to medications.\r\n\r\n## Recent Medical History\r\n- **Healthcare Provider Visits:** The patient has not visited any healthcare provider recently.\r\n- **Medical Tests:** No recent medical tests have been undertaken.\r\n\r\n---\r\n\r\nThis report summarizes the current health status as discussed by the patient. It is intended to provide a clear overview ahead of the patient's visit, ensuring comprehensive care.\r\n```\r\n\r\n</details>\r\n\r\n### Surprise Trip\r\n\r\n<details>\r\n\r\n```md\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ personalizedActivityPlanner Working on: Research activities and events in Wrocław, Poland that match the traveler's interests and age group (30 years old).\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ restaurantScout Working on: Research highly-rated restaurants and dining experiences in Wrocław, Poland.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ landmarkScout Working on: Research landmarks with historic context in Wrocław, Poland.\r\n\r\nsupervisor \r\n  └─▶ landmarkScout Waiting for tools: lookupWikipedia\r\n\r\nsupervisor \r\n  └─▶ landmarkScout Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ restaurantScout Working on: Research picturesque and entertaining locations in Wrocław, Poland.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ itineraryCompiler Working on: Compile the researched activities, restaurants, landmarks, and picturesque locations into a day-by-day itinerary for the 7-day trip.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ itineraryCompiler Working on: Generate Comprehensive day-by-day plan for the trip to Wrocław, Poland.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor Looking for next task...\r\n\r\nI've gathered all the necessary information and tasks previously researched and will now create a comprehensive and detailed plan for the 7-day trip to Wrocław, Poland, ensuring it aligns with the traveler's interests and the available information.\r\n\r\n**Day 1: Arrival and Leisure Introduction**\r\n- **15:00:** Arrive in Wrocław on Flight AA123.\r\n- **16:30:** Check in at your hotel located at Main Square.\r\n- **19:00:** Casual evening stroll around the Main Market Square (Rynek) to absorb the local architecture and atmosphere.\r\n- **20:00:** Dinner at Bernard for an introduction to Czech and Polish cuisine.\r\n\r\n**Day 2: Historical and Cultural Immersion**\r\n- **09:00:** Start your day with exploring Wrocław Cathedral and Ostrów Tumski, the historical core of the city.\r\n- **12:00:** Enjoy a traditional Polish lunch at Pod Fredrą, near the Main Square.\r\n- **14:00:** Visit the Panorama of the Battle of Racławice for a historic art experience.\r\n- **17:00:** A quick walk through Wrocław's Historical Museum located in the City Hall.\r\n- **19:30:** Dinner at Kurna Chata for a deep dive into rustic Polish culinary delights.\r\n\r\n**Day 3: Artistic Exploration and Evening Entertainment**\r\n- **09:30:** Visit the Contemporary Museum Wrocław, dive into modern art exhibits.\r\n- **12:30:** Lunch at Vincent, savoring French cuisine.\r\n- **15:00:** Explore The University of Wrocław and appreciate its Baroque architecture.\r\n- **19:00:** Attend an evening performance at Wrocław Opera or the Philharmonic Hall.\r\n- **21:00:** Late dinner at Restaurant Jadka, known for its modern Polish dishes.\r\n\r\n**Day 4: Scenic Retreat and Relaxation**\r\n- **09:00:** Spend your morning at the Botanical Garden of the University of Wrocław.\r\n- **12:00:** Lunch at Przystań & Marina offering scenic views of the Odra River.\r\n- **15:00:** A leisure walk across Tumski Bridge with lovely river views.\r\n- **18:00:** Dinner at Vincent with fine French dining.\r\n\r\n**Day 5: Animals and Outdoor Leisure**\r\n- **10:00:** Visit the Wrocław Zoo and Afrykarium to experience its distinctive water complex.\r\n- **13:00:** Have a casual lunch at any cozy eatery around the Market Square.\r\n- **16:00:** Spend the afternoon relaxing at Słodowa Island, ideal for a picnic.\r\n- **19:00:** Enjoy the vibrant nightlife, exploring the local pubs and bars around the Main Square.\r\n\r\n**Day 6: Festive Delight and Architectural Appreciation**\r\n- **09:00:** Experience the Wrocław Christmas Market for festive shopping and treats.\r\n- **13:00:** Have lunch in the Market Square from diverse options available.\r\n- **15:00:** Tour the Centennial Hall (Hala Stulecia) and appreciate this UNESCO Heritage Site’s modern architecture.\r\n- **19:00:** Dinner at Bernard with an eclectic menu, followed by a night of exploring the local pubs.\r\n\r\n**Day 7: Last Experiential Day and Departure**\r\n- **09:00:** A final walk around the Market Square capturing photos and checking out last-minute shops or cafes.\r\n- **12:00:** Light lunch at a nearby café to your accommodation.\r\n- **14:00:** If time permits, visit the National Museum for insightful exhibits.\r\n- **17:00:** Departure preparations.\r\n- **Evening:** Depart for your return flight to New York.\r\n\r\nThis detailed itinerary caters to diverse interests including history, art, outdoor leisure, and cultural festivities, providing a well-rounded travel experience in Wrocław.\r\n```\r\n</details>\r\n\r\n### Wikipedia\r\n\r\n<details>\r\n\r\n```md\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ wikipediaIndexer Working on: Find information about John III Sobieski on Wikipedia.\r\n\r\nsupervisor \r\n  └─▶ wikipediaIndexer Waiting for tools: lookupWikipedia\r\n\r\nsupervisor \r\n  └─▶ wikipediaIndexer Processing tool response...\r\n\r\nsupervisor \r\n  └─▶ wikipediaIndexer Waiting for tools: saveDocumentInVectorStore\r\n\r\nsupervisor \r\n  └─▶ wikipediaIndexer Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Working on: Lookup sentences related to the topic \"Battle of Vienna\" in the vector store.\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Waiting for tools: searchInVectorStore\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Working on: Lookup sentences related to the topic \"John III later years and death\" in the vector store.\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Waiting for tools: searchInVectorStore\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ reportCompiler Working on: Create a list of sentences looked up for each topic, with each sentence in a separate bullet point.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor Looking for next task...\r\n\r\nFor the topic \"Battle of Vienna\":\r\n- Popular among his subjects, he was an able military leader, most famously for his victory over the Ottoman Empire at the Battle of Vienna in 1683. The defeated Ottomans named Sobieski the 'Lion of Lechistan', and the Pope hailed him as the saviour of Western Christendom.\r\n\r\nFor the topic \"John III later years and death\":\r\n- Suffering from poor health and obesity in later life, Sobieski died in 1696 and was buried at Wawel Cathedral in Kraków. He was succeeded by Augustus II of Poland and Saxony.\r\n```\r\n\r\n</details>\r\n\r\n### Ecommerce\r\n\r\n<details>\r\n\r\n```md\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ techExpert Working on: Analyze the image '/Users/grabbou/Repositories/dead-simple-ai-agent/example/assets/example-sneakers.jpg' to identify and note down all visible technical features such as color, size, material, and brand.\r\n\r\nsupervisor \r\n  └─▶ techExpert Working on: functions.visionTool\r\n\r\nsupervisor \r\n  └─▶ techExpert Waiting for tools: visionTool\r\n\r\nsupervisor \r\n  └─▶ techExpert Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ marketingManager Working on: Create a catchy product description using the identified features: navy blue high-top sneakers with a canvas upper, white rubber toe cap, white laces, white stitching, and a two-tone sole with a black stripe.\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor Looking for next task...\r\n\r\nStep into timeless elegance with our captivating Navy Blue High-Top Sneakers. Crafted from a durable canvas upper, these sneakers are a perfect blend of style and comfort. The sophisticated navy blue hue, enhanced by exquisite white stitching, makes them an instant classic in your shoe collection. \r\n\r\nFeaturing a chic high-top design, complemented by a distinctive white rubber toe cap and matching white laces, these sneakers exude a sporty yet refined look. The two-tone sole with a sleek black stripe not only adds a dynamic touch but also promises ultimate grip and support with every step you take.\r\n\r\nThese sneakers are not just footwear; they are a statement. A statement that says you value both form and function, adventure and leisure. Whether you're out exploring the city streets or enjoying a casual weekend brunch, these sneakers will elevate every outfit and occasion.\r\n\r\nWhy choose these sneakers? Because they're more than just a pair of shoes—they are a versatile companion for your life's journeys, ready to take you wherever your heart desires, all while evoking a sense of confidence and style.\r\n```\r\n</details>\r\n\r\n### Template\r\n\r\n<details>\r\n```md\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ librarian Working on: Analyze the photo of the library and list all the books in the library.\r\n\r\nsupervisor \r\n  └─▶ librarian Working on: functions.visionTool\r\n\r\nsupervisor \r\n  └─▶ librarian Waiting for tools: visionTool\r\n\r\nsupervisor \r\n  └─▶ librarian Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ webmaster Working on: Find the best template to use for the website from the available templates in the \"/Users/grabbou/Repositories/dead-simple-ai-agent/example/assets\" directory.\r\n\r\nsupervisor \r\n  └─▶ webmaster Waiting for tools: listFilesFromDirectory\r\n\r\nsupervisor \r\n  └─▶ webmaster Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ webmaster Working on: Copy the template 'book_library_template.html' to '/Users/grabbou/Repositories/dead-simple-ai-agent/example/assets/library.html'.\r\n\r\nsupervisor \r\n  └─▶ webmaster Waiting for tools: readFile\r\n\r\nsupervisor \r\n  └─▶ webmaster Processing tool response...\r\n\r\nsupervisor \r\n  └─▶ webmaster Waiting for tools: saveFile\r\n\r\nsupervisor \r\n  └─▶ webmaster Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor \r\n  └─▶ resourcePlanner Looking for best agent...\r\n\r\nsupervisor \r\n  └─▶ webmaster Working on: Replace the content of '/Users/grabbou/Repositories/dead-simple-ai-agent/example/assets/library.html' with the list of books.\r\n\r\nsupervisor \r\n  └─▶ webmaster Waiting for tools: readFile\r\n\r\nsupervisor \r\n  └─▶ webmaster Processing tool response...\r\n\r\nsupervisor \r\n  └─▶ webmaster Working on: Replace placeholder content with actual book list\r\n\r\nsupervisor \r\n  └─▶ webmaster Waiting for tools: saveFile\r\n\r\nsupervisor \r\n  └─▶ webmaster Processing tool response...\r\n\r\nsupervisor Looking for next task...\r\n\r\nsupervisor Looking for next task...\r\n\r\nThe list of books has been successfully incorporated into the HTML template and saved to '/Users/grabbou/Repositories/dead-simple-ai-agent/example/assets/library.html'.\r\n```\r\n</details>",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/121/comments",
+    "author": "grabbou",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-14T06:12:09Z",
+        "body": "Also @pkarw I have issues with Github Trending example - content of website too large exceeded context window\r\nWikipedia Vector - I don't think it saves sentences - the tool is not called n times, but just once."
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-14T06:15:14Z",
+        "body": "Great job @grabbou, thanks for this effort 🙏 I've checked the changes and suggested only one minor change "
+      }
+    ]
+  },
+  {
+    "number": 120,
+    "title": "feat: parallelism #111 merge into main",
+    "created_at": "2024-12-13T15:04:44Z",
+    "closed_at": "2024-12-13T15:07:31Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/120",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/120/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-13T15:07:31Z",
+        "body": "I already cherry-picked 2d5137373200f6201a5f79573c75c8750390267c from the CLI, so this one can be closed"
+      }
+    ]
+  },
+  {
+    "number": 117,
+    "title": "fix: prompt improvements for medical_survey - partial port of #100",
+    "created_at": "2024-12-13T12:36:26Z",
+    "closed_at": "2024-12-13T15:31:29Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/117",
+    "body": "After these changes - one critical: to analyze the previous user answers - the `nurse` is getting way deeper into the symptoms.",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/117/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-13T15:29:46Z",
+        "body": "I have updated some stuff in this PR while rebasing, to make sure that agents only include description about their behavior, without orders. Orders go from supervisor, via workflow. I believe this is more elegant, will run in a second to verify.\r\n\r\nMeanwhile @pkarw let me know what was the intent in this PR, that way I can attest whether it provide net improvement or not."
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-13T15:31:24Z",
+        "body": "After merging #111 this is no longer an improvement. Thanks! I just apparently merged this same stuff while merging #100 into #111"
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "feat: prepare architecture for parallelism and add helpers",
+    "created_at": "2024-12-12T16:10:45Z",
+    "closed_at": "2024-12-13T15:00:05Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/111",
+    "body": "This PR enables architecture to handle multiple children, effectively enabling parallelism. It also adds few state helpers.\r\nIn a follow-up PR, I will send a draft of parallel supervisor - works OK, but needs testing!",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/111/comments",
+    "author": "grabbou",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-12T16:21:53Z",
+        "body": "Plus, maybe parallelism should be explicitly enabled/disabled because I can imagine some kinds of workflows that cannot be processed in parallel - I mean this kind of scenario where there are a few steps to be executed, but the next steps depend on the previous result. In this case, there's a significant risk that the supervisor won't get these details and split the tasks. There should be a way to prevent this from happening. \r\n\r\nAnother thing is to have a configurable number of parallel tasks (children) at hand."
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-12T16:34:36Z",
+        "body": "> Plus, maybe parallelism should be explicitly enabled/disabled because I can imagine some kinds of workflows that cannot be processed in parallel - I mean this kind of scenario where there are a few steps to be executed, but the next steps depend on the previous result. In this case, there's a significant risk that the supervisor won't get these details and split the tasks. There should be a way to prevent this from happening.\r\n> \r\n> Another thing is to have a configurable number of parallel tasks (children) at hand.\r\n\r\nShould parallelism be enabled by default? Or shall we consider it advanced feature?\r\nWhat should be default parallelism value? "
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-13T14:02:29Z",
+        "body": "@grabbou parallelism should be disabled for now - until we stabilize the `resourcePlanner` and `supervisor` so they're not getting stucked/looped over (see: #112). So - let's work on enabling it next week :D \r\n\r\nParallelism is clearly `quality` not `quantity` improvement. We still need some `quantity` improvements (like Ollama support)"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-13T14:25:25Z",
+        "body": "Yup, there's no parallel support at this point, so we're good here!"
+      }
+    ]
+  },
+  {
+    "number": 100,
+    "title": "feat: #99 workflow knowledge",
+    "created_at": "2024-12-11T17:43:15Z",
+    "closed_at": "2024-12-12T14:53:13Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/100",
+    "body": "Well, I implemented it - #99 - I guess it MIGHT do a good job limiting dispatching offspring (by taking the agent too many context planning tasks) - however, it's pretty damn hard to find it out at the moment. To be perfectly honest, I don't really like it, so it's up to you, @grabbou, if you decide to merge it or not.  \r\n\r\nI mean - I believe in a better quality change in dispatching only after refactoring and A/B kind of testing different dispatchers on all example probes. Right now, I guess. \r\n\r\nI'm not sure about the naming: `knowledge` - as in the future - `knowledge` maybe should be something more related to the gathered shared context between the agents. I mean, in the end, it's the same meaning, a different way of how it will work. \r\n",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/100/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T17:57:54Z",
+        "body": "Note that the backward compatibility mode makes it not compliant with the `kind of` Liskov Substitution Principle (LSP) and, therefore, more difficult to debug - especially for newcomers. \r\n\r\nSo if merging in, maybe we should disable backward compatibility and always add only the background to the agents even when it's empty. @grabbou \r\n\r\nThe other thing is that it's pretty essential to pass this information - till now embedded into `description` like, for example, file names - otherwise, agents started hallucinating during the tests - inventing file names that don't exist, etc."
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-12T14:23:15Z",
+        "body": "I proposed an alternative approach in #108, in case we wanted to go with knowledge field. I will let you decide which approach should we go with."
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-12T14:53:13Z",
+        "body": "Going to close this one in favor of #108 as per discussion."
+      }
+    ]
+  },
+  {
+    "number": 99,
+    "title": "feat: additional field to workflow description",
+    "created_at": "2024-12-11T13:50:34Z",
+    "closed_at": "2024-12-13T15:10:38Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/99",
+    "body": "Right now, the entire workflow and what has been done so far are shared between agents. The idea is to separate a part of the workflow context, which is shared with agents. Otherwise, the agents use this workflow information to plan their own steps, which sometimes leads to performing tasks that were already executed or duplicating work.\r\n\r\nExample:\r\n\r\n```ts\r\nconst researchTripWorkflow = workflow({\r\n  members: [personalizedActivityPlanner, restaurantScout, landmarkScout, itineraryCompiler],\r\n  description: `\r\n    Research and find cool things to do in Wrocław, Poland.\r\n\r\n    Focus:\r\n      - activities and events that match the traveler's interests and age group.\r\n      - highly-rated restaurants and dining experiences.\r\n      - landmarks with historic context.\r\n      - picturesque and entertaining locations.\r\n\r\n    Traveler's information:\r\n      - Origin: New York, USA\r\n      - Destination: Wrocław, Poland\r\n      - Age of the traveler: 30\r\n      - Hotel location: Main Square, Wrocław\r\n      - Flight information: Flight AA123, arriving on 2023-12-15\r\n      - How long is the trip: 7 days\r\n  `,\r\n  output: `\r\n    Comprehensive day-by-day itinerary for the trip to Wrocław, Poland.\r\n    Ensure the itinerary integrates flights, hotel information, and all planned activities and dining experiences.\r\n  `,\r\n  snapshot: logger,\r\n})\r\n```\r\n\r\nafter refactor:\r\n\r\n\r\n```ts\r\nconst researchTripWorkflow = workflow({\r\n  members: [personalizedActivityPlanner, restaurantScout, landmarkScout, itineraryCompiler],\r\n  description: `\r\n    Research and find cool things to do in Wrocław, Poland.\r\n\r\n    Focus:\r\n      - activities and events that match the traveler's interests and age group.\r\n      - highly-rated restaurants and dining experiences.\r\n      - landmarks with historic context.\r\n      - picturesque and entertaining locations.\r\n  `,\r\n  output: `\r\n    Comprehensive day-by-day itinerary for the trip to Wrocław, Poland.\r\n    Ensure the itinerary integrates flights, hotel information, and all planned activities and dining experiences.\r\n  `,\r\n  knowledge: `\r\n    Traveler's information:\r\n      - Origin: New York, USA\r\n      - Destination: Wrocław, Poland\r\n      - Age of the traveler: 30\r\n      - Hotel location: Main Square, Wrocław\r\n      - Flight information: Flight AA123, arriving on 2023-12-15\r\n      - How long is the trip: 7 days\r\n      `\r\n  snapshot: logger,\r\n})\r\n```\r\n\r\nnot sure if `knowledge` is the best name however `context` could be a little bit confusing as it appears in other places",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/99/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T13:50:52Z",
+        "body": "... and only `knowledge` is being shared with each agent\r\n"
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T13:52:32Z",
+        "body": "Somehow related to #95 "
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-11T14:20:01Z",
+        "body": "I think that’s good name to start with! "
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-13T15:10:38Z",
+        "body": "Eventually closed with #111 "
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "title": "fix: missing @clack/prompts dep in tools",
+    "created_at": "2024-12-11T11:22:45Z",
+    "closed_at": "2024-12-11T11:46:37Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/96",
+    "body": "## Summary \r\n\r\nAdd missing `@clack/prompts` dep in tools:\r\n\r\nWhen running `github_trending` template I got following error:\r\n\r\nError details:\r\n```\r\nfabrice-test-3 % bun src/github_trending.ts\r\nerror: Cannot find module \"@clack/prompts\" from \"/Users/maciej/Development/Other/fabrice-test-3/node_modules/@fabrice-ai/tools/src/utils.ts\"\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/96/comments",
+    "author": "mdjastrzebski",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T11:47:45Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 91,
+    "title": "fix: few messages are missing in the default logger",
+    "created_at": "2024-12-11T09:22:37Z",
+    "closed_at": "2024-12-11T13:54:09Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/91",
+    "body": "Comparing prevStatus/nextStatus in logger is wrong - inside agent, status is always \"assigned\". To print sub-steps, we need to change that comparison",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/91/comments",
+    "author": "grabbou",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T13:54:09Z",
+        "body": "Closed with #98 "
+      }
+    ]
+  },
+  {
+    "number": 75,
+    "title": "fix: mime-type was fixed to jpeg",
+    "created_at": "2024-12-10T10:05:57Z",
+    "closed_at": "2024-12-10T10:07:02Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/75",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/75/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-10T10:06:58Z",
+        "body": "I think I've seen this somewhere!"
+      }
+    ]
+  },
+  {
+    "number": 68,
+    "title": "feat: supervisor should be configurable agent",
+    "created_at": "2024-12-10T08:16:45Z",
+    "closed_at": "2024-12-12T16:42:55Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/68",
+    "body": "Should have its own prompt and customization\r\nShould be special one for dealing with smaller tasks, not only complex workflows\r\nCan have access to additional data to be better at planning ",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/68/comments",
+    "author": "grabbou",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-11T17:50:13Z",
+        "body": "Related: #71 \r\nRelated: #64 "
+      }
+    ]
+  },
+  {
+    "number": 57,
+    "title": "feat: rag tool + example",
+    "created_at": "2024-12-09T14:46:27Z",
+    "closed_at": "2024-12-09T21:37:06Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/57",
+    "body": "The example is not the best one. After merging in #56 I think I'll make something more spectacular - indexing local text files would be the best option I guess, or indexing different Wikipedia articles / doing local search - or something like this.\r\n\r\n@grabbou check the idea I had for switching the backend. I guess per-module global variable as a driver is not the best option, maybe you'd suggest other way handling it - feel free\r\n\r\nThe cool thing is that in this implementation we're dependency free (for the in-memory vector store) so it can be even moved to the core",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/57/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-09T20:47:20Z",
+        "body": "I need a break. I'll leave this one for tomorrow!"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-09T21:36:58Z",
+        "body": "I am going to merge it \"as is\", and will send a follow-up PR to provide a bit of abstraction on injecting the vector store runtime implementation, and I'll actually leave pinecone, although I haven't used it (so you will have to verify this tomorrow)"
+      }
+    ]
+  },
+  {
+    "number": 56,
+    "title": "feat: FS tools + example",
+    "created_at": "2024-12-09T13:23:23Z",
+    "closed_at": "2024-12-09T19:06:50Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/56",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/56/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-09T19:06:36Z",
+        "body": "Thanks! Going to merge it in, I have a follow-up with a bunch of tweaks (per WhatsApp)"
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "title": "Initial release checklist",
+    "created_at": "2024-12-08T09:49:50Z",
+    "closed_at": "2024-12-09T21:34:24Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/42",
+    "body": "- [ ] Final name for the project\n- [x] Readme tweaks\n- [x] Task-substeps/recurrency vs iterate()\n- [x] WebServer example - blocked by the recurrency issues \n- [x] FileSystem tools: read file, write file, read directory\n- [x] WebSearch tool\n- [x] Vectorstore tools: add, search + support for multiple Vector store backends / at first can be implemented via langchaina vectorstore\n- [x] Examples for the tools above\n- [x] Release pipeline\n- [x] Basic docs",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/42/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T20:53:36Z",
+        "body": "This is quite extensive list, not going to lie! But let's see how much we cna do tomorrow!"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T22:36:28Z",
+        "body": "I would say getting Cali to run off this framework ahead of release would be massive, and great way to do dog fooding! Once all PRs are merged, I'll proceed with a silent release under this artificial name, and let's see how it works in production!\r\n\r\nRelated #47 "
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T22:37:17Z",
+        "body": "BTW, there are file system tools in Cali already, maybe we can abstract them away or something"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-09T21:34:24Z",
+        "body": "We just need the name! But will close this issue anyway for now! "
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "WIP: [feat] removed recurrency",
+    "created_at": "2024-12-08T07:43:11Z",
+    "closed_at": "2024-12-08T20:16:11Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/39",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/39/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T20:16:11Z",
+        "body": "Closing in favor of #44 "
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "feat: initial server example implementation",
+    "created_at": "2024-12-07T22:11:31Z",
+    "closed_at": "2024-12-08T23:57:27Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/36",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/36/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T20:52:22Z",
+        "body": "I will merge and update this PR after merging my work, then, we can have true stateless stuff! "
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T23:57:22Z",
+        "body": "Will update in a follow up."
+      }
+    ]
+  },
+  {
+    "number": 20,
+    "title": "feat: visionTool + example (ecommerce product descriptions)",
+    "created_at": "2024-12-07T18:13:35Z",
+    "closed_at": "2024-12-07T19:21:43Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/20",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/20/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T19:17:21Z",
+        "body": "This is awesome!!"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T19:21:38Z",
+        "body": "Looks good to me!"
+      }
+    ]
+  },
+  {
+    "number": 18,
+    "title": "[feat] Vision Tool",
+    "created_at": "2024-12-07T17:33:55Z",
+    "closed_at": "2024-12-08T06:29:34Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/18",
+    "body": "We should have a tool for calling out `llama_vision` or `chatgpt-4o` asking some visual queries - it should be a separate call supporting sending files directly via LLM call",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/18/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T19:41:34Z",
+        "body": "Implemented!"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "feat: FileSystem tools",
+    "created_at": "2024-12-07T17:32:55Z",
+    "closed_at": "2024-12-09T20:43:53Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/17",
+    "body": "Read, Write, ReadFolder, Remove, TempFIle etc ...",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/17/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-08T22:54:19Z",
+        "body": "We have them in Cali, so I think I would wait until we do that migration - that way we get them for free. I am a bit skeptical about filesystem operations - overall, a bit risky to give access to entire filesystem to LLM. \r\n\r\nI think should (likely) be scoped to the root (that is passed in as parameter). This is what Claude MCP does too!"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-09T20:43:53Z",
+        "body": "Implemented!"
+      }
+    ]
+  },
+  {
+    "number": 15,
+    "title": "feat: memory layer + stepping execution",
+    "created_at": "2024-12-07T14:12:05Z",
+    "closed_at": "2024-12-07T18:37:21Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/15",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/15/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T18:29:37Z",
+        "body": "Applied a few tweaks, merging!"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "feat #2: a step towards async exec + memory persistence",
+    "created_at": "2024-12-07T09:47:12Z",
+    "closed_at": "2024-12-07T13:11:34Z",
+    "labels": [],
+    "url": "https://github.com/callstackincubator/fabrice-ai/pull/10",
+    "body": "This is just a draft PR - still WiP",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/10/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T13:07:33Z",
+        "body": "LGTM"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "rfc: Per-agent context splitting",
+    "created_at": "2024-12-07T08:55:51Z",
+    "closed_at": "2024-12-08T06:32:52Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/6",
+    "body": "Right now we've got a shared context per-team. All agents have access to all information from the execution context. This is great, and simplifies a lot - but we'll shortly deal with:\r\n- context windows issues per LLM,\r\n- discrepancies in the case that agents use different LLMs (`llama_vision` vs `gpt-4` vs `mistral` etc) - idk for sure, but it could be a real mess when multiple LLMs will base on the results generated by other ones ",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/6/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-07T08:56:21Z",
+        "body": "This is a `rfc` - and let's discuss if this makes sense. Will make the #1  a little bit more complex, requiring some kind of `agent` tagging but it's not really an issue"
+      },
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T20:06:20Z",
+        "body": "BTW, agents have their own context, they only inherit \"current state\" of workflow to get started. It gets longer of course with more tasks, but it is for context. We could decide if it is needed, or we change it to \"task\" and \"context\" (all necessary information to perform task).\r\n\r\nOnce agent is done processing, it returns its answer, so agents have their per-agent context."
+      },
+      {
+        "user": "pkarw",
+        "created_at": "2024-12-08T06:32:43Z",
+        "body": "I'm closing it for now, I think the current way of context switching is exactly what I had in mind creating this issue before getting into the game deep enough 😅"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "feat: The proper output logger",
+    "created_at": "2024-12-07T08:51:07Z",
+    "closed_at": "2024-12-09T07:15:48Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/callstackincubator/fabrice-ai/issues/4",
+    "body": "It would be great to generate a structuralized (`zod` schema) output JSON messages provided all the debug information required - like the agent name, step name, etc. along with the context info. Kind of callstack. The messages could be dumped to console, logged to file, ext. logger etc.",
+    "comments_url": "https://api.github.com/repos/callstackincubator/fabrice-ai/issues/4/comments",
+    "author": "pkarw",
+    "comments": [
+      {
+        "user": "grabbou",
+        "created_at": "2024-12-07T21:56:46Z",
+        "body": "> Kind of callstack\r\n\r\nYes"
+      }
+    ]
+  }
+]

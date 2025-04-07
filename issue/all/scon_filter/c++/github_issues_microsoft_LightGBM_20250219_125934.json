@@ -1,0 +1,79 @@
+[
+  {
+    "number": 6728,
+    "title": "60x Slowdown Using Concurrency",
+    "created_at": "2024-11-22T09:25:13Z",
+    "closed_at": "2024-11-26T14:58:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6728",
+    "body": "## Description\n<!-- A clear description of the bug -->\nThere seems to be a clear issue related to how `lightgbm` handles resource sharing. When restricting the number of cores associated with a process, the runtime increases significantly.\n\nIn the example provided below, the run time using all cores (0-15) is about 1.821 seconds. When restricting the process to all cores but one (0 - 14), the runtime increases to 109.31 seconds; more than a 60x increase. This only happens if the resource restriction is done from within the Python script. If the affinity is set beforehand using `taskset -c 0-14` the runtime is approximately the same, 1.796 seconds.\n\nThis makes training multiple `lightgbm` models in parallel undesirable, at least if the subprocesses are called from within a Python script. As this a common pattern of implementing concurrency, this appears to be a limitation which can hopefully be easily addressed and fixed.\n\nThanks!\n\n## Reproducible example\n<!-- Minimal code that exhibits this behavior -->\n\n**lgbm_affinity.py**\n```python\nimport argparse\nimport lightgbm as lgb\nimport numpy as np\nimport os\n\nnp.random.seed(42)\n\n\ndef main(use_setaffinity: bool = False, use_taskset: bool = False):\n\n    n = os.cpu_count()\n\n    # Set affinity using ``os.sched_setaffinity``\n    if use_setaffinity:\n        os.sched_setaffinity(0, set(range(n - 1)))\n        os.environ['OMP_NUM_THREADS'] = str(n - 1)  # Added after suggestion\n\n    # Set affinity using ``taskset``\n    if use_taskset:\n        pid = os.getpid()\n        command = f\"taskset -cp 0-{n - 2} {pid}\"\n        os.system(command)\n        os.environ['OMP_NUM_THREADS'] = str(n - 1)  # Added after suggestion\n\n    # Generate a data set\n    nrows, ncols = 1_000, 10\n    X = np.random.normal(size=(nrows, ncols))\n    y = X @ np.random.normal(size=ncols) + np.random.normal(size=nrows)\n\n    lgb_train = lgb.Dataset(X, y)\n\n    # Train model\n    params = {\n        \"objective\": \"regression\",\n        \"metric\": \"rmse\",\n        \"num_leaves\": 31,  # the default value\n        \"learning_rate\": 0.05,\n        \"feature_fraction\": 0.9,\n        \"bagging_fraction\": 0.8,\n        \"bagging_freq\": 5,\n        \"verbose\": 0\n    }\n    lgb.train(params, lgb_train)\n\n\nif __name__ == \"__main__\":\n\n    parser = argparse.ArgumentParser()\n\n    parser.add_argument(\n        \"--use-setaffinity\", \n        dest=\"use_setaffinity\", \n        action=\"store_true\",\n    )\n\n    parser.add_argument(\n        \"--use-taskset\", \n        dest=\"use_taskset\", \n        action=\"store_true\",\n    )\n\n    args = parser.parse_args()\n    main(**vars(args))\n```\n\n**lgbm_affinity.sh**\n```bash\ntime python lgbm_affinity.py > /dev/null 2>&1\ntime python lgbm_affinity.py  --use-setaffinity > /dev/null 2>&1\ntime python lgbm_affinity.py  --use-taskset > /dev/null 2>&1\ntime taskset -c 0-14 python lgbm_affinity.py > /dev/null 2>&1\n```\n\n**Output**\n```\n# Using all cores\nreal    0m1.821s\nuser    0m4.394s\nsys     0m0.178s\n\n# Using ``set_affinity`` from within the process\nreal    1m49.313s\nuser    25m44.344s\nsys     0m1.109s\n\n# Using ``taskset`` from within the process\nreal    1m48.820s\nuser    25m54.104s\nsys     0m0.959s\n\n# Using ``taskset`` before initializing the process\nreal    0m1.796s\nuser    0m4.135s\nsys     0m0.203s\n```\n\n## Environment info\n\nLightGBM version or commit hash:\n\n```\nliblightgbm  4.5.0    cpu_h155599f_3  conda-forge\nlightgbm     4.5.0    cpu_py_3        conda-forge\n```\n\nCommand(s) you used to install LightGBM\n\n```shell\nmicromamba install lightgbm\n```\n\n<!-- Put any additional environment information here -->\n\nOther used packages:\n```\nnumpy     1.26.4   py312heda63a1_0  conda-forge\n```\n\nThe example was run on an AWS instance (`ml.m5.4xlarge`) with 16 cores.\n\n## Additional Comments\n<!-- What else should we know? -->\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6728/comments",
+    "author": "JohanLoknaQC",
+    "comments": [
+      {
+        "user": "jmoralez",
+        "created_at": "2024-11-22T17:56:20Z",
+        "body": "Hey @JohanLoknaQC, thanks for using LightGBM.\n\nBy default LightGBM uses all available threads on the machine unless you tell it otherwise. So in your examples you're submitting n tasks and assigning only n - 1 threads, so they have to fight each other to execute them. I think the easiest way to fix this is by doing something like `os.environ['OMP_NUM_THREADS'] = str(n-1)`, that way you tell LightGBM to use the number of threads that you've limited the process to have."
+      },
+      {
+        "user": "JohanLoknaQC",
+        "created_at": "2024-11-25T12:03:35Z",
+        "body": "Thanks a lot for the answer! However, after adding the suggested fix (see code above) the run-times remains virtually unchanged. It does seem like something else might be causing this additional run-time."
+      },
+      {
+        "user": "jmoralez",
+        "created_at": "2024-11-25T15:15:10Z",
+        "body": "Sorry, I think that only works if provided through the command line. Can you please set the `num_threads` argument instead? e.g.\n\n```python\n    params = {\n        \"objective\": \"regression\",\n        \"metric\": \"rmse\",\n        \"num_leaves\": 31,  # the default value\n        \"learning_rate\": 0.05,\n        \"feature_fraction\": 0.9,\n        \"bagging_fraction\": 0.8,\n        \"bagging_freq\": 5,\n        \"verbose\": 0,\n        \"num_threads\": n - 1,  # <- set this\n    }\n```"
+      },
+      {
+        "user": "JohanLoknaQC",
+        "created_at": "2024-11-26T14:58:21Z",
+        "body": "Thank you very much - this solved this issue.\n\nJust for reference, it also worked when the affinities were set quite arbitrarily, e.g. `3-12`. It therefore seems to a quite general solution. \ud83d\udc4d "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why programmatic CPU affinity restriction causes LightGBM performance degradation",
+      "Solution that maintains performance parity between internal and external affinity restriction methods",
+      "Clear guidance on proper thread configuration when using LightGBM in concurrent processes",
+      "General solution working with arbitrary core allocations",
+      "Explanation of environment variable vs parameter configuration differences"
+    ]
+  },
+  {
+    "number": 1228,
+    "title": "Comparing performance with and without Hessian?",
+    "created_at": "2018-02-04T09:50:56Z",
+    "closed_at": "2018-02-07T00:55:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1228",
+    "body": "I want to add docs for Hessian-less optimization for R, using LightGBM, what vector value should I use for the hessian?\r\n\r\nping @guolinke ",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1228/comments",
+    "author": "Laurae2",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-02-06T14:20:14Z",
+        "body": "the non-hessian solution require the post-fix of leave outputs. \r\nSo it cannot use custom grad/hess to achieve it now.\r\nYou can use current code (non-hessian) and the old code(with hessian) to compare.\n\n---\n\n@Laurae2 can we close this ? "
+      },
+      {
+        "user": "Laurae2",
+        "created_at": "2018-02-06T20:06:04Z",
+        "body": "@guolinke yes unless you think there is a way to get custom metrics to work with hessian-less optimization."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-02-07T00:55:08Z",
+        "body": "The cost is very big to support postfix in python/R package.\r\nI think it is also not needed due to it is not common.\r\n\r\nFor the comparison, you can just use different versions of LightGBM."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification on how to perform valid performance comparisons between Hessian and Hessian-less optimization approaches in LightGBM",
+      "Explanation of version compatibility requirements for comparing implementations",
+      "Identification of limitations when using custom metrics with Hessian-less optimization"
+    ]
+  }
+]

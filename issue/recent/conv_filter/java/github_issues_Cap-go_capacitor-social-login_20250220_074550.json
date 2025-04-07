@@ -1,0 +1,65 @@
+[
+  {
+    "number": 34,
+    "title": "Apple login on iOS returns only an identityToken",
+    "created_at": "2024-10-23T06:29:24Z",
+    "closed_at": "2024-10-25T09:04:46Z",
+    "labels": [],
+    "url": "https://github.com/Cap-go/capacitor-social-login/issues/34",
+    "body": "Tried this plugin yesterday, works on android but on iOS ( 15+ ) device tested it ever only returns an identityToken. Repeated the stop using Apple ID and login cycle like 20 times, whilst using the old cordova-plugin-sign-in-with-apple retuns the user data on the initial login:\r\n\r\n```\r\n        await SocialLogin.initialize({\r\n          apple: {\r\n            clientId,\r\n          },\r\n        });\r\n\r\n        const { result } = (await SocialLogin.login({\r\n          provider: \"apple\",\r\n          options: {\r\n            scopes: [\"email\", \"profile\"],\r\n          },\r\n        })) as { result: AppleProviderResponse };\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/Cap-go/capacitor-social-login/issues/34/comments",
+    "author": "csotiMatyas",
+    "comments": [
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-23T07:01:19Z",
+        "body": "Went through the source code and the login function of the apple provider is not using the payload argument ( yes they are hard coded here => request.requestedScopes ) , so the docs are a bit misleading.\r\n\r\n```\r\nfunc login(payload: [String: Any], completion: @escaping (Result<AppleProviderResponse, Error>) -> Void) {\r\n        self.completion = completion\r\n\r\n        let appleIDProvider = ASAuthorizationAppleIDProvider()\r\n        let request = appleIDProvider.createRequest()\r\n        request.requestedScopes = [.fullName, .email]\r\n\r\n        let authorizationController = ASAuthorizationController(authorizationRequests: [request])\r\n        authorizationController.delegate = self\r\n        authorizationController.presentationContextProvider = self\r\n        authorizationController.performRequests()\r\n    }\r\n\r\n\r\n```"
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-23T07:22:07Z",
+        "body": "So as far as I can read swift: \r\n\r\nThe apple provider does not take a clientId param, as the docs suggests:\r\n\r\n```\r\n           if let appleSettings = call.getObject(\"apple\") {\r\n            if let redirectUrl = appleSettings[\"redirectUrl\"] as? String {\r\n                apple.initialize(redirectUrl: redirectUrl)\r\n                initialized = true\r\n            } else {\r\n                apple.initialize()\r\n                initialized = true\r\n            }\r\n        }\r\n```"
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-23T07:23:36Z",
+        "body": "And the authorization controller without a redirectUrl ( which should be android requirement only ), will only ever return identityToken:\r\n\r\n```\r\n     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization:       ASAuthorization) {\r\n        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {\r\n            let userIdentifier = appleIDCredential.user\r\n            let fullName = appleIDCredential.fullName\r\n            let email = appleIDCredential.email\r\n\r\n            //            let response = AppleProviderResponse(\r\n            //                user: userIdentifier,\r\n            //                email: email,\r\n            //                givenName: fullName?.givenName,\r\n            //                familyName: fullName?.familyName,\r\n            //                identityToken: String(data: appleIDCredential.identityToken ?? Data(), encoding: .utf8) ?? \"\",\r\n            //                authorizationCode: String(data: appleIDCredential.authorizationCode ?? Data(), encoding: .utf8) ?? \"\"\r\n            //            )\r\n\r\n            let errorCompletion: ((Result<AppleProviderResponse, AppleProviderError>) -> Void) = { result in\r\n                do {\r\n                    let finalResult = try result.get()\r\n                    self.completion?(.success(finalResult))\r\n                } catch {\r\n                    self.completion?(.failure(error))\r\n                }\r\n            }\r\n\r\n            let authorizationCode = String(data: appleIDCredential.authorizationCode ?? Data(), encoding: .utf8) ?? \"\"\r\n            let identityToken = String(data: appleIDCredential.identityToken ?? Data(), encoding: .utf8) ?? \"\"\r\n\r\n            if !self.redirectUrl.isEmpty {\r\n                let firstName = fullName?.givenName ?? \"Jhon\"\r\n                let lastName = fullName?.familyName ?? \"Doe\"\r\n\r\n                if let _ = fullName?.givenName {\r\n                    sendRequest(code: authorizationCode, identityToken: identityToken, email: email ?? \"\", firstName: firstName, lastName: lastName, completion: errorCompletion, skipUser: false)\r\n                } else {\r\n                    sendRequest(code: authorizationCode, identityToken: identityToken, email: email ?? \"\", firstName: firstName, lastName: lastName, completion: errorCompletion, skipUser: true)\r\n                }\r\n            } else {\r\n                do {\r\n                    try self.persistState(idToken: identityToken, refreshToken: \"\", accessToken: \"\")\r\n                    let appleResponse = AppleProviderResponse(identityToken: identityToken)\r\n                    completion?(.success(appleResponse))\r\n                    return\r\n                } catch {\r\n                    completion?(.failure(AppleProviderError.specificJsonWritingError(error)))\r\n                    return\r\n                }\r\n            }\r\n            // completion?(.success(response))\r\n        }\r\n    }\r\n```"
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-23T07:29:53Z",
+        "body": "Typescript types are also a mess, will submit a PR if my time allows."
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-23T07:44:27Z",
+        "body": "Nevermind, apple provider can ever return \r\n```\r\n\r\nstruct AppleProviderResponse {\r\n    //    let user: String\r\n    let identityToken: String\r\n}\r\n\r\n```"
+      },
+      {
+        "user": "riderx",
+        "created_at": "2024-10-23T18:51:46Z",
+        "body": "I fixed the requested Scopes not taking in account, thanks!\r\nfor clientID we put it in the doc to simplify that it's require to have object Apple to init apple properly"
+      },
+      {
+        "user": "riderx",
+        "created_at": "2024-10-23T18:52:00Z",
+        "body": "just sent some fix tell me if that help"
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-24T06:24:28Z",
+        "body": "@riderx Hey, thanks for the update, the main problem is the return of the apple provider which is right now set to only contain the identityToken\r\n\r\n\r\n```\r\nstruct AppleProviderResponse {\r\n    //    let user: String\r\n    let identityToken: String\r\n}\r\n\r\n```\r\n\r\nIt should return the full appleIDCredential that is currently commented in the authorizationController \r\n\r\n` // MARK: - ASAuthorizationControllerDelegate`\r\n\r\n\r\n```\r\n            //            let response = AppleProviderResponse(\r\n            //                user: userIdentifier,\r\n            //                email: email,\r\n            //                givenName: fullName?.givenName,\r\n            //                familyName: fullName?.familyName,\r\n            //                identityToken: String(data: appleIDCredential.identityToken ?? Data(), encoding: .utf8) ?? \"\",\r\n            //                authorizationCode: String(data: appleIDCredential.authorizationCode ?? Data(), encoding: .utf8) ?? \"\"\r\n            //            )\r\n```\r\n\r\nOn the first login apple sends the users info, subsequent request will return only an identity token.\r\n"
+      },
+      {
+        "user": "riderx",
+        "created_at": "2024-10-24T17:51:40Z",
+        "body": "Thanks for the report, should be good now"
+      },
+      {
+        "user": "csotiMatyas",
+        "created_at": "2024-10-25T09:04:25Z",
+        "body": "It works as expected now, thank you! This was quick @riderx "
+      }
+    ]
+  }
+]

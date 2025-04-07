@@ -1,0 +1,25 @@
+[
+  {
+    "number": 12,
+    "title": "GPU implementation for arbitrary data types",
+    "created_at": "2024-09-28T08:28:06Z",
+    "closed_at": "2024-09-28T17:49:53Z",
+    "labels": [],
+    "url": "https://github.com/bytedance/ABQ-LLM/issues/12",
+    "body": "Hello, it is an excellent work with ABQ-LLM\u2014it has been incredibly helpful. I have a small question regarding the GPU implementation for arbitrary data types, specifically concerning your use of bit-level binary tensor cores to implement multiplication between data widths.\r\nSince each quantized weight and activation has its own scale and zero point, it appears that direct multiplication between quantized integer data types isn\u2019t feasible. For example, the weight data would be represented as `(scale_w * INT_w + zero_w)` and the activation data as `(scale_a * INT_a + zero_a)`, leading to a product of:\r\n`(scale_w * scale_a * INT_w * INT_a + scale_w * INT_w * zero_a + scale_a * INT_a * zero_w + zero_w * zero_a)`\r\nThis seems that the multiplication cannot be simply reduced to `INT_w * INT_a` (just as the paper said). How did you address this issue in your implementation? I couldn't find a specific explanation in the code.\r\nThank you for your assistance.",
+    "comments_url": "https://api.github.com/repos/bytedance/ABQ-LLM/issues/12/comments",
+    "author": "KoalaYuFeng",
+    "comments": [
+      {
+        "user": "lswzjuer",
+        "created_at": "2024-09-28T13:25:01Z",
+        "body": "Good question.\r\n\r\nAfter counting the mainstream inference engines or quantization algorithm solutions, you will find that the weights usually use symmetric quantization, which means that zero_w is 0, so the actual problem we need to deal with is scale_w * scale_a * INT_w * INT_a + scale_w * INT_w * zero_a. scale_w * scale_a will be integrated into the correction parameters of \"Reduction In SMEM\" (Fig4.step6), which does not introduce any additional time consumption, and scale_w * INT_w * zero_a will be calculated and stored offline, and directly integrated into the +bias operation in the tail processing of GEMM."
+      },
+      {
+        "user": "KoalaYuFeng",
+        "created_at": "2024-09-28T17:49:46Z",
+        "body": "Ok, thanks. It solves my question. :-) "
+      }
+    ]
+  }
+]

@@ -1,0 +1,84 @@
+[
+  {
+    "number": 3342,
+    "title": "Wav2Vec 2.0 pretraining limited by CPU even on large machine",
+    "created_at": "2021-03-11T13:47:51Z",
+    "closed_at": "2024-05-27T17:04:05Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3342",
+    "body": "I'm running wav2vec 2.0 pretraining on a DGX A100  and I seem to be CPU-limited which is a bit surprising given the amount of CPU resources the machine has. The GPUSs seem to be working at barely 50%. When I lower the GPU count to four I get basically the same updates / time unit but with higher GPU load per GPU.\r\n\r\nI have tried running with and without `+optimization.update_freq='[x]'` parameter with somewhat similar result. The CPU load is lower without it, bit GPU utilization is about the same.\r\n\r\nAny thoughts?\r\n\r\n**Setup**:\r\nNVIDIA DGX A100\r\n8 x A100 GPU\r\n2 x 64 core / 128 thread CPU\r\n1TB RAM\r\nUbuntu 20.04\r\nCode runs inside NVIDIA NGC container",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3342/comments",
+    "author": "marma",
+    "comments": [
+      {
+        "user": "stale[bot]",
+        "created_at": "2021-06-16T23:13:59Z",
+        "body": "This issue has been automatically marked as stale. **If this issue is still affecting you, please leave any comment** (for example, \"bump\"), and we'll keep it open. We are sorry that we haven't been able to prioritize it yet. If you have any new additional information, please include it with your comment!\n"
+      },
+      {
+        "user": "Slyne",
+        "created_at": "2022-05-10T14:06:41Z",
+        "body": "same issue here. Can anyone share the GPU utilization ?"
+      },
+      {
+        "user": "lubossmidl",
+        "created_at": "2022-05-17T05:27:53Z",
+        "body": "I have the same problem...\n\n---\n\nthe training process seems to be over-optimized on large machine ...\r\ntry to use parameter OMP_NUM_THREADS=1\r\nlike\r\nOMP_NUM_THREADS=1 fairseq-train ...\r\n\r\n(8 x A100 GPU / 128 thread CPU: GPU utilization approx. 97-100% and CPU 8% instead of GPU 30% and 100% CPU)"
+      },
+      {
+        "user": "marma",
+        "created_at": "2024-05-27T17:04:05Z",
+        "body": "Thank you @lubossmidl! I did not see this as I had moved on to other things. Closing issue.\r\n\r\nFunny story: we debugged a similar issue today and found this exact solution. I remembered this issue and went back to look at it. If only I had read you answer two years ago we would have saved a few hours :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of CPU bottlenecking despite high CPU core count",
+      "Provides a method to balance CPU/GPU resource allocation",
+      "Explains CPU contention mechanisms in distributed training frameworks",
+      "Demonstrates measurable improvement in GPU utilization"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:38:50"
+    }
+  },
+  {
+    "number": 2727,
+    "title": "colon-separated list of dataset",
+    "created_at": "2020-10-13T06:31:44Z",
+    "closed_at": "2020-10-15T10:29:33Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2727",
+    "body": "## \u2753 Questions and Help\r\n\r\nHi, I am pre-training a model on a large dataset that cannot fit into the CPU memory. So I tried the solution mentioned in #880 by @myleott . I splitted my dataset into 4 splits, and each split is read separately. \r\n\r\nHowever this could not solve the problem as each time a split is loaded the memory usage increases and at some point I get OOM. \r\n\r\nHere's my command:\r\n\r\n```\r\n#!/bin/bash\r\n#SBATCH --job-name=gpu-32node\r\n#SBATCH --partition=gpu_p1\r\n#SBATCH --qos=qos_gpu-t3\r\n#SBATCH --output=x.out\r\n#SBATCH --error=x.err\r\n#SBATCH --nodes=32\r\n#SBATCH --ntasks-per-node=1\r\n#SBATCH --gres=gpu:4\r\n#SBATCH --time=20:00:00\r\n#SBATCH --cpus-per-task=40\r\n#SBATCH --hint=nomultithread\r\n\r\nmodule purge\r\n\r\nset -x\r\n\r\nDATA_PATH='data-bin/data-bin1:data-bin/data-bin2:data-bin/data-bin3:data-bin/data-bin4'\r\nMAX_TOKENS=8192\r\nMAX_UPDATE=190000\r\nSAVE_INTERVAL=5000\r\nLR=0.0008\r\nMAX_EPOCH=32\r\nDISTRIBUTED_WORLD_SIZE=128\r\nSENTENCE_PIECE_MODEL='sentencepiece.model'\r\nVALID_SUBSET='valid'\r\n\r\nsrun fairseq-train $DATA_PATH \\\r\n    --optimizer=adam \\\r\n    --adam-betas='(0.9, 0.999)' \\\r\n    --adam-eps=1e-06 \\\r\n    --arch='bart_base' \\\r\n    --bpe='sentencepiece' \\\r\n    --sentencepiece-vocab $SENTENCE_PIECE_MODEL \\\r\n    --clip-norm=0.1 \\\r\n    --log-interval=10 \\\r\n    --mask=0.3 \\\r\n    --mask-length='span-poisson' \\\r\n    --mask-random=0.1 \\\r\n    --permute-sentences=1 \\\r\n    --poisson-lambda=3.5 \\\r\n    --replace-length=1 \\\r\n    --rotate=0 \\\r\n    --max-update $MAX_UPDATE \\\r\n    --total-num-update $MAX_UPDATE \\\r\n    --save-dir $SAVE_DIR \\\r\n    --save-interval-updates=$SAVE_INTERVAL \\\r\n    --skip-invalid-size-inputs-valid-test \\\r\n    --task='denoising' \\\r\n    --update-freq=2 \\\r\n    --restore-file=$MODEL_PATH \\\r\n    --required-batch-size-multiple 8 \\\r\n    --fp16 \\\r\n    --lr=$LR \\\r\n    --weight-decay=0.01 \\\r\n    --lr-scheduler polynomial_decay \\\r\n    --activation-fn 'gelu' \\\r\n    --pooler-activation-fn 'tanh' \\\r\n    --tensorboard-logdir=$TENSORBOARD_LOGS \\\r\n    --max-tokens=$MAX_TOKENS \\\r\n    --distributed-world-size=$DISTRIBUTED_WORLD_SIZE \\\r\n    --distributed-port 12345 \\\r\n    --dropout 0.1 \\\r\n    --dataset-impl 'mmap' \\\r\n    --max-epoch $MAX_EPOCH \\\r\n    --warmup-updates $((6*$MAX_UPDATE/100)) \\\r\n    --no-epoch-checkpoints \\\r\n    --valid-subset $VALID_SUBSET\r\n```\r\n\r\nAm I doing something wrong?",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2727/comments",
+    "author": "moussaKam",
+    "comments": [
+      {
+        "user": "myleott",
+        "created_at": "2020-10-14T13:58:18Z",
+        "body": "A couple things:\r\n1) have you installed pyarrow? `pip install pyarrow`, it should automatically kick in and improve memory utilization\r\n2) are you using the master version of fairseq? There was a known memory leak with colon-separated datasets, which was fixed 1 or 2 months back."
+      },
+      {
+        "user": "moussaKam",
+        "created_at": "2020-10-15T10:29:33Z",
+        "body": "Actually my fairseq was not up-to-date, there was this memory leak problem. Now it works. Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Addresses memory leaks when using colon-separated dataset splits",
+      "Ensures dataset splits can be loaded without cumulative memory growth",
+      "Maintains compatibility with dataset splitting strategies for large datasets",
+      "Validates proper memory management in dataset loading implementation"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:40:08"
+    }
+  }
+]

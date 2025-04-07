@@ -1,0 +1,331 @@
+[
+  {
+    "number": 171,
+    "title": "Question about Inference Speed",
+    "created_at": "2025-01-27T07:30:57Z",
+    "closed_at": "2025-01-27T07:59:54Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/issues/171",
+    "body": "Hello! Appreciating your amazing job. I notice that the inference speed of llama2-7b@2b in your paper is almost the same as FP16 version. This does not align with the theoretical analysis, as improvement in decoding speed should be observed when the weight bit-width is reduced. May I ask if you have conducted an analysis of the current speed bottlenecks during inference? Is the Dequant operation in the current CUDA implementation overly complex, or are there other reasons? What is the potential for optimization, and are there any ongoing optimization plans in the pipeline?",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/171/comments",
+    "author": "Flying-Cloud",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2025-01-27T07:36:59Z",
+        "body": "Our current inference example only dequantizes the compressed weights before GEMM, which is the main reason the current results are close to FP16/BF16 performance. We are actively working on improving the CUDA kernel, so please stay tuned. The dequantization kernel itself is not overly complex, but we have many tasks progressing in parallel. We appreciate your patience!"
+      },
+      {
+        "user": "Flying-Cloud",
+        "created_at": "2025-01-27T07:43:24Z",
+        "body": "Thanks for your kindly reply! I still have some unresolved qusetions. During the decode phase, the reading of weights is theoretically the bottleneck for inference speed, and most of the operators are GEMV operators. I noticed that you have already implemented a CUDA version of quant_gemv. Shouldn't this significantly improve the inference speed? I would greatly appreciate it if you could address my confusion. Thank you very much!"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2025-01-27T07:47:20Z",
+        "body": "> Thanks for your kindly reply! I still have some unresolved qusetions. During the decode phase, the reading of weights is theoretically the bottleneck for inference speed, and most of the operators are GEMV operators. I noticed that you have already implemented a CUDA version of quant_gemv. Shouldn't this significantly improve the inference speed? I would greatly appreciate it if you could address my confusion. Thank you very much!\n\nActually, we haven’t optimized the data loading for the LUT, memory access patterns, and the workload distribution to SMs, all of which are critical factors affecting GEMV performance. An ideal optimization would be to place the LUT in shared memory as much as possible, which is key to fully unlocking the inference performance of weight-only quantization."
+      },
+      {
+        "user": "Flying-Cloud",
+        "created_at": "2025-01-27T07:59:54Z",
+        "body": "Thank you for your clarification! Once again, I truly appreciate your work."
+      }
+    ]
+  },
+  {
+    "number": 164,
+    "title": "fix(cmake): building dynamic library for specified GPU architectures and support multi threads compile",
+    "created_at": "2025-01-15T02:40:25Z",
+    "closed_at": "2025-01-16T02:14:20Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/164",
+    "body": "Added a CMake variable `USER_CUDA_ARCH_LIST` to allow users to specify CUDA architectures manually.\r\n\r\nIf this variable is not set, CMake will automatically detect the CUDA architecture of the underlying machine and build the dynamic library accordingly.\r\n\r\nSet the `TORCH_CUDA_ARCH_LIST` environment variable to the desired architecture. CMake will automatically read this value from the environment.\r\n\r\nfor example:\r\n\r\ndynamic library is built for sm_75 and sm_80:\r\n\r\n```bash\r\nexport TORCH_CUDA_ARCH_LIST=\"7.5 8.0\"\r\npython3 setup.py develop 2>&1 | tee build.log\r\n```\r\n\r\ndynamic library is built for local GPU:\r\n```bash\r\npython3 setup.py develop 2>&1 | tee build.log\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/164/comments",
+    "author": "lcy-seso",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2025-01-15T13:10:34Z",
+        "body": "> Added a CMake variable `USER_CUDA_ARCH_LIST` to allow users to specify CUDA architectures manually.\r\n> \r\n> If this variable is not set, CMake will automatically detect the CUDA architecture of the underlying machine and build the dynamic library accordingly.\r\n> \r\n> Set the `TORCH_CUDA_ARCH_LIST` environment variable to the desired architecture. CMake will automatically read this value from the environment.\r\n> \r\n> for example:\r\n> \r\n> dynamic library is built for sm_75 and sm_80:\r\n> \r\n> ```shell\r\n> export TORCH_CUDA_ARCH_LIST=\"7.5 80\"\r\n> python3 setup.py develop 2>&1 | tee build.log\r\n> ```\r\n> \r\n> dynamic library is built for local GPU:\r\n> \r\n> ```shell\r\n> python3 setup.py develop 2>&1 | tee build.log\r\n> ```\r\n\r\nShould I update `export TORCH_CUDA_ARCH_LIST=\"7.5 80\"` as `export TORCH_CUDA_ARCH_LIST=\"7.5 8.0\"` to aviod error?"
+      },
+      {
+        "user": "lcy-seso",
+        "created_at": "2025-01-15T13:20:51Z",
+        "body": "> > Added a CMake variable `USER_CUDA_ARCH_LIST` to allow users to specify CUDA architectures manually.\r\n> > If this variable is not set, CMake will automatically detect the CUDA architecture of the underlying machine and build the dynamic library accordingly.\r\n> > Set the `TORCH_CUDA_ARCH_LIST` environment variable to the desired architecture. CMake will automatically read this value from the environment.\r\n> > for example:\r\n> > dynamic library is built for sm_75 and sm_80:\r\n> > ```shell\r\n> > export TORCH_CUDA_ARCH_LIST=\"7.5 80\"\r\n> > python3 setup.py develop 2>&1 | tee build.log\r\n> > ```\r\n> > \r\n> > \r\n> >     \r\n> >       \r\n> >     \r\n> > \r\n> >       \r\n> >     \r\n> > \r\n> >     \r\n> >   \r\n> > dynamic library is built for local GPU:\r\n> > ```shell\r\n> > python3 setup.py develop 2>&1 | tee build.log\r\n> > ```\r\n> \r\n> Should I update `export TORCH_CUDA_ARCH_LIST=\"7.5 80\"` as `export TORCH_CUDA_ARCH_LIST=\"7.5 8.0\"` to aviod error?\r\n\r\nmy typo. It should be \"export TORCH_CUDA_ARCH_LIST=\"7.5 8.0\" required by `cuda_select_nvcc_arch_flags`"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2025-01-16T02:14:16Z",
+        "body": "Thanks for your help!"
+      }
+    ]
+  },
+  {
+    "number": 149,
+    "title": "fix(build): build using cmake.",
+    "created_at": "2024-12-27T12:50:33Z",
+    "closed_at": "2024-12-29T05:28:00Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/149",
+    "body": "Re-implemented the `setup.py` to use CMake for building the CUDA extensions. This approach offers several advantages:\r\n\r\n1. CMake is more powerful for handling complex builds across multiple architectures.\r\n2. It speeds up the development of C++ code, as developers can build directly without relying on distribution tools.\r\n\r\nUsage:\r\n\r\nbuild the wheel:\r\n\r\n```bash\r\npython3 setup.py build bdist_wheel\r\n```\r\n\r\nclean build:\r\n\r\n```\r\npython3 setup.py clean\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/149/comments",
+    "author": "lcy-seso",
+    "comments": [
+      {
+        "user": "lcy-seso",
+        "created_at": "2024-12-29T02:26:15Z",
+        "body": "@YangWang92 This PR is ready for review.\r\n\r\nThis PR is intended to introduce no changes but improve the current build by letting `setup.py` to call CMake instead of simply using PyTorch's default CudaExtentions.\r\n\r\nThis leads to potential advantages, allowing me to gradually enhance the build in future PRs. These improvements could include things like speeding up the compilation process and adding multiple architecture-dependent implementations."
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-29T05:27:24Z",
+        "body": "Thanks for your help, and let me update the author list and package version."
+      }
+    ]
+  },
+  {
+    "number": 148,
+    "title": "Potential BUG in pack.py?",
+    "created_at": "2024-12-27T03:12:46Z",
+    "closed_at": "2024-12-29T04:35:36Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/issues/148",
+    "body": "I encountered an `AssertionError` while using the code in the algorithm branch to quantize the LLaMA3.1-8B model with the setting `num_res_centroids > num_centroids`. I believe that setting `num_res_centroids > num_centroids` is a valid configuration. It seems that this issue might be related to **line 128 in `pack.py`**. Specifically, I propose the following change:\n```python\n#res_indices = ((unpack_indice >> index_bits) & ((1 << index_bits) - 1)).view(torch.uint64).to(torch.int64)\nres_indices = ((unpack_indice >> index_bits) & ((1 << res_bits) - 1)).view(torch.uint64).to(torch.int64)\n```\nCould you please review this part of the code and confirm if this modification is appropriate? ",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/148/comments",
+    "author": "ForAxel",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-27T03:23:26Z",
+        "body": "Let me check, thanks for your feedback!"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-27T08:03:25Z",
+        "body": "Hi @ForAxel,\nI think it is a bug, and can you help me to pull a request to fix it. You can be a contributor of the project. \n\nThanks!\nYang"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-29T04:35:35Z",
+        "body": "merged! Thanks for your contribution!"
+      }
+    ]
+  },
+  {
+    "number": 145,
+    "title": "refactor: refactor and optimize python code implementations.",
+    "created_at": "2024-12-20T14:34:35Z",
+    "closed_at": "2024-12-23T05:01:54Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/145",
+    "body": "This PR includes the following modifications:\r\n\r\n1. Adjusts the formatting style to ensure each line of Python and C++ code has a maximum of 80 characters, instead of the previous 120 characters. This will ease code reading.\r\n\r\n1. Adds the pre-commit configuration. Usage instructions:\r\n    ```bash\r\n    # Install pre-commit\r\n    pip3 install pre-commit\r\n\r\n    # After pre-commit is installed, execute:\r\n    pre-commit install\r\n    ```\r\n\r\n1. Extracts the customized CUDA kernel from `VQLinearLayer` into a standalone wrapper to facilitate subsequent benchmarking and optimization of the CUDA kernel.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/145/comments",
+    "author": "lcy-seso",
+    "comments": [
+      {
+        "user": "lcy-seso",
+        "created_at": "2024-12-23T03:53:07Z",
+        "body": "Hi @YangWang92 and @wejoncy,\r\n\r\nCould you please review this pull request?\r\n\r\nIn this PR, I have updated the auto-formatting settings to ensure each line has a maximum of 80 characters, making the code easier to read.\r\n\r\nThis reformatting has resulted in various changes, but I want to assure you that I have not modified the C++ implementations. Therefore, all changes can be safely assumed to be solely due to the auto-formatting.\r\n\r\nThe main changes are in `vqlinear.py`. Specifically:\r\n\r\n1. I have extracted the customized CUDA kernel from `VQLinearLayer` into a standalone wrapper to facilitate subsequent benchmarking and optimization. The logic of the existing implementations remains unchanged.\r\n1. I have added a simple unit test for end-to-end inference to ensure the correctness of changes made in this PR and that future changes do not introduce errors. Both the customized CUDA kernel and the PyTorch-implemented dequantized GEMM are tested.\r\n\r\nThank you!"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-23T05:01:42Z",
+        "body": " Hi @lcy-seso,\r\nThank you very much for your pull; it is invaluable to our project!\r\n\r\nYang"
+      }
+    ]
+  },
+  {
+    "number": 139,
+    "title": "Adds nvembed model to quantization algorithm",
+    "created_at": "2024-12-10T03:45:33Z",
+    "closed_at": "2024-12-10T04:23:04Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/139",
+    "body": "Add support for quantizing the NV-Embed model using VPTQ. Benchmarked using MTEB to evaluate performance against the `bfloat16` version. Current benchmarks are based on a single task, further testing with more meaningful retrieval tasks and parameter tuning would be interesting to explore.\r\n\r\nBenchmarks below are provided for context only and are not part of this PR.\r\n\r\nBatch sizes were set to `16` for `VPTQ-NVEmbed` and `4` for `bfloat16`, as these were the maximum sizes that fit on a 24GB GPU.\r\n\r\n#### Results on a specific task in (MTEB)\r\n\r\n| Model                 | Main Score | Evaluation Time (s) |\r\n|-----------------------|------------|-----------------------|\r\n| VPTQ-NVEmbed-128-1024 | 0.33361    | 753.76               |\r\n| NV-Embed bfloat16     | 0.38469    | 874.00               |\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/139/comments",
+    "author": "bndos",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-10T04:22:52Z",
+        "body": "Thanks for your contribution! I will merge it into the main branch and release a new version on PyPI."
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-10T10:18:38Z",
+        "body": "Could you please provide any additional suggestions for our VPTQ project? Are there any areas where we need to make improvements?"
+      },
+      {
+        "user": "bndos",
+        "created_at": "2024-12-11T04:12:47Z",
+        "body": "> Could you please provide any additional suggestions for our VPTQ project? Are there any areas where we need to make improvements?\r\n\r\nAs far as the algorithm is concerned, I’m still getting familiar with it and the codebase. However, one suggestion I’d make is to use the Ruff formatter (`ruff format`). I noticed that `ruff` is configured in the `pyproject.toml`, but the formatter itself isn’t being used. If this were my repo, I’d probably run `ruff format` and set up a GitHub action and pre-commit hook for `ruff check` and `ruff format`. The main advantage is avoiding formatting artifacts in PRs. Just my 2 cents! :)"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-11T04:34:26Z",
+        "body": "Yes, indeed there are some issues with our format and my code management. I will continue to improve. Thank you!"
+      }
+    ]
+  },
+  {
+    "number": 135,
+    "title": "ops.gemm",
+    "created_at": "2024-12-01T09:59:09Z",
+    "closed_at": "2024-12-01T15:03:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/VPTQ/issues/135",
+    "body": "If I have two residual codebooks and indice, how do I do quantization of the network layer with two residual codebooks?How is the ops.gemm method compatible with the input and calculation of multiple residual codebook arrays?",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/135/comments",
+    "author": "xzjwillbethin",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-12-01T15:02:01Z",
+        "body": "What I understand is that you want to use a second residual lookup table to further quantize the error. Similarly, by adding such a table, you can simply accumulate it during dequantization."
+      }
+    ]
+  },
+  {
+    "number": 132,
+    "title": "where are the layer-wise fine-tune codes in algorithm branch?",
+    "created_at": "2024-11-30T09:12:53Z",
+    "closed_at": "2024-11-30T13:41:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/VPTQ/issues/132",
+    "body": "In section 4, you suggest to perform layer-wise fine-tune after perform vptq stage, but I cannot find any code in algorithm branch.",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/132/comments",
+    "author": "Huangdequ",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-30T13:41:19Z",
+        "body": "Yes, in the paper, we included layer-wise fine-tuning. However, we recently found that running end-to-end fine-tuning performs better than layer-wise fine-tuning. I removed the code for layer-wise fine-tuning because it requires collecting a large amount of layer-wise input and output data, which is less convenient compared to end-to-end training."
+      }
+    ]
+  },
+  {
+    "number": 131,
+    "title": "Question about the design motivation behind VPTQ",
+    "created_at": "2024-11-30T07:37:35Z",
+    "closed_at": "2024-11-30T13:45:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/VPTQ/issues/131",
+    "body": "Thank you for your insightful and thought-provoking work. I have a question regarding the motivation behind low-bit quantization and its potential as a solution for enabling extremely low-bit quantization in larger models for current tasks.\n\nConsider a scenario where I have a device with limited memory capacity (e.g., 32GB GPU) and prioritize accuracy and perplexity over execution speed (tokens/s). Under such constraints, I can choose among the following options:\n1. A smaller model with high-bit weights.\n2. A medium-sized model with quantized weights (e.g., INT8 or INT4).\n3. A larger model with extremely low-bit weights (e.g., the bit-widths discussed in your work).\nI am particularly interested in understanding the potential upper bounds of these three categories, especially after fine-tuning, which is known to enhance post-quantization performance. While I understand this is an open question, could you share your insights or intuitions about the trade-offs and the scenarios where each approach might excel?\n\nThank you for your time and for advancing this fascinating area of research. I look forward to your thoughts.",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/131/comments",
+    "author": "KoalaYuFeng",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-30T13:45:16Z",
+        "body": "Yes, I really appreciate your question—it’s thought-provoking, and I’m seriously reflecting on it while trying to pursue rigorous research. If you're interested, we could collaborate directly. You can find my contact information in my profile and reach out to me via email.\n\nI’ve also been thinking about how a 70B model at 2-bit precision might outperform a 32B model at 4-bit precision in certain aspects. It seems there’s no free lunch, and this topic offers a wealth of research opportunities to explore and discuss. If you're interested, feel free to contact me! I’ve been quite busy lately and have some models that have been scanned across configuration spaces, but I haven’t yet conducted a thorough quantitative analysis or empirical study."
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-30T13:48:13Z",
+        "body": "Additionally, I speculate that a 70B model at 2-bit might achieve stronger performance on certain benchmarks. Although I can’t prove this yet, I plan to conduct a thorough analysis on this in the future."
+      }
+    ]
+  },
+  {
+    "number": 130,
+    "title": "tow stage code",
+    "created_at": "2024-11-30T07:32:09Z",
+    "closed_at": "2024-11-30T13:58:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/VPTQ/issues/130",
+    "body": "1.In the two-stage quantization, two similar functions, the init_centroids_indices&& init_res_centroids_indices function and the quantize_vector &&quantize_residual_vector function, are defined respectively. Why are they designed so? What are the key differences between them?\n2.The init_centroids_indices function has completed the quant_data construction for weight. Why does vptq need to be invoked again to calculate q_weight? What's the difference between quant_data and q_weight;\n3.In the residual quantization phase, q_error is used to calculate centroids and labels, and then the two matrices are used to repeatedly quantize the weight _weight of the network model. Why?",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/130/comments",
+    "author": "xzjwillbethin",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-30T13:58:08Z",
+        "body": "Indeed, our code has a somewhat research-oriented style, haha, so some parts might not be very clear. Let me quickly explain: \n\n1. **`quant_data`**: This is used to compute the proxy error for evaluating the quantization error of the model, specifically \\(\\Delta W^T H \\Delta W\\). I need to calculate the `quant_data` at each step to evaluate the impact of each step on the quantization error.  \n\n2. **`init_centroids_indices` & `init_res_centroids_indices`**: These are just naively initialized centroids using weighted k-means but without further updating the indices via second-order optimization. In the subsequent steps, VPTQ updates the indices and quantization errors column by column to optimize the second-order term of the objective function.  \n\n3. I couldn’t seem to find the keyword `q_weight` in the code. Could it be a typo somewhere?  \n\nHere’s a general description of the quantization steps after enabling residual vector quantization:  \n\n1. Use weighted k-means to initialize the lookup table (`init_centroids_indices`).  \n2. With the initialized lookup table, optimize the second-order term via VPTQ (update indices) and obtain the weights quantized using the lookup table.  \n3. Continue quantizing the residuals: calculate the residual matrix by subtracting the previously quantized weights from the original weights, then cluster the residual matrix to get the residual lookup table.  \n4. Discard all previous indices and retain only the two lookup tables obtained earlier. Finally, use the first lookup table and the residual lookup table to quantize the original weights, resulting in the final quantized output.  "
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-30T13:59:07Z",
+        "body": "I plan to write a blog later to explain the algorithm details in depth. The algorithm in the paper is written quite concisely, so feel free to ask more questions!"
+      }
+    ]
+  },
+  {
+    "number": 119,
+    "title": "When I use the parameter npercent=1 to quantize the model, I have the following problem：",
+    "created_at": "2024-11-15T14:35:02Z",
+    "closed_at": "2024-11-16T05:08:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/VPTQ/issues/119",
+    "body": "/VPTQ/vptq/vptq.py\", line 443, in get_error\n    weight = weight.reshape(qweight.shape)\nRuntimeError: shape '[3584, 3548]' is invalid for input of size 12845056\n\n",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/119/comments",
+    "author": "half-lang",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-11-16T03:51:21Z",
+        "body": "Could you please list all the parameters? I suspect you might not have set vec_len for outlier. \nHere is an example, which allocates an outlier codebook (vector length = 4, size = 256) for **1%** outlier:\n```bash\nCUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python run_vptq.py \\\n        --model_name Qwen/Qwen2.5-7B-Instruct \\\n        --output_dir outputs/Qwen2.5-7B-Instruct/ \\\n        --vector_lens **4** 8 \\\n        --group_num 1 \\\n        --num_centroids **256** 65536 \\\n        --num_res_centroids -1 256 \\\n        --npercent **1** \\\n        --blocksize 128 \\\n        --new_eval \\\n        --seq_len 8192 \\\n        --kmeans_mode hessian \\\n        --num_gpus 8 \\\n        --enable_perm \\\n        --enable_norm \\\n        --save_model \\\n        --save_packed_model \\\n        --hessian_path Hessians-Qwen2.5-7B-Instruct-6144-8k \\\n        --inv_hessian_path InvHessians-Qwen2.5-7B-Instruct-6144-8k \\\n        --ktol 1e-5 --kiter 100\n```"
+      },
+      {
+        "user": "half-lang",
+        "created_at": "2024-11-16T04:53:07Z",
+        "body": "thanks so much for your reply；I can quantize the model now！"
+      }
+    ]
+  },
+  {
+    "number": 90,
+    "title": "Use absolute imports",
+    "created_at": "2024-10-27T20:17:42Z",
+    "closed_at": "2024-10-28T08:13:49Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/90",
+    "body": "- Switch to absolute imports to ensure `vptq.ops` is correctly located on a local setup.\r\n- Allow running `vptq` as a script without requiring the `-m` flag.\r\n- Resolve Issue #89 where CUDA kernel is not found in local setups.",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/90/comments",
+    "author": "bndos",
+    "comments": [
+      {
+        "user": "bndos",
+        "created_at": "2024-10-27T20:19:27Z",
+        "body": "> @bndos please read the following Contributor License Agreement(CLA). If you agree with the CLA, please reply with the following information.\r\n> \r\n> ```\r\n> @microsoft-github-policy-service agree [company=\"{your company}\"]\r\n> ```\r\n> \r\n> > Options:\r\n> > \r\n> > * (default - no company specified) I have sole ownership of intellectual property rights to my Submissions and I am not making Submissions in the course of work for my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree\r\n> > ```\r\n> > \r\n> > \r\n> >     \r\n> >       \r\n> >     \r\n> > \r\n> >       \r\n> >     \r\n> > \r\n> >     \r\n> >   \r\n> > \r\n> > * (when company given) I am making Submissions in the course of work for my employer (or my employer has intellectual property rights in my Submissions by contract or applicable law). I have permission from my employer to make Submissions and enter into this Agreement on behalf of my employer. By signing below, the defined term “You” includes me and my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree company=\"Microsoft\"\r\n> > ```\r\n> \r\n> Contributor License Agreement\r\n\r\n@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "wejoncy",
+        "created_at": "2024-10-28T04:08:28Z",
+        "body": "Hi @bndos  very thanks for you contribution.\r\n\r\nLGTM.\r\nCould you format the code to pass  the CI before we can get it merged?"
+      },
+      {
+        "user": "YangWang92",
+        "created_at": "2024-10-28T08:14:55Z",
+        "body": "Hi @bndos,\r\nThank you for your contribution. I noticed that there was a problem with our formatter settings, and I've just fixed it. Thank you very much for your help! I have merged it into the main branch."
+      }
+    ]
+  },
+  {
+    "number": 47,
+    "title": "docs: update README.md",
+    "created_at": "2024-10-06T15:11:40Z",
+    "closed_at": "2024-10-06T15:25:46Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/VPTQ/pull/47",
+    "body": "minor fix",
+    "comments_url": "https://api.github.com/repos/microsoft/VPTQ/issues/47/comments",
+    "author": "eltociear",
+    "comments": [
+      {
+        "user": "YangWang92",
+        "created_at": "2024-10-06T15:19:43Z",
+        "body": "thanks for your fix!"
+      }
+    ]
+  }
+]

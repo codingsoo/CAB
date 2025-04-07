@@ -1,0 +1,76 @@
+[
+  {
+    "number": 518,
+    "title": "Imap client.connect not giving exception when using bad port number",
+    "created_at": "2017-06-07T14:23:27Z",
+    "closed_at": "2017-06-07T15:00:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/518",
+    "body": "\r\nHello,\r\n\r\nWhen I use this to connect to an IMAP server using SSL and port 993, it works fine.\r\n`try\r\n               {\r\n                    Mailbox mailbox = db.Mailboxes.Find(mbid);\r\n                    int mailboxcount = db.Mailboxes.Count();\r\n                    using (var client = new ImapClient())\r\n                    {\r\n                         client.ServerCertificateValidationCallback = (s, c, h, e) => true;\r\n                         client.Connect(mailbox.Host, mailbox.ServerPortNumber, mailbox.UseSsl);\r\n                         client.AuthenticationMechanisms.Remove(\"XOAUTH2\");\r\n                         client.Authenticate(mailbox.User, mailbox.Password);\r\n                         var inbox = client.Inbox;\r\n                         inbox.Open(FolderAccess.ReadOnly);\r\n`\r\n\r\nIf I change the port number to something like 994, it never gets to the **client.AuthenticationMechanisms.Remove(\"XOAUTH2\");** statement.  It does not execute any of the exception catches.  It just exits the method completely.\r\n\r\nI used the Visual Studio 2017 debugger and it makes it to the **client.Connect(mailbox.Host, mailbox.ServerPortNumber, mailbox.UseSsl);** line, but when I continue execution, it never gives any kind of error message.\r\n\r\nI tried it in IE 11 and Mozilla Firefox.\r\n\r\nIs there a way to catch an exception message for this error?\r\n\r\nThanks,\r\nTony",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/518/comments",
+    "author": "Carneno",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2017-06-07T15:00:01Z",
+        "body": "Why would you try to connect to port 994?\r\n\r\nAnd yes, it will eventually throw an exception. Same as Socket.Connect() will. It just takes several minutes because of the standard TCP timeout."
+      },
+      {
+        "user": "Carneno",
+        "created_at": "2017-06-07T15:15:03Z",
+        "body": "Jeffrey,\r\n\r\nThanks for your help.\r\n\r\nI myself would not try to connect to port 994, because I know that the correct port to use is 993, but what if one of my clients puts in the wrong port number by mistake when setting up their mailbox?\r\n\r\nI want to be able to inform them of what the problem is.\r\n\r\nIn my testing I did not wait for the timeout to occur.  I just tested it again and waited for the timeout and it did give an error message.\r\n\r\nThanks,\r\nTony"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Mechanism to detect connection failures due to invalid port numbers",
+      "Handling of timeout-related exceptions during connection attempts",
+      "Clear error feedback before TCP timeout occurs"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:02:44"
+    }
+  },
+  {
+    "number": 493,
+    "title": "Cancelling Search or GetMessage causes client to disconnect",
+    "created_at": "2017-04-18T19:38:14Z",
+    "closed_at": "2017-04-18T21:43:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/493",
+    "body": "I don't know if it's a bug or just me not grasping the usage of the CancellationToken correctly, since I couldn't find an explanation about it. I'm trying to make a simple mail client, so to show messages in a folder using the `ImapService` I do the following:\r\n\r\n\r\n    static CancellationTokenSource _messagesTaskCts;\r\n    IMailFolder _sourceFolder;\r\n\r\n    async Task<ObservableCollection<MailMessage>> GetMessages()\r\n    {\r\n        try { _messagesTaskCts?.Cancel(); }\r\n        catch (ObjectDisposedException) { /* The implicated task already finished */ }\r\n        \r\n        using (_messagesTaskCts = new CancellationTokenSource())\r\n        {\r\n            var cToken = _messagesTaskCts.Token;\r\n            var messages = new ObservableCollection<MailMessage>();\r\n\r\n            await _sourceFolder.OpenAsync(FolderAccess.ReadOnly).ConfigureAwait(false);\r\n            var uids = (await _sourceFolder.SearchAsync(SearchQuery.All, cToken));\r\n\r\n            foreach (var uid in uids)\r\n            {\r\n                var msg = await _sourceFolder.GetMessageAsync(uid, cToken);\r\n                messages.Add(new MailMessage(msg));\r\n            }\r\n\r\n            return messages;\r\n        }\r\n    }\r\n\r\n\r\nHowever, if one folder is currently trying to retrieve its messages and I want to start retrieving messages from another folder (i.e. cancel current task and start new) I end up getting a `ServiceNotConnectedException.cs` telling me that the client has been disconnected.\r\n\r\nI expected that cancelling the token source would simply terminate the operation (be it `_sourceFolder.SearchAsync` or `_sourceFolder.GetMessageAsync`), but maybe that's not how I'm supposed to use the token?\r\n\r\nUsing MailKit v1.14.2 from NuGet",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/493/comments",
+    "author": "Xerillio",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2017-04-18T20:21:36Z",
+        "body": "The way that cancellation works is that if a command is already in progress, it has to drop the connection (there's no other way).\r\n\r\nThe convention for doing cancellation should probably look a bit like this from your perspective:\r\n\r\n```csharp\r\ntry {\r\n    client.DoSomethingAsync (..., cancellationToken);\r\n} catch (OperationCanceledException) {\r\n    if (!client.IsConnected) {\r\n        Reconnect ();\r\n    }\r\n}\r\n```\r\n\r\nI should note that the `ImapEngine` always checks cancelation state *before* issuing the command as well, so it's possible that the connection is not dropped if the command hasn't been sent yet, so you should always check `client.IsConnected`."
+      },
+      {
+        "user": "Xerillio",
+        "created_at": "2017-04-18T21:10:53Z",
+        "body": "Thanks for the quick response, that makes sense now. It also forces me to think about how to handle retrying any task that is using the client when it loses connection."
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2017-04-18T21:43:01Z",
+        "body": "Glad that cleared things up :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how cancellation tokens affect IMAP connection state",
+      "Guidance on proper error handling after cancellation",
+      "Pattern for maintaining client availability during cancellations",
+      "Clarification of cancellation timing impacts on network operations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:02:57"
+    }
+  }
+]

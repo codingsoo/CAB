@@ -1,0 +1,185 @@
+[
+  {
+    "number": 4438,
+    "title": "How to stop the process pool so that it waits for all the workers to finish?",
+    "created_at": "2021-10-15T20:44:58Z",
+    "closed_at": "2021-10-21T08:50:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/4438",
+    "body": "In the my crawlers program with worker pool on kill (SIGTERM) signal program stops  immediately and doesn't wait until workers stop.\r\n\r\nPlease help to fix that prototype code, so it will exit after all workers stop:\r\n\r\n```\r\n<?php\r\n\r\ndeclare(strict_types=1);\r\n\r\n$workerNum = 5;\r\n\r\n$pool = new Swoole\\Process\\Pool($workerNum);\r\n\r\n$pool->on(\"WorkerStart\", function ($pool, $workerId) {\r\n    $sleep = rand(3, 6);\r\n    echo \"Worker#$workerId: sleep for $sleep seconds\\n\";\r\n    sleep($sleep);\r\n});\r\n\r\n$pool->on(\"WorkerStop\", function ($pool, $workerId) {\r\n    echo \"Worker#$workerId is stopped\\n\";\r\n    sleep(1);\r\n});\r\n\r\n$pool->start();\r\n\r\n```\r\n\r\nEnv parameters:\r\n\r\n```\r\nphp --ri swoole\r\n\r\nswoole\r\n\r\nSwoole => enabled\r\nAuthor => Swoole Team <team@swoole.com>\r\nVersion => 4.6.5\r\nBuilt => Apr 24 2021 09:19:13\r\ncoroutine => enabled with boost asm context\r\nkqueue => enabled\r\nrwlock => enabled\r\nopenssl => OpenSSL 1.1.1k  25 Mar 2021\r\ndtls => enabled\r\nhttp2 => enabled\r\npcre => enabled\r\nzlib => 1.2.11\r\nbrotli => E16777225/D16777225\r\nasync_redis => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_coroutine => On => On\r\nswoole.enable_library => On => On\r\nswoole.enable_preemptive_scheduler => Off => Off\r\nswoole.display_errors => On => On\r\nswoole.use_shortname => On => On\r\nswoole.unixsock_buffer_size => 262144 => 262144\r\n```\r\n\r\n5. What is your machine environment used (show your `uname -a` & `php -v` & `gcc -v`) ?\r\n\r\n```\r\n[1] 7055\r\n[2] 7056\r\nDarwin MacBook-X.local 20.6.0 Darwin Kernel Version 20.6.0: Mon Aug 30 06:12:20 PDT 2021; root:xnu-7195.141.6~3/RELEASE_ARM64_T8101 arm64\r\n[1]  - done       uname -a\r\nPHP 7.4.23 (cli) (built: Aug 27 2021 10:07:08) ( NTS )\r\nCopyright (c) The PHP Group\r\nZend Engine v3.4.0, Copyright (c) Zend Technologies\r\n[2]  + done       php -v\r\nConfigured with: --prefix=/Applications/Xcode.app/Contents/Developer/usr --with-gxx-include-dir=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/4.2.1\r\nApple clang version 13.0.0 (clang-1300.0.29.3)\r\nTarget: arm64-apple-darwin20.6.0\r\nThread model: posix\r\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/4438/comments",
+    "author": "alebedev80",
+    "comments": [
+      {
+        "user": "deminy",
+        "created_at": "2021-10-16T00:17:43Z",
+        "body": "The `SIGTERM` signal is handled in the manager process only, but not handled in each worker processes. You will need to handle signal `SIGTERM` in worker processes.\r\n\r\nHere are two examples to handle signal `SIGTERM` in worker processes.\r\n\r\n## If the worker process runs in non-blocking mode:\r\n\r\n```php\r\n<?php\r\n\r\ndeclare(strict_types=1);\r\n\r\nuse Swoole\\Coroutine;\r\nuse Swoole\\Process;\r\nuse Swoole\\Process\\Pool;\r\n\r\necho \"Current process ID is: \", posix_getpid(), \"\\n\";\r\n\r\n$pool = new Pool(2);\r\n$pool->set(['enable_coroutine' => true]);\r\n\r\n$pool->on(\"WorkerStart\", function (Pool $pool, int $workerId) {\r\n    Process::signal(SIGTERM, function() use ($pool, $workerId) {\r\n        echo \"Will shutdown process #{$workerId}\\n\";\r\n        // More clean up code before exiting the process.\r\n    });\r\n\r\n    $sleep = rand(3, 6);\r\n    echo \"Worker #$workerId: sleep for {$sleep} seconds\\n\";\r\n    Coroutine::sleep($sleep);\r\n});\r\n\r\n$pool->on(\"WorkerStop\", function ($pool, $workerId) {\r\n    echo \"Worker#$workerId is stopped\\n\";\r\n    sleep(1);\r\n});\r\n\r\n$pool->start();\r\n```\r\n\r\n## If the worker process runs in blocking mode:\r\n\r\n```php\r\n$pool->on(\"WorkerStart\", function ($pool, $workerId) {\r\n    $running = true;\r\n    pcntl_signal(SIGTERM, function () use (&$running) {\r\n        $running = false;\r\n    });\r\n    echo \"Worker#{$workerId} is started\\n\";\r\n    $redis = new Redis();\r\n    $redis->pconnect('127.0.0.1', 6379);\r\n    $key = \"key1\";\r\n    while ($running) {\r\n         $msg = $redis->brpop($key);\r\n         pcntl_signal_dispatch();\r\n         if ( $msg == null) continue;\r\n         var_dump($msg);\r\n     }\r\n});\r\n```"
+      },
+      {
+        "user": "alebedev80",
+        "created_at": "2021-10-16T10:56:22Z",
+        "body": "@matyhtf thank you very much!\r\n\r\ni've fixed my prototype's code relate to blocking mode example and it's working fine. It would be great to correct the documentation, I think this is a quite common problem.\r\n\r\n```\r\n<?php\r\n\r\ndeclare(strict_types=1);\r\n\r\nuse Swoole\\Coroutine as Co;\r\n\r\n$workerNum = 3;\r\n\r\necho \"Current process ID is: \", posix_getpid(), \"\\n\";\r\n\r\n$pool = new Swoole\\Process\\Pool($workerNum);\r\n$pool->set(['enable_coroutine' => true]);\r\n$pool->on(\"WorkerStart\", function ($pool, $workerId) {\r\n    $running = true;\r\n    pcntl_signal(SIGTERM, function () use (&$running, $workerId) {\r\n        $t = date('H:i:s');\r\n        echo \"$t - Worker#$workerId: got SIGTERM at $t\\n\";\r\n        $running = false;\r\n    });\r\n    while ($running) {\r\n        $sleep = rand(5, 10);\r\n        $s = date('H:i:s');\r\n        echo \"$s - Worker#$workerId: start $s and sleep for $sleep seconds\\n\";\r\n        Co::exec(\"/bin/sleep $sleep\");\r\n        $f = date('H:i:s');\r\n        echo \"$f - Worker#$workerId: stop after sleep for $sleep seconds $s - $f\\n\";\r\n        pcntl_signal_dispatch();\r\n    }\r\n});\r\n\r\n$pool->on(\"WorkerStop\", function ($pool, $workerId) {\r\n    $t = date('H:i:s');\r\n    echo \"$t - Worker#$workerId is stopped\\n\";\r\n    sleep(1);\r\n});\r\n\r\n$pool->start();\r\n```\r\n\r\n\r\n\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Proper handling of SIGTERM signal in worker processes",
+      "Mechanism to complete current worker tasks before termination",
+      "Synchronization between signal reception and worker termination"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:13:31"
+    }
+  },
+  {
+    "number": 2679,
+    "title": "MacOS MoJave10.14.5\u7f16\u8bd1\u5b89\u88c5swoolev4.4.0\u5931\u8d25",
+    "created_at": "2019-07-12T07:03:49Z",
+    "closed_at": "2019-07-12T13:48:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2679",
+    "body": "Please answer these questions before submitting your issue. Thanks!\r\n\r\n1. What did you do? If possible, provide a simple script for reproducing the error.\r\n\r\n```\r\n phpize-7.3.5 \r\n./configure  \r\nsudo make && make install\r\n```\r\n\r\n2. What did you expect to see?\r\n\r\n\u6b63\u5e38\u5b89\u88c5swoole\r\n\r\n3. What did you see instead?\r\n\r\n\u5b89\u88c5\u7684\u6269\u5c55\u76ee\u5f55\u4e0d\u662f\u6211\u9884\u671f\u7684\r\n```\r\nInstalling shared extensions:     /usr/lib/php/extensions/no-debug-non-zts-20160303/\r\ncp: /usr/lib/php/extensions/no-debug-non-zts-20160303/#INST@26485#: Permission denied\r\nmake: *** [install-modules] Error 1\r\n```\r\n\r\n4. What version of Swoole are you using (show your `php --ri swoole`)?\r\n\r\ngit clone\u7684\u6700\u65b0\u7248\u672cv4.4.0\r\n\r\n5. What is your machine environment used (including version of kernel & php & gcc) ?\r\n\r\nOS: MacOS Mojave10.14.5 \uff0c\u5df2\u7ecf\u5173\u6389\u4e86rootless(csrutil disable)\r\nPHP:**\u5305\u542b\u9ed8\u8ba4\u7684php7.1.23 \u8fd8\u6709\u6211\u81ea\u5df1\u5b89\u88c5XAMPP\u5305\u542b\u76847.3.5**\r\n```\r\n$ gcc -v\r\nConfigured with: --prefix=/Applications/Xcode.app/Contents/Developer/usr --with-gxx-include-dir=/usr/include/c++/4.2.1\r\nApple LLVM version 10.0.1 (clang-1001.0.46.4)\r\nTarget: x86_64-apple-darwin18.6.0\r\nThread model: posix\r\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\r\n```\r\n\r\n\r\n\r\n-----------------------------\u5b89\u88c5\u8fc7\u7a0b\uff08\u4f7f\u7528XAMPP\u7684PHP7.3.5\uff09--------------------------\r\n```\r\n$ phpize-7.3.5 .\r\nConfiguring for:\r\nPHP Api Version:         20180731\r\nZend Module Api No:      20180731\r\nZend Extension Api No:   320180731\r\n\r\n$ ./configure\r\nchecking for grep that handles long lines and -e... /usr/bin/grep\r\nchecking for egrep... /usr/bin/grep -E\r\nchecking for a sed that does not truncate output... /usr/bin/sed\r\nchecking for cc... cc\r\nchecking whether the C compiler works... yes\r\nchecking for C compiler default output file name... a.out\r\nchecking for suffix of executables... \r\nchecking whether we are cross compiling... no\r\nchecking for suffix of object files... o\r\nchecking whether we are using the GNU C compiler... yes\r\nchecking whether cc accepts -g... yes\r\nchecking for cc option to accept ISO C89... none needed\r\nchecking how to run the C preprocessor... cc -E\r\nchecking for icc... no\r\nchecking for suncc... no\r\nchecking whether cc understands -c and -o together... yes\r\nchecking for system library directory... lib\r\nchecking if compiler supports -R... no\r\nchecking if compiler supports -Wl,-rpath,... yes\r\nchecking build system type... x86_64-apple-darwin18.6.0\r\nchecking host system type... x86_64-apple-darwin18.6.0\r\nchecking target system type... x86_64-apple-darwin18.6.0\r\nchecking for PHP prefix... /usr\r\nchecking for PHP includes... -I/usr/include/php -I/usr/include/php/main -I/usr/include/php/TSRM -I/usr/include/php/Zend -I/usr/include/php/ext -I/usr/include/php/ext/date/lib\r\nchecking for PHP extension directory... /usr/lib/php/extensions/no-debug-non-zts-20160303\r\nchecking for PHP installed headers prefix... /usr/include/php\r\n....\r\n\r\n```\r\n\r\n\u8fd9\u91cc\u53d1\u73b0\u9ed8\u8ba4\u7528\u7684\u662f\u7cfb\u7edf\u81ea\u5e26\u7684PHP\uff0c\u4ee5\u53ca\u9ed8\u8ba4\u7684\u6269\u5c55\u76ee\u5f55\r\n```\r\nsudo make && make install \r\nBuild complete.\r\nDon't forget to run 'make test'.\r\n....\r\ndsymutil .libs/swoole.so || :\r\ncreating swoole.la\r\n(cd .libs && rm -f swoole.la && ln -s ../swoole.la swoole.la)\r\n/bin/sh /Users/spark/work/downloads/swoole-src/libtool --mode=install cp ./swoole.la /Users/spark/work/downloads/swoole-src/modules\r\ncp ./.libs/swoole.so /Users/spark/work/downloads/swoole-src/modules/swoole.so\r\ncp ./.libs/swoole.lai /Users/spark/work/downloads/swoole-src/modules/swoole.la\r\n----------------------------------------------------------------------\r\nLibraries have been installed in:\r\n   /Users/spark/work/downloads/swoole-src/modules\r\n\r\nIf you ever happen to want to link against installed libraries\r\nin a given directory, LIBDIR, you must either use libtool, and\r\nspecify the full pathname of the library, or use the `-LLIBDIR'\r\nflag during linking and do at least one of the following:\r\n   - add LIBDIR to the `DYLD_LIBRARY_PATH' environment variable\r\n     during execution\r\n\r\nSee any operating system documentation about shared libraries for\r\nmore information, such as the ld(1) and ld.so(8) manual pages.\r\n----------------------------------------------------------------------\r\n\r\n\r\nInstalling shared extensions:     /usr/lib/php/extensions/no-debug-non-zts-20160303/\r\ncp: /usr/lib/php/extensions/no-debug-non-zts-20160303/#INST@26485#: Permission denied\r\nmake: *** [install-modules] Error 1\r\n```\r\n\r\n\r\n\u8bf7\u95ee\u5982\u4f55\u6307\u5b9a\u6211\u81ea\u5df1\u5b89\u88c5\u7684PHP\u8def\u5f84\u53ca\u6269\u5c55\u8def\u5f84\uff0c\u6307\u5b9a\u540e\u53ef\u5426\u89e3\u51b3\u6b64\u95ee\u9898\uff1f\r\n\r\n\u611f\u8c22\uff0c\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2679/comments",
+    "author": "sparky1",
+    "comments": [
+      {
+        "user": "phper08",
+        "created_at": "2019-07-12T08:07:55Z",
+        "body": "\u4e2a\u4eba\u5efa\u8bae\uff1a\r\n1\u3001phpize \u7528\u7edd\u5bf9\u8def\u5f84\uff1b\r\n2\u3001./configure \u52a0\u4e0a --with-phpize= \u52a0\u7edd\u5bf9\u8def\u5f84\r\n3\u3001make \u548c make install \u5206\u5f00\uff0c\u5148 make\uff0c\u7136\u540e sudo make install"
+      },
+      {
+        "user": "sparky1",
+        "created_at": "2019-07-12T09:22:33Z",
+        "body": "> \u4e2a\u4eba\u5efa\u8bae\uff1a\r\n> 1\u3001phpize \u7528\u7edd\u5bf9\u8def\u5f84\uff1b\r\n> 2\u3001./configure \u52a0\u4e0a --with-phpize= \u52a0\u7edd\u5bf9\u8def\u5f84\r\n> 3\u3001make \u548c make install \u5206\u5f00\uff0c\u5148 make\uff0c\u7136\u540e sudo make install\r\n\r\n\u6211\u7528\u4e86\u7edd\u5bf9\u8def\u5f84\uff0c\u4e5f\u52a0\u4e86\u53c2\u6570\uff0c\u4f46\u8fd8\u662f\u627e\u7684\u7cfb\u7edf\u9ed8\u8ba4\u7684PHP\r\n`$ /Applications/XAMPP/bin/phpize-7.3.5 .\r\nConfiguring for:\r\nPHP Api Version:         20180731\r\nZend Module Api No:      20180731\r\nZend Extension Api No:   320180731\r\n(base) \r\n\r\n$ ./configure --with-phpize=/Applications/XAMPP/bin/phpize-7.3.5\r\nconfigure: WARNING: unrecognized options: --with-phpize\r\nchecking for grep that handles long lines and -e... /usr/bin/grep\r\nchecking for egrep... /usr/bin/grep -E\r\nchecking for a sed that does not truncate output... /usr/bin/sed\r\nchecking for cc... cc\r\nchecking whether the C compiler works... yes\r\nchecking for C compiler default output file name... a.out\r\nchecking for suffix of executables... \r\nchecking whether we are cross compiling... no\r\nchecking for suffix of object files... o\r\nchecking whether we are using the GNU C compiler... yes\r\nchecking whether cc accepts -g... yes\r\nchecking for cc option to accept ISO C89... none needed\r\nchecking how to run the C preprocessor... cc -E\r\nchecking for icc... no\r\nchecking for suncc... no\r\nchecking whether cc understands -c and -o together... yes\r\nchecking for system library directory... lib\r\nchecking if compiler supports -R... no\r\nchecking if compiler supports -Wl,-rpath,... yes\r\nchecking build system type... x86_64-apple-darwin18.6.0\r\nchecking host system type... x86_64-apple-darwin18.6.0\r\nchecking target system type... x86_64-apple-darwin18.6.0\r\nchecking for PHP prefix... /usr\r\nchecking for PHP includes... -I/usr/include/php -I/usr/include/php/main -I/usr/include/php/TSRM -I/usr/include/php/Zend -I/usr/include/php/ext -I/usr/include/php/ext/date/lib\r\nchecking for PHP extension directory... /usr/lib/php/extensions/no-debug-non-zts-20160303\r\nchecking for PHP installed headers prefix... /usr/include/php\r\n...\r\n`"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2019-07-12T13:48:20Z",
+        "body": "php-config \u4f7f\u7528\u7edd\u5bf9\u8def\u5f84\r\n```shell\r\n\r\n./configure --with-php-config=/Applications/XAMPP/bin/php-config\r\n```"
+      },
+      {
+        "user": "sparky1",
+        "created_at": "2019-07-15T03:11:27Z",
+        "body": "> php-config \u4f7f\u7528\u7edd\u5bf9\u8def\u5f84\r\n> \r\n> ```shell\r\n> ./configure --with-php-config=/Applications/XAMPP/bin/php-config\r\n> ```\r\n\r\n\u53ef\u4ee5\u5566\uff0c\u591a\u8c22\uff01"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clear instructions for specifying custom PHP installation paths during Swoole compilation",
+      "Solution must address permission issues when writing to system PHP directories",
+      "Method to ensure build system recognizes non-default PHP environments",
+      "Configuration that works with multiple PHP versions installed on macOS",
+      "Validation that extension installs to correct writable directory"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:15:44"
+    }
+  },
+  {
+    "number": 1583,
+    "title": "Segmentation fault \u9519\u8bef",
+    "created_at": "2018-04-25T10:37:06Z",
+    "closed_at": "2018-04-26T02:35:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1583",
+    "body": "CentOS 6.9 x64 Kernel 4.4.127\r\nphp 7.1.16 with yac\r\nswoole 2.1.3\r\n\r\n\r\n\r\n\u4e0b\u9762\u662f\u6709\u6548\u7684\u8c03\u8bd5\u4fe1\u606f\r\n\r\n(gdb) bt\r\n#0  0x00007fea2e0f595d in swShareMemory_mmap_create (object=0x7ffcc05f0950, size=2097248, mapfile=0x0)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:122\r\n#1  0x00007fea2e0f56a5 in sw_shm_malloc (size=2097248) at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:25\r\n#2  0x00007fea2e0f5e4e in swMemoryGlobal_new_page (gm=0x7ffcc05f0a10)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/MemoryGlobal.c:80\r\n#3  0x00007fea2e0f5d52 in swMemoryGlobal_new (pagesize=2097152, shared=1 '\\001')\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/MemoryGlobal.c:51\r\n#4  0x00007fea2e0e8985 in swoole_init () at /opt/distfiles/php/swoole-src-2.1.3/src/core/base.c:64\r\n#5  0x00007fea2dff89fb in zm_startup_swoole (type=1, module_number=62) at /opt/distfiles/php/swoole-src-2.1.3/swoole.c:1024\r\n#6  0x0000000000a21478 in zend_startup_module_ex (module=0x27a6f50) at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1843\r\n#7  0x0000000000a214da in zend_startup_module_zval (zv=0x2765510) at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1858\r\n#8  0x0000000000a2f192 in zend_hash_apply (ht=0x14b10e0, apply_func=0xa214b7 <zend_startup_module_zval>)\r\n    at /opt/distfiles/php/php-7.1.16/Zend/zend_hash.c:1507\r\n#9  0x0000000000a21a9f in zend_startup_modules () at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1969\r\n#10 0x0000000000988d00 in php_module_startup (sf=0x1488d80, additional_modules=0x0, num_additional_modules=0)\r\n    at /opt/distfiles/php/php-7.1.16/main/main.c:2300\r\n#11 0x0000000000af930f in php_cli_startup (sapi_module=0x1488d80) at /opt/distfiles/php/php-7.1.16/sapi/cli/php_cli.c:427\r\n#12 0x0000000000afb22a in main (argc=2, argv=0x2722070) at /opt/distfiles/php/php-7.1.16/sapi/cli/php_cli.c:1348\r\n(gdb) f 1\r\n#1  0x00007fea2e0f56a5 in sw_shm_malloc (size=2097248) at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:25\r\n25          mem = swShareMemory_mmap_create(&object, size, NULL);\r\n(gdb) f 0\r\n#0  0x00007fea2e0f595d in swShareMemory_mmap_create (object=0x7ffcc05f0950, size=2097248, mapfile=0x0)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:122\r\n122             swWarn(\"mmap(%ld) failed. Error: %s[%d]\", size, strerror(errno), errno);\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1583/comments",
+    "author": "yxgong",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2018-04-25T10:45:10Z",
+        "body": "\u8bf7\u52ff\u4f7f\u7528 ` --enable-hugepage` \u7f16\u8bd1\u53c2\u6570"
+      },
+      {
+        "user": "yxgong",
+        "created_at": "2018-04-25T11:07:35Z",
+        "body": "\u591a\u8c22\u554a\uff0c\u679c\u7136\r\n\u4e0d\u7528--enable-hugepage \u5168\u65b0\u7f16\u8bd1\u540e\u5c31\u89e3\u51b3\u4e86\r\n\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause related to memory allocation configuration in Swoole",
+      "Provides guidance on Swoole compilation parameters affecting shared memory management",
+      "Resolves segmentation faults during PHP module initialization"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:18:08"
+    }
+  },
+  {
+    "number": 921,
+    "title": "coredump with swoole_http_server",
+    "created_at": "2016-11-24T15:00:09Z",
+    "closed_at": "2016-11-25T05:41:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/921",
+    "body": "swoole\u914d\u7f6e\uff1a\r\n\r\n> \r\n            'worker_num'      => 8, //worker process num\r\n            'backlog'         => 16, //listen backlog \r\n            'max_request'     => 5000,\r\n            'task_worker_num' => 8,\r\n            'task_worker_max' => 16,\r\n            'dispatch_mode'      => 3,   \r\n            'user'               => 'rrxuser',\r\n            'group'              => 'rrxuser',\r\n            'open_tcp_nodelay'   => 1,   \r\n            'enable_reuse_port'  => 1,\r\n            'log_file'           => '/data/logs/swoole.log',\r\n            'log_level'          => 0,   \r\n            'daemonize'          => 1,   \r\n            'package_max_length' => 5242880,\r\n\r\n\r\n\r\n\r\ncore bt:\r\n\r\n#0  zend_mm_alloc_small (heap=0x7fa343800040, ptr=0x7fa31fb3c540, size=<value optimized out>, copy_size=352) at /data/php7-src/php-7.0.9/Zend/zend_alloc.c:1295\r\n#1  zend_mm_alloc_heap (heap=0x7fa343800040, ptr=0x7fa31fb3c540, size=<value optimized out>, copy_size=352) at /data/php7-src/php-7.0.9/Zend/zend_alloc.c:1366\r\n#2  zend_mm_realloc_heap (heap=0x7fa343800040, ptr=0x7fa31fb3c540, size=<value optimized out>, copy_size=352) at /data/php7-src/php-7.0.9/Zend/zend_alloc.c:1644\r\n#3  0x0000000000850dc2 in zend_string_realloc (execute_data=0x7fa343814bf0) at /data/php7-src/php-7.0.9/Zend/zend_string.h:187\r\n#4  ZEND_CONCAT_SPEC_TMPVAR_TMPVAR_HANDLER (execute_data=0x7fa343814bf0) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:44737\r\n#5  0x0000000000805190 in execute_ex (ex=<value optimized out>) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:417\r\n#6  0x00000000007b8ba8 in zend_call_function (fci=0x7ffdaf001620, fci_cache=0x7ffdaf001670) at /data/php7-src/php-7.0.9/Zend/zend_execute_API.c:866\r\n#7  0x00000000006be0b9 in zif_array_map (execute_data=<value optimized out>, return_value=0x7fa3438147c0) at /data/php7-src/php-7.0.9/ext/standard/array.c:5349\r\n#8  0x000000000083c998 in ZEND_DO_FCALL_BY_NAME_SPEC_HANDLER (execute_data=0x7fa343814710) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:714\r\n#9  0x0000000000805190 in execute_ex (ex=<value optimized out>) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:417\r\n#10 0x00000000007b8ba8 in zend_call_function (fci=0x7ffdaf0018a0, fci_cache=0x7ffdaf001820) at /data/php7-src/php-7.0.9/Zend/zend_execute_API.c:866\r\n#11 0x00000000007b913a in call_user_function_ex (function_table=<value optimized out>, object=<value optimized out>, function_name=<value optimized out>, retval_ptr=<value optimized out>, \r\n    param_count=<value optimized out>, params=<value optimized out>, no_separation=0, symbol_table=0x0) at /data/php7-src/php-7.0.9/Zend/zend_execute_API.c:685\r\n#12 0x00007fa342c4a311 in sw_call_user_function_ex (serv=0x193bc20, req=<value optimized out>) at /data/php7-src/swoole-src/php7_wrapper.h:232\r\n#13 http_onReceive (serv=0x193bc20, req=<value optimized out>) at /data/php7-src/swoole-src/swoole_http_server.c:981\r\n#14 0x00007fa342c75b02 in swWorker_onTask (factory=<value optimized out>, task=0x7ffdaf001b30) at /data/php7-src/swoole-src/src/network/Worker.c:193\r\n#15 0x00007fa342c75c6b in swWorker_onPipeReceive (reactor=<value optimized out>, event=0x7ffdaf003ba0) at /data/php7-src/swoole-src/src/network/Worker.c:563\r\n#16 0x00007fa342c675d0 in swReactorEpoll_wait (reactor=0x193cdd0, timeo=<value optimized out>) at /data/php7-src/swoole-src/src/reactor/ReactorEpoll.c:258\r\n#17 0x00007fa342c76abf in swWorker_loop (factory=<value optimized out>, worker_id=<value optimized out>) at /data/php7-src/swoole-src/src/network/Worker.c:510\r\n#18 0x00007fa342c73d63 in swManager_spawn_worker (factory=0x193c050, worker_id=2) at /data/php7-src/swoole-src/src/network/Manager.c:669\r\n#19 0x00007fa342c747a9 in swManager_start (factory=0x193c050) at /data/php7-src/swoole-src/src/network/Manager.c:133\r\n#20 0x00007fa342c6464a in swFactoryProcess_start (factory=0x193c050) at /data/php7-src/swoole-src/src/factory/FactoryProcess.c:86\r\n#21 0x00007fa342c6a4ff in swServer_start (serv=0x193bc20) at /data/php7-src/swoole-src/src/network/Server.c:658\r\n#22 0x00007fa342c48eaf in zim_swoole_http_server_start (execute_data=0x7fa343813a50, return_value=0x7fa343813a40) at /data/php7-src/swoole-src/swoole_http_server.c:1388\r\n#23 0x000000000083d2b8 in ZEND_DO_FCALL_SPEC_HANDLER (execute_data=0x7fa343813840) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:842\r\n#24 0x0000000000805190 in execute_ex (ex=<value optimized out>) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:417\r\n#25 0x00000000008582eb in zend_execute (op_array=0x7fa34387d000, return_value=<value optimized out>) at /data/php7-src/php-7.0.9/Zend/zend_vm_execute.h:458\r\n#26 0x00000000007c5b43 in zend_execute_scripts (type=8, retval=0x0, file_count=3) at /data/php7-src/php-7.0.9/Zend/zend.c:1427\r\n#27 0x00000000007680b0 in php_execute_script (primary_file=0x7ffdaf0072b0) at /data/php7-src/php-7.0.9/main/main.c:2494\r\n#28 0x000000000085c64a in do_cli (argc=3, argv=0x1803440) at /data/php7-src/php-7.0.9/sapi/cli/php_cli.c:974\r\n#29 0x000000000085ce4a in main (argc=3, argv=0x1803440) at /data/php7-src/php-7.0.9/sapi/cli/php_cli.c:1344\r\n\r\n\r\nphp\u7248\u672c\uff1a7.0.\r\nswoole\u7248\u672c\uff1a1.9.0\r\n\u628aworker_num\u548cbacklog\u8c03\u62104\u5c31\u6ca1\u95ee\u9898\uff0c8\u5c31\u4f1acore,16\u4e5f\u4f1a\uff0c\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/921/comments",
+    "author": "lscgzwd",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-11-25T05:41:42Z",
+        "body": "\u5173\u95edopcache\u8bd5\u8bd5\u3002\u6216\u8005\u8bbe\u7f6e php.ini  `opcache.enable_cli = off`"
+      },
+      {
+        "user": "lscgzwd",
+        "created_at": "2016-11-28T05:10:26Z",
+        "body": "\u786e\u5b9e\u5173\u95ed\u540e\u53ef\u4ee5\u4e86\uff0c\u4f46\u662f\u540c\u6837\u7684\u53c2\u6570\u6216\u8005\u66f4\u5927\u7684\u53c2\u6570\uff0c\u5728\u67d0\u4e9b\u73af\u5883\u4e0b\u786e\u4e0d\u4f1acoredump,  \u751f\u4ea7\u4e0a\u4e5f\u662f\u5f00\u4e86Opcache,\u5e76\u4e14\u53c2\u6570\u662f256\u4e5f\u6ca1\u6709\u62a5\u9519\uff0c\u7ebf\u4e0b\u73af\u5883\u786e\u62a5\u9519\u3002"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identify the root cause of memory allocation failures when increasing worker_num/backlog parameters",
+      "Explain compatibility between Swoole configuration and PHP OPcache settings",
+      "Provide stability guidelines for Swoole memory management under load",
+      "Address environment-specific factors causing discrepancies between production and development setups"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:20:26"
+    }
+  },
+  {
+    "number": 464,
+    "title": "onReceive\u4e2d\u4f1a\u6536\u5230\u622a\u65ad\u7684\u6570\u636e",
+    "created_at": "2015-12-31T09:01:10Z",
+    "closed_at": "2016-01-02T10:57:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/464",
+    "body": "\u8bbe\u7f6e\u4e86\\r\\n\\r\\n\u4e3a\u7ed3\u675f\u7b26,\u8fde\u7eed\u53d1\u9001100\u6bb5\u6570\u636e(\u7528fsockopen\u6253\u5f00, \u7136\u540e\u901a\u8fc7write\u53d1\u9001, \u5faa\u73af100\u6b21, \u6700\u540eclose), \u5176\u4e2d\u6bcf\u6bb5\u6570\u636e\u7684\u6700\u540e\u4e5f\u7528\\r\\n\\r\\n\u4f5c\u4e3a\u7ed3\u675f\n\u4f46\u662f\u6709\u4e9b\u65f6\u5019, \u53d1\u9001\u7684100\u6bb5\u6570\u636e\u4e2d,\u4f1a\u67091-2\u6bb5\u6570\u636e\u51fa\u9519, \u7ecf\u8fc7\u65e5\u5fd7\u6253\u5370, \u53d1\u73b0\u6570\u636e\u88ab\u622a\u65ad\u4e86\n\u4e2d\u95f4\u5e76\u6ca1\u6709\\r\\n\\r\\n, \u4f46\u662f\u88ab\u62c6\u6210\u4e862\u6b21onReceive\n\n\u6211\u81ea\u5df1\u7528\u65e5\u5fd7\u6253\u5370\u4e86\u4e00\u4e0b, \u53d1\u73b0onReceive\u7684\u56de\u8c03\u51fd\u6570\u91cc\u9762\u6253\u5370\u7684\u6570\u636e, \u88ab\u62c6\u6210\u4e862\u6b21\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/T\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:89]save log to db error: <E9><9D><9E><E6><B3><95><E6><95><B0><E6><8D><AE>\n<E5><AF><B9><E8><B1><A1><EF><BC><81>\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]estAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei42\",\"thread\":\"29697\"}\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:89]save log to db error: <E9><9D><9E><E6><B3><95><E6><95><B0><E6><8D><AE>\n<E5><AF><B9><E8><B1><A1><EF><BC><81>\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/TestAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei43\",\"thread\":\"29697\"}\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/TestAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei44\",\"thread\":\"29697\"}\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/464/comments",
+    "author": "poisonbian",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2015-12-31T09:20:31Z",
+        "body": "\u662f\u5426\u542f\u7528\u4e86 open_eof_split\n"
+      },
+      {
+        "user": "poisonbian",
+        "created_at": "2016-01-02T06:28:58Z",
+        "body": "\u4e4b\u524d\u6ca1\u6709\u5f00\u542fopen_eof_split\uff0c\u56e0\u4e3a\u4f1a\u51fa\u9519\uff0c\u770b\u5230\u4f60\u53e6\u5916\u4e00\u4e2a\u56de\u590d\uff0c\u5173\u95ed\u4e86ringbuffer\uff0c\u91cd\u65b0\u5f00\u542f\u4e86open_eof_split\u4e4b\u540e\uff0c\u8fd9\u4e2a\u95ee\u9898\u5c31\u6ca1\u6709\u518d\u590d\u73b0\u4e86~\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures proper handling of message termination delimiters to prevent data truncation",
+      "Resolves conflicts between buffer management and termination detection mechanisms",
+      "Provides reliable message reassembly from multiple network packets"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:21:20"
+    }
+  }
+]

@@ -1,0 +1,89 @@
+[
+  {
+    "number": 36,
+    "title": "Problem with Parallel Query Job",
+    "created_at": "2024-11-28T18:57:04Z",
+    "closed_at": "2024-11-28T19:50:34Z",
+    "labels": [],
+    "url": "https://github.com/friflo/Friflo.Engine.ECS/issues/36",
+    "body": "```\r\nusing Friflo.Engine.ECS;\r\nusing Friflo.Engine.ECS.Systems;\r\n\r\nnamespace TestECS;\r\n\r\nclass Program\r\n{\r\n    static void Main(string[] args)\r\n    {\r\n        ParallelJobRunner jobRunner = new ParallelJobRunner(Environment.ProcessorCount);\r\n        EntityStore world = new EntityStore { JobRunner = jobRunner };\r\n        SystemRoot systemRoot = new SystemRoot(world) { new TestSystem() };\r\n\r\n        var archetype = world.GetArchetype(ComponentTypes.Get<Position>());\r\n        archetype.CreateEntities(7993);\r\n\r\n        systemRoot.Update(default);\r\n        Thread.Sleep(2000);\r\n        systemRoot.Update(default);\r\n        \r\n        Console.ReadKey();\r\n    }\r\n}\r\n\r\npublic class TestSystem : QuerySystem<Position>\r\n{\r\n    protected override void OnUpdate()\r\n    {\r\n        var queryJob = Query.ForEach((myComponents, entities) =>\r\n        {\r\n            for (int n = 0; n < entities.Length; n++)\r\n            {\r\n                myComponents[n].x += 10f;\r\n            }\r\n        });\r\n        queryJob.RunParallel();\r\n        Query.Store.JobRunner.Dispose();\r\n    }\r\n}\r\n```\r\n\r\nThe second call to `systemRoot.Update(default);` causes an error if I have 7993+ entities.\r\nIt doesn't matter if I use TestSystem or implement `var queryJob` in `static void Main(string[] args)`!\r\n\r\nMaybe I'm missing something?\r\n\r\n```\r\nUnhandled exception. System.ObjectDisposedException: Cannot access a disposed object.\r\nObject name: 'ParallelJobRunner'.\r\n   at Friflo.Engine.ECS.ParallelJobRunner.ExecuteJob(Object job, JobTask[] tasks)\r\n   at Friflo.Engine.ECS.QueryJob`1.RunParallel()\r\n   at TestECS.TestSystem.OnUpdate() in C:\\projects\\TestECS\\TestECS\\Program.cs:line 36\r\n   at Friflo.Engine.ECS.Systems.QuerySystemBase.OnUpdateGroup()\r\n   at Friflo.Engine.ECS.Systems.SystemGroup.OnUpdateGroup()\r\n   at Friflo.Engine.ECS.Systems.SystemGroup.Update(UpdateTick tick)\r\n   at TestECS.Program.Main(String[] args) in C:\\projects\\TestECS\\TestECS\\Program.cs:line 19\r\n```",
+    "comments_url": "https://api.github.com/repos/friflo/Friflo.Engine.ECS/issues/36/comments",
+    "author": "zerosar",
+    "comments": [
+      {
+        "user": "friflo",
+        "created_at": "2024-11-28T19:45:24Z",
+        "body": "A `JobRunner` contains a set of worker threads.\r\nThese threads are utilized when calling `RunParallel()`.\r\nWhen `RunParallel()` finishes these threads are idle and will be used again for the next `RunParallel()` cycle.\r\n\r\n*Reason:* Reusing threads bring a significant performance boost because thread creation and disposing has a very high performance penalty.\r\n\r\nSo the usage pattern of a single `JobRunner` is\r\n- Create a `JobRunner` when the applications starts.\r\n- Dispose the `JobRunner` before the applications finishes.\r\n\r\nModified your code without testing.\r\n\r\n```cs\r\nusing Friflo.Engine.ECS;\r\nusing Friflo.Engine.ECS.Systems;\r\n\r\nnamespace TestECS;\r\n\r\nclass Program\r\n{\r\n    static void Main(string[] args)\r\n    {\r\n        ParallelJobRunner jobRunner = new ParallelJobRunner(Environment.ProcessorCount);\r\n        EntityStore world = new EntityStore { JobRunner = jobRunner };\r\n        SystemRoot systemRoot = new SystemRoot(world) { new TestSystem() };\r\n\r\n        var archetype = world.GetArchetype(ComponentTypes.Get<Position>());\r\n        archetype.CreateEntities(7993);\r\n\r\n        systemRoot.Update(default);\r\n        Thread.Sleep(2000);\r\n        systemRoot.Update(default);\r\n        jobRunner.Dispose(); // jobRunner is not used anymore so it can be disposed\r\n        \r\n        Console.ReadKey();\r\n    }\r\n}\r\n\r\npublic class TestSystem : QuerySystem<Position>\r\n{\r\n    protected override void OnUpdate()\r\n    {\r\n        var queryJob = Query.ForEach((myComponents, entities) =>\r\n        {\r\n            for (int n = 0; n < entities.Length; n++)\r\n            {\r\n                myComponents[n].x += 10f;\r\n            }\r\n        });\r\n        queryJob.RunParallel();\r\n        // Query.Store.JobRunner.Dispose(); doing this stop all worker threads\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "zerosar",
+        "created_at": "2024-11-28T19:50:34Z",
+        "body": "Got it. Thanks for the explanation."
+      }
+    ]
+  },
+  {
+    "number": 27,
+    "title": "EntitySerializer throws when using a MemoryStream created from a byte[]",
+    "created_at": "2024-11-02T00:59:26Z",
+    "closed_at": "2024-11-02T06:46:10Z",
+    "labels": [],
+    "url": "https://github.com/friflo/Friflo.Engine.ECS/issues/27",
+    "body": "The following code will throw an exception.\r\n\r\n```csharp\r\nEntityStore store = new();\r\nEntity entity = store.CreateEntity();\r\nentity.AddComponent(new EntityName { value = \"Hello World!\" });\r\n\r\nEntitySerializer serializer = new();\r\n\r\nusing MemoryStream writeStream = new();\r\nserializer.WriteEntities([entity], writeStream);\r\n\r\nwriteStream.Position = 0;\r\nusing StreamReader reader = new(writeStream);\r\nstring json = reader.ReadToEnd();\r\n\r\nEntityStore newStore = new();\r\nserializer.ReadIntoStore(newStore, new MemoryStream(Encoding.UTF8.GetBytes(json)));\r\n```\r\n\r\nThe exception it will throw is...\r\n\r\n```csharp\r\nERROR: System.UnauthorizedAccessException: MemoryStream's internal buffer cannot be accessed.\r\n   at System.IO.MemoryStream.GetBuffer()\r\n   at Friflo.Engine.ECS.Serialize.EntitySerializer.ReadIntoStoreSync(EntityStore store, MemoryStream memoryStream)\r\n   at Friflo.Engine.ECS.Serialize.EntitySerializer.ReadIntoStore(EntityStore store, Stream stream)\r\n   ...\r\n```\r\n\r\nThere is a workaround if you construct the `MemoryStream` like so.\r\n\r\n```csharp\r\nbyte[] bytes = Encoding.UTF8.GetBytes(json);\r\nusing MemoryStream memoryStream = new(bytes, 0, bytes.Length, true, true);\r\n```\r\n\r\nThis works because the final `bool` parameter of the constructor being `true` opens up `GetBuffer()` to provide the internal `byte[]` instead of throwing an exception. However, I do not think this should be required.\r\n\r\nI am using .NET 8 with version `3.0.0-preview.13` of `Friflo.Engine.ECS`.\r\n",
+    "comments_url": "https://api.github.com/repos/friflo/Friflo.Engine.ECS/issues/27/comments",
+    "author": "Soren025",
+    "comments": [
+      {
+        "user": "friflo",
+        "created_at": "2024-11-02T06:46:10Z",
+        "body": "@Soren025 Thx for report with test case.\r\n\r\nFixed with unit test."
+      },
+      {
+        "user": "friflo",
+        "created_at": "2024-11-12T13:00:36Z",
+        "body": "Fixed in 3.0.0-preview.14"
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "[Enhancement] `RequireComponent` Attribute",
+    "created_at": "2024-10-14T09:07:55Z",
+    "closed_at": "2025-01-11T12:18:57Z",
+    "labels": [],
+    "url": "https://github.com/friflo/Friflo.Engine.ECS/issues/23",
+    "body": "It is common to assign `RequireComponent` for a self-defined component in Unity for easier initialization.\r\n\r\nLike this:\r\n\r\n```csharp\r\nclass SubComponent : MonoBehaviour {}\r\n\r\n[RequireComponent(typeof(SubComponent), typeof(SpriteRenderer))]\r\nclass CustomComponent : MonoBehaviour {}\r\n\r\nvar obj = new GameObject(\"Test\", typeof(CustomComponent));\r\n\r\n// Then obj has CustomComponent, SubComponent, SpriteRenderer together.\r\n```\r\n\r\nIs it possible to implement it in Friflo? like this:\r\n\r\n```csharp\r\n[RequireComponent(typeof(Position))] \r\nstruct AnimData : IComponent \r\n{\r\n    public int frame_idx;\r\n    public Sprite[] ref_frames;\r\n}\r\n\r\nvar e = store.CreateEntity(new AnimData());\r\n// Then e has both AnimData and Position components.\r\n```\r\n\r\nTo my knowledge, it is possible to expand `Generic<AnimData>.ComponentTypes` through the attribute, ",
+    "comments_url": "https://api.github.com/repos/friflo/Friflo.Engine.ECS/issues/23/comments",
+    "author": "inmny",
+    "comments": [
+      {
+        "user": "friflo",
+        "created_at": "2025-01-11T12:18:58Z",
+        "body": "Thought about this.\r\nIt is possible but doing this has a performance impact on all `AddComponent<>` and `CreatEntity()` operations. Whether with or without this attribute.\r\n\r\nAdditionally understanding of code is more complicated because components may be added implicit.\r\nYou now have to check component type attributes when adding them.\r\nOtherwise you will wonder why a component was added without doing this explicit."
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "[Question] What's the differences between `Tag` and `Component` in the framework",
+    "created_at": "2024-10-13T12:25:46Z",
+    "closed_at": "2025-01-11T12:29:26Z",
+    "labels": [],
+    "url": "https://github.com/friflo/Friflo.Engine.ECS/issues/22",
+    "body": "I find that entity is copied fully no matter change(add/remove) tags or components. It seems that component is already sufficient and tag is useless.\r\n\r\nAnd is there plan to implement changing tag more lightly?",
+    "comments_url": "https://api.github.com/repos/friflo/Friflo.Engine.ECS/issues/22/comments",
+    "author": "inmny",
+    "comments": [
+      {
+        "user": "friflo",
+        "created_at": "2025-01-11T12:08:35Z",
+        "body": "The main difference a component can have data a tag not.\r\nThis enables to store tags very efficient.\r\n\r\nAn entity with a specific tag is moved to an `Archetype` containing this tag.\r\nSo no additional \"component\" data is stored when using tags.\r\nAlso when moving entities between archetypes no \"component\" data needs to be copied.\r\nThis makes the use of tags already very \"light\".\r\nDon't see any opportunities to make this even lighter."
+      },
+      {
+        "user": "inmny",
+        "created_at": "2025-01-11T12:29:26Z",
+        "body": "thanks for answering"
+      }
+    ]
+  }
+]

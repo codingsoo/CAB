@@ -1,0 +1,251 @@
+[
+  {
+    "number": 4879,
+    "title": "The router restore function can incorrectly set variables to undefined",
+    "created_at": "2022-04-03T14:26:13Z",
+    "closed_at": "2022-04-03T16:13:04Z",
+    "labels": [
+      "question",
+      "module:router"
+    ],
+    "url": "https://github.com/expressjs/express/issues/4879",
+    "body": "I found a case where `request.params` becomes undefined. Here is a concrete test case to reproduce the case:\r\n\r\n```javascript\r\n// test/app.router.js\r\n\r\nit('should have req.params in finish event after handler2 calls next', function(done){\r\n  var app = express();\r\n\r\n  function handler1(req, res, next) {\r\n    res.once('finish', function() {\r\n      setTimeout(function() {\r\n        assert(req.params.id);\r\n      })\r\n    })\r\n\r\n    next()\r\n  }\r\n\r\n  function handler2(req, res, next){\r\n    res.end(req.params.id);\r\n    next()\r\n  }\r\n\r\n  app.get('/user/:id', handler1, handler2);\r\n\r\n  request(app)\r\n  .get('/user/1')\r\n  .expect(200, '1', done);\r\n})\r\n```\r\n\r\nThe test runs fine if there is no `next` call in `handler2`. The `setTimeout` in `handler1` ensures that the test fails.\r\n\r\nAs I understand it, the last `next` will cause the function `done` to be called in the router:\r\n\r\n```javascript\r\n// lib/router/index.js\r\n\r\n// no more matching layers\r\nif (idx >= stack.length) {\r\n    setImmediate(done, layerError);\r\n    return;\r\n}\r\n```\r\n\r\nThe problem is that `done` is not working correctly in this case. If there are middlewares and no router the `done` function will replace `baseUrl`, `next`, and `params` with the value `undefined`.\r\n\r\n```javascript\r\n// lib/router/index.js\r\n\r\n// restore vals\r\nfor (var i = 0; i < props.length; i++) {\r\n    obj[props[i]] = vals[i];\r\n}\r\n```\r\n\r\nHence the `setTimeout` in the `handler1`. Without a timeout, the `handler1` function mostly finishes successfully before `done` is called in the next iteration of the event loop.\r\n\r\nMy proposal to fix the problem would be to check for `undefined`:\r\n\r\n```javascript\r\n// lib/router/index.js\r\n\r\n// restore vals\r\nfor (var i = 0; i < props.length; i++) {\r\n  if (vals[i] !== undefined) {\r\n    obj[props[i]] = vals[i];\r\n  }\r\n}\r\n```\r\n\r\nBefore creating a pull request I would like to hear if I missed some details or a better solution.\r\n\r\nI think better would if the `done` function would not try to restore anything if there is no router at all. But I could not figure out a good way to do that.",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/4879/comments",
+    "author": "floftar",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2022-04-03T16:13:04Z",
+        "body": "This is working as designed. When the code path exits the router, all the values are cleared."
+      },
+      {
+        "user": "floftar",
+        "created_at": "2022-04-06T16:49:37Z",
+        "body": "Thanks for the explanation!\r\n\r\nI guess that function name `restore` confused me because I thought that the function should always try to restore the variables.\r\n\r\nWhy are only `baseUrl`, `next`, and `params` request properties cleared? For instance, `query` and `method` are still available in my test case."
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2022-04-06T16:53:25Z",
+        "body": "Hi @floftar because inside the `handle` function, those are the only properties that are manipulated, so it is being responsible for restoring those properties back to the values they were when the `req` first entered into that `handle` function."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why specific request properties (baseUrl, next, params) are cleared when exiting router processing",
+      "Clear description of the router's state management design principles",
+      "Validation of whether undefined check is an appropriate solution pattern",
+      "Guidance on handling asynchronous operations with request context cleanup",
+      "Explanation of request property lifecycle management in nested middleware scenarios"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:20:55"
+    }
+  },
+  {
+    "number": 3962,
+    "title": "trust-proxy function not called?",
+    "created_at": "2019-05-17T09:36:34Z",
+    "closed_at": "2019-05-17T19:52:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/3962",
+    "body": "My Express server is running in a docker container with an nginx docker container proxying request to it.\r\n\r\n```\r\nRequest -> (nginx) -> (express)\r\n```\r\n\r\nI've been trying to set up Express so it only trusts the one nginx proxy, but so far I've not been able to get the `trust-proxy` setting to work.\r\nThe function I pass to the `trust-proxy` setting seems to never get called in my application.\r\n\r\n```ts\r\napp.set('trust proxy', (ip: string) => {\r\n    console.error(`PROXY ADDR: ${ip}`);\r\n    return false;\r\n});\r\n```\r\nWith this configuration, the `console.error` never appears in the logs.\r\n\r\nAm I doing something wrong here with my configuration, or is `trust proxy` not working as intended?\r\n\r\nMinimal reproduction:\r\n```ts\r\nconst app = express();\r\n\r\napp.set('trust proxy', (ip: string) => {\r\n    console.error(`PROXY ADDR: ${ip}`);\r\n    return false;\r\n});\r\n\r\napp.use('*', (_req: express.Request, res: express.Response) => {\r\n    return res.send('Hi');\r\n});\r\n\r\nconst webServer = createServer(app);\r\nwebServer.listen(3731);\r\n```",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/3962/comments",
+    "author": "Ionaru",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2019-05-17T13:59:41Z",
+        "body": "Hi @Ionaru . The trust proxy function is called when trust of addresses needs to be established. In your example, there is no code that needs to know anything about the upstream, so for optimization reasons, it will not get invoked.\r\n\r\nIf you add something like `req.ip`, `req.hostname` etc to your example, your function should then get called, as Express tries to determine the address."
+      },
+      {
+        "user": "Ionaru",
+        "created_at": "2019-05-17T19:52:03Z",
+        "body": "Ah, I see. My bad."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of when Express's trust-proxy function is actually invoked",
+      "Clarification of required conditions for trust-proxy evaluation",
+      "Identification of Express internal optimization behaviors"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:23:24"
+    }
+  },
+  {
+    "number": 3565,
+    "title": "Post request flood?",
+    "created_at": "2018-02-14T08:47:11Z",
+    "closed_at": "2018-02-15T11:22:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/3565",
+    "body": "Introduction\r\n================\r\nI\u00b4ve a nodejs application with express that have some post and get request. The whole website works just fine without problems.\r\n\r\nProblem\r\n============\r\nIf I call the post request to much in time the site will crash. It will not respond to other requests. Doesn\u00b4t matter if it\u00b4s get or post request. I just can close the tab and open the site in a new one. Then it work again.\r\n\r\nMy Code\r\n===========\r\n\r\n## Client side ##\r\nIt\u00b4s a easy post request to set a client permission. There is no callback defined.\r\n\r\n    $.post(\r\n       '/clients/set/client/permission',\r\n       {\r\n          permName: globPermissionTable[permName],\r\n          value: checked,\r\n          id: '<%= data[0].id %>'\r\n       }\r\n    );\r\n\r\n----------\r\n\r\n## Server side ##\r\nJust a easy post segment. Even if I will uncomment all in the request it will be not response.\r\n\r\n    app.post('/clients/set/client/permission', function(req, res) {\r\n\t   // Permissioncheck\r\n\t   /*var permName = req.body.permName, val = req.body.value, id = req.body.id;\r\n\t   if(helper.checkParams([permName, val, id])) {\r\n\t\t     database.SetClientPermissions(parseInt(id), permName, (val === 'true') ? true : false);\r\n\t   };*/\r\n    });",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/3565/comments",
+    "author": "lgund",
+    "comments": [
+      {
+        "user": "lgund",
+        "created_at": "2018-02-14T08:58:33Z",
+        "body": "I found out now that if a write _res.send('finished');_ this problem doesn\u00b4t happen. If it\u00b4s that important to always send something back?\r\n\r\n-----------\r\nFull Code:\r\n`app.post('/clients/set/client/permission', function(req, res) {\r\n   res.send('finished');\r\n});`"
+      },
+      {
+        "user": "wesleytodd",
+        "created_at": "2018-02-14T21:50:51Z",
+        "body": "Yes, you always need to send a response.  Otherwise the connection will remain open waiting for that response.  If you are not going to handle a request in a middleware, you can also just call `next` and allow express to respond for you with a 404:\r\n\r\n```\r\napp.post('/foo', function (req, res, next) {\r\n  if (something) {\r\n    return res.send('response');\r\n  }\r\n  next();\r\n});\r\n```"
+      },
+      {
+        "user": "lgund",
+        "created_at": "2018-02-15T11:22:27Z",
+        "body": "Thanks. That helped a lot!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of the need to properly close HTTP connections in Express",
+      "Clarification of Express middleware response lifecycle requirements"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:24:14"
+    }
+  },
+  {
+    "number": 3107,
+    "title": "unix socket support",
+    "created_at": "2016-10-20T15:35:29Z",
+    "closed_at": "2016-10-21T13:16:07Z",
+    "labels": [
+      "4.x",
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/3107",
+    "body": "Is it possible to use express with unix socket instead of `host:port` ?\n\nThe `listen` signature just call underlying server `listen` method, so I tried with:\n\n``` node\nserver = require('net').createServer(express());\nserver.listen('/tmp/sock', function() {\n  fs.chmodSync('/tmp/sock', 0777);\n});\n```\n\nBut then when, through nginx, I try to access a page, express crashes with the following error:\n\n```\n[...]/node_modules/express/lib/router/index.js:140\n  var search = 1 + req.url.indexOf('?');\n                          ^\n\nTypeError: Cannot read property 'indexOf' of undefined\n    at Function.handle ([...]/node_modules/express/lib/router/index.js:140:27)\n    at EventEmitter.handle ([...]/node_modules/express/lib/application.js:173:10)\n    at Server.app ([...]/node_modules/express/lib/express.js:38:9)\n    at emitOne (events.js:77:13)\n    at Server.emit (events.js:169:7)\n    at Pipe.onconnection (net.js:1431:8)\n```\n",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/3107/comments",
+    "author": "magne4000",
+    "comments": [
+      {
+        "user": "LinusU",
+        "created_at": "2016-10-20T15:55:57Z",
+        "body": "I think that this is already supported:\n\n``` js\nconst express = require('express')\nconst app = express()\n\n// ...\n\napp.listen('/tmp/sock', () => {\n  console.log('Now listening on /tmp/sock')\n})\n```\n"
+      },
+      {
+        "user": "hacksparrow",
+        "created_at": "2016-10-20T17:39:10Z",
+        "body": "@magne4000 you will need to use `http`, not `net`.\n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2016-10-21T02:42:13Z",
+        "body": "Yes, @magne4000 , your code incorrectly used the `net` module; if you simply replace your `require('net')` with `require('http')` it works just fine. In addition, you can just pass in the socket path to `app.listen` and Express.js will handle the rest for you. I'm simply summarizing the great replies from @LinusU and @hacksparrow since there hasn't been a response. @magne4000 please let us know if this works for you and we can close the issue, otherwise we can try to figure out why you can't get your UNIX socket working.\n"
+      },
+      {
+        "user": "magne4000",
+        "created_at": "2016-10-21T07:31:26Z",
+        "body": "Ok my bad ... it seems rather logical to use `http` instead of `net`.\nNow perhaps we need a note in `listen` documentation to mention that socket are also supported ?\n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2016-10-21T13:16:06Z",
+        "body": "Glad to hear you got it working! You're absolutely welcome to make a PR to update/add to our documentation. There is a link to edit the docs and open a PR all within your web browser at the bottom of every documentation page :)\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrate proper integration of Express with Unix sockets using the correct Node.js core modules",
+      "Show Express's native capability to handle socket paths through its listen method",
+      "Clarify documentation requirements for socket usage"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:26:31"
+    }
+  },
+  {
+    "number": 2770,
+    "title": "Each request is calling linux stat",
+    "created_at": "2015-09-30T14:39:19Z",
+    "closed_at": "2015-09-30T16:42:58Z",
+    "labels": [
+      "4.x",
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/2770",
+    "body": "Hi,\nWe added some monitoring to our servers lately after finding some unexpected latency on some times, and saw on our calls to the servers latency is caused by calling linux stat command.\nWe are still investigating to see if this may be related to other used services, but can it be express related issue? \n",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/2770/comments",
+    "author": "eranbrill",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2015-09-30T14:47:54Z",
+        "body": "The express.static will call stat to see if a file exists or not. If you are using express.static to serve files, then yes, you will see a stat. Ideally your express.static should be .use()d after your routes to avoid unnecessary stat calls.\n"
+      },
+      {
+        "user": "eranbrill",
+        "created_at": "2015-09-30T16:42:58Z",
+        "body": "Works Like A charm, thanks !\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the relationship between Express middleware order and unnecessary filesystem stat calls",
+      "Explains how to minimize filesystem checks in Express for latency reduction",
+      "Addresses Express.static usage patterns that trigger stat operations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:27:46"
+    }
+  },
+  {
+    "number": 2593,
+    "title": "Router mergeParams=true does not work ",
+    "created_at": "2015-03-14T17:41:11Z",
+    "closed_at": "2015-03-14T17:57:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/2593",
+    "body": "express 4.12.2. According to the Router doc about `mergeParams` option:\n\n> Preserve the `req.params` values from the parent router. If the parent and the child have conflicting param names, the child\u2019s value take precedence.\n\nMay be I miss something, but it does not behave in that way at all:\n\n``` javascript\nvar express = require('express');\nvar app = express();\n\n\napp.get('/users/:username', function(req, res, next) {\n        console.log('> app.get');\n\n    if (req.params.username !== 'alice') {\n        throw new Error('app.get: username != alice');\n    }\n\n    next();\n});\n\nvar router1 = express.Router({mergeParams: true});\napp.use(router1);\n\nrouter1.get('*', function(req, res, next) {\n        console.log('> router1.get');\n\n        // This throws.  \n    if (req.params.username !== 'alice') {\n        throw new Error('router1.get: username != alice');\n    }\n\n    next();\n});\n\napp.listen(5000, '0.0.0.0');\n```\n\nNow send a GET request with url \"/users/alice\" and it will print:\n\n```\n> app.get\n> router.get\nError: router1.get: username != alice\n```\n",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/2593/comments",
+    "author": "ibc",
+    "comments": [
+      {
+        "user": "ibc",
+        "created_at": "2015-03-14T17:57:04Z",
+        "body": "May be `mergeParams` just work when declaring a named param in the mount path of the router?\n\n\n---\n\nYes, sorry for the noise.\n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2015-03-14T21:17:08Z",
+        "body": "> Yes, sorry for the noise.\n\nI'm not sure if there is such thing as \"noise\" :) So to answer this, what `mergeParams` does is merge any `req.params` that _exists at the time the router is entered_. The reason it wasn't doing anything in your example above is because `app.use(router1);` does not have any parameters. You can see this by doing something like `app.use(function (req, res, next) { console.dir(req.params); next() })` and seeing it as nothing there.\n\nTo expand on your example, there are two possible solutions to achieve this, and the correct one for your situation depends on exactly how you are looking for the sub router to behave:\n\n``` js\nvar express = require('express');\nvar app = express();\n\napp.get('/users/:username', function(req, res, next) {\n        console.log('> app.get');\n\n    if (req.params.username !== 'alice') {\n        throw new Error('app.get: username != alice');\n    }\n\n    next();\n});\n\nvar router1 = express.Router({mergeParams: true});\n// now router1 will actually inherit parameters, since it's defined on a path with them\napp.all('/users/:username', router1);\n\nrouter1.get('*', function(req, res, next) {\n        console.log('> router1.get');\n\n    if (req.params.username !== 'alice') {\n        throw new Error('router1.get: username != alice');\n    }\n\n    next();\n});\n\napp.listen(5000, '0.0.0.0');\n```\n"
+      },
+      {
+        "user": "ibc",
+        "created_at": "2015-03-17T11:36:50Z",
+        "body": "Clear, thanks a lot.\n"
+      },
+      {
+        "user": "seyedasfar",
+        "created_at": "2019-04-14T09:28:33Z",
+        "body": "What is the purpose of using mergeParams?"
+      },
+      {
+        "user": "abdoerrahiem",
+        "created_at": "2020-07-07T09:08:42Z",
+        "body": "> What is the purpose of using mergeParams?\r\n\r\nto use route in another route"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why mergeParams=true didn't preserve req.params in the original setup",
+      "Clear demonstration of how to properly mount a router to inherit parameters",
+      "Identification of scenarios where mergeParams provides value",
+      "Differentiation between parameter inheritance from mounting path vs other contexts"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:29:56"
+    }
+  }
+]

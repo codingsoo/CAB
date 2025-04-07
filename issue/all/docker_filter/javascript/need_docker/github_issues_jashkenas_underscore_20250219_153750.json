@@ -1,0 +1,54 @@
+[
+  {
+    "number": 1648,
+    "title": "_.isEqual on \"[object HTMLCanvasElement]\" elements with different content",
+    "created_at": "2014-05-22T09:50:59Z",
+    "closed_at": "2014-05-22T12:30:44Z",
+    "labels": [
+      "question",
+      "duplicate"
+    ],
+    "url": "https://github.com/jashkenas/underscore/issues/1648",
+    "body": "With two canvas of the same size and same properties, but different contents (and different results from \"toDataURL()\"), _.isEqual returns true.\n\nI'm not sure what should be the expected result in this case. Maybe it's a bug, maybe it should lead to a warning in the documentation.\n",
+    "comments_url": "https://api.github.com/repos/jashkenas/underscore/issues/1648/comments",
+    "author": "Volune",
+    "comments": [
+      {
+        "user": "akre54",
+        "created_at": "2014-05-22T12:30:44Z",
+        "body": "`_.isEqual` is undefined for Elements (do a search through the issues for some background). It's much better to write the comparison by hand and `mixin` it into your own Underscore copy if you need it.\n\n``` js\n_.mixin({\n  isCanvasEqual: function(a, b) { return a.toDataUrl() === b.toDataUrl() }\n});\n```\n"
+      },
+      {
+        "user": "michaelficarra",
+        "created_at": "2014-05-22T14:30:42Z",
+        "body": "You could also define `HTMLCanvasElement.prototype.isEqual`.\n\n``` js\nHTMLCanvasElement.prototype.isEqual = function(otherCanvas) {\n  return this.toDataUrl() === otherCavas.toDataUrl();\n};\n```\n"
+      },
+      {
+        "user": "Volune",
+        "created_at": "2014-05-22T14:56:58Z",
+        "body": "A \"isCanvasEqual\" function is not usable for objects that may or may not contain a canvas (as it was in my case)\n\nThe HTMLCanvasElement.prototype.isEqual function is a good solution, thanks.\n"
+      },
+      {
+        "user": "jdalton",
+        "created_at": "2014-05-22T15:53:00Z",
+        "body": "Yap, the current Underscore method of handling DOM elements puts devs in a jam because it either works on some browsers, doesn't, or locks up the browser. That's not a good experience and seems to be common enough to warrant action.\n\nExtending DOM prototypes is a losing game too (see Prototype.js).\n\nUnderscore could detect DOM elements, avoid crawling, and do a strict equality check, `===`. This prevents the inconsistent behavior and browser freezes. Then Underscore could add support for a customizing callback to allow devs to tailor `_.isEqual` to their needs.\n\n``` js\nvar eq = _.partial(_.isEqual, _, _, function(value, other) {\n  if (_.isElement(value) && _.isElement(other) &&\n        value.nodeName.toLowerCase() == 'canvas' &&\n        other.nodeName.toLowerCase() == 'canvas'\n      ){\n    return value.toDataUrl() == other.toDataUrl();\n  }\n});\n```\n"
+      },
+      {
+        "user": "akre54",
+        "created_at": "2014-05-22T17:46:28Z",
+        "body": "Yeah extending prototypes is usually a no-go. @jdalton's solution is the way to go here. Given the number of edge cases and the murkily-defined equality semantics for elements of any type, it's much better to add this yourself to your own app.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Handles canvas element comparison based on actual content rather than object reference",
+      "Works with objects that may or may not contain canvas elements",
+      "Avoids browser inconsistencies and freezes with DOM element comparison",
+      "Doesn't require modifying native prototypes",
+      "Integrates with existing Underscore comparison logic"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:32:40"
+    }
+  }
+]

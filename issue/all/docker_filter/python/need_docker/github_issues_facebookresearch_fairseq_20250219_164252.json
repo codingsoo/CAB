@@ -1,0 +1,108 @@
+[
+  {
+    "number": 4492,
+    "title": "Model m2m-100 in fairseq-interactive mode",
+    "created_at": "2022-06-15T11:27:53Z",
+    "closed_at": "2022-06-16T08:56:56Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/4492",
+    "body": "I have a nice implementation of `fairseq-generate` on the pretrained m2m-100 model for EN-RU language pair. At the binarization stage with `fairseq-preprocess`, I noticed that `--srcdict` and `--tgtdict` options contain **the same** file, `model_dict.128k.txt` - exactly as it is recommended on the m2m-100 web page. That file is subsequently used in `--fixed-dictionary` option in `fairseq-generate`.\r\nThe main lack of this workflow is that I need to preprocess a **reference** translation file, which is a priori absent when my goal is simple translation without necessity to measure the quality of the translation. Thereby it's reasonable to assume that, if my EN-RU translation successfully completes with `fairseq-generate`, there is an opportunity to do the same with `fairseq-interactive`.\r\n\r\nInitially, when I tried `fairseq-interactive`, I got the error that files `dict.en.txt` and `dict.ru.txt` are not found. Really these dictionaries are not distributed with pretrained m2m-100 models. Then, if I copy the only available model dictionary `model_dict.128k.txt` twice, and rename one of those copies to `dict.en.txt`, the other - to `dict.ru.txt`, then there is no more error, but the output text turns out to be translated into a **random** language (EL, PT, etc. or even EN), as if my option `--target-lang ru` was ignored. The same occurs if I use `dict.en.txt` and `dict.ru.txt` files from my binarized data folder - they are the same as `model_dict.128k.txt`.\r\n\r\nThe full `fairseq-interactive` translation command which I use:\r\n\r\n`fairseq-interactive --input=testdata/ex.txt --path 1.2B_last_checkpoint.pt . --source-lang en --target-lang ru --tokenizer moses --bpe sentencepiece --sentencepiece-model spm.128k.model > testdata/ex.txt.out`\r\n\r\nAny ideas and suggestions to use m2m-100 in fairseq-interactive correctly?",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/4492/comments",
+    "author": "molokanov50",
+    "comments": [
+      {
+        "user": "gmryu",
+        "created_at": "2022-06-16T01:11:44Z",
+        "body": "To be honest, I have not tested m2m-100 myself.\r\nFrom a side perspecitive, I guess you should give the following arguments:\r\n```\r\n--task translation_multi_simple_epoch \\\r\n--lang-pairs language_pairs.txt \\\r\n--decoder-langtok --encoder-langtok src \r\n```\r\nor what is the command you used to generate? just switch that generate to interactive, add tokenizer,bpe.\r\n\r\n\r\nAnyway, for this case I believe TranslationTask (default task if not specified) read the model_dict.128k.txt, moses tokenized and spm your data correctly.\r\nThe reason you got random language is m2m-100 model requires a special token in sentences to identify which language pair is used. A normal translation task do not need to."
+      },
+      {
+        "user": "molokanov50",
+        "created_at": "2022-06-16T08:56:56Z",
+        "body": "The addition of `--decoder-langtok --encoder-langtok src` solved my question, now the target translation language is taken from `--target-lang` option. Thx a lot."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures the model respects the specified target language during translation",
+      "Works with fairseq-interactive without requiring reference translations",
+      "Maintains compatibility with the model's shared dictionary setup"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:38:06"
+    }
+  },
+  {
+    "number": 2782,
+    "title": "Error when trying to train with pipeline parallelism",
+    "created_at": "2020-10-23T15:59:08Z",
+    "closed_at": "2020-10-26T08:40:55Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2782",
+    "body": "Hi guys,\r\n\r\nI was trying to train a transformer model with pipeline parallelism. Is this supposed to work already? \r\n\r\nThe command i tried (following the translation example):\r\n`fairseq-train     data-bin/iwslt14.tokenized.de-en     --arch transformer_iwslt_de_en_pipeline_parallel --share-decoder-input-output-embed     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0     --lr 5e-4 --lr-scheduler inverse_sqrt --warmup-updates 4000     --dropout 0.3 --weight-decay 0.0001     --criterion label_smoothed_cross_entropy --label-smoothing 0.1     --max-tokens 4096     --eval-bleu     --eval-bleu-args '{\"beam\": 5, \"max_len_a\": 1.2, \"max_len_b\": 10}'     --eval-bleu-detok moses     --eval-bleu-remove-bpe     --eval-bleu-print-samples     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric --pipeline-model-parallel --pipeline-encoder-balance '[8]' --pipeline-encoder-devices '[0]' --pipeline-decoder-balance '[1,6,1]' --pipeline-decoder-devices '[0,1,0]' --pipeline-chunks 1 --distributed-world-size 2`\r\n\r\nerror:\r\n```\r\n2020-10-23 17:17:08 | INFO | fairseq.tasks.translation | [de] dictionary: 8848 types\r\n2020-10-23 17:17:08 | INFO | fairseq.tasks.translation | [en] dictionary: 6632 types\r\n2020-10-23 17:17:08 | INFO | fairseq.data.data_utils | loaded 7283 examples from: data-bin/iwslt14.tokenized.de-en/valid.de-en.de\r\n2020-10-23 17:17:08 | INFO | fairseq.data.data_utils | loaded 7283 examples from: data-bin/iwslt14.tokenized.de-en/valid.de-en.en\r\n2020-10-23 17:17:08 | INFO | fairseq.tasks.translation | data-bin/iwslt14.tokenized.de-en valid de-en 7283 examples\r\nTraceback (most recent call last):\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/bin/fairseq-train\", line 33, in <module>\r\n    sys.exit(load_entry_point('fairseq', 'console_scripts', 'fairseq-train')())\r\n  File \"/tertiary/thies/fairseq/fairseq_cli/train.py\", line 352, in cli_main\r\n    distributed_utils.call_main(cfg, main)\r\n  File \"/tertiary/thies/fairseq/fairseq/distributed_utils.py\", line 301, in call_main\r\n    cfg.distributed_training.distributed_world_size,\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/lib/python3.6/site-packages/torch/multiprocessing/spawn.py\", line 247, in spawn\r\n    return start_processes(fn, args, nprocs, join, daemon, start_method='spawn')\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/lib/python3.6/site-packages/torch/multiprocessing/spawn.py\", line 205, in start_processes\r\n    while not context.join():\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/lib/python3.6/site-packages/torch/multiprocessing/spawn.py\", line 166, in join\r\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\r\ntorch.multiprocessing.spawn.ProcessRaisedException: \r\n\r\n-- Process 0 terminated with the following error:\r\nTraceback (most recent call last):\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/lib/python3.6/site-packages/torch/multiprocessing/spawn.py\", line 59, in _wrap\r\n    fn(i, *args)\r\n  File \"/tertiary/thies/fairseq/fairseq/distributed_utils.py\", line 283, in distributed_main\r\n    main(cfg, **kwargs)\r\n  File \"/tertiary/thies/fairseq/fairseq_cli/train.py\", line 74, in main\r\n    model = task.build_model(cfg.model)\r\n  File \"/tertiary/thies/fairseq/fairseq/tasks/translation.py\", line 327, in build_model\r\n    model = super().build_model(args)\r\n  File \"/tertiary/thies/fairseq/fairseq/tasks/fairseq_task.py\", line 548, in build_model\r\n    model = models.build_model(args, self)\r\n  File \"/tertiary/thies/fairseq/fairseq/models/__init__.py\", line 56, in build_model\r\n    return ARCH_MODEL_REGISTRY[cfg.arch].build_model(cfg, task)\r\n  File \"/tertiary/thies/fairseq/fairseq/model_parallel/models/pipeline_parallel_transformer/model.py\", line 277, in build_model\r\n    checkpoint=args.pipeline_checkpoint,\r\n  File \"/tertiary/thies/fairseq/fairseq/model_parallel/models/pipeline_parallel_transformer/model.py\", line 57, in __init__\r\n    + [encoder.final_layer_norm]\r\n  File \"/secondary/thies/.virtualenvs/pytorch-23102020/lib/python3.6/site-packages/torch/nn/modules/module.py\", line 796, in __getattr__\r\n    type(self).__name__, name))\r\ntorch.nn.modules.module.ModuleAttributeError: 'TransformerEncoder' object has no attribute 'embedding_layer'\r\n```",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2782/comments",
+    "author": "thies1006",
+    "comments": [
+      {
+        "user": "shruti-bh",
+        "created_at": "2020-10-23T17:28:40Z",
+        "body": "For training, a single `Pipe()` module is created for the Transformer encoder-decoder model. So, you need to set `--pipeline-balance` and `--pipeline-devices` in the training command, instead of `--pipeline-encoder-balance`, `--pipeline-encoder-devices`, `--pipeline-decoder-balance`, `--pipeline-decoder-devices`.\r\nFor inference/generation, two `Pipe()` modules are created, one for the encoder and one for the decoder, since the encoder and decoder are called separately during generation. So, in that case, you need to set `--pipeline-encoder-balance`, `--pipeline-encoder-devices`, `--pipeline-decoder-balance`, `--pipeline-decoder-devices` instead."
+      },
+      {
+        "user": "thies1006",
+        "created_at": "2020-10-26T08:40:55Z",
+        "body": "Awesome, works now.\r\nThank you very much."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarifies the distinction between pipeline configuration parameters for training vs inference",
+      "Identifies correct pipeline parameter requirements for training phase",
+      "Explains how model architecture differs between training and generation phases"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:39:49"
+    }
+  },
+  {
+    "number": 2731,
+    "title": "OOM when fine-tune BART for summarization",
+    "created_at": "2020-10-14T13:23:18Z",
+    "closed_at": "2020-10-15T13:52:08Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2731",
+    "body": "\r\n#### What is your question?\r\n\r\nWith my GPU 1080Ti with 12GB memory, it keeps having errors OOM until I decrease the max_tokens to 64. However, it has another error below:\r\n\"AssertionError: sentence at index 2512 of size 101 exceeds max_tokens limit of 64!\"\r\nSo is it possible to fine-tune bart with 12GB memory?  I wonder it cannot have great performance in 64 tokens even if it can run successfully.\r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version (e.g., 1.0 or master):\r\n - PyTorch Version (e.g., 1.0)\r\n - OS (e.g., Linux):cent os7\r\n - How you installed fairseq (`pip`, source):\r\n - Build command you used (if compiling from source):\r\n - Python version:\r\n - CUDA/cuDNN version:\r\n - GPU models and configuration:\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2731/comments",
+    "author": "monologue1107",
+    "comments": [
+      {
+        "user": "moussaKam",
+        "created_at": "2020-10-15T10:35:04Z",
+        "body": "Try with --memory-efficient-fp16 . Otherwise, you can use the base architecture instead of the large one.\r\nAlso you can use --truncate-source to avoid exceeding limit error.  "
+      },
+      {
+        "user": "monologue1107",
+        "created_at": "2020-10-15T11:34:31Z",
+        "body": "> Try with --memory-efficient-fp16 . Otherwise, you can use the base architecture instead of the large one.\r\n> Also you can use --truncate-source to avoid exceeding limit error.\r\n\r\nThanks for your reply. I used --memory-efficient-fp16 for bart-large model and now train successfully with max_tokens=1024 in two 1080Ti GPU with 12GB memory. Hope for good training results."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must enable training BART on 12GB GPUs without OOM errors",
+      "Must support reasonable sequence lengths (\u22651024 tokens) for summarization quality",
+      "Should handle input sequences exceeding specified length limits gracefully",
+      "Must provide memory optimization strategies compatible with their hardware"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:39:59"
+    }
+  }
+]

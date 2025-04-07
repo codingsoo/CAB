@@ -1,0 +1,441 @@
+[
+  {
+    "number": 12980,
+    "title": "[QST] What's the cudf overhead for small dataset?",
+    "created_at": "2023-03-20T23:29:11Z",
+    "closed_at": "2023-03-23T17:45:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/12980",
+    "body": "**What is your question?**\r\n\r\n```\r\nimport cudf\r\nimport pandas as pd\r\nimport numpy as np\r\n\r\ndf1 = pd.DataFrame()\r\ndim = 1000\r\ndf1[\"A\"] = np.random.randint(0, dim, dim)\r\n\r\ndf1_cu = cudf.from_pandas(df1)\r\n\r\n%%time\r\ndf1_cu[\"A\"].sum()\r\n600 \u00b5s\r\n\r\n%%time\r\ndf1[\"A\"].sum()\r\n200 \u00b5s\r\n```\r\n\r\ncudf seems to have some  overhead for small datasets. Where does it come from? It should not from data transfer as \r\ndf1_cu = cudf.from_pandas(df1) has transferred the data.",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/12980/comments",
+    "author": "zachary62",
+    "comments": [
+      {
+        "user": "bdice",
+        "created_at": "2023-03-20T23:46:36Z",
+        "body": "@zachary62 I can\u2019t answer this definitively right now, but I would point out that there is still device-host data transfer: the result of the sum must be copied back to the host, incurring a device (or stream) synchronization."
+      },
+      {
+        "user": "zachary62",
+        "created_at": "2023-03-20T23:59:36Z",
+        "body": "For a task of a large number (e.g., 100000) sum, group-by, max queries, but over small datasets (<10000 rows), is there any way to use cudf for speedup? These queries are independent, and can we exploit inter-query parallelism?"
+      },
+      {
+        "user": "shwina",
+        "created_at": "2023-03-23T14:16:57Z",
+        "body": "> For a task of a large number (e.g., 100000) sum, group-by, max queries, but over small datasets (<10000 rows), is there any way to use cudf for speedup? These queries are independent, and can we exploit inter-query parallelism?\r\n\r\nOne way would be to leverage groupby.\r\n\r\nSay, for example you have 100 small datasets of 10_000 rows each:\r\n\r\n```python\r\ndfs = [cudf.datasets.randomdata(10_000) for i in range(100)]  # 100 dataframes of 10_000 rows each\r\n```\r\n\r\nYou could compute for example the `min` and `max` of each dataframe as follows:\r\n\r\n```python\r\ndf_stats = [df.agg(['max', 'min']) for df in dfs]\r\nprint(\"\\n\".join(map(str, df_stats[:5])))  # print the first 5 results\r\n         id         x         y\r\nmax  1141.0  0.999934  0.999911\r\nmin   867.0 -0.999895 -0.999854\r\n         id         x         y\r\nmax  1118.0  0.999983  0.999700\r\nmin   890.0 -0.999549 -0.999927\r\n         id         x         y\r\nmax  1104.0  0.999812  0.999611\r\nmin   887.0 -0.999343 -0.999895\r\n         id         x         y\r\nmax  1129.0  0.999822  0.999234\r\nmin   880.0 -0.999846 -0.999479\r\n         id         x         y\r\nmax  1120.0  0.998873  0.999985\r\nmin   884.0 -0.999894 -0.999906\r\n```\r\n\r\nThis is quite slow:\r\n\r\n```python\r\n%%timeit\r\ndf_stats = [df.agg(['max', 'min']) for df in dfs]\r\n\r\n316 ms \u00b1 5.26 ms per loop (mean \u00b1 std. dev. of 7 runs, 1 loop each)\r\n```\r\n\r\nAnother option would be to use a groupby to compute the `max` and `min` in a single operation. Here's a trick for doing that:\r\n\r\n```python\r\nimport cupy as cp\r\n\r\ndfs_concatenated = cudf.concat(dfs)\r\ngroups = cp.repeat(cp.arange(100), 10_000)\r\ndf_stats = dfs_concatenated.groupby(groups, sort=True).agg(['max', 'min'])\r\nprint(df_stats.head(5))\r\n     id              x                   y          \r\n    max  min       max       min       max       min\r\n0  1141  867  0.999934 -0.999895  0.999911 -0.999854\r\n1  1118  890  0.999983 -0.999549  0.999700 -0.999927\r\n2  1104  887  0.999812 -0.999343  0.999611 -0.999895\r\n3  1129  880  0.999822 -0.999846  0.999234 -0.999479\r\n4  1120  884  0.998873 -0.999894  0.999985 -0.999906\r\n```\r\n\r\nThis is faster:\r\n\r\n```python\r\n%%timeit\r\ngroups = cp.repeat(cp.arange(100), 10_000)\r\ndf_stats = cudf.concat(dfs).groupby(groups, sort=True).agg(['max', 'min'])\r\n\r\n21.4 ms \u00b1 1.54 ms per loop (mean \u00b1 std. dev. of 7 runs, 10 loops each)\r\n```\r\n"
+      },
+      {
+        "user": "zachary62",
+        "created_at": "2023-03-23T17:45:46Z",
+        "body": "That's smart! Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of cuDF overhead sources for small datasets",
+      "Identification of optimization strategies for inter-query parallelism",
+      "Demonstration of batch processing efficiency",
+      "Comparison of data transfer vs computation tradeoffs"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:00:55"
+    }
+  },
+  {
+    "number": 9401,
+    "title": "missing: cuFile_LIBRARY cuFileRDMA_LIBRARY cuFile_INCLUDE_DIR",
+    "created_at": "2021-10-07T19:45:20Z",
+    "closed_at": "2022-07-25T16:56:35Z",
+    "labels": [
+      "question",
+      "CMake"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/9401",
+    "body": "Hi,\r\n\r\nI am trying to build the C++ library from source using cuda 11.2 / gcc 9.4 / Ubuntu 18.04 / Driver Version: 470.74. However, it seems that a dependency is missing. In particular, I get the following error:\r\n\r\nCould NOT find cuFile (missing: cuFile_LIBRARY cuFileRDMA_LIBRARY cuFile_INCLUDE_DIR) \r\n\r\nIs there a way to obtain this library for Cuda 11.2? Cuda 11.4 seems to include GDS, but I havent managed to find this library for Cuda 11.2. Any pointer here is appreciated. \r\n\r\nBest,\r\n",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/9401/comments",
+    "author": "pedronahum",
+    "comments": [
+      {
+        "user": "beckernick",
+        "created_at": "2021-10-08T16:53:36Z",
+        "body": "Hi @pedronahum , thanks for filing the issue. We've made some updates in 21.10 that should prevent this in the general case. Could you share the full error?"
+      },
+      {
+        "user": "pedronahum",
+        "created_at": "2021-10-09T13:08:46Z",
+        "body": "Hi @beckernick. Deeply sorry, yesterday evening I upgraded my distribution to Ubuntu 20.04 and cannot reproduce the error.\r\n\r\nfyi, it seems that aws-sdk-cpp is required, as the build will fail if a header file (ie, aws/core/Aws.h) from this library is not found. After installing this sdk, I managed to build the cudf library. \r\n\r\nBest, \r\n\r\n"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-11-15T21:02:55Z",
+        "body": "This issue has been labeled `inactive-30d` due to no recent activity in the past 30 days. Please close this issue if no further response or action is needed. Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed. This issue will be labeled `inactive-90d` if there is no activity in the next 60 days."
+      },
+      {
+        "user": "Atharex",
+        "created_at": "2021-12-09T21:18:50Z",
+        "body": "seeing a similar error with a centos build with version 21.12. \r\n\r\nWhat is this cuFile? Does it have to be externally installed/built before cudf?"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-04-08T23:03:04Z",
+        "body": "This issue has been labeled `inactive-30d` due to no recent activity in the past 30 days. Please close this issue if no further response or action is needed. Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed. This issue will be labeled `inactive-90d` if there is no activity in the next 60 days.\n\n---\n\nThis issue has been labeled `inactive-90d` due to no recent activity in the past 90 days. Please close this issue if no further response or action is needed. Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed."
+      },
+      {
+        "user": "vyasr",
+        "created_at": "2022-07-25T16:56:35Z",
+        "body": "@Atharex cuFile is a part of the CTK since CUDA 11.4. If you have a sufficiently new CTK it will be present. Building libcudf now requires CUDA>=11.5, so if you can build the latest versions of cudf you should automatically have cuFile available."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification on cuFile availability for CUDA 11.2 or earlier versions",
+      "Explanation of cuFile's role in the build process and its dependencies"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:01:22"
+    }
+  },
+  {
+    "number": 8019,
+    "title": "How to \"concatenate\" rows into 1 list with groupby",
+    "created_at": "2021-04-21T16:48:29Z",
+    "closed_at": "2021-04-22T12:48:23Z",
+    "labels": [
+      "question",
+      "Python"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/8019",
+    "body": "I am trying to concatenate multiple rows into one single list after a _groupby_.\r\n\r\nWith _Pandas_, I can do this:\r\n\r\n```\r\ndf = pd.DataFrame({'A': [1,1,2,2,2,2,3],'B':['a','b','c','d','e','f','g']})\r\ndf = df.groupby('A')['B'].apply(list)\r\n\r\nA\r\n-------------------\r\n1          [a, b]\r\n2    [c, d, e, f]\r\n3             [g]\r\n```\r\n\r\nIs there any equivalent solutions using _cudf_?\r\n\r\nI tried the following without success\r\n\r\n```\r\ngdf = gdf.groupby('A')['B'].apply(list)\r\n\r\n**TypeError: Series object is not iterable. Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` if you wish to iterate over the values.**\r\n```\r\n\r\n```\r\ngdf = gdf.groupby('A')['B'].apply(lambda x : list(x))\r\n\r\n**TypeError: Series object is not iterable. Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` if you wish to iterate over the values.**\r\n```\r\n```\r\ngdf = gdf.groupby('A')['B'].apply(lambda x : x.to_arrow())\r\n\r\n**TypeError: cannot concatenate object of type <class 'pyarrow.lib.StringArray'>**\r\n```\r\n\r\n```\r\ngdf = gdf.groupby('A').agg({'B': lambda x: list(x)})\r\n\r\n**TypeError: 'type' object is not iterable**\r\n```\r\n\r\nAny suggestions? Thanks!\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/8019/comments",
+    "author": "gfiameni",
+    "comments": [
+      {
+        "user": "beckernick",
+        "created_at": "2021-04-21T17:07:01Z",
+        "body": "You can use the `agg` API. `df.groupby('A')['B'].agg(list)` or `df.groupby('A').agg({\"B\":list})`"
+      },
+      {
+        "user": "gfiameni",
+        "created_at": "2021-04-22T12:48:23Z",
+        "body": "Thanks! It works perfectly."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must use cuDF-compatible groupby aggregation to create lists of values",
+      "Avoid iteration over Series objects during aggregation",
+      "Produce grouped output matching pandas' structure (group labels with corresponding lists)"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:01:33"
+    }
+  },
+  {
+    "number": 7991,
+    "title": "[QST] Queston about row number limit in cuDF dataframe",
+    "created_at": "2021-04-19T05:13:54Z",
+    "closed_at": "2021-04-19T17:25:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/7991",
+    "body": "Dear cuDF developers,\r\n\r\nI am using Dask to load in some parquet data as a dask-cudf dataframe. When I use `.compute()` to convert from dask-cudf back to cuDF (I need some functions that aren't supported in dask-cudf) I am encountering this error:\r\n\r\n```\r\nRuntimeError: cuDF failure at: ../src/copying/concatenate.cu:365: Total number of concatenated rows exceeds size_type range\r\n```\r\n\r\nMy dataframe has 27 million rows which seems... large but maybe still reasonable? What is the row limit? Is there any way I can increase this limit? \r\n\r\nIf I can provide more info please let me know.\r\n\r\nThank you very much,\r\nLaurie",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/7991/comments",
+    "author": "lastephey",
+    "comments": [
+      {
+        "user": "davidwendt",
+        "created_at": "2021-04-19T12:09:44Z",
+        "body": "The row limit for a cudf column/dataframe is 2 billion (2,147,483,647)."
+      },
+      {
+        "user": "beckernick",
+        "created_at": "2021-04-19T13:06:00Z",
+        "body": "> When I use .compute() to convert from dask-cudf back to cuDF (I need some functions that aren't supported in dask-cudf) I am encountering this error:\r\n\r\nWould you be able to share which operations aren't supported in dask-cudf?\r\n\r\nIn the meantime, could you stay in Dask land but use the cudf operations with `ddf.map_partitions(custom_func)` to operate independently on each individual DataFrame partition?"
+      },
+      {
+        "user": "lastephey",
+        "created_at": "2021-04-19T16:32:19Z",
+        "body": "Thank you for your quick responses, David and Nick.\r\n\r\nSure, a few of the operations I'm using in cuDF:\r\n* `cudf.melt`\r\n* `cudf.to_datetime`\r\n* `cudf.drop_duplicates`\r\n\r\nThank you for the suggestion-- I can try the map partitions approach and report back. \r\n\r\nI am wondering why I hit this row limit when I am well under 2 billion rows. Does it sound like a possible bug? If so I am happy to file a report.\r\n\r\n"
+      },
+      {
+        "user": "beckernick",
+        "created_at": "2021-04-19T17:12:19Z",
+        "body": "Thanks Laurie!\r\n\r\nThis likely came up due to non numeric columns in the table. For example, the ~2 billion MAX(int32) limit on string columns presents based on the number of individual characters, rather than rows.\r\n\r\n\r\n> Sure, a few of the operations I'm using in cuDF:\r\n> cudf.melt\r\n> cudf.to_datetime\r\n> cudf.drop_duplicates\r\n\r\ndrop_duplicates and melt should be available as `ddf.drop_duplicates()` and `ddf.melt()`. For `to_datetime`, could you intead explicitly cast the column with `ddf[col].astype(\"datetime64[ms]\")`? If anything of these aren't working, please let us know!"
+      },
+      {
+        "user": "lastephey",
+        "created_at": "2021-04-19T17:25:49Z",
+        "body": "Thanks Nick. Ok I see, the row limit makes sense.\r\n\r\nThanks for the pointer about melt and drop_duplicates. I see now I was trying to use them incorrectly, like:\r\n\r\n```\r\ndask_cudf.melt(ddf)\r\n```\r\ninstead of\r\n\r\n```\r\nddf.melt()\r\n```\r\n\r\nI think I should be able to make this work within Dask using your suggestions. I'll close this, thank you very much for your help!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why a 27M-row dataframe triggers a size limit error below 2B rows",
+      "Workarounds to avoid full dataframe materialization when using unsupported operations",
+      "Clarification of whether this is a bug or expected behavior",
+      "Guidance on proper dask-cudf API usage for required operations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:01:40"
+    }
+  },
+  {
+    "number": 7481,
+    "title": "[QST]problems with dask_cudf custom aggregation",
+    "created_at": "2021-03-02T04:40:00Z",
+    "closed_at": "2021-04-04T09:19:17Z",
+    "labels": [
+      "question",
+      "Python",
+      "dask"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/7481",
+    "body": "**What is your question?**\r\nHi there,\r\n\r\nI'm trying to do a string-join aggregation in dask_cudf groupby dataframe. The input dataframe looks like below:\r\n`documents_categories.compute()`\r\n\r\ndocument_id | kv\r\n-- | --\r\n1595802 | 1611:0.92\r\n1595802 | 1610:0.07\r\n1524246 | 1807:0.92\r\n1524246 | 1608:0.07\r\n\r\n`documents_categories.dtypes`\r\n\r\n> document_id     int64\r\n> kv             object\r\n> dtype: object\r\n\r\nThe expected string-joined result should be:\r\ndocument_id | kv\r\n-- | --\r\n1595802 | 1611:0.92;1610:0.07\r\n1524246 | 1807:0.92;1608:0.07\r\n\r\nI have tried the following codes and other several methods, but still can't get this function running successfully. I'm not a expert in dask_cudf, any suggestions? Thanks!\r\n\r\n```\r\ncustom_join = dask.dataframe.Aggregation(\"custom_join\", lambda x: x.str.join(\";\"), lambda y: y.str.join(\";\"))\r\ndocuments_categories.groupby('document_id').agg({\"kv\": custom_join})\r\n```\r\n\r\n\r\n```\r\n---------------------------------------------------------------------------\r\nAttributeError                            Traceback (most recent call last)\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/utils.py in raise_on_meta_error(funcname, udf)\r\n    179     try:\r\n--> 180         yield\r\n    181     except Exception as e:\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/core.py in _emulate(func, *args, **kwargs)\r\n   5315     with raise_on_meta_error(funcname(func), udf=kwargs.pop(\"udf\", False)):\r\n-> 5316         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))\r\n   5317 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py in _groupby_apply_funcs(df, *index, **kwargs)\r\n    920     for result_column, func, func_kwargs in funcs:\r\n--> 921         r = func(grouped, **func_kwargs)\r\n    922 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py in _apply_func_to_column(df_like, column, func)\r\n    966 \r\n--> 967     return func(df_like[column])\r\n    968 \r\n\r\n<ipython-input-45-5dd27ef25785> in <lambda>(x)\r\n----> 1 custom_join = dask.dataframe.Aggregation(\"custom_join\", lambda x: x.str.join(\";\"), lambda y: y.str.join(\";\"))\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/cudf/core/groupby/groupby.py in __getattribute__(self, key)\r\n     62         try:\r\n---> 63             return super().__getattribute__(key)\r\n     64         except AttributeError:\r\n\r\nAttributeError: 'SeriesGroupBy' object has no attribute 'str'\r\n\r\nThe above exception was the direct cause of the following exception:\r\n\r\nValueError                                Traceback (most recent call last)\r\n<ipython-input-46-31b5ac92e045> in <module>\r\n----> 1 documents_categories.groupby('document_id').agg({\"kv\": custom_join})\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py in agg(self, arg, split_every, split_out)\r\n   1846     @derived_from(pd.core.groupby.DataFrameGroupBy)\r\n   1847     def agg(self, arg, split_every=None, split_out=1):\r\n-> 1848         return self.aggregate(arg, split_every=split_every, split_out=split_out)\r\n   1849 \r\n   1850 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask_cudf/groupby.py in aggregate(self, arg, split_every, split_out)\r\n     81 \r\n     82         return super().aggregate(\r\n---> 83             arg, split_every=split_every, split_out=split_out\r\n     84         )\r\n     85 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py in aggregate(self, arg, split_every, split_out)\r\n   1842             return self.size()\r\n   1843 \r\n-> 1844         return super().aggregate(arg, split_every=split_every, split_out=split_out)\r\n   1845 \r\n   1846     @derived_from(pd.core.groupby.DataFrameGroupBy)\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py in aggregate(self, arg, split_every, split_out)\r\n   1622             split_out=split_out,\r\n   1623             split_out_setup=split_out_on_index,\r\n-> 1624             sort=self.sort,\r\n   1625         )\r\n   1626 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/core.py in apply_concat_apply(args, chunk, aggregate, combine, meta, token, chunk_kwargs, aggregate_kwargs, combine_kwargs, split_every, split_out, split_out_setup, split_out_setup_kwargs, sort, ignore_index, **kwargs)\r\n   5267 \r\n   5268     if meta is no_default:\r\n-> 5269         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)\r\n   5270         meta = _emulate(\r\n   5271             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/core.py in _emulate(func, *args, **kwargs)\r\n   5314     \"\"\"\r\n   5315     with raise_on_meta_error(funcname(func), udf=kwargs.pop(\"udf\", False)):\r\n-> 5316         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))\r\n   5317 \r\n   5318 \r\n\r\n/opt/conda/envs/rapids/lib/python3.7/contextlib.py in __exit__(self, type, value, traceback)\r\n    128                 value = type()\r\n    129             try:\r\n--> 130                 self.gen.throw(type, value, traceback)\r\n    131             except StopIteration as exc:\r\n    132                 # Suppress StopIteration *unless* it's the same exception that\r\n\r\n/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/utils.py in raise_on_meta_error(funcname, udf)\r\n    199         )\r\n    200         msg = msg.format(\" in `{0}`\".format(funcname) if funcname else \"\", repr(e), tb)\r\n--> 201         raise ValueError(msg) from e\r\n    202 \r\n    203 \r\n\r\nValueError: Metadata inference failed in `_groupby_apply_funcs`.\r\n\r\nYou have supplied a custom function and Dask is unable to \r\ndetermine the type of output that that function returns. \r\n\r\nTo resolve this please provide a meta= keyword.\r\nThe docstring of the Dask function you ran should have more information.\r\n\r\nOriginal error is below:\r\n------------------------\r\nAttributeError(\"'SeriesGroupBy' object has no attribute 'str'\")\r\n\r\nTraceback:\r\n---------\r\n  File \"/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/utils.py\", line 180, in raise_on_meta_error\r\n    yield\r\n  File \"/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/core.py\", line 5316, in _emulate\r\n    return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))\r\n  File \"/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py\", line 921, in _groupby_apply_funcs\r\n    r = func(grouped, **func_kwargs)\r\n  File \"/opt/conda/envs/rapids/lib/python3.7/site-packages/dask/dataframe/groupby.py\", line 967, in _apply_func_to_column\r\n    return func(df_like[column])\r\n  File \"<ipython-input-45-5dd27ef25785>\", line 1, in <lambda>\r\n    custom_join = dask.dataframe.Aggregation(\"custom_join\", lambda x: x.str.join(\";\"), lambda y: y.str.join(\";\"))\r\n  File \"/opt/conda/envs/rapids/lib/python3.7/site-packages/cudf/core/groupby/groupby.py\", line 63, in __getattribute__\r\n    return super().__getattribute__(key)\r\n```",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/7481/comments",
+    "author": "yuanqingz",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-04-01T05:11:48Z",
+        "body": "This issue has been labeled `inactive-30d` due to no recent activity in the past 30 days. Please close this issue if no further response or action is needed. Otherwise, please respond with a comment indicating any updates or changes to the original issue and/or confirm this issue still needs to be addressed. This issue will be labeled `inactive-90d` if there is no activity in the next 60 days."
+      },
+      {
+        "user": "beckernick",
+        "created_at": "2021-04-01T14:02:14Z",
+        "body": "@cocorosiekz we've recently implemented collect list. It looks like it's not cleanly working with Dask (I'll file an issue), but perhaps the following would work for you?\r\n\r\n```python\r\nimport cudf\r\nimport dask_cudf\r\nfrom io import StringIO\r\n\u200b\r\n\u200b\r\ndata = \"\"\"document_id   kv\r\n1595802 1611:0.92\r\n1595802 1610:0.07\r\n1524246 1807:0.92\r\n1524246 1608:0.07\"\"\"\r\n\u200b\r\ndf = cudf.read_csv(StringIO(data), sep=\"\\t\")\r\nddf = dask_cudf.from_cudf(df, 2)\r\n\u200b\r\n\u200b\r\ndef collect_list_agg(df):\r\n    return df.groupby(\"document_id\").agg({\"kv\": list})\r\n\u200b\r\n# ensure every row of a given key is in the same partition\r\npartitioned = ddf.shuffle(on=[\"document_id\"])\r\n\u200b\r\n# run a within-partition cudf groupby collect list\r\nprint(partitioned.map_partitions(collect_list_agg).compute())\r\n                                 kv\r\ndocument_id                        \r\n1595802      [1611:0.92, 1610:0.07]\r\n1524246      [1807:0.92, 1608:0.07]\r\n```\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "yuanqingz",
+        "created_at": "2021-04-04T09:19:13Z",
+        "body": "Thanks @beckernick ! The shuffle-then-map-partitions way works for me. But it would be great to use groupby-collect-list to solve this. I think we can close this issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must enable string aggregation in dask_cudf groupby operations",
+      "Approach must work within dask_cudf's groupby limitations for string operations",
+      "Must explain proper handling of grouped string data in GPU-accelerated workflows",
+      "Should address data partitioning requirements for groupby aggregations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:02:31"
+    }
+  },
+  {
+    "number": 5830,
+    "title": "install error[QST]",
+    "created_at": "2020-08-03T12:26:41Z",
+    "closed_at": "2020-08-06T05:05:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/5830",
+    "body": "Dear developer,\r\nThanks for developing nice tool. I would like to install cudf. But when I tried to install cudf with conda, I got following error.\r\ncations were found to be incompatible with your CUDA driver:\r\n\r\n  - feature:/linux-64::__cuda==11.0=0\r\n  - feature:|@/linux-64::__cuda==11.0=0\r\n\r\nYour installed CUDA driver is: 11.0\r\n\r\nMy cuder driver version is 450 and nvidia-smi shows cuda version is 11.0. But I installed condatoolkit version 10.1.\r\nSo I think actual cuda version of my env is cuda10.1.\r\nAre there any way to install cudf without downgrading nvidia-drive version?\r\nAny comments a/o suggestions will be greatly appreciated.\r\nThanks in advance.\r\n\r\nTaka",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/5830/comments",
+    "author": "iwatobipen",
+    "comments": [
+      {
+        "user": "kkraus14",
+        "created_at": "2020-08-03T14:53:27Z",
+        "body": "@iwatobipen those messages related to `__cuda` are a bug in conda and are typically innocuous. Any chance you could share the full output of your conda install/create command to help troubleshoot?"
+      },
+      {
+        "user": "iwatobipen",
+        "created_at": "2020-08-03T22:47:59Z",
+        "body": "@kkraus14 Thanks for your prompt reply. Here is a full output when I tried to install cudf.\r\n\r\n\r\n$ conda install -c rapidsai cudf=0.13\r\nCollecting package metadata (current_repodata.json): done\r\nSolving environment: failed with initial frozen solve. Retrying with flexible solve.\r\nSolving environment: failed with repodata from current_repodata.json, will retry with next repodata source.\r\nCollecting package metadata (repodata.json): done\r\nSolving environment: failed with initial frozen solve. Retrying with flexible solve.\r\nSolving environment: - \r\nFound conflicts! Looking for incompatible packages.\r\nThis can take several minutes.  Press CTRL-C to abort.\r\nfailed                                                                                                                         \r\n\r\nUnsatisfiableError: The following specifications were found to be incompatible with each other:\r\n\r\nOutput in format: Requested package -> Available versionsThe following specifications were found to be incompatible with your CUDA driver:\r\n\r\n  - feature:/linux-64::__cuda==11.0=0\r\n  - feature:|@/linux-64::__cuda==11.0=0\r\n\r\nYour installed CUDA driver is: 11.0\r\n\r\n\r\nAnd list of conda package which has 'cuda' in their name.\r\n\r\n\r\n$ conda list | grep cuda\r\ncudatoolkit               10.1.243             h6bb024c_0    nvidia\r\ncudatoolkit-dev           10.1.243             h516909a_3    conda-forge\r\ncudnn                     7.6.5                cuda10.1_0  \r\nopenmm                    7.4.2           py37_cuda101_rc_1    omnia\r\n\r\n\r\nThanks"
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-08-03T23:57:53Z",
+        "body": "Can you dump the full output of `conda list` here?\r\n\r\nDo you have a `.condarc` file that specifies other channels already? If so could you post your channels here as well?"
+      },
+      {
+        "user": "iwatobipen",
+        "created_at": "2020-08-04T00:38:16Z",
+        "body": "Here is the full list of my env and I don't have a .condarc file now.\r\nThanks\r\n\r\n$ conda list\r\n# packages in environment at /home/iwatobipen/miniconda3/envs/chemoinfo:\r\n#\r\n# Name                    Version                   Build  Channel\r\n_libgcc_mutex             0.1                        main  \r\n_py-xgboost-mutex         2.0                       cpu_0  \r\nabsl-py                   0.9.0                    py37_0  \r\nalembic                   1.4.2                      py_0  \r\namberlite                 16.0                     pypi_0    pypi\r\nambertools                17.0                     pypi_0    pypi\r\nambit                     0.3                  h137fa24_1    psi4\r\nappdirs                   1.4.3            py37h28b3542_0  \r\nase                       3.19.2                   pypi_0    pypi\r\nasn1crypto                1.3.0                    py37_1  \r\nattrs                     19.3.0                     py_0  \r\nautograd                  1.3                        py_0    conda-forge\r\nautograd-gamma            0.4.1                      py_0    conda-forge\r\nbackcall                  0.2.0                      py_0  \r\nbcrypt                    3.1.7            py37h7b6447c_1  \r\nblack                     19.10b0                    py_0  \r\nblas                      1.0                         mkl  \r\nbleach                    3.1.5                      py_0  \r\nblosc                     1.19.0               hd408876_0  \r\nbokeh                     2.1.1                    py37_0  \r\nboost-cpp                 1.68.0            h11c811c_1000    conda-forge\r\nbrotlipy                  0.7.0           py37h7b6447c_1000  \r\nbzip2                     1.0.8                h7b6447c_0  \r\nca-certificates           2020.6.24                     0  \r\ncairo                     1.14.12              h8948797_3  \r\ncatch2                    2.11.2               hc9558a2_0    conda-forge\r\ncertifi                   2020.6.20                py37_0  \r\ncffi                      1.14.0           py37he30daa8_1  \r\nchardet                   3.0.4                 py37_1003  \r\nchemps2                   1.8.9                h8c3debe_0    psi4\r\nclang                     10.0.1          default_hde54327_0    conda-forge\r\nclang-tools               10.0.1          default_hde54327_0    conda-forge\r\nclangdev                  10.0.1          default_hde54327_0    conda-forge\r\nclangxx                   10.0.1          default_hde54327_0    conda-forge\r\nclick                     7.1.2                      py_0  \r\ncliff                     3.3.0                      py_0    conda-forge\r\ncloudpickle               1.5.0                      py_0  \r\ncmaes                     0.6.0              pyhbc3b93e_0    conda-forge\r\ncmd2                      0.9.22                   py37_0    conda-forge\r\ncolorama                  0.4.3                      py_0  \r\ncolorlog                  4.2.1                    py37_0  \r\nconfigparser              5.0.0                      py_0  \r\ncryptography              2.9.2            py37h1ba5d50_0  \r\ncudatoolkit               10.1.243             h6bb024c_0    nvidia\r\ncudatoolkit-dev           10.1.243             h516909a_3    conda-forge\r\ncudnn                     7.6.5                cuda10.1_0  \r\ncupy                      7.7.0            py37h0632833_0    conda-forge\r\ncurl                      7.69.1               hbc83047_0  \r\ncycler                    0.10.0                   py37_0  \r\ncython                    0.29.21          py37he6710b0_0  \r\ncytoolz                   0.10.1           py37h7b6447c_0  \r\ndask                      2.20.0                     py_0  \r\ndask-core                 2.20.0                     py_0  \r\ndatabricks-cli            0.9.1                      py_0    conda-forge\r\ndbus                      1.13.16              hb2f20db_0  \r\ndecorator                 4.4.2                      py_0  \r\ndeepdiff                  3.3.0                    py37_1    psi4\r\ndefusedxml                0.6.0                      py_0  \r\ndgl-cu101                 0.4.3.post2              pypi_0    pypi\r\ndgllife                   0.2.4                    pypi_0    pypi\r\ndistributed               2.20.0                   py37_0  \r\ndkh                       1.2                  h173d85e_2    psi4\r\ndocker-py                 4.2.2                    py37_0  \r\ndocker-pycreds            0.4.0                      py_0  \r\nentrypoints               0.3                      py37_0  \r\nexpat                     2.2.9                he6710b0_2  \r\nfastcache                 1.1.0            py37h7b6447c_0  \r\nfastrlock                 0.4              py37he6710b0_0  \r\nfftw3f                    3.3.4                         2    omnia\r\nflake8                    3.8.3                      py_0  \r\nflask                     1.1.2                      py_0  \r\nfontconfig                2.13.0               h9420a91_0  \r\nfpsim2                    0.2.3           py37_1_g29b1e09    efelix\r\nfreetype                  2.10.2               he06d7ca_0    conda-forge\r\nfsspec                    0.7.4                      py_0  \r\nfuture                    0.18.2                   py37_1  \r\ngau2grid                  1.3.1                h035aef0_0    psi4\r\ngdma                      2.2.6                h0e1e685_6    psi4\r\ngitdb                     4.0.5                      py_0  \r\ngitpython                 3.1.3                      py_1  \r\nglib                      2.65.0               h3eb4bd4_0  \r\ngoogledrivedownloader     0.4                      pypi_0    pypi\r\ngorilla                   0.3.0                      py_0    conda-forge\r\ngst-plugins-base          1.14.0               hbbd80ab_1  \r\ngstreamer                 1.14.0               hb31296c_0  \r\ngunicorn                  20.0.4                   py37_0  \r\nh5py                      2.10.0                   pypi_0    pypi\r\nhdf4                      4.2.13               h3ca952b_2  \r\nhdf5                      1.10.2               hba1933b_1  \r\nheapdict                  1.0.1                      py_0  \r\nhyperopt                  0.2.4                    pypi_0    pypi\r\nicu                       58.2                 he6710b0_3  \r\nidna                      2.10                       py_0  \r\nimportlib-metadata        1.7.0                    py37_0  \r\nimportlib_metadata        1.7.0                         0  \r\nintel-openmp              2020.1                      217  \r\nipykernel                 5.3.4            py37h5ca1d4c_0  \r\nipython                   7.16.1           py37h5ca1d4c_0  \r\nipython_genutils          0.2.0                    py37_0  \r\nipywidgets                7.5.1                      py_0  \r\nisodate                   0.6.0                    pypi_0    pypi\r\nisort                     5.0.9                    py37_0  \r\nitsdangerous              1.1.0                    py37_0  \r\njedi                      0.17.1                   py37_0  \r\njinja2                    2.11.2                     py_0  \r\njoblib                    0.16.0                     py_0  \r\njpeg                      9b                   h024ee3a_2  \r\njsonpickle                1.4.1                      py_0  \r\njsonschema                3.2.0                    py37_1  \r\njupyter                   1.0.0                      py_2    conda-forge\r\njupyter_client            6.1.6                      py_0  \r\njupyter_console           6.1.0                      py_0  \r\njupyter_core              4.6.3                    py37_0  \r\nkiwisolver                1.2.0            py37hfd86e86_0  \r\nkrb5                      1.17.1               h173b8e3_0  \r\nlcms2                     2.11                 h396b838_0  \r\nld_impl_linux-64          2.33.1               h53a641e_7  \r\nlibboost                  1.67.0               h46d08c1_4  \r\nlibclang                  10.0.1          default_hde54327_0    conda-forge\r\nlibclang-cpp              10.0.1          default_hde54327_0    conda-forge\r\nlibclang-cpp10            10.0.1          default_hde54327_0    conda-forge\r\nlibcurl                   7.69.1               h20c2e04_0  \r\nlibedit                   3.1.20191231         h14c3975_1  \r\nlibffi                    3.3                  he6710b0_2  \r\nlibgcc-ng                 9.1.0                hdf63c60_0  \r\nlibgfortran-ng            7.3.0                hdf63c60_0  \r\nlibiconv                  1.15              h516909a_1006    conda-forge\r\nlibint                    1.2.1                hb4a4fd4_6    psi4\r\nlibllvm10                 10.0.1               he513fc3_0    conda-forge\r\nlibnetcdf                 4.4.1.1             hfc65e7b_11    conda-forge\r\nlibpng                    1.6.37               hed695b0_1    conda-forge\r\nlibpq                     12.2                 h20c2e04_0  \r\nlibprotobuf               3.12.3               hd408876_0  \r\nlibsodium                 1.0.18               h7b6447c_0  \r\nlibssh2                   1.9.0                h1ba5d50_1  \r\nlibstdcxx-ng              9.1.0                hdf63c60_0  \r\nlibtiff                   4.1.0                h2733197_1  \r\nlibuuid                   1.0.3                h1bed415_2  \r\nlibxc                     4.3.4                h7b6447c_0    psi4\r\nlibxcb                    1.14                 h7b6447c_0  \r\nlibxgboost                1.1.1                he1b5a44_0    conda-forge\r\nlibxml2                   2.9.10               he19cac6_1  \r\nlibxslt                   1.1.34               hc22bd24_0  \r\nlifelines                 0.25.0                     py_0    conda-forge\r\nlightgbm                  2.3.0            py37he6710b0_0  \r\nllvm-tools                10.0.1               he513fc3_0    conda-forge\r\nllvmdev                   10.0.1               he513fc3_0    conda-forge\r\nllvmlite                  0.33.0                   pypi_0    pypi\r\nlocket                    0.2.0                    py37_1  \r\nlz4-c                     1.9.2                he6710b0_1  \r\nlzo                       2.10                 h7b6447c_2  \r\nmako                      1.1.3                      py_0  \r\nmarkupsafe                1.1.1            py37h14c3975_1  \r\nmatplotlib                3.3.0                         1    conda-forge\r\nmatplotlib-base           3.3.0            py37hd478181_1    conda-forge\r\nmccabe                    0.6.1                    py37_1  \r\nmesalib                   18.3.1               h590aaf7_0    conda-forge\r\nmistune                   0.8.4           py37h14c3975_1001  \r\nmkl                       2020.1                      217  \r\nmkl-service               2.3.0            py37he904b0f_0  \r\nmkl_fft                   1.1.0            py37h23d657b_0  \r\nmkl_random                1.1.1            py37h0573a6f_0  \r\nml-metrics                0.1.4                    pypi_0    pypi\r\nmlflow                    1.2.0                      py_1    conda-forge\r\nmmpbsa-py                 16.0                     pypi_0    pypi\r\nmongodb                   4.0.3                h597af5e_0  \r\nmongoengine               0.20.0           py37hc8dfbb8_2    conda-forge\r\nmore-itertools            8.4.0                      py_0  \r\nmsgpack-c                 3.2.0                hc5b1762_0    conda-forge\r\nmsgpack-python            1.0.0            py37hfd86e86_1  \r\nmypy_extensions           0.4.3                    py37_0  \r\nnbconvert                 5.6.1                    py37_1  \r\nnbformat                  5.0.7                      py_0  \r\nnccl                      2.7.8.1              h51cf6c1_0    conda-forge\r\nncurses                   6.2                  he6710b0_1  \r\nnetworkx                  2.4                        py_1  \r\nngboost                   0.2.1              pyh9f0ad1d_0    conda-forge\r\nnotebook                  6.0.3                    py37_0  \r\nnumba                     0.50.1                   pypi_0    pypi\r\nnumexpr                   2.7.1            py37h423224d_0  \r\nnumpy                     1.19.1           py37hbc911f0_0  \r\nnumpy-base                1.19.1           py37hfa32c7d_0  \r\nolefile                   0.46                     py37_0  \r\nopenforcefield            0.7.1+45.g6426b42a          pypi_0    pypi\r\nopenforcefields           1.2.0                    py37_0    omnia\r\nopenmm                    7.4.2           py37_cuda101_rc_1    omnia\r\nopenssl                   1.1.1g               h7b6447c_0  \r\nopenvr                    1.0.17               h6bb024c_1    schrodinger\r\nopt-einsum                3.0.0                      py_0    conda-forge\r\noptuna                    2.0.0                      py_0    conda-forge\r\npackaging                 20.4                       py_0  \r\npackmol-memgen            1.0.5rc0                 pypi_0    pypi\r\npandas                    1.0.5            py37h0573a6f_0  \r\npandoc                    2.10                          0  \r\npandocfilters             1.4.2                    py37_1  \r\nparmed                    3.2.0                    pypi_0    pypi\r\nparso                     0.7.0                      py_0  \r\npartd                     1.1.0                      py_0  \r\npathspec                  0.7.0                      py_0  \r\npatsy                     0.5.1                    py37_0  \r\npbr                       5.4.5                      py_0  \r\npcmsolver                 1.2.1            py37h142c950_0    psi4\r\npcre                      8.44                 he6710b0_0  \r\npdb4amber                 1.7.dev0                 pypi_0    pypi\r\npexpect                   4.8.0                    py37_1  \r\npickleshare               0.7.5                 py37_1001  \r\npillow                    7.2.0            py37hb39fc2d_0  \r\npint                      0.10                       py_0    psi4\r\npip                       20.1.1                   py37_1  \r\npixman                    0.40.0               h7b6447c_0  \r\nplotly                    4.8.2                      py_0  \r\npluggy                    0.13.1                   py37_0  \r\npmw                       2.0.1           py37hc8dfbb8_1002    conda-forge\r\npostgresql                12.2                 h20c2e04_0  \r\nprettytable               0.7.2                      py_3    conda-forge\r\nprometheus_client         0.8.0                      py_0  \r\nprompt-toolkit            3.0.5                      py_0  \r\nprompt_toolkit            3.0.5                         0  \r\nprotobuf                  3.12.3           py37he6710b0_0  \r\npsi4                      1.3.2+ecbda83    py37h31b3128_0    psi4\r\npsutil                    5.7.0            py37h7b6447c_0  \r\npsycopg2                  2.8.5            py37hb09aad4_1    conda-forge\r\nptyprocess                0.6.0                    py37_0  \r\npy                        1.9.0                      py_0  \r\npy-boost                  1.67.0           py37h04863e7_4  \r\npy-cpuinfo                7.0.0                      py_0  \r\npy-xgboost                1.1.1            py37hc8dfbb8_0    conda-forge\r\npy3dmol                   0.8.0                      py_0    conda-forge\r\npychembldb                0.4.1                     dev_0    <develop>\r\npycodestyle               2.6.0                      py_0  \r\npycparser                 2.20                       py_2  \r\npydantic                  1.5.1            py37h7b6447c_0  \r\npyflakes                  2.2.0                      py_0  \r\npygments                  2.6.1                      py_0  \r\npymol                     2.5.0a0                  pypi_0    pypi\r\npymongo                   3.9.0            py37he6710b0_0  \r\npyopenssl                 19.1.0                     py_1  \r\npyparsing                 2.4.7                      py_0  \r\npyperclip                 1.8.0              pyh9f0ad1d_0    conda-forge\r\npyqt                      5.9.2            py37h05f1152_2  \r\npyrsistent                0.16.0           py37h7b6447c_0  \r\npyside2                   5.9.0a1          py37h4dc837a_0    conda-forge\r\npysocks                   1.7.1                    py37_1  \r\npytables                  3.4.4            py37ha205bf6_0  \r\npytest                    5.4.3                    py37_0  \r\npython                    3.7.7                hcff3b4d_5  \r\npython-dateutil           2.8.1                      py_0  \r\npython-editor             1.0.4                      py_0  \r\npython_abi                3.7                     1_cp37m    conda-forge\r\npytraj                    2.0.5                    pypi_0    pypi\r\npytz                      2020.1                     py_0  \r\npyyaml                    5.3.1            py37h7b6447c_1  \r\npyzmq                     19.0.1           py37he6710b0_1  \r\nqcelemental               0.4.2                      py_0    psi4\r\nqcengine                  0.8.2                      py_0    conda-forge\r\nqcfractal                 0.7.2                      py_0    conda-forge\r\nqcportal                  0.7.2                      py_0    conda-forge\r\nqt                        5.9.7                h5867ecd_1  \r\nqtconsole                 4.7.5                      py_0  \r\nqtpy                      1.9.0                      py_0  \r\nquerystring_parser        1.2.4                      py_0    conda-forge\r\nrazi                      0.0.0                    pypi_0    pypi\r\nrdflib                    5.0.0                    pypi_0    pypi\r\nrdkit                     2020.03.3.0      py37hc20afe1_1    rdkit\r\nrdkit-postgresql          2020.03.3.0          h8ea0133_0    rdkit\r\nreadline                  8.0                  h7b6447c_0  \r\nregex                     2020.6.8         py37h7b6447c_0  \r\nrequests                  2.24.0                     py_0  \r\nresp                      0.8.1              pyha93d1a2_0    psi4\r\nretrying                  1.3.3                    py37_2  \r\nsander                    16.0                     pypi_0    pypi\r\nscikit-learn              0.23.1           py37h423224d_0  \r\nscipy                     1.5.0            py37h0b6359f_0  \r\nseaborn                   0.10.1                        1    conda-forge\r\nseaborn-base              0.10.1                     py_1    conda-forge\r\nsend2trash                1.5.0                    py37_0  \r\nsetuptools                49.2.0                   py37_0  \r\nsimint                    0.7                  h642920c_1    psi4\r\nsimplejson                3.17.0           py37h7b6447c_0  \r\nsip                       4.19.8           py37hf484d3e_0  \r\nsix                       1.15.0                     py_0  \r\nsmmap                     3.0.2                      py_0  \r\nsnappy                    1.1.8                he6710b0_0  \r\nsortedcontainers          2.2.2                      py_0  \r\nsqlalchemy                1.3.18           py37h8f50634_0    conda-forge\r\nsqlite                    3.32.3               h62c20be_0  \r\nsqlparse                  0.3.1                      py_0  \r\nstatsmodels               0.11.1           py37h7b6447c_0  \r\nstevedore                 3.2.0            py37hc8dfbb8_0    conda-forge\r\ntabulate                  0.8.3                    py37_0  \r\ntblib                     1.6.0                      py_0  \r\nterminado                 0.8.3                    py37_0  \r\ntestpath                  0.4.4                      py_0  \r\nthreadpoolctl             2.1.0              pyh5ca1d4c_0  \r\ntk                        8.6.10               hbc83047_0  \r\ntoml                      0.10.1                     py_0  \r\ntoolz                     0.10.0                     py_0  \r\ntorch                     1.5.0+cu101              pypi_0    pypi\r\ntorch-cluster             1.5.6                    pypi_0    pypi\r\ntorch-geometric           1.6.0                    pypi_0    pypi\r\ntorch-scatter             2.0.5                    pypi_0    pypi\r\ntorch-sparse              0.6.6                    pypi_0    pypi\r\ntorch-spline-conv         1.2.0                    pypi_0    pypi\r\ntorchvision               0.6.0+cu101              pypi_0    pypi\r\ntornado                   6.0.4            py37h7b6447c_1  \r\ntqdm                      4.48.0                   pypi_0    pypi\r\ntraitlets                 4.3.3                    py37_0  \r\ntyped-ast                 1.4.1            py37h7b6447c_0  \r\ntyping_extensions         3.7.4.2                    py_0  \r\nurllib3                   1.25.9                     py_0  \r\nwcwidth                   0.2.5                      py_0  \r\nwebencodings              0.5.1                    py37_1  \r\nwebsocket-client          0.57.0                   py37_1  \r\nwerkzeug                  1.0.1                      py_0  \r\nwheel                     0.34.2                   py37_0  \r\nwidgetsnbextension        3.5.1                    py37_0  \r\nxfeat                     0.1.0                     dev_0    <develop>\r\nxgboost                   1.1.1            py37h3340039_0    conda-forge\r\nxz                        5.2.5                h7b6447c_0  \r\nyaml                      0.2.5                h7b6447c_0  \r\nzeromq                    4.3.2                he6710b0_2  \r\nzict                      2.0.0                      py_0  \r\nzipp                      3.1.0                      py_0  \r\nzlib                      1.2.11               h7b6447c_3  \r\nzstd                      1.4.5                h9ceee32_0  \r\n\r\n"
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-08-04T01:13:48Z",
+        "body": "Could you try changing your install command to `conda install -c rapidsai -c nvidia -c conda-forge -c defaults cudf=0.14`?\r\n\r\nFrom the looks of your environment what stands out most to me is you have `pandas 1.0.5` while v0.14 of RAPIDS requires `pandas 0.25.3` as well as having a bunch of pip packages installed which can play havoc on solving / finding dependencies properly.\r\n\r\nIf using a new environment is an option I'd strongly suggest taking that route and using: `conda create -c rapidsai -c nvidia -c conda-forge -c defaults cudf=0.14`"
+      },
+      {
+        "user": "iwatobipen",
+        "created_at": "2020-08-05T04:18:58Z",
+        "body": "Sorry for my late reply. I tried to your suggested command but it didn't work. On the other side when I created a new environment, I could install cudf without any problems.\r\n\r\n"
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-08-05T05:52:14Z",
+        "body": "Got it. Looks like there's conflicts in your current environment and given the number of packages installed in it this isn't unexpected.\r\n\r\nDoes creating a new environment work for you or do you need it in this existing environment?"
+      },
+      {
+        "user": "iwatobipen",
+        "created_at": "2020-08-05T06:57:06Z",
+        "body": "Hopefully, I would like to install cudf in the existing environment but I got following error (it was picked up cudf related).\r\nBut new env is acceptable if it is difficult to solve the conflict.\r\nPackage pyarrow conflicts for:\r\ncudf=0.14 -> pyarrow=0.15.0\r\nqcportal -> pyarrow[version='>=0.13.0']\r\nqcfractal -> qcfractal-core[version='>=0.13.1,<0.13.2.0a0'] -> pyarrow[version='>=0.13.0']\r\n\r\nThanks.\r\n"
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-08-05T14:15:52Z",
+        "body": "Is there any additional conflicts being shown? That looks solvable with pyarrow 0.15.\r\n"
+      },
+      {
+        "user": "iwatobipen",
+        "created_at": "2020-08-06T05:05:03Z",
+        "body": "Hi, I tried to remove some packages and install cudf in my env and found that new version of rdkit  202003.03 and rdkit-postgresql cause the issue. When I uninstalled rdkit-postgresql and downgrade rdkit version to 2018, installation was succeeded. \r\nAnd I would like to close the issue.\r\nThank you for taking your time.\r\n"
+      },
+      {
+        "user": "aniruddhakal",
+        "created_at": "2020-10-17T15:25:58Z",
+        "body": "> Could you try changing your install command to `conda install -c rapidsai -c nvidia -c conda-forge -c defaults cudf=0.14`?\r\n> \r\n> From the looks of your environment what stands out most to me is you have `pandas 1.0.5` while v0.14 of RAPIDS requires `pandas 0.25.3` as well as having a bunch of pip packages installed which can play havoc on solving / finding dependencies properly.\r\n> \r\n> If using a new environment is an option I'd strongly suggest taking that route and using: `conda create -c rapidsai -c nvidia -c conda-forge -c defaults cudf=0.14`\r\n\r\nworked like a charm for me,\r\nThanks @kkraus14 "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve environment dependency conflicts without requiring NVIDIA driver downgrades",
+      "Ensure compatibility with existing CUDA 11.0 driver and mixed toolkit versions",
+      "Provide installation method that works in existing environment with multiple scientific packages",
+      "Address package version conflicts (particularly pandas and rdkit-related dependencies)",
+      "Offer clear conflict resolution strategies for conda environments"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:03:04"
+    }
+  },
+  {
+    "number": 4893,
+    "title": "[QST] I need a \"reduce\" operation",
+    "created_at": "2020-04-14T09:46:42Z",
+    "closed_at": "2020-04-15T14:22:30Z",
+    "labels": [
+      "question",
+      "Python"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/4893",
+    "body": "Hi!\r\n\r\nI have grouped my cudf stream and now I need to reduce values by unique values.\r\n For example, My stream has:\r\na   b\r\n1  1\r\n1  2\r\n2  3\r\n2  4\r\n\r\nI need to get stream with have unique value of column 'a' and result of some function from column 'b'\r\na  f(a)\r\n1  10\r\n2  20\r\n\r\nHow I can do it? Thanks for advice!",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/4893/comments",
+    "author": "schernolyas",
+    "comments": [
+      {
+        "user": "kkraus14",
+        "created_at": "2020-04-14T18:31:34Z",
+        "body": "@schernolyas it sounds like you're doing a groupby. Can you give more information about what `f(a)` looks like? Do built in groupby aggregations not suffice for your use case?"
+      },
+      {
+        "user": "schernolyas",
+        "created_at": "2020-04-14T18:52:58Z",
+        "body": "Hi @kkraus14 !\r\nDo you mean that I can decrease count of rows by groupby? I tried groupby without success."
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-04-14T18:55:56Z",
+        "body": "@schernolyas Yes, in your above example, you could do something like `df.groupby(['a']).sum()` which would return you two rows of `[3, 7]` which is the sum of the `b` column."
+      },
+      {
+        "user": "schernolyas",
+        "created_at": "2020-04-15T07:12:17Z",
+        "body": "Hi @kkraus14 !\r\n\r\nThank you very much for your comments. "
+      },
+      {
+        "user": "kkraus14",
+        "created_at": "2020-04-15T14:22:30Z",
+        "body": "@schernolyas my pleasure, I'm going to close this as it seems your question is resolved. If you have any additional questions feel free to open a new issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrate how to group rows by unique values in column 'a' and apply an aggregation function to column 'b'",
+      "Show usage of groupby operations in cudf",
+      "Produce a dataframe with unique 'a' values and corresponding aggregated 'b' values"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:03:26"
+    }
+  },
+  {
+    "number": 2958,
+    "title": "cudf flatten API [QST]",
+    "created_at": "2019-10-03T20:42:50Z",
+    "closed_at": "2019-12-12T20:52:24Z",
+    "labels": [
+      "question",
+      "Python"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/2958",
+    "body": "**What is your question?**\r\nDoes CUDF  support an api to flat the dataframe like pd.values.flatten() ? Thanks you.\r\n```python\r\nIn [40]: df_matchColor1                                       \r\nOut[40]: \r\n      color  key_index\r\n0   #ffffd9          0\r\n1   #7fcdbb          1\r\n2   #41b6c4          2\r\n3   #1d91c0          3\r\n4   #ffffd9          4\r\n5   #7fcdbb          5\r\n6   #41b6c4          6\r\n7   #1d91c0          7\r\n8   #ffffd9          8\r\n9   #7fcdbb          9\r\n10  #41b6c4         10\r\n11  #1d91c0         11\r\n\r\nIn [53]: df_matchColor1.to_pandas().values.flatten()                                 \r\nOut[53]: \r\narray(['#ffffd9', 0, '#7fcdbb', 1, '#41b6c4', 2, '#1d91c0', 3, '#ffffd9',\r\n       4, '#7fcdbb', 5, '#41b6c4', 6, '#1d91c0', 7, '#ffffd9', 8,\r\n       '#7fcdbb', 9, '#41b6c4', 10, '#1d91c0', 11], dtype=object)\r\n```",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/2958/comments",
+    "author": "MikeChenfu",
+    "comments": [
+      {
+        "user": "kkraus14",
+        "created_at": "2019-10-10T22:30:10Z",
+        "body": "@MikeChenfu in your use case you're utilizing Pandas/Numpy's ability to fall back to using Python objects to created a mixed dtype array. This is extremely detrimental to performance and won't be supported in cuDF for mixed dtypes.\r\n\r\nOtherwise, you should be able to use the same code as `df.values.flatten()` that will go from cuDF --> cuPy --> flattened cuPy array."
+      },
+      {
+        "user": "MikeChenfu",
+        "created_at": "2019-10-14T15:43:22Z",
+        "body": "Thanks @kkraus14. It works right now. Thanks for your kind help.:)   "
+      },
+      {
+        "user": "Mirror-HHf",
+        "created_at": "2019-11-01T13:38:53Z",
+        "body": "Hello, I saw that you were learning NSGA2 algorithm before, could you give me a contact information opportunity to communicate with you?"
+      },
+      {
+        "user": "randerzander",
+        "created_at": "2019-12-12T20:52:24Z",
+        "body": "I believe @MikeChenfu solved his problem another way"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Equivalent functionality to pandas.DataFrame.values.flatten() in cuDF",
+      "Support for array conversion that maintains GPU-accelerated performance",
+      "Clear documentation of dtype handling limitations",
+      "Native cuDF-to-cuPy array conversion support"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:03:33"
+    }
+  },
+  {
+    "number": 2880,
+    "title": "Does Dask Distributed or dask_cudf supports Apache Arrow Flight batch stream for IO?",
+    "created_at": "2019-09-27T12:54:34Z",
+    "closed_at": "2019-10-25T12:50:47Z",
+    "labels": [
+      "question",
+      "Python",
+      "dask"
+    ],
+    "url": "https://github.com/rapidsai/cudf/issues/2880",
+    "body": "**What is your question?**\r\nI am sharing my data in arrow format through arrow flight as stream; and need to consume it from dask_cudf in GPU.\r\n\r\nWhat i tried \r\n - read arrow batch stream as a table.\r\n - Create cudf\r\n - pass it to dask_cudf.\r\n \r\nThis works for small data, but reading full stream as a single arrow table into cudf may cause out of memory error.\r\n\r\nIs there any better way out of the box in dask distributed or in dask_cudf to read/write to Arrow Flight Buffer?",
+    "comments_url": "https://api.github.com/repos/rapidsai/cudf/issues/2880/comments",
+    "author": "vnkesarwani",
+    "comments": [
+      {
+        "user": "kkraus14",
+        "created_at": "2019-10-10T22:50:25Z",
+        "body": "@vnkesarwani is there a reason you couldn't read the Arrow batch stream directly on a worker so that you don't have to do the local --> distributed data movement? I.E. using delayed function(s) to read the Arrow flight source on the workers and create the arrow tables and pass to cudf in an embarassingly parallel manner? Once you have the cudf DataFrames created on the workers it's a simple `dask_cudf.from_delayed(...)` call (zero-op) to create a dask dataframe from them."
+      },
+      {
+        "user": "vnkesarwani",
+        "created_at": "2019-10-25T12:50:47Z",
+        "body": "Thanks @kkraus14. \r\n\r\nI am able to run in distributed mode."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports memory-efficient streaming of Arrow Flight data to avoid out-of-memory errors",
+      "Leverages distributed computing capabilities for parallel data processing",
+      "Maintains compatibility with GPU-accelerated workflows through cudf/dask_cudf"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:03:39"
+    }
+  }
+]

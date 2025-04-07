@@ -1,0 +1,190 @@
+[
+  {
+    "number": 114,
+    "title": "Typescript error in not optional context",
+    "created_at": "2025-02-02T16:08:03Z",
+    "closed_at": "2025-02-03T03:30:32Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/114",
+    "body": "```\nos.router({\n\ttest: os.$context<{ db: \"fake-db\" }>().handler(() => {})\n})\n```\n\n\n```\nType 'DecoratedProcedure<{ db: \"fake-db\"; }, { db: \"fake-db\"; }, undefined, undefined, void, {}, {}>' is not assignable to type 'Router<Context, ContractRouter<{}>>'.\n  Type 'DecoratedProcedure<{ db: \"fake-db\"; }, { db: \"fake-db\"; }, undefined, undefined, void, {}, {}>' is not assignable to type '{ [x: string]: Router<Context, ContractRouter<{}>>; }'.\n    Index signature for type 'string' is missing in type 'DecoratedProcedure<{ db: \"fake-db\"; }, { db: \"fake-db\"; }, undefined, undefined, void, {}, {}>'\n```\n\n```\ntest: os.$context<{ db?: \"fake-db\" }>().handler(() => {}) // works\n```\n\n    \"@orpc/client\": \"^0.33.0\",\n    \"@orpc/server\": \"^0.33.0\",",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/114/comments",
+    "author": "mmmpppsss",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2025-02-03T01:27:09Z",
+        "body": "I believe this behavior is expected\n\nIf you need to specify a context, you can do this instead:\n\n```ts\nos.$context<{ db: \"fake-db\" }>().router({\n  test: os.$context<{ db: \"fake-db\" }>().handler(() => {})\n});\n```\n\nAlternatively, you can define the router using a plain object:  \n\n```ts\nconst router = {\n  test: os.$context<{ db: \"fake-db\" }>().handler(() => {})\n};\n```  "
+      }
+    ]
+  },
+  {
+    "number": 102,
+    "title": "Missing Zod array introspection when generating OpenAPI spec.",
+    "created_at": "2025-01-25T08:39:17Z",
+    "closed_at": "2025-02-01T09:15:44Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/102",
+    "body": "Simple example:\n```ts\nexport const example = base.prefix(\"/example\").router({\n\texample: base\n\t\t.route({ path: \"/\" })\n\t\t.output(\n\t\t\tz.object({\n\t\t\t\tbody: z.object({\n\t\t\t\t\titems: z.array(z.string()),\n\t\t\t\t}),\n\t\t\t}),\n\t\t)\n\t\t.handler(() => {\n\t\t\treturn {\n\t\t\t\tbody: { items: [] },\n\t\t\t};\n\t\t}),\n});\n```\nThe above example generates the following OpenAPI schema for its output:\n```json\n\"application/json\": {\n    \"schema\": {\n        \"type\": \"object\",\n        \"properties\": { \"items\": { \"type\": \"array\" } },\n        \"required\": [\"items\"]\n    }\n}\n```\nThis is missing information about the elements of the array and seems to be a bug.\n\nThanks for your work on this library!",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/102/comments",
+    "author": "HamishWHC",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-26T00:21:57Z",
+        "body": "I will working on this soon, now I need to finish `rewrite builders` first."
+      }
+    ]
+  },
+  {
+    "number": 91,
+    "title": "[feature request] support add description in swagger for each api",
+    "created_at": "2025-01-15T09:48:04Z",
+    "closed_at": "2025-01-16T08:18:47Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/91",
+    "body": "Hi,\r\n\r\nI want to add description for an API (which should be shown in swagger document), but I can only add description to fields. Is it possible to support describe the API, or maybe it's already supported?\r\n\r\n```ts\r\nexport const contract = oc.router({\r\n  getUser: oc\r\n    .input(z.object({ name: z.string() }).describe(\"123123\"))\r\n    //                                      ^ adding to fields is possible\r\n    .output(z.object({ username: z.string(), avatar: z.string() })),\r\n});\r\n```",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/91/comments",
+    "author": "InfiniteXyy",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-15T10:28:12Z",
+        "body": "You can use the `oc.route({ description: 'your description here' })`"
+      },
+      {
+        "user": "InfiniteXyy",
+        "created_at": "2025-01-16T08:27:52Z",
+        "body": "Sorry I didn't see this, it perfectly support my requirement I will close the issue."
+      }
+    ]
+  },
+  {
+    "number": 89,
+    "title": "contract without schema?",
+    "created_at": "2025-01-14T16:56:20Z",
+    "closed_at": "2025-01-16T12:22:30Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/89",
+    "body": "Hi, I want to use orpc only for clients, but I don't want to add extra bundle to parse the response, is that possible? e.g.\r\n\r\n```ts\r\n// or maybe you can use `HttpError` as the default error response?\r\ntype HttpError = {\r\n  message: string\r\n}\r\n\r\ntype FilterTodo = {\r\n  search: string\r\n}\r\n\r\ntype Todo = {\r\n  id: number\r\n  title: string\r\n  completed: boolean\r\n}\r\n\r\nconst contract = oc.router({\r\n  todo: oc.router({\r\n    all: oc.route({ method: 'GET', path: '/todos' })\r\n      .input<Partial<FilterTodo>>()\r\n      .output<Todo[], HttpError>(),\r\n\r\n    create: oc\r\n      .route({ method: 'POST', path: '/todos' })\r\n      .input<Omit<Todo, 'id'>>()\r\n      .output<Todo, HttpError>(),\r\n\r\n    completeById: oc\r\n      .route({ method: 'PUT', path: '/todos/{id}' })\r\n      .output<Todo, HttpError>(),\r\n  }),\r\n});\r\n```\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/89/comments",
+    "author": "iamyuu",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-14T23:31:51Z",
+        "body": "We can do this:\r\n\r\n```ts\r\nimport type { StandardSchemaV1 } from '@standard-schema/spec'\r\nimport type { ZodType, ZodTypeDef } from 'zod'\r\nimport { z } from 'zod'\r\nimport { oc } from '.'\r\n\r\n// for universal way\r\nexport function type<T>(): StandardSchemaV1<T, T> {\r\n  return undefined as any\r\n}\r\n\r\n// or specific with zod\r\nexport function type<T>(): ZodType<T, ZodTypeDef, T> {\r\n  return z.custom<T>()\r\n}\r\n\r\ntype FilterTodo = {\r\n  search: string\r\n}\r\n\r\ntype Todo = {\r\n  id: number\r\n  title: string\r\n  completed: boolean\r\n}\r\n\r\nconst contract = oc.route({ method: 'GET', path: '/todos' })\r\n  .input(type<Partial<FilterTodo>>())\r\n  .output(type<Todo[]>())\r\n  .errors({\r\n    HTTP_ERROR: {\r\n      message: 'default error message',\r\n    },\r\n  })\r\n  ```\r\n  \r\n  But for error response `HttpError` you must define it inside .errors"
+      },
+      {
+        "user": "iamyuu",
+        "created_at": "2025-01-15T10:25:21Z",
+        "body": "I see, I think `type` should be built it right? like `ts-rest`"
+      },
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-15T12:06:46Z",
+        "body": "> I see, I think `type` should be built it right? like `ts-rest`\n\nYes, I will do that"
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "Thanks for your awesome project!",
+    "created_at": "2025-01-13T07:18:19Z",
+    "closed_at": "2025-01-13T07:23:20Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/84",
+    "body": "Hi, sorry for creating an issue.\r\n\r\nI really want to express my love for this project. I was previously a user of `ts-rest`. Switching to `orpc` didn't present any difficulties at all; it solved many issues with `ts-rest`, such as not having to manually provide keys for react query and supporting file type data structures, etc.\r\nThe use of orpc is also more flexible; it can provide middleware for each API and also create procedures to offer common middleware.\r\n\r\nI am still in the process of learning `orpc` and look forward to the day when this project can release version 1.0.",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/84/comments",
+    "author": "InfiniteXyy",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-13T08:17:45Z",
+        "body": "Thanks for your kind words! I'm glad oRPC has been helpful. Your support motivates me to keep improving. Excited for what's ahead!"
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "would this work in a react native env?",
+    "created_at": "2025-01-03T16:10:46Z",
+    "closed_at": "2025-01-07T08:12:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/unnoq/orpc/issues/70",
+    "body": "thanks for the work, looks prett cool!",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/70/comments",
+    "author": "atresnjo",
+    "comments": [
+      {
+        "user": "unteifu",
+        "created_at": "2025-01-03T22:08:52Z",
+        "body": "Yes it would if you use either the @orpc/react or @orpc/react-query package :smile:"
+      },
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-04T00:25:42Z",
+        "body": "> thanks for the work, looks prett cool!\n\nEvery oRPC package should works"
+      }
+    ]
+  },
+  {
+    "number": 58,
+    "title": "Discussion on New Error Handling APIs and Design Patterns",
+    "created_at": "2024-12-26T14:25:55Z",
+    "closed_at": "2025-01-10T13:20:43Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/unnoq/orpc/issues/58",
+    "body": "I’m working on a new approach to error handling in oRPC and would love to hear your thoughts on the design, naming, and patterns used in the API. Below is the current implementation:\r\n\r\n```ts\r\nconst getting = os\r\n  .input(z.object({ val: z.string() }))\r\n  .output(z.object({ val: z.string() }))\r\n  .errors({\r\n    PAYLOAD_TOO_LARGE: {\r\n       status: 498, // optional, default status of PAYLOAD_TOO_LARGE is 413\r\n       message: 'default message', // optional\r\n       data: ErrorSchema, // optional\r\n    },\r\n    ANYTHING: {\r\n       status: 499, // required since oRPC not know the ANYTHING error\r\n    }\r\n  })\r\n  .func(async (input, context, meta) => {\r\n    throw meta.errors.PAYLOAD_TOO_LARGE({ \r\n        message: 'payment required'\r\n        data: {}\r\n    });\r\n    // equal to\r\n    throw new ORPCError({ code: 'PAYLOAD_TOO_LARGE', status: 498,  data: { } })\r\n\r\n   // this error will convert to 500 because the error is conflict with defined errors\r\n   throw new ORPCError({ status: 498, code: 'PAYLOAD_TOO_LARGE', data: { invalid: true } })\r\n   \r\n   // default status of PAYLOAD_TOO_LARGE is 413, so it will not conflict here\r\n   throw new ORPCError({ code: 'PAYLOAD_TOO_LARGE', data: { invalid: true } })\r\n\r\n  // this will throw like normal because it not conflict with defined errors\r\n   throw new ORPCError({ code: 'UNPROCESSABLE_CONTENT', data: { invalid: true } })\r\n   \r\n   // throw meta.errors.ANYTHING({ })\r\n   // throw new ORPCError({ code: 'ANYTHING' })\r\n  });\r\n```\r\n\r\n> oRPC only treat an error is conflict with defined error when the status code is the same but data or code it not match.\r\n\r\nWith built-in error like, validation failures and internal server errors, it will not prevent you from define but the openapi specs will always contain `or` in schema. Or the built-in errors will never conflict with your defined errors\r\n\r\nHow handle error on client? \r\n\r\n```ts\r\nconst [data, error] = await safe(getting)\r\n\r\nif(isDefinedError(error)){\r\n // error fulltype here\r\n}\r\n```\r\n\r\nWith `@orpc/vue-query` or `@orpc/react-query` will work out of the box, but vanilla client will require you use helper function like `safe`\r\n\r\n\r\nWith this approach, we can achieve:\r\n- Type-safety for error data.\r\n- Automatic inclusion of errors in OpenAPI specs.\r\n- Typesafe error handling on the client side.\r\n\r\nI’m looking for feedback on the following:\r\n- Naming conventions for errors and related APIs.\r\n- The overall design pattern and approach.\r\n- How to handle common errors like input validation failures, authentication issues, and internal server errors.",
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/58/comments",
+    "author": "unnoq",
+    "comments": [
+      {
+        "user": "unteifu",
+        "created_at": "2024-12-27T19:21:24Z",
+        "body": "I think the syntax layout is good however i do disagree with the `error` being a key of `meta` because i think it's unnecessary embedding of a commonly used thing. Even having that not available is fine as `ORPCError` is still handing the exact same thing and is a bit more clear that you're throwing a new error constructor. I think if errors are the focus of discussion also, the inclusion of a notFound and internalServerError handler could aid this nicely which can be a simpler catcher these errors etc, reduce repeated code, and allow for better handing of things like Sentry reporting."
+      },
+      {
+        "user": "unnoq",
+        "created_at": "2024-12-28T01:33:53Z",
+        "body": "> I think the syntax layout is good however i do disagree with the `error` being a key of `meta` because i think it's unnecessary embedding of a commonly used thing. Even having that not available is fine as `ORPCError` is still handing the exact same thing and is a bit more clear that you're throwing a new error constructor. I think if errors are the focus of discussion also, the inclusion of a notFound and internalServerError handler could aid this nicely which can be a simpler catcher these errors etc, reduce repeated code, and allow for better handing of things like Sentry reporting.\r\n\r\n\r\nThis is completely optional and built on top of `ORPCError`. It’s primarily for type safety and OpenAPI specs. \r\n\r\nI’m just a bit confused about what happens if a user defines custom errors and how to handle cases where built-in errors don’t match the defined ones.\r\n\r\nRegarding the suggestion to include a `notFound` and `internalServerError` handler, I don’t think I prefer it since it’s not shorter than the old way: `throw new ORPC({ code: 'NOT_BOUND' })`. \r\n\r\nWhat are your thoughts?\""
+      },
+      {
+        "user": "unnoq",
+        "created_at": "2025-01-10T13:20:43Z",
+        "body": "v0.28.0 now has this"
+      }
+    ]
+  },
+  {
+    "number": 45,
+    "title": "Hey, do you know tRPC ？",
+    "created_at": "2024-12-09T01:22:44Z",
+    "closed_at": "2024-12-11T12:19:38Z",
+    "labels": [],
+    "url": "https://github.com/unnoq/orpc/issues/45",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/unnoq/orpc/issues/45/comments",
+    "author": "cerjs",
+    "comments": [
+      {
+        "user": "unnoq",
+        "created_at": "2024-12-09T01:40:48Z",
+        "body": "I've used tRPC extensively in the past, but it doesn't meet the efficiency requirements for my current use case."
+      },
+      {
+        "user": "CarlosZiegler",
+        "created_at": "2024-12-09T08:46:36Z",
+        "body": "What is the diff betwwen both ? SOme benchmarks ? What is the proposal that tRPC does not cover?\r\n\r\nJust curious :)"
+      },
+      {
+        "user": "unnoq",
+        "created_at": "2024-12-09T09:08:31Z",
+        "body": "The main purpose of oRPC is to serve as an alternative to TS-REST, not tRPC. Additionally, as I mentioned earlier, I’ve used tRPC in the past but migrated to TS-REST when my use case evolved."
+      }
+    ]
+  }
+]

@@ -1,0 +1,337 @@
+[
+  {
+    "number": 1400,
+    "title": "Include tested Generic parameter as column in various default outputs",
+    "created_at": "2020-03-21T14:37:13Z",
+    "closed_at": "2020-03-24T18:43:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/1400",
+    "body": "The current output formats: Console, markdown, csv, html are all lacking the generic type parameter when exporting benchmarks that were configured with `[GenericTypeArguments]`.\r\n\r\nThis makes compiling combined reports needlessly more complicated.\r\nFor example, it would make sense to be enable merging the generated CSVs for all the generic types that were benchmarked and enable generating some sort of grouped visualization with a different tool.\r\n\r\nI'm opening this issue to make sure I'm not missing something obvious about this.\r\n\r\nIf this is indeed the case, and there are no objections, I'll try to add such an output column be default and submit a PR.\r\n\r\nAny thoughts?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/1400/comments",
+    "author": "damageboy",
+    "comments": [
+      {
+        "user": "adamsitnik",
+        "created_at": "2020-03-23T11:20:46Z",
+        "body": "By default, BDN generates a single report per type. If given report belongs to one type, the type information is not included in the report because it's part of the file name.\r\n\r\nI think that what you are looking for is the `--join` switch:\r\n\r\nSample benchmarks:\r\n\r\n```cs\r\nusing BenchmarkDotNet.Attributes;\r\nusing BenchmarkDotNet.Running;\r\n\r\nnamespace Generic\r\n{\r\n    class Program\r\n    {\r\n        static void Main(string[] args) => BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);\r\n    }\r\n\r\n    [GenericTypeArguments(typeof(int))]\r\n    [GenericTypeArguments(typeof(string))]\r\n    public class Some<T>\r\n    {\r\n        [Benchmark] public bool IsValueType() => typeof(T).IsValueType;\r\n    }\r\n\r\n    [GenericTypeArguments(typeof(int))]\r\n    [GenericTypeArguments(typeof(int))]\r\n    public class Other<T> where T : new()\r\n    {\r\n        [Benchmark] public T Create() => new T();\r\n    }\r\n}\r\n```\r\n\r\nSample command:\r\n\r\n```cmd\r\ndotnet run -c Release --filter '*' --join --job dry\r\n```\r\n\r\nSample output:\r\n\r\n``` ini\r\n\r\nBenchmarkDotNet=v0.12.0, OS=Windows 10.0.18363\r\nIntel Xeon CPU E5-1650 v4 3.60GHz, 1 CPU, 12 logical and 6 physical cores\r\n.NET Core SDK=5.0.100-preview.2.20119.13\r\n  [Host] : .NET Core 3.1.1 (CoreCLR 4.700.19.60701, CoreFX 4.700.19.60801), X64 RyuJIT\r\n  Dry    : .NET Core 3.1.1 (CoreCLR 4.700.19.60701, CoreFX 4.700.19.60801), X64 RyuJIT\r\n\r\nJob=Dry  IterationCount=1  LaunchCount=1  \r\nRunStrategy=ColdStart  UnrollFactor=1  WarmupCount=1  \r\n\r\n```\r\n|         Type |      Method |     Mean | Error |\r\n|------------- |------------ |---------:|------:|\r\n| Other&lt;Int32&gt; |      Create | 391.7 us |    NA |\r\n| Other&lt;Int32&gt; |      Create | 385.1 us |    NA |\r\n|  Some&lt;Int32&gt; | IsValueType | 368.8 us |    NA |\r\n| Some&lt;String&gt; | IsValueType | 378.4 us |    NA |\r\n\r\n@damageboy if `--join` is not enough I am perfectly fine with including the type name as a new column"
+      },
+      {
+        "user": "damageboy",
+        "created_at": "2020-03-24T18:43:16Z",
+        "body": "No, I think it's good enough for me, Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 1330,
+    "title": "How to join the results from multiple types?",
+    "created_at": "2019-12-13T21:50:28Z",
+    "closed_at": "2019-12-17T09:52:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/1330",
+    "body": "Hi, \r\nI want merge benchmark results. \r\nI use \r\nBenchmarkDotNet version=\"0.12.0\" \r\ntargetFramework=\"net461\"\r\n\r\n` \r\n        \r\n            BenchmarkRunner.Run<MyBenchmark>(ManualConfig\r\n                    .Create(DefaultConfig.Instance)\r\n                    .With(ConfigOptions.JoinSummary)\r\n                    .With(ConfigOptions.DisableLogFile));\r\n\r\n            BenchmarkRunner.Run<MyBenchmark1>(ManualConfig\r\n                    .Create(DefaultConfig.Instance)\r\n                    .With(ConfigOptions.JoinSummary)\r\n                    .With(ConfigOptions.DisableLogFile));\r\n//-------------------------------------------------------------------------\r\n\r\n    public class MyBenchmark\r\n    {\r\n        [Benchmark]\r\n        public void Fn1() => Thread.Sleep(10);\r\n\r\n        [Benchmark]\r\n        public void Fn2() => Thread.Sleep(10);\r\n    }\r\n\r\n    public class MyBenchmark1\r\n    {\r\n        [Benchmark]\r\n        public void Fn__1() => Thread.Sleep(10);\r\n\r\n        [Benchmark]\r\n        public void Fn__2() => Thread.Sleep(10);\r\n    }\r\n`\r\n\r\nbut did'nt obtain merged results in  BenchmarkDotNet.Artifacts . That is correct way to merge benchmarks results?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/1330/comments",
+    "author": "Wizard2007",
+    "comments": [
+      {
+        "user": "adamsitnik",
+        "created_at": "2019-12-17T09:52:53Z",
+        "body": "Hello @Wizard2007 \r\n\r\n`BenchmarkRunner.Run` stores no state between the runs. \r\n\r\nTo join the results from multiple types you need to pass all types|assemblies info to a single `BenchmarkRunner.Run` call.\r\n\r\nExample:\r\n\r\n```cs\r\nBenchmarkRunner.Run(\r\n    typeof(MyBenchmark).Assembly, // all benchmarks from given assembly are going to be executed\r\n    ManualConfig\r\n                .Create(DefaultConfig.Instance)\r\n                .With(ConfigOptions.JoinSummary)\r\n                .With(ConfigOptions.DisableLogFile));\r\n```"
+      },
+      {
+        "user": "Wizard2007",
+        "created_at": "2019-12-17T21:43:22Z",
+        "body": "Thank you, it was very help full, and  I can solve my issue.\r\nI use such code, to run only this two benchmark and join results.\r\n\r\n`            \r\n            \r\n       var config = ManualConfig.Create(DefaultConfig.Instance)\r\n             .With(ConfigOptions.JoinSummary)\r\n             .With(ConfigOptions.DisableLogFile);\r\n\r\n        BenchmarkRunner.Run(new[]{\r\n                BenchmarkConverter.TypeToBenchmarks( typeof(MyBenchmark), config),\r\n                BenchmarkConverter.TypeToBenchmarks( typeof(MyBenchmark1), config) \r\n                });\r\n\r\n`"
+      },
+      {
+        "user": "VAllens",
+        "created_at": "2024-12-29T13:44:22Z",
+        "body": "> Thank you, it was very help full, and I can solve my issue. I use such code, to run only this two benchmark and join results.\n> \n> `\n> \n> ```\n>    var config = ManualConfig.Create(DefaultConfig.Instance)\n>          .With(ConfigOptions.JoinSummary)\n>          .With(ConfigOptions.DisableLogFile);\n> \n>     BenchmarkRunner.Run(new[]{\n>             BenchmarkConverter.TypeToBenchmarks( typeof(MyBenchmark), config),\n>             BenchmarkConverter.TypeToBenchmarks( typeof(MyBenchmark1), config) \n>             });\n> ```\n> \n> `\n\nIt's an effective solution and it works for me."
+      }
+    ]
+  },
+  {
+    "number": 1192,
+    "title": "Comparing project reference against package reference",
+    "created_at": "2019-07-05T18:10:01Z",
+    "closed_at": "2019-07-08T10:20:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/1192",
+    "body": "I know it is possible to compare between different NuGet versions, but is it possible to compare a local build of a library (a ProjectReference to Foo.csproj) against an existing NuGet package reference.\r\n\r\nIf not, is it possible to emit a custom MSBuild define on a Job that could be used in a csproj condition for the Reference block?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/1192/comments",
+    "author": "MihaZupan",
+    "comments": [
+      {
+        "user": "WojciechNagorski",
+        "created_at": "2019-07-07T09:47:41Z",
+        "body": "I don't know about normal solution for this. But you can try to use local feeds as a workaround. You can publish new version of your package to local directory and then configure your nuget.config in benchmark project to use it."
+      },
+      {
+        "user": "MihaZupan",
+        "created_at": "2019-07-08T10:20:04Z",
+        "body": "I thought about doing this but didn't think of the nuget config, thanks.\n\n---\n\nTested it on a few projects and it seems to be working. Thanks again."
+      },
+      {
+        "user": "WojciechNagorski",
+        "created_at": "2019-07-08T11:16:12Z",
+        "body": "@MihaZupan Thanks for the information."
+      }
+    ]
+  },
+  {
+    "number": 1140,
+    "title": "Targeting .NET 4.6.2 but executing as 4.7.2",
+    "created_at": "2019-04-28T17:57:36Z",
+    "closed_at": "2019-04-28T21:07:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/1140",
+    "body": "I have a small benchmark project that is targeting netcoreapp2 and net462.\r\n\r\n```\r\n<Project Sdk=\"Microsoft.NET.Sdk\">\r\n\r\n  <PropertyGroup>\r\n    <OutputType>Exe</OutputType>\r\n    <TargetFrameworks>netcoreapp2;net462</TargetFrameworks>\r\n  </PropertyGroup>\r\n\r\n  <ItemGroup>\r\n    <PackageReference Include=\"BenchmarkDotNet\" Version=\"0.11.5\" />\r\n  </ItemGroup>\r\n\r\n</Project>\r\n```\r\n\r\n\r\nHowever when running this benchmark it only seems to respect the netcoreapp target and not the full framework one. It states that the CLR job was run targeting net472. Could I be doing this wrong or is this an issue? I have targeted only two jobs [CoreJob, ClrJob].\r\n\r\n>   [Host] : .NET Core 2.0.9 (CoreCLR 4.6.26614.01, CoreFX 4.6.26614.01), 64bit RyuJIT\r\n>   Clr    : .NET Framework 4.7.2 (CLR 4.0.30319.42000), 64bit RyuJIT-v4.7.3394.0\r\n>   Core   : .NET Core 2.0.9 (CoreCLR 4.6.26614.01, CoreFX 4.6.26614.01), 64bit RyuJIT\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/1140/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "ghost",
+        "created_at": "2019-04-28T21:07:48Z",
+        "body": "I have also noticed that even if I remove the explicit job attributes and only target my project to net462 the run summary still shows it executes with net472.\n\n---\n\nAfter asking on SO someone pointed out that unlike .net core the full framework does not have side by side installs but a runtime that is upgraded in place. So even with net462 but having 4.7.2 installed means that will be the runtime. Makes sense."
+      },
+      {
+        "user": "adamsitnik",
+        "created_at": "2019-04-29T13:02:24Z",
+        "body": "This is the default behavior of Full .NET Framework. No matter what version your app targets, it's always executed with the latest .NET Runtime installed on your machine.\r\n\r\nYou can test it with the following example\r\n\r\n```cs\r\nvoid Main() => System.Console.WriteLine(Microsoft.DotNet.PlatformAbstractions.RuntimeEnvironment.FrameworkDescription);\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 993,
+    "title": "How to run Clr and Core jobs at the same time?",
+    "created_at": "2018-12-29T14:11:17Z",
+    "closed_at": "2018-12-30T17:08:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/993",
+    "body": "Hi\r\n\r\nFirst I tried to run Core and Clr jobs on .net core project but in this case only Core job finished successfully.\r\n\r\n``` ini\r\n\r\nBenchmarkDotNet=v0.11.3, OS=Windows 10.0.17134.472 (1803/April2018Update/Redstone4)\r\nIntel Core i7-5500U CPU 2.40GHz (Broadwell), 1 CPU, 4 logical and 2 physical cores\r\n.NET Core SDK=2.2.100\r\n  [Host] : .NET Core 2.2.0 (CoreCLR 4.6.27110.04, CoreFX 4.6.27110.04), 64bit RyuJIT\r\n  Core   : .NET Core 2.2.0 (CoreCLR 4.6.27110.04, CoreFX 4.6.27110.04), 64bit RyuJIT\r\n\r\n\r\n```\r\n|  Method |  Job | Runtime |     Mean |    Error |   StdDev |   Median |\r\n|-------- |----- |-------- |---------:|---------:|---------:|---------:|\r\n| Replace |  Clr |     Clr |       NA |       NA |       NA |       NA |\r\n| Replace | Core |    Core | 20.38 us | 1.389 us | 4.095 us | 18.77 us |\r\n\r\nBenchmarks with issues:\r\n  StringBenchmark.Replace: Clr(Runtime=Clr)\r\n\r\nWhen I checked logs and I found message that project is not compatible with net 472:\r\n\r\n// Build Exception: Standard output: \r\n   Restoring packages for C:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparison\\bin\\Release\\netcoreapp2.2\\68bc1c9b-f1a8-4730-8f05-3d8e1e81d768\\BenchmarkDotNet.Autogenerated.csproj...\r\n  Restore completed in 72.18 ms for C:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparison\\StringPerformanceComparison.csproj.\r\nC:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparison\\bin\\Release\\netcoreapp2.2\\68bc1c9b-f1a8-4730-8f05-3d8e1e81d768\\BenchmarkDotNet.Autogenerated.csproj : error NU1201: Project StringPerformanceComparison is not compatible with net472 (.NETFramework,Version=v4.7.2). Project StringPerformanceComparison supports: netcoreapp2.2 (.NETCoreApp,Version=v2.2)\r\nC:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparison\\bin\\Release\\netcoreapp2.2\\68bc1c9b-f1a8-4730-8f05-3d8e1e81d768\\BenchmarkDotNet.Autogenerated.csproj : error NU1201: Project StringPerformanceComparison is not compatible with net472 (.NETFramework,Version=v4.7.2) / win7-x64. Project StringPerformanceComparison supports: netcoreapp2.2 (.NETCoreApp,Version=v2.2)\r\n  Restore failed in 194.61 ms for C:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparison\\bin\\Release\\netcoreapp2.2\\68bc1c9b-f1a8-4730-8f05-3d8e1e81d768\\BenchmarkDotNet.Autogenerated.csproj.\r\n\r\n\r\nSo I tried slightly different approach. I created full .NET framework console app and check what happens. It ended in similar fashion but this time Clr job finished successfully.\r\n\r\n``` ini\r\n\r\nBenchmarkDotNet=v0.11.3, OS=Windows 10.0.17134.472 (1803/April2018Update/Redstone4)\r\nIntel Core i7-5500U CPU 2.40GHz (Broadwell), 1 CPU, 4 logical and 2 physical cores\r\n  [Host] : .NET Framework 4.7.2 (CLR 4.0.30319.42000), 32bit LegacyJIT-v4.7.3260.0\r\n  Clr    : .NET Framework 4.7.2 (CLR 4.0.30319.42000), 32bit LegacyJIT-v4.7.3260.0\r\n\r\n\r\n```\r\n|  Method |  Job | Runtime |     Mean |     Error |   StdDev |\r\n|-------- |----- |-------- |---------:|----------:|---------:|\r\n| Replace |  Clr |     Clr | 16.49 us | 0.6754 us | 1.981 us |\r\n| Replace | Core |    Core |       NA |        NA |       NA |\r\n\r\nBenchmarks with issues:\r\n  StringBenchmark.Replace: Core(Runtime=Core)\r\n\r\n\r\nAnd this time there were confilcts with resolving proper dependencies due to different versons:\r\n\r\n// Build Exception: Standard output: \r\n Microsoft (R) Build Engine version 15.9.20+g88f5fadfbe for .NET Core\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\n  Restore completed in 45.65 ms for C:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparisonFull\\bin\\Release\\f30272d9-c3c3-4011-8f75-7264f756e91d\\BenchmarkDotNet.Autogenerated.csproj.\r\nC:\\Program Files\\dotnet\\sdk\\2.2.100\\Microsoft.Common.CurrentVersion.targets(2110,5): warning MSB3277: Found conflicts between different versions of \"System.Collections.Immutable\" that could not be resolved.  These reference conflicts are listed in the build log when log verbosity is set to detailed. [C:\\Dev\\TheCodeManual\\StringPerformance\\StringPerformanceComparisonFull\\bin\\Release\\f30272d9-c3c3-4011-8f75-7264f756e91d\\BenchmarkDotNet.Autogenerated.csproj]\r\nC:\\Program Files\\dotnet\\sdk\\2.2.100\\Microsoft.Common.CurrentVersion.targets(2110,5): warning MSB3277: Found conflicts between different versions of \"System.Reflection.Metadata\" that could not be resolved.  These reference conflicts are listed in the build log when log verbosity is set to detailed. \r\n\r\nDid I do something worng or there is an issue on dotnetbenchmark side?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/993/comments",
+    "author": "kmadof",
+    "comments": [
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-12-30T17:08:01Z",
+        "body": "Hi @kmadof \r\n\r\n```log\r\nProject StringPerformanceComparison is not compatible with net472 (.NETFramework,Version=v4.7.2). Project StringPerformanceComparison supports: netcoreapp2.2 (.NETCoreApp,Version=v2.2)\r\n```\r\n\r\nTo run projects for .NET and .NET Core the project that defines benchmarks must target both frameworks. In your case it should be:\r\n\r\n```xml\r\n<TargetFrameworks>netcoreapp2.2;net472</TargetFrameworks>\r\n```\r\n\r\nPlease feel free to reopen the issue if it does not help."
+      }
+    ]
+  },
+  {
+    "number": 883,
+    "title": "Console app Benchmark self-contained and configure inprocess faile because dotnet cli toolchain is not installed",
+    "created_at": "2018-09-25T08:13:44Z",
+    "closed_at": "2018-09-25T10:35:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/883",
+    "body": "Hi, I have a Benchmark console app that need to run in diferent machines, that machines could or could not have the .net core installed so I publish the console app using the self-contained configuration.\r\nI read that you use the dotnet cli to build the app and try to run it, but also that the inprocess toolchain configuration omit that step. So I try to config my benchmark to use inprocess my code is like this:\r\n\r\n```\r\npublic MainConfig() : ManualConfig\r\n{ \r\n    Add(Job.InProcess\r\n           .With(InprocessToolChain.Instance)\r\n           .With(Platform.X64)\r\n           .With(CsProjCoreToolchain.NetCoreApp21)\r\n           .WithTargetCount(4)\r\n           .WithId(\"InProcess\"));\r\n\r\n   Add(new ConsoleLogger);\r\n}\r\n```\r\n\r\nWhen I try to run the benchmark in a machine without dotnet I get the following error:\r\nBenchmarkDotNet requires dotnet cli toolchain to be installed, benchmark 'BenchmarkBI.'Get all rows from table test.': InProcess(Platform=X64, Toolchain=.NET Core 2.1, IterationCount=4)' will not be executed\r\n\r\n\r\nAny Idea if I need to change anything in the config?\r\n\r\n\r\n\r\n\r\n ",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/883/comments",
+    "author": "germandb",
+    "comments": [
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2018-09-25T08:20:41Z",
+        "body": "@germandb, try to remove `.With(CsProjCoreToolchain.NetCoreApp21)` from your config (if you want to run the benchmark *in process*, you can't configure the version of .NET Core). It's impossible to use two different toolchains at the same time."
+      },
+      {
+        "user": "germandb",
+        "created_at": "2018-09-25T10:23:06Z",
+        "body": "Hi Andrey thanks for the quick response. That did the trick to solve that exception.\r\nBut now the executiong fail with a System.InvalidOperationException Benchmark takes to long to run. Prefer to use out-of-process toolchains for long-runing benchmarks.\r\n\r\nI try the benchmark in other machine that have the dotnet installed and worked fine the method have a mean execution time of 4 seconds."
+      }
+    ]
+  },
+  {
+    "number": 841,
+    "title": "parse error in the follow ",
+    "created_at": "2018-07-24T09:24:33Z",
+    "closed_at": "2018-07-24T09:58:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/841",
+    "body": "I want to use BenchmarkDotNet to known the difference between Enum Attribute and property\r\nso I use this test \r\n```C#\r\nnamespace EnumAndProperty\r\n{\r\n    class Program\r\n    {\r\n        static void Main(string[] args)\r\n        {\r\n            BenchmarkRunner.Run<GetTextClass>();\r\n           \r\n            Console.ReadLine();\r\n        }\r\n\r\n    }\r\n    public class GetTextClass\r\n    {\r\n        [Benchmark]\r\n        public void GetTextByAttribute()\r\n        {\r\n            for (int i = 0; i < 10; i++)\r\n            {\r\n                Console.WriteLine(MetaEnum.TestEnum.Default.GetDescription() + i);\r\n            }\r\n        }\r\n        [Benchmark]\r\n        public void GetTextByProperty()\r\n        {\r\n            for (int i = 0; i < 10; i++)\r\n            {\r\n                Console.WriteLine(MetaEnum.Test + i);\r\n            }\r\n        }\r\n    }\r\n    public class MetaEnum\r\n    {\r\n        public enum TestEnum\r\n        {\r\n            /// <summary>\r\n            /// \u9ed8\u8ba4\r\n            /// <remarks>\u503c\u4e3a1</remarks>\r\n            /// </summary>\r\n            [Description(\"\u9ed8\u8ba4\")]\r\n            Default = 1,\r\n        }\r\n        public const string Test = \"\u6d4b\u8bd5\";\r\n    }\r\n    public static class EnumHelper\r\n    {\r\n        /// <summary>\r\n        /// \u83b7\u5f97\u679a\u4e3e\u8bbe\u5b9a\u7684\u503c\r\n        /// </summary>\r\n        /// <typeparam name=\"T\">\u679a\u4e3e\u503c\u7684\u7c7b\u578b\uff0c\u4e00\u822c\u4e3a<see cref=\"Int32\"/></typeparam>\r\n        /// <param name=\"enumValue\"></param>\r\n        /// <returns>\u679a\u4e3e\u5bf9\u5e94\u7684\u503c</returns>\r\n        public static T GetValue<T>(this Enum enumValue)\r\n        {\r\n            return (T)Convert.ChangeType(enumValue, enumValue.GetTypeCode());\r\n        }\r\n\r\n        /// <summary>\r\n        /// \u83b7\u53d6\u7279\u6027 (DescriptionAttribute) \u7684\u8bf4\u660e\uff1b\u5982\u679c\u672a\u4f7f\u7528\u8be5\u7279\u6027\uff0c\u5219\u8fd4\u56de\u679a\u4e3e\u7684\u540d\u79f0\u3002\r\n        /// </summary>\r\n        /// <param name=\"enumValue\"></param>\r\n        /// <returns></returns>\r\n        public static string GetDescription(this Enum enumValue)\r\n        {\r\n            FieldInfo fieldInfo = enumValue.GetType().GetField(enumValue.ToString());\r\n            DescriptionAttribute[] attrs =\r\n                fieldInfo.GetCustomAttributes(typeof(DescriptionAttribute), false) as DescriptionAttribute[];\r\n\r\n            return attrs.Length > 0 ? attrs[0].Description : enumValue.ToString();\r\n        }\r\n\r\n\r\n    }\r\n}\r\n```\r\nand i always get the error\r\n**parse error in the follow line**\r\nmy BenchmarkDotNet version is 0.11.0.0\r\nI use visual studio 2017 and .NET 4.6.1 in windows 10 pro 1803\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/841/comments",
+    "author": "wangshuai-007",
+    "comments": [
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2018-07-24T09:32:58Z",
+        "body": "@w371987114, you benchmark can't use `Console.WriteLine` calls because BenchmarkDotNet uses it for communication between the host process and the benchmark runner process. Why do you need it?"
+      },
+      {
+        "user": "wangshuai-007",
+        "created_at": "2018-07-24T09:53:57Z",
+        "body": "@AndreyAkinshin \r\nI want to know the progress of the test, by the way, I can accept my return value.\r\nI just removed the `Console.WriteLine`  It works fine now, thank you for your answer."
+      },
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2018-07-24T09:58:58Z",
+        "body": "BenchmarkDotNet prints progress messages automatically."
+      }
+    ]
+  },
+  {
+    "number": 804,
+    "title": "What is the point of BuildScriptFilePath ?",
+    "created_at": "2018-06-25T05:23:10Z",
+    "closed_at": "2018-06-25T10:04:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/804",
+    "body": "I'm in the process of attempting to implement #290 and noticed that the Generators create a `.bat` build script which seems quite handy, but then the Builders don't actually use the build script generated.\r\n\r\nFor example the `DotNetCliBuilder` runs it's own `restore` and `build` commands and doesn't use the generated build script to do the building.  The Roslyn Builder outputs a log entry for the `BuildScriptFilePath` but then doesn't use it at all.\r\n\r\nThis might be intentional, so sorry if I'm being naive (the solution is quite a learning curve :) \r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/804/comments",
+    "author": "Shazwazza",
+    "comments": [
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-06-25T10:04:17Z",
+        "body": "Hi @Shazwazza \r\n\r\nIt's a very good question!\r\n\r\nBDN used to generate **and run** this script. At some point of time, we moved from doing this to calling Roslyn API directly. The script was preserved for situations when we fail to build the benchmark project, apply `[KeepBenchmarkFiles]` attribute and run it manually to reproduce the problem. So we keep it only for eventual troubleshooting.\r\n\r\nYou can ignore it if you are developing a custom toolchain."
+      },
+      {
+        "user": "Shazwazza",
+        "created_at": "2018-06-25T11:07:32Z",
+        "body": "Ah, ok thanks :) I might add some code docs to those classes in my PR. "
+      }
+    ]
+  },
+  {
+    "number": 708,
+    "title": "Error of DisassemblyDiagnoser(printAsm: true, printSource: true) in MultiTarget project",
+    "created_at": "2018-03-31T21:56:58Z",
+    "closed_at": "2018-04-03T13:58:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/708",
+    "body": "I have a multitarget project with windows diagnoser enabler for NET47:\r\n\r\n```\r\n<Project Sdk=\"Microsoft.NET.Sdk\">\r\n\r\n  <PropertyGroup>\r\n    <OutputType>Exe</OutputType>\r\n    <TargetFrameworks>netcoreapp2.0;net47</TargetFrameworks>\r\n\t<LangVersion>latest</LangVersion>\r\n  </PropertyGroup>\r\n\r\n  <ItemGroup>\r\n    <PackageReference Include=\"BenchmarkDotNet\" Version=\"0.10.13\" />\r\n    \r\n    <PackageReference Include=\"DynamicExpresso.Core\" Version=\"2.0.0\" />\r\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"11.0.2\" />\r\n  </ItemGroup>\r\n  \r\n    <ItemGroup Condition=\"'$(TargetFramework)' == 'net47'\">\r\n\t\t<PackageReference Include=\"BenchmarkDotNet.Diagnostics.Windows\" Version=\"0.10.13\" />\r\n\t</ItemGroup>\r\n\r\n  <ItemGroup>\r\n    <ProjectReference Include=\"..\\..\\Routines\\Routines.csproj\" />\r\n  </ItemGroup>\r\n</Project>\r\n```\r\n\r\nDisassembler configuration enabled on conditional compiling:\r\n\r\n```\r\n#if !NETCOREAPP2_0\r\n    [DisassemblyDiagnoser(printAsm: true, printSource: true)]\r\n#endif\r\n    public class BenchmarkConverAll\r\n    { \r\n\r\n```\r\nInlining diagnoser enabled that way works, when dissasembly diagnoser returns an error:\r\n\r\nTest executed as \r\n& dotnet run -c Release -f net47 -p \"$BenchmarkProjectPath\"\r\n\r\n\r\n```\r\nPS D:\\cot\\DashboardCode\\Routines> D:\\cot\\DashboardCode\\Routines\\BenchmarkWindows.ps1\r\nMicrosoft (R) Build Engine version 15.6.82.30579 for .NET Core\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\n  Restore completed in 64.03 ms for D:\\cot\\DashboardCode\\Routines\\Routines\\Routines.csproj.\r\n  Restore completed in 64.46 ms for D:\\cot\\DashboardCode\\Routines\\Tests\\Benchmark\\Benchmark.csproj.\r\n  Routines -> D:\\cot\\DashboardCode\\Routines\\Routines\\bin\\Release\\netstandard2.0\\DashboardCode.Routines.dll\r\n  Benchmark -> D:\\cot\\DashboardCode\\Routines\\Tests\\Benchmark\\bin\\Release\\netcoreapp2.0\\Benchmark.dll\r\n  Benchmark -> D:\\cot\\DashboardCode\\Routines\\Tests\\Benchmark\\bin\\Release\\net47\\Benchmark.exe\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:05.85\r\nMicrosoft (R) Build Engine version 15.6.82.30579 for .NET Core\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\n  Restore completed in 104.64 ms for D:\\cot\\DashboardCode\\Routines\\Routines\\Routines.csproj.\r\n  Restore completed in 121.11 ms for D:\\cot\\DashboardCode\\Routines\\Tests\\Benchmark\\Benchmark.csproj.\r\n// ***** BenchmarkRunner: Start   *****\r\n// Found benchmarks:\r\n//   BenchmarkConverAll.TestConverAll: RyuJitX64(Jit=RyuJit, Platform=X64)\r\n\r\n// Validating benchmarks:\r\n// ***** Building 1 benchmark(s) in Parallel: Start   *****\r\n// ***** Done, took 00:00:05 (5.29 sec)   *****\r\n// **************************\r\n// Benchmark: BenchmarkConverAll.TestConverAll: RyuJitX64(Jit=RyuJit, Platform=X64)\r\n// *** Execute ***\r\n// Launch: 1 / 1\r\n// Execute: D:\\cot\\DashboardCode\\Routines\\Tests\\Benchmark\\bin\\Release\\net47\\74d4fd8a-270d-46ab-bde8-907d0dfaa814.exe diagnoserAttached\r\n// BeforeAnythingElse\r\n\r\n// Benchmark Process Environment Information:\r\n// Runtime=.NET Framework 4.7 (CLR 4.0.30319.42000), 64bit RyuJIT-v4.7.2633.0\r\n// GC=Concurrent Workstation\r\n// Job: RyuJitX64(Jit=RyuJit, Platform=X64)\r\n\r\nPilot  1: 16 op, 3459366.51 ns, 216.2104 us/op\r\n\r\n..............................\r\n\r\n// AfterAll\r\n\\ ---------------------------\r\nFailed to read source code location!\r\nPlease make sure that the project, which defines benchmarks contains following settings:\r\n\t <DebugType>pdbonly</DebugType>\r\n\t <DebugSymbols>true</DebugSymbols>\r\n\\ ---------------------------\r\ndotnet.exe : \r\nAt D:\\cot\\DashboardCode\\Routines\\BenchmarkWindows.ps1:17 char:1\r\n+ & dotnet run -c Release -f net47 -p \"$BenchmarkProjectPath\"\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\nUnhandled Exception: \r\nSystem.InvalidOperationException: There is an error in XML document (0, 0). ---> System.Xml.XmlException: Root element is missing.\r\n   at System.Xml.XmlTextReaderImpl.Throw(Exception e)\r\n   at System.Xml.XmlTextReaderImpl.ParseDocumentContent()\r\n   at System.Xml.XmlReader.MoveToContent()\r\n   at Microsoft.Xml.Serialization.GeneratedAssembly.XmlSerializationReaderDisassemblyResult.Read9_DisassemblyResult()\r\n   --- End of inner exception stack trace ---\r\n   at System.Xml.Serialization.XmlSerializer.Deserialize(XmlReader xmlReader, String encodingStyle, XmlDeserializationEvents events)\r\n   at BenchmarkDotNet.Diagnosers.WindowsDisassembler.Dissasemble(DiagnoserActionParameters parameters)\r\n   at BenchmarkDotNet.Diagnosers.DisassemblyDiagnoser.Handle(HostSignal signal, DiagnoserActionParameters parameters)\r\n   at BenchmarkDotNet.Extensions.CommonExtensions.ForEach[T](IList`1 source, Action`1 command)\r\n   at BenchmarkDotNet.Loggers.SynchronousProcessOutputLoggerWithDiagnoser.ProcessInput()\r\n   at BenchmarkDotNet.Toolchains.Executor.Execute(Process process, Benchmark benchmark, SynchronousProcessOutputLoggerWithDiagnoser loggerWithDiagnoser, ILogger logger)\r\n   at BenchmarkDotNet.Toolchains.Executor.Execute(Benchmark benchmark, ILogger logger, String exePath, String workingDirectory, String args, IDiagnoser diagnoser, IResolver \r\nresolver, IConfig config)\r\n   at BenchmarkDotNet.Toolchains.Executor.Execute(ExecuteParameters executeParameters)\r\n   at BenchmarkDotNet.Running.BenchmarkRunnerCore.Execute(ILogger logger, Benchmark benchmark, IToolchain toolchain, BuildResult buildResult, IConfig config, IResolver \r\nresolver)\r\n   at BenchmarkDotNet.Running.BenchmarkRunnerCore.RunCore(Benchmark benchmark, ILogger logger, ReadOnlyConfig config, String rootArtifactsFolderPath, Func`2 \r\ntoolchainProvider, IResolver resolver, BuildResult buildResult)\r\n   at BenchmarkDotNet.Running.BenchmarkRunnerCore.Run(BenchmarkRunInfo benchmarkRunInfo, ILogger logger, String title, String rootArtifactsFolderPath, Func`2 \r\ntoolchainProvider, IResolver resolver, List`1 artifactsToCleanup)\r\n   at BenchmarkDotNet.Running.BenchmarkRunnerCore.Run(BenchmarkRunInfo benchmarkRunInfo, Func`2 toolchainProvider)\r\n   at Benchmark.Program.Main(String[] args)\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/708/comments",
+    "author": "rpokrovskij",
+    "comments": [
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2018-04-02T21:49:12Z",
+        "body": "@adamsitnik, could you take a look?"
+      },
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-04-03T13:58:39Z",
+        "body": "Hi @rpokrovskij \r\n\r\nThe answer is in the output you provided:\r\n\r\n```\r\nFailed to read source code location!\r\nPlease make sure that the project, which defines benchmarks contains following settings:\r\n\t <DebugType>pdbonly</DebugType>\r\n\t <DebugSymbols>true</DebugSymbols>\r\n```\r\n\r\nPlease feel free to reopen if it does not help."
+      },
+      {
+        "user": "rpokrovskij",
+        "created_at": "2018-04-03T16:22:29Z",
+        "body": "I have noticed this but thougth that this works only for classic proj file (when I use `<Project Sdk=\"Microsoft.NET.Sdk\">` )...\r\nI will check does this works in this case.\r\nYes it works! Thank you.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 668,
+    "title": "Can ParamsSource be evaluated after GlobalSetup?",
+    "created_at": "2018-02-27T14:28:15Z",
+    "closed_at": "2018-03-02T20:29:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/668",
+    "body": "I have to initialize several objects that are generating parameters. Therefore my idea was to initialize these objects in the GlobalSetup area. \r\n\r\n        private IProjectInfo _generatedProject1;\r\n        private IProjectInfo _generatedProject2;\r\n\r\n        [GlobalSetup]\r\n        public void BenchmarkSetup()\r\n        {\r\n            var loader = new ProjectLoader();\r\n            _generatedProject1 = loader.GetSample();\r\n            _generatedProject2 = loader.GetBigSample();\r\n        }\r\n\r\n        [ParamsSource(nameof(Projects))]\r\n        public IProjectInfo Project;\r\n\r\n        public IEnumerable<IParam> Projects()\r\n        {\r\n            yield return new ProjectParameter { Project = _generatedProject1};\r\n            yield return new ProjectParameter { Project = _generatedProject2};\r\n        }\r\n\r\n        [Benchmark]\r\n        public IProject OpenProject()\r\n        {\r\n            var project = OpenProject(Project);\r\n            return project;\r\n        }\r\n\r\n        public class ProjectParameter : IParam\r\n        {\r\n            public IProjectInfo Project { get; set; }\r\n            public string ToSourceCode() => \"\";\r\n            public object Value => Project;\r\n            public string DisplayText => Project.Name;\r\n        }\r\n\r\nBut unfortunately the parameters are built before, so I get an exception. Is there any workaround?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/668/comments",
+    "author": "chriga",
+    "comments": [
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-02-27T15:38:59Z",
+        "body": "Parameters are generated before the call to `Setup` method(s), to make it possible for the setup to use their values.\r\n\r\nYou could do sth like:\r\n\r\n```cs\r\nprivate Dictionary<string, IProjectInfo> _projectsByName;\r\n\r\nprivate IProjectInfo _project;\r\n\r\n[ParamsSource(nameof(Projects))]\r\npublic string CurrentProjectName;\r\n\r\npublic IEnumerable<IParam> Projects()\r\n{\r\n\tyield return \"generatedProject1\"\r\n\tyield return \"generatedProject2\";\r\n}\r\n\r\n\r\n[GlobalSetup]\r\npublic void BenchmarkSetup()\r\n{\r\n\tvar loader = new ProjectLoader();\r\n\t_projectsByName = new Dictionary<string, IProjectInfo>\r\n\t{\r\n\t\t{ \"_generatedProject1\", loader.GetSample() },\r\n\t\t{ \"_generatedProject2\", loader.GetBigSample() },\r\n\t}\r\n\r\n\t_currentProject = _projectsByName[CurrentProjectName];\r\n}\r\n\r\n[Benchmark]\r\npublic IProject OpenProject()\r\n{\r\n\tvar project = OpenProject(_currentProject);\r\n\treturn project;\r\n}\r\n```"
+      },
+      {
+        "user": "chriga",
+        "created_at": "2018-03-02T16:00:17Z",
+        "body": "Hi Adam,\r\n\r\nthanks for your input. Your idea seems to work with some modification:\r\n\r\n    private Dictionary<string, IProjectInfo> _projectsByName;\r\n    \r\n    [ParamsSource(nameof(Projects))]\r\n    public string CurrentProjectName;\r\n\r\n    public IEnumerable<string> Projects()\r\n    {\r\n\t    yield return \"generatedProject1\"\r\n\t    yield return \"generatedProject2\";\r\n    }\r\n\r\n    [GlobalSetup]\r\n    public void BenchmarkSetup()\r\n    {\r\n\t    var loader = new ProjectLoader();\r\n\t    _projectsByName = new Dictionary<string, IProjectInfo>\r\n        {\r\n\t\t    { \"generatedProject1\", loader.GetSample() },\r\n\t\t    { \"generatedProject2\", loader.GetBigSample() }\r\n\t    }\r\n    }\r\n\r\n    [Benchmark]\r\n    public IProject OpenProject()\r\n    {\r\n\t    var project = OpenProject(_projectsByName[CurrentProjectName]);\r\n\t    return project;\r\n    }\r\n\r\nOriginal I wanted that the project names are used from loaded projects. But I can get over it."
+      },
+      {
+        "user": "FreePhoenix888",
+        "created_at": "2023-03-17T11:15:55Z",
+        "body": "I would be glad to be able call some code before ParamsSource evaluation\n\n---\n\nI have found out that static constructor is evaluated before ParamsSource evaluation. @chriga , you can try this solution"
+      },
+      {
+        "user": "timcassell",
+        "created_at": "2023-03-17T11:50:38Z",
+        "body": "@FreePhoenix888 So is a non-static constructor (just make sure it's public, parameter-less). In any case, I wouldn't recommend that. By default, benchmarks are ran in a separate process from the host process that evaluated the params, so if you're trying to use that instead of `[GlobalSetup]`, you could be in for a surprise."
+      },
+      {
+        "user": "FreePhoenix888",
+        "created_at": "2023-03-17T12:21:31Z",
+        "body": "> @FreePhoenix888 So is a non-static constructor (just make sure it's public, parameter-less). In any case, I wouldn't recommend that. By default, benchmarks are ran in a separate process from the host process that evaluated the params, so if you're trying to use that instead of `[GlobalSetup]`, you could be in for a surprise.\r\n\r\nThank you for fast response.\r\nAs I know initializing a field right on the declaration line is equivalent to having aconstructor because C# automatically creates it under the hood. Is not it ? :)"
+      }
+    ]
+  },
+  {
+    "number": 656,
+    "title": "Question: is it possible to access method, mean and scale programmatically once the benchmarks have ran?",
+    "created_at": "2018-02-22T16:43:55Z",
+    "closed_at": "2018-02-28T14:43:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/656",
+    "body": "Is it possible to access method, mean and scale programmatically once the benchmarks have ran?",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/656/comments",
+    "author": "PonchoPowers",
+    "comments": [
+      {
+        "user": "PonchoPowers",
+        "created_at": "2018-02-28T12:45:18Z",
+        "body": "Use case being I would like to run the benchmarks on the command line as part of an automatic build system, and I'd like to flag up when the benchmarks are too slow, so would like to programmatically parse the results to then indicate on the build system summary page whether the build has passed or failed.\r\n\r\nI couldn't see anywhere in the docs which specified I could and I took a look at the Summary class and it wasn't immediately apparent if I could access this data via the API or not.\n\n---\n\nI know artifacts are created which contain this information, but I was hoping to programmatically parse the Summary class but can't see how to. Should I parse the artifacts after the benchmarks have ran or is there another way?"
+      },
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-02-28T13:07:16Z",
+        "body": "```cs\r\nvar summary = BenchmarkRunner.Run<Program>();\r\n\r\nforeach (var report in summary.Reports)\r\n{\r\n    report.ResultStatistics.Mean // ResultStatistics has all you need\r\n}\r\n```"
+      },
+      {
+        "user": "PonchoPowers",
+        "created_at": "2018-02-28T14:36:27Z",
+        "body": "Ah cool got to loop the reports first. Got it thanks."
+      }
+    ]
+  },
+  {
+    "number": 323,
+    "title": "Dead code elimination - is this safe?",
+    "created_at": "2016-12-10T17:12:36Z",
+    "closed_at": "2016-12-12T13:07:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/BenchmarkDotNet/issues/323",
+    "body": "I have a benchmark like so:\r\n\r\n```cs\r\n[Params(1, 10, 100, 500, 1000, 10000)]\r\npublic int NumberOfMatches { get; set; }\r\n\r\n[Benchmark]\r\npublic List<bool> DotNetGlobIsMatch()\r\n{\r\n    // we collect all results in a list \r\n    // and return it to prevent dead code elimination (optimisation)\r\n    var results = new List<bool>(NumberOfMatches);\r\n    for (int i = 0; i < NumberOfMatches; i++)\r\n    {\r\n        var testString = _testData[i];\r\n        var result = _dotnetGlob.IsMatch(testString);\r\n        results.Add(result);\r\n    }\r\n    return results;\r\n}\r\n```\r\n\r\nI would use `[OperationsPerInvoke]` except it's not dynamic, so I use  `[Params(1, 10, 100, 500, 1000, 10000)]` instead.\r\n\r\nMy question is, I don't really like having to construct and return a list in my Benchmark method, however I need to ensure that something is done with each result in the iteration so that dead code elimination doesn't remove it.\r\n\r\nIs this safe to do instead?\r\n\r\n```cs\r\n[Benchmark]\r\npublic IEnumerable<bool> DotNetGlobIsMatch()\r\n{\r\n    for (int i = 0; i < NumberOfMatches; i++)\r\n    {\r\n        var testString = _testData[i];\r\n        var result = _dotnetGlob.IsMatch(testString);\r\n        yield return result;\r\n    }\r\n}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/BenchmarkDotNet/issues/323/comments",
+    "author": "dazinator",
+    "comments": [
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2016-12-12T12:52:53Z",
+        "body": "In both cases, you will have some overhead. Here is an almost overhead-free benchmark:\r\n```cs\r\n[Benchmark]\r\npublic bool DotNetGlobIsMatch()\r\n{\r\n    var result = false;\r\n    for (int i = 0; i < NumberOfMatches; i++)\r\n    {\r\n        var testString = _testData[i];\r\n        result ^= _dotnetGlob.IsMatch(testString);\r\n    }\r\n    return result;\r\n}\r\n```"
+      },
+      {
+        "user": "dazinator",
+        "created_at": "2016-12-12T13:07:31Z",
+        "body": "ah nice! Thanks @AndreyAkinshin !"
+      }
+    ]
+  }
+]

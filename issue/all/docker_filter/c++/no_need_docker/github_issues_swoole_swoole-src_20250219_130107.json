@@ -1,0 +1,759 @@
+[
+  {
+    "number": 5580,
+    "title": "Create a Swoole WebSocket server that subscribes to new messages from Redis using Redis Pub/Sub.",
+    "created_at": "2024-11-21T20:06:44Z",
+    "closed_at": "2024-11-26T08:54:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/5580",
+    "body": "Hi everyone, could someone tell how to send an event from a process to server. I am creating a WebSocket server with Redis pub/sub and subscribing to a Redis channel in the WebSocket server process, but how to pass data to server?\r\nOr is there another approach?\r\nIf I write the subscribing code in the workerStart event, the webSocket server will not accept new connections. \r\n```\r\n$this->server->on(\"workerStart\", function ($server, $workerId) use ($redis) {\r\n    $redis->subscribe(['chat_channel'], function ($redis, $channel, $message) {\r\n        foreach ($this->server->connections as $fd) {\r\n              $this->server->push($fd, json_encode($message));\r\n        }\r\n    });\r\n});\r\n```\r\nI guess this is because the phpredis client is blocking, but how to write a code that will accept messages from Redis and broadcast them to connected users? \r\n\r\nI am really struggling with this. Please help if you know how to solve it.  Thank you very much!\r\n\r\n\r\n4. What version of Swoole are you using (show your `php --ri swoole`)?\r\n\r\n```\r\nphp --ri swoole\r\n\r\nswoole\r\n\r\nSwoole => enabled\r\nAuthor => Swoole Team <team@swoole.com>\r\nVersion => 6.0.0-dev\r\nBuilt => Oct  7 2024 17:07:28\r\ncoroutine => enabled with boost asm context\r\nepoll => enabled\r\neventfd => enabled\r\nsignalfd => enabled\r\ncpu_affinity => enabled\r\nspinlock => enabled\r\nrwlock => enabled\r\nhttp2 => enabled\r\njson => enabled\r\npcre => enabled\r\nzlib => 1.2.11\r\nbrotli => E16781312/D16781312\r\nmutex_timedlock => enabled\r\npthread_barrier => enabled\r\nfutex => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_library => On => On\r\nswoole.enable_fiber_mock => Off => Off\r\nswoole.enable_preemptive_scheduler => Off => Off\r\nswoole.display_errors => On => On\r\nswoole.use_shortname => On => On\r\nswoole.unixsock_buffer_size => 8388608 => 8388608\r\n```\r\n\r\n5. What is your machine environment used (show your `uname -a` & `php -v` & `gcc -v`) ?\r\n```\r\nLinux developer-v3 5.4.0-26-generic #30-Ubuntu SMP Mon Apr 20 16:58:30 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux\r\n\r\nPHP 8.3.14 (cli) (built: Nov 21 2024 05:47:02) (NTS)\r\n\r\n``` \r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/5580/comments",
+    "author": "AnyutaH",
+    "comments": [
+      {
+        "user": "NathanFreeman",
+        "created_at": "2024-11-23T16:38:43Z",
+        "body": "You can use a custom process to do this.\r\n```\r\n$server = new Swoole\\Websocket\\Server('127.0.0.1', 9502, SWOOLE_PROCESS);\r\n\r\n$process = new Swoole\\Process(function() use ($server) {\r\n    $redis->subscribe(['chat_channel'], function ($redis, $channel, $message) {\r\n        foreach ($server->connections as $fd) {\r\n              $server->push($fd, json_encode($message));\r\n        }\r\n    });\r\n});\r\n$server->addProcess($process);\r\n\r\n.....\r\n$server->start();"
+      },
+      {
+        "user": "AnyutaH",
+        "created_at": "2024-11-23T21:00:35Z",
+        "body": "Yes, it worked with SWOOLE_PROCESS set on server, thank you very much @NathanFreeman "
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2024-11-26T08:54:34Z",
+        "body": "It is recommended to use the `isEstablished` method to determine whether the connection is an active WebSocket connection.\r\n\r\n```php\r\n$server = new Swoole\\Websocket\\Server('127.0.0.1', 9502, SWOOLE_PROCESS);\r\n\r\n$process = new Swoole\\Process(function() use ($server) {\r\n    $redis->subscribe(['chat_channel'], function ($redis, $channel, $message) {\r\n        foreach ($server->connections as $fd) {\r\n              if ($server->isEstablished($fd)) {\r\n                  $server->push($fd, json_encode($message));\r\n              }\r\n        }\r\n    });\r\n});\r\n$server->addProcess($process);\r\n\r\n.....\r\n$server->start();\r\n```"
+      },
+      {
+        "user": "AnyutaH",
+        "created_at": "2024-11-26T10:37:19Z",
+        "body": "Ok, thanks a lot @matyhtf "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow Redis subscription without blocking WebSocket server operations",
+      "Must validate WebSocket connection status before pushing messages",
+      "Maintain WebSocket server availability while processing Redis messages"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:11:27"
+    }
+  },
+  {
+    "number": 5545,
+    "title": "\"PHP Deprecated\" warning",
+    "created_at": "2024-10-25T15:18:39Z",
+    "closed_at": "2024-10-26T00:11:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/5545",
+    "body": "Please answer these questions before submitting your issue.\r\n\r\n1. What did you do? If possible, provide a simple script for reproducing the error.\r\n\r\nRunning code:\r\n```php\r\n\r\nnamespace test;\r\n\r\nuse Swoole\\Runtime;\r\n\r\nRuntime::enableCoroutine(true, SWOOLE_HOOK_TCP);\r\n\r\ngo(function () {\r\n  $redis = new \\Redis();\r\n\r\n  if (!$redis->connect('127.0.0.1', 6379)) {\r\n    throw new \\RedisException(\"Unable to connect to Redis\", 2);\r\n  }\r\n\r\n  echo \"Redis connected\\n\";\r\n});\r\n```\r\n\r\n2. What did you expect to see?\r\n\r\n> Redis connected\r\n\r\n3. What did you see instead?\r\n\r\n> PHP Deprecated:  Swoole\\Event::rshutdown(): Event::wait() in shutdown function is deprecated in Unknown on line 0\r\n>\r\n> Deprecated: Swoole\\Event::rshutdown(): Event::wait() in shutdown function is deprecated in Unknown on line 0\r\n> Redis connected\r\n\r\n4. What version of Swoole are you using (show your `php --ri swoole`)?\r\n\r\n**`> php --ri swoole`**\r\n> \r\n> swoole\r\n> \r\n> Swoole => enabled\r\n> Author => Swoole Team <team@swoole.com>\r\n> Version => 5.1.4\r\n> Built => Sep 17 2024 22:29:47\r\n> coroutine => enabled with boost asm context\r\n> eventfd => enabled\r\n> kqueue => enabled\r\n> cpu_affinity => enabled\r\n> spinlock => enabled\r\n> rwlock => enabled\r\n> http2 => enabled\r\n> json => enabled\r\n> zlib => 1.3\r\n> mutex_timedlock => enabled\r\n> pthread_barrier => enabled\r\n> mysqlnd => enabled\r\n> async_redis => enabled\r\n> \r\n> Directive => Local Value => Master Value\r\n> swoole.enable_coroutine => On => On\r\n> swoole.enable_library => Off => Off\r\n> swoole.enable_fiber_mock => Off => Off\r\n> swoole.enable_preemptive_scheduler => On => On\r\n> swoole.display_errors => On => On\r\n> swoole.use_shortname => On => On\r\n> swoole.unixsock_buffer_size => 2621440 => 2621440\r\n\r\n5. What is your machine environment used (show your `uname -a` & `php -v` & `gcc -v`) ?\r\n\r\n**`> uname -a`**\r\n> FreeBSD web 14.1-RELEASE-p5 FreeBSD 14.1-RELEASE-p5 GENERIC amd64\r\n\r\n**`> php -v`**\r\n> PHP 8.3.12 (cli) (built: Sep 29 2024 01:11:14) (NTS)\r\n> Copyright (c) The PHP Group\r\n> Zend Engine v4.3.12, Copyright (c) Zend Technologies\r\n>     with Zend OPcache v8.3.12, Copyright (c), by Zend Technologies\r\n\r\n**`> gcc -v`**\r\n> Using built-in specs.\r\n> COLLECT_GCC=gcc\r\n> COLLECT_LTO_WRAPPER=/usr/local/libexec/gcc13/gcc/x86_64-portbld-freebsd14.0/13.3.0/lto-wrapper\r\n> Target: x86_64-portbld-freebsd14.0\r\n> Configured with: /wrkdirs/usr/ports/lang/gcc13/work/gcc-13.3.0/configure --enable-multilib --with-build-config=bootstrap-debug --disable-nls --enable-gnu-indirect-function --enable-host-shared --enable-plugin --libdir=/usr/local/lib/gcc13 --libexecdir=/usr/local/libexec/gcc13 --program-suffix=13 --with-as=/usr/local/bin/as --with-gmp=/usr/local --with-gxx-include-dir=/usr/local/lib/gcc13/include/c++/ --with-gxx-libcxx-include-dir=/usr/include/c++/v1 --with-ld=/usr/local/bin/ld --with-pkgversion='FreeBSD Ports Collection' --with-system-zlib --without-zstd --enable-languages=c,c++,objc,fortran,jit --prefix=/usr/local --localstatedir=/var --mandir=/usr/local/share/man --infodir=/usr/local/share/info/gcc13 --build=x86_64-portbld-freebsd14.0\r\n> Thread model: posix\r\n> Supported LTO compression algorithms: zlib\r\n> gcc version 13.3.0 (FreeBSD Ports Collection)",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/5545/comments",
+    "author": "mozart77",
+    "comments": [
+      {
+        "user": "NathanFreeman",
+        "created_at": "2024-10-25T15:53:34Z",
+        "body": "```php\r\n\r\nnamespace test;\r\n\r\nuse Swoole\\Runtime;\r\nuse function Swoole\\Coroutine\\run;\r\nuse function Swoole\\Coroutine\\go;\r\n\r\nRuntime::enableCoroutine(true, SWOOLE_HOOK_TCP);\r\n\r\nrun(function(){\r\n    $redis = new \\Redis();\r\n    if (!$redis->connect('127.0.0.1', 6379)) {\r\n        throw new \\RedisException(\"Unable to connect to Redis\", 2);\r\n    }\r\n    echo \"Redis connected\\n\";\r\n});\r\n```\r\n\r\nTry it like this."
+      },
+      {
+        "user": "mozart77",
+        "created_at": "2024-10-25T16:07:32Z",
+        "body": "> ```\r\n> use Swoole\\Runtime;\r\n> use function Swoole\\Coroutine\\run;\r\n> use function Swoole\\Coroutine\\go;\r\n> \r\n> Runtime::enableCoroutine(true, SWOOLE_HOOK_TCP);\r\n> \r\n> run(function(){\r\n>     $redis = new \\Redis();\r\n>     if (!$redis->connect('127.0.0.1', 6379)) {\r\n>         throw new \\RedisException(\"Unable to connect to Redis\", 2);\r\n>     }\r\n>     echo \"Redis connected\\n\";\r\n> });\r\n> ```\r\n\r\nThe result:\r\n\r\n> PHP Fatal error:  Uncaught Error: Call to undefined function Swoole\\Coroutine\\run() in /usr/local/www/test/q.php:11\r\n> Stack trace:\r\n> #0 {main}\r\n>   thrown in /usr/local/www/test/q.php on line 11\r\n> \r\n> Fatal error: Uncaught Error: Call to undefined function Swoole\\Coroutine\\run() in /usr/local/www/test/q.php:11\r\n> Stack trace:\r\n> #0 {main}\r\n>   thrown in /usr/local/www/test/q.php on line 11"
+      },
+      {
+        "user": "NathanFreeman",
+        "created_at": "2024-10-25T16:39:50Z",
+        "body": "```php\r\nnamespace test;\r\n\r\nuse Swoole\\Runtime;\r\n\r\nRuntime::enableCoroutine(true, SWOOLE_HOOK_TCP);\r\n\r\ngo(function () {\r\n  $redis = new \\Redis();\r\n\r\n  if (!$redis->connect('127.0.0.1', 6379)) {\r\n    throw new \\RedisException(\"Unable to connect to Redis\", 2);\r\n  }\r\n\r\n  echo \"Redis connected\\n\";\r\n});\r\nSwoole\\Event::wait();\r\n```\r\n\r\nIt seems that the value of the configuration `swoole.enable_library` is set to Off, which is why it prompts that the function does not exist. So try adding `Swoole\\Event::wait();` at the end of this code."
+      },
+      {
+        "user": "mozart77",
+        "created_at": "2024-10-25T16:42:27Z",
+        "body": "That's it! Works! Thank you!"
+      },
+      {
+        "user": "NathanFreeman",
+        "created_at": "2024-10-25T16:42:27Z",
+        "body": "I need to supplement this section with details in the Swoole documentation."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves the deprecated warning related to Swoole's Event::rshutdown() method",
+      "Works with the current Swoole configuration (swoole.enable_library=Off)",
+      "Properly manages Swoole's event loop lifecycle",
+      "Maintains coroutine functionality for Redis operations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:11:45"
+    }
+  },
+  {
+    "number": 5004,
+    "title": "Connect EVENT: \"Invalid frame header\"",
+    "created_at": "2023-03-09T01:46:31Z",
+    "closed_at": "2023-03-09T04:21:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/5004",
+    "body": "### Invalid frame header\r\nPlease answer these questions before submitting your issue.\r\n\r\n1. What did you do? If possible, provide a simple script for reproducing the error.\r\n\u5ba2\u6237\u7aef\u8fde\u63a5\u65f6\uff0c\u7a81\u7136\u53d1\u73b0\u62a5\u201c**Invalid frame header**\u201d\r\n\r\n\u670d\u52a1\u7aef\u76f4\u63a5\u8fdb\u5165 Close\u4e8b\u4ef6\r\n\r\n2. What did you expect to see?\r\n\u5f53\u65f6\u5565\u90fd\u6b63\u5e38\uff0c\u4e0d\u8fc7\u8fd9\u4e2a\u95ee\u9898\u4e4b\u524d\u4e5f\u51fa\u73b0\u591a\u5f88\u591a\u6b21\uff0cInvalid frame header\uff0c\u540e\u6765\u89e3\u51b3\u4e86\uff0c\u5fd8\u8bb0\u600e\u4e48\u89e3\u51b3\u4e86\u3002\uff08\u5404\u79cd\u641c\u4e5f\u662f\u6ca1\u6709\u7ed3\u679c\uff0c\u6240\u4ee5\u4eca\u5929\u63d0\u4e00\u4e2aissue\u8bb0\u5f55\u4e00\u4e0b\u6700\u540e\u89e3\u51b3\u529e\u6cd5\uff0c\u4ee5\u5907\u540e\u67e5\u3002\uff09\r\n\r\n3. What did you see instead?\r\n\u8fde\u63a5\u63d0\u793a\u201cError\u201d\r\n\r\n4. What version of Swoole are you using (show your `php --ri swoole`)?\r\nVersion => 4.4.17\r\nBuilt => Jun 29 2020 18:34:48\r\ncoroutine => enabled\r\nepoll => enabled\r\neventfd => enabled\r\nsignalfd => enabled\r\ncpu_affinity => enabled\r\nspinlock => enabled\r\nrwlock => enabled\r\nsockets => enabled\r\nopenssl => OpenSSL 1.0.2k-fips  26 Jan 2017\r\nhttp2 => enabled\r\npcre => enabled\r\nzlib => 1.2.7\r\nmutex_timedlock => enabled\r\npthread_barrier => enabled\r\nfutex => enabled\r\nasync_redis => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_coroutine => On => On\r\nswoole.enable_library => On => On\r\nswoole.enable_preemptive_scheduler => Off => Off\r\nswoole.display_errors => On => On\r\nswoole.use_shortname => On => On\r\nswoole.unixsock_buffer_size => 8388608 => 8388608\r\n\r\n\r\n5. What is your machine environment used (show your `uname -a` & `php -v` & `gcc -v`) ?\r\n\u90fd\u5f88\u6807\u51c6\u7684\u73af\u5883\uff0c\u6628\u5929\u53ef\u4ee5\uff0c\u4eca\u5929\u5c31\u4e0d\u884c\u3002\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/5004/comments",
+    "author": "tengdengming",
+    "comments": [
+      {
+        "user": "tengdengming",
+        "created_at": "2023-03-09T01:56:06Z",
+        "body": "### \u6ce8\u610f\u6ce8\u610f\uff0c\u4e0d\u662f\u914d\u7f6e\u95ee\u9898\uff0c\u4e0d\u662f\u4ee3\u7801\u903b\u8f91\u95ee\u9898\u3002Invalid frame header\r\n\u662f\u901a\u8baf\u4e8b\u4ef6\u7f16\u7a0b\u6b63\u5e38\u903b\u8f91\u7406\u89e3\u7684\u95ee\u9898\u3002\u5728Connect\uff0c\u6216\u8005OnOpen\u4e8b\u4ef6\u6ce8\u518c\u903b\u8f91\u4e2d\uff0c\u6709\u65f6\u5019\u4e3a\u4e86\u505a\u4e00\u4e9b\u6d4b\u8bd5\u6216\u8005\u540c\u6b65\u963b\u585e\u7684\u64cd\u4f5c\u65f6\uff0c\u5c06\u4e1a\u52a1\u903b\u8f91\u5199\u5230\u4e86\u9ed8\u8ba4\u4e8b\u4ef6\u4e2d\uff0c\u5bfc\u81f4\u4e0a\u4e0b\u6587\u53e5\u67c4\u903b\u8f91\u751f\u547d\u5468\u671f\u602a\u5708\u3002\r\n\r\n\u6bd4\u5982\u6211\u5728\u6d4b\u8bd5\u7684\u65f6\u5019\u4e3a\u4e86\u6d4b\u56de\u4e00\u4e2a\u5305\uff0c\u7b80\u5355\u7684\u5c06send\u53d1\u9001\u5199\u5728\u4e86OnOpen\u4e8b\u4ef6\u5904\u7406\u57df\u7684\u534f\u7a0b\u5904\u7406\u5355\u5143\uff0c\u5728\u534f\u7a0b\u53c8global\u5168\u5c40\u8c03\u7528\u4e3b\u7c7b\u7684send\u65b9\u6cd5\u3002\u5bfc\u81f4\u8fde\u63a5\u4e8b\u4ef6\u4e2d\u53bb\u6267\u884c\u4e00\u4e2a\u57fa\u4e8e\u8fde\u63a5\u4ee5\u540e\u7684\u53d1\u9001\u8c03\u7528\uff0c\u7136\u540e\u5c31\u51fa\u73b0\u4e86### Invalid frame header\r\n\u3002\u662f\u4e0d\u662f\u6709\u70b9\u5947\u602a\uff0c\uff08\u5b83\u662f\u4e0d\u4f1a\u660e\u786e\u7684\u544a\u8bc9\u4f60\u9519\u5728\u54ea\u91cc\uff09\r\n\r\n\u62ff\u6389\u540e\u5373\u53ef\u6062\u590d\u6b63\u5e38\uff0c\u8fd9\u4e2a\u95ee\u9898\u78b0\u5230\u8fc72\u6b21\u4ee5\u4e0a\uff0c\u4f46\u662f\u65f6\u95f4\u4e45\u4e86\uff0c\u5199\u522b\u7684\u53bb\u4e86\u5c31\u5fd8\u8bb0\u4e86\u3002\r\n"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2023-03-09T04:21:30Z",
+        "body": "\u4e0d\u8981\u4f7f\u7528 `Server::send()` \u65b9\u6cd5\uff0c\u8fd9\u662f\u539f\u59cb\u7684 `tcp send`\uff0c\u6539\u4e3a\u4f7f\u7528 `Server::push()`"
+      },
+      {
+        "user": "tengdengming",
+        "created_at": "2023-03-13T07:03:27Z",
+        "body": "\u5b66\u4e60\u4e86\uff0cTCP\u5c42\u9762\u7684\u7528Server::push()\u3002 @matyhtf \u3002\u53e6\u5916\u8bf7\u6559\u4e00\u4e0b\uff0c\u53ef\u4ee5\u5728\u54ea\u91cc\u770b\u5230\u8fd9\u79cd\u5f02\u5e38\u4fe1\u606f\u65e5\u5fd7\uff1f"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why Server::send() causes 'Invalid frame header' in WebSocket/HTTP2 contexts",
+      "Clear distinction between TCP-level operations and application protocol methods",
+      "Guidance on proper data sending patterns in Swoole event handlers"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:12:47"
+    }
+  },
+  {
+    "number": 4610,
+    "title": "\u5173\u4e8eswoole-cli swoole\u7684\u914d\u7f6e\u4fee\u6539",
+    "created_at": "2022-02-16T10:13:40Z",
+    "closed_at": "2022-02-16T16:28:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/4610",
+    "body": "Please answer these questions before submitting your issue.\r\n\r\n1. What did you do? If possible, provide a simple script for reproducing the error.\r\n\r\n```\r\n\u4f7f\u7528 v4.8.6 swoole-cli \u542f\u52a8hyperf\u65f6\r\n ./swoole-cli bin/hyperf.php start\r\n```\r\n\r\n\r\n2. What did you expect to see?\r\n\r\n**v4.8.6  swoole-cli\u600e\u4e48\u4fee\u6539swoole\u7684\u914d\u7f6e\u5440\uff1f\r\n\u4f8b\u5982 swoole.use_shortname \u4fee\u6539\u4e3a Off**\r\n\r\n3. What did you see instead?\r\n\r\n**\u9700\u8981\u5173\u95ed swoole.use_shortname**\r\n`ERROR Swoole short function names must be disabled before the server starts, please set swoole.use_shortname='Off' in your php.ini.`\r\n\r\n4. What version of Swoole are you using (show your `php --ri swoole`)?\r\n./swoole-cli --ri swoole\r\n\r\n```\r\nswoole\r\n\r\nSwoole => enabled\r\nAuthor => Swoole Team <team@swoole.com>\r\nVersion => 4.8.6\r\nBuilt => Jan 11 2022 11:48:24\r\ncoroutine => enabled with boost asm context\r\nepoll => enabled\r\neventfd => enabled\r\nsignalfd => enabled\r\ncpu_affinity => enabled\r\nspinlock => enabled\r\nrwlock => enabled\r\nsockets => enabled\r\nopenssl => OpenSSL 1.1.1m  14 Dec 2021\r\ndtls => enabled\r\nhttp2 => enabled\r\njson => enabled\r\ncurl-native => enabled\r\nc-ares => 1.18.1\r\nzlib => 1.2.11\r\nmutex_timedlock => enabled\r\npthread_barrier => enabled\r\nfutex => enabled\r\nmysqlnd => enabled\r\nasync_redis => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_coroutine => On => On\r\nswoole.enable_library => On => On\r\nswoole.enable_preemptive_scheduler => Off => Off\r\nswoole.display_errors => On => On\r\nswoole.use_shortname => On => On\r\nswoole.unixsock_buffer_size => 8388608 => 8388608\r\n\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/4610/comments",
+    "author": "shimianxiang",
+    "comments": [
+      {
+        "user": "leocavalcante",
+        "created_at": "2022-02-16T12:23:47Z",
+        "body": "`swoole-cli --ini` \u7684\u8f93\u51fa\u662f\u4ec0\u4e48?\r\n\r\n\u4f5c\u4e3a\u4e00\u79cd\u89e3\u51b3\u65b9\u6cd5\uff0c\u60a8\u53ef\u4ee5\u5c1d\u8bd5 `swoole-cli -dswoole.use_shortname=Off bin/hyperf.php` "
+      },
+      {
+        "user": "shimianxiang",
+        "created_at": "2022-02-16T15:50:18Z",
+        "body": "./swoole-cli --ini \u7684\u8f93\u51fa\u662f\r\n```\r\nConfiguration File (php.ini) Path: /usr/local/lib\r\nLoaded Configuration File:         (none)\r\nScan for additional .ini files in: (none)\r\nAdditional .ini files parsed:      (none)\r\n\r\n```\r\n\u60f3\u8981\u7684\u7b54\u6848\u5c31\u662f\u8fd9\u4e2a `swoole-cli -dswoole.use_shortname=Off bin/hyperf.php `\u611f\u8c22\u89e3\u7b54\r\n\u671f\u5f85swoole5.0 swoole-cli  \u7684\u6b63\u5f0f\u53d1\u5e03\r\n\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates how to modify Swoole configuration settings when using swoole-cli without a loaded php.ini file",
+      "Provides a method to set Swoole directives at runtime for swoole-cli",
+      "Explains configuration approaches compatible with Hyperf framework requirements",
+      "Addresses Swoole CLI's unique configuration workflow compared to standard PHP environments"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:12:55"
+    }
+  },
+  {
+    "number": 3052,
+    "title": "Can we rely on websocket FD number not being repeated?",
+    "created_at": "2020-01-07T17:26:22Z",
+    "closed_at": "2020-01-13T11:28:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/3052",
+    "body": "This is a general question, not a bug, so I don't think the issue template applies.\r\n\r\nFor reference, I am using the latest version of swoole with PHP 7.4.0 on Alpine Linux (Docker).\r\n\r\nMy question: When running a websocket server, like so:\r\n\r\n```php\r\n$server = new Swoole\\WebSocket\\Server(\"0.0.0.0\", 9501);\r\n\r\n$server->on('message', function (Swoole\\WebSocket\\Server $server, $frame) \r\n{\r\n    echo \"receive from {$frame->fd}:{$frame->data},opcode:{$frame->opcode},fin:{$frame->finish}\\n\";\r\n    $server->push($frame->fd, \"this is server\");\r\n});\r\n```\r\nis it safe to assume that `$frame->fd` will be the same for messages for the same connection?\r\n\r\nAlso, if a particular `$frame->fd` is re-used, will this only be after an explicit `onClose` event?\r\n\r\nThe background for this question is that we want to allow users to log in via a websocket, and want to check whether it is sufficient to just authenticate users at the start and maintain a list of authenticated FDs on the backend, or whether we need to get the client to send us a session ID/token with every frame.\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/3052/comments",
+    "author": "osrec",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2020-01-09T03:09:31Z",
+        "body": "> is it safe to assume that $frame->fd will be the same for messages for the same connection?\r\n\r\nyes, fd is almost never reused (unless it exceeds 16000k)\r\n"
+      },
+      {
+        "user": "osrec",
+        "created_at": "2020-01-10T00:24:00Z",
+        "body": "Great, thank you! So basically only after FD > 16 million will it repeat?"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2020-01-12T03:44:18Z",
+        "body": "@osrec Yes,  it will skip the fd in use"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of FD reuse policy in Swoole WebSocket connections",
+      "Explanation of FD lifecycle management",
+      "Guarantee of FD consistency during active connections",
+      "Boundary conditions for FD reuse"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:14:44"
+    }
+  },
+  {
+    "number": 2969,
+    "title": "Swoole\\Runtime::enableCoroutine() and cURL",
+    "created_at": "2019-11-22T04:17:33Z",
+    "closed_at": "2019-11-22T07:39:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2969",
+    "body": "Hi Swoole Team\r\n\r\nDoes `Swoole\\Runtime::enableCoroutine()` make all socket communication async? For example, would it make cURL requests in PHP async?\r\n\r\nThanks!\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2969/comments",
+    "author": "osrec",
+    "comments": [
+      {
+        "user": "huangzhhui",
+        "created_at": "2019-11-22T05:45:39Z",
+        "body": "`\\Swoole\\Runtime::enableCoroutine(SWOOLE_HOOK_ALL | SWOOLE_HOOK_CURL)`"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how Swoole's coroutine system interacts with PHP extensions like cURL",
+      "Clarification on which socket operations become asynchronous by default vs requiring explicit configuration",
+      "Identification of required configuration flags for specific async behaviors",
+      "Differentiation between general socket async capabilities and cURL-specific implementation"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:15:02"
+    }
+  },
+  {
+    "number": 2615,
+    "title": "How to implement ini_set()",
+    "created_at": "2019-06-08T00:36:44Z",
+    "closed_at": "2019-06-08T17:59:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2615",
+    "body": "I have got to set this\r\n     ini_set('session.cookie_httponly',1);\r\n\r\nbut I dont know if this is compatible with swoole registered cookie like\r\n     $res->cookie()\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2615/comments",
+    "author": "jobs-git",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2019-06-08T04:37:46Z",
+        "body": "This is a configuration item in FPM\r\n\r\nin Swoole:\r\n```php\r\nfunction Http\\Response->cookie(string $key, string $value = '', int $expire = 0 , string $path = '/', string $domain  = '', bool $secure = false , bool $httponly = false);\r\n```\r\n\r\nThere is no global configuration item\r\n"
+      },
+      {
+        "user": "jobs-git",
+        "created_at": "2019-06-08T17:59:54Z",
+        "body": "this will do, thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify compatibility between PHP ini_set() and Swoole's cookie handling methods",
+      "Identify the correct way to set httponly cookies in Swoole's architecture",
+      "Explain parameter usage for Swoole's cookie implementation",
+      "Differentiate between PHP-FPM configuration and Swoole runtime settings"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:15:51"
+    }
+  },
+  {
+    "number": 2534,
+    "title": "Connection gets outdated data.",
+    "created_at": "2019-04-27T14:27:23Z",
+    "closed_at": "2019-04-28T15:25:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2534",
+    "body": "Hi! I have an issue with Swoole WebSocket Server. I created an object to use Swoole Server. Here is the constructor: \r\n\r\n`public function __construct()\r\n    {\r\n        $this->serverWS = new Swoole\\WebSocket\\Server(\"192.168.56.2\", 9502);\r\n        \r\n        $this->serverWS->on('open', \r\n            function(Server $serverWS, Request $request) \r\n            {\r\n                $this->onConnection($request);\r\n            }\r\n        );\r\n\r\n        $this->serverWS->on('message', \r\n            function(Server $serverWS, Frame $frame)\r\n            {\r\n                $this->onMessage($frame);\r\n            }\r\n        );\r\n\r\n        $this->serverWS->on('close',\r\n            function(Server $serverWS, int $fd)\r\n            {\r\n                $this->onClose($fd);\r\n            }\r\n        );\r\n\r\n        $this->serverWS->on('workerStart',\r\n            function(Server $serverWS)\r\n            {\r\n                $this->onWorkerStart($this->serverWS);\r\n            }\r\n        );\r\n\r\n        $this->serverWS->start();\r\n    }`\r\n\r\nAlso, I have a desktop client written in Python (I start it with Linux terminal). Connection is established by the following example:\r\n\r\n`if __name__ == \"__main__\":\r\n    websocket.enableTrace(True)\r\n    ws = websocket.WebSocketApp(\"ws://192.168.56.2:9502\",\r\n                            on_message = on_message,\r\n                            on_error = on_error,\r\n                            on_close = on_close,\r\n                            header   = {\r\n                                'User-Agent: RaspberryPi/3B+' + ' ' + str(os.uname()), \r\n                                'Access-Token: ' + generate_token()\r\n                            }\r\n    )\r\n    ws.on_open = on_open\r\n    ws.run_forever()`\r\n\r\nWhat I do on server side is set current Python connection ID (I'm defining a Python client by the certain request header) to private property of my custom WebsocketServer object (this property is equal 0 by default). And by triggering onClose event I set this property to 0 again. If this property is not 0 and the same client tries to establish the connection, server closes it.\r\nI do this because i need to identify this client and have only one instance of it's connection.\r\n\r\nAnd the problem is that I can have two connections at the same time (two terminal windows with started clients). If there's three or more clients - all works fine: server closes connections.\r\n\r\nI tried to debug and what I noticed is when the first PythonClient connection triggers, WebsocketServer sets ID property from 0 to 1 (and I can easily read this property and it will surely be equal 1). Then I'm running the second PythonClient and what i got on server is 0 ID property again, which will be setted to 2...\r\nThe third connection (and following ones) get ID that is equal 1, untill I'm keeping first connection opened. (As it should be)\r\n\r\nThis is so strange. I have no any idea why this happens. Please, tell me what I'm doing wrong!\r\n\r\nMy Swoole version is:\r\n`php --ri swoole\r\n\r\nswoole\r\n\r\nSwoole => enabled\r\nAuthor => Swoole Team <team@swoole.com>\r\nVersion => 4.3.1\r\nBuilt => Mar 22 2019 11:50:29\r\ncoroutine => enabled\r\nepoll => enabled\r\neventfd => enabled\r\nsignalfd => enabled\r\ncpu_affinity => enabled\r\nspinlock => enabled\r\nrwlock => enabled\r\nopenssl => OpenSSL 1.1.0g  2 Nov 2017\r\nhttp2 => enabled\r\npcre => enabled\r\nmutex_timedlock => enabled\r\npthread_barrier => enabled\r\nfutex => enabled\r\nasync_redis => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_coroutine => On => On\r\nswoole.display_errors => On => On\r\nswoole.use_shortname => On => On\r\nswoole.unixsock_buffer_size => 8388608 => 8388608\r\n`\r\n\r\nMy Linux kernel is:\r\n`Linux elephant 4.15.0-47-generic #50-Ubuntu SMP Wed Mar 13 10:44:52 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux`\r\n\r\nMy PHP version is:\r\n`PHP 7.2.17-0ubuntu0.18.04.1 (cli) (built: Apr 18 2019 14:12:38) ( NTS )\r\nCopyright (c) 1997-2018 The PHP Group\r\nZend Engine v3.2.0, Copyright (c) 1998-2018 Zend Technologies\r\n    with Zend OPcache v7.2.17-0ubuntu0.18.04.1, Copyright (c) 1999-2018, by Zend Technologies`\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2534/comments",
+    "author": "shumichenko",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2019-04-28T06:19:46Z",
+        "body": "I can only tell you the following points due to my poor English language proficiency:\r\n1. The server is asynchronous, multiple requests may be processed at the same time\r\n2. Server use multi-process mode by default, you can try `new Swoole\\WebSocket\\Server(\"192.168.56.2\", 9502, SWOOLE_BASE);` to make it be a single process Server\r\n"
+      },
+      {
+        "user": "shumichenko",
+        "created_at": "2019-04-28T15:25:00Z",
+        "body": "> I can only tell you the following points due to my poor English language proficiency:\r\n> \r\n> 1. The server is asynchronous, multiple requests may be processed at the same time\r\n> 2. Server use multi-process mode by default, you can try `new Swoole\\WebSocket\\Server(\"192.168.56.2\", 9502, SWOOLE_BASE);` to make it be a single process Server\r\n\r\nThanks, it's working now!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how Swoole's process model affects connection state management",
+      "Solution ensuring atomic state management across worker processes",
+      "Clarification of connection handling race conditions in concurrent environments"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:16:29"
+    }
+  },
+  {
+    "number": 2312,
+    "title": "Coroutine Channel question",
+    "created_at": "2019-01-14T05:07:54Z",
+    "closed_at": "2019-01-14T05:16:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2312",
+    "body": "```php\r\n// a.php\r\n$chan = new \\Swoole\\Coroutine\\Channel();\r\ngo(function () use ($chan) {\r\n    $chan->push(1);\r\n//    $chan->push(2);\r\n});\r\n// php a.php\r\n// \u6267\u884c\u5b8c\u9000\u51fa\r\n\r\n// a.php\r\n$chan = new \\Swoole\\Coroutine\\Channel();\r\ngo(function () use ($chan) {\r\n    $chan->push(1);\r\n    $chan->push(2);\r\n});\r\n// php a.php\r\n// \u4e3a\u4ec0\u4e48\u4f1a\u963b\u585e\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2312/comments",
+    "author": "lizhichao",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2019-01-14T05:09:43Z",
+        "body": "\u56e0\u4e3a\u901a\u9053\u5bb9\u91cf\u53ea\u67091, \u7b2c\u4e8c\u6b21push\u4f1a\u6302\u8d77"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of channel capacity limitations in coroutine communication",
+      "Clarification of producer-consumer relationships in channel operations",
+      "Differentiation between buffered and unbuffered channel behavior"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:16:47"
+    }
+  },
+  {
+    "number": 2304,
+    "title": "\u540c\u6b65\u6a21\u5f0f\u4e0b\uff0c\u7b49\u5f85\u67d0\u4e2a\u534f\u7a0b\u7ed3\u675f\u518d\u54cd\u5e94\uff0c\u600e\u4e48\u5904\u7406\u5462\uff1fchan\u53ea\u80fd\u5728\u534f\u7a0b\u91cc\u7528",
+    "created_at": "2019-01-10T07:27:28Z",
+    "closed_at": "2019-01-11T03:49:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2304",
+    "body": "",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2304/comments",
+    "author": "thinkcmf",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2019-01-10T08:01:40Z",
+        "body": "\u628a\u5168\u5c40\u4ee3\u7801\u5305\u5230\u534f\u7a0b\u91cc\u4f7f\u7528"
+      },
+      {
+        "user": "windrunner414",
+        "created_at": "2019-01-10T10:14:18Z",
+        "body": "\u5728\u534f\u7a0b\u5185\u54cd\u5e94"
+      },
+      {
+        "user": "thinkcmf",
+        "created_at": "2019-01-10T13:00:13Z",
+        "body": "> \u628a\u5168\u5c40\u4ee3\u7801\u5305\u5230\u534f\u7a0b\u91cc\u4f7f\u7528\r\n\r\n\u4e3b\u8981\u662f\u4e0d\u60f3\u5927\u6539\u539f\u6709\u9879\u76ee\u7684\u903b\u8f91\uff0c\u53c8\u60f3\u4f7f\u7528\u534f\u7a0b\n\n---\n\n\u5176\u5b9e\u7ed9\u5f53\u524d worker\u52a0\u4e2a\u6807\u8bb0\u522b\u63a5\u53d7\u65b0\u7684\u8bf7\u6c42\u5c31\u53ef\u4ee5\u4e86"
+      },
+      {
+        "user": "windrunner414",
+        "created_at": "2019-01-10T15:29:44Z",
+        "body": "```\r\nfunction onRequest($request, $response) {\r\n    go(function () use (&$request, &$response) {\r\n        // do something...\r\n        $response->end();\r\n    });\r\n}\r\n```\r\n\u8fd9\u6837\u8bd5\u8bd5\u5462\uff1f\r\n\u800c\u4e14\u5305\u5728\u534f\u7a0b\u91cc\u4e5f\u65e0\u9700\u6539\u903b\u8f91\u5440"
+      },
+      {
+        "user": "thinkcmf",
+        "created_at": "2019-01-11T02:13:38Z",
+        "body": "> ```\r\n> function onRequest($request, $response) {\r\n>     go(function () use (&$request, &$response) {\r\n>         // do something...\r\n>         $response->end();\r\n>     });\r\n> }\r\n> ```\r\n> \u8fd9\u6837\u8bd5\u8bd5\u5462\uff1f\r\n> \u800c\u4e14\u5305\u5728\u534f\u7a0b\u91cc\u4e5f\u65e0\u9700\u6539\u903b\u8f91\u5440\r\n\r\n\u539f\u6709\u903b\u8f91\u91cc\u6709\u5f88\u591a\u9759\u6001\u53d8\u91cf\u548c\u9759\u6001\u5c5e\u6027\uff0c\u653e\u534f\u7a0b\u91cc\uff0c\u5982\u679c\u534f\u7a0b\u91cc\u6709\u963b\u585e\u4ee3\u7801\uff0c\u534f\u7a0b\u5c31\u4f1a\u6302\u8d77\uff0c\u7136\u540e\u65b0\u8bf7\u6c42\u65f6\u6765\uff0c\u9759\u6001\u53d8\u91cf\u548c\u9759\u6001\u5c5e\u6027\u5c31\u53ef\u80fd\u4f1a\u88ab\u8986\u76d6"
+      },
+      {
+        "user": "twose",
+        "created_at": "2019-01-11T02:19:10Z",
+        "body": "\u4f60\u8fd9\u79cd\u60c5\u51b5, \u540c\u6b65\u548c\u5f02\u6b65\u4e00\u8d77\u4f7f\u7528, \u6ca1\u6709\u610f\u4e49, \u4f1a\u4ea7\u751f\u9519\u8bef"
+      },
+      {
+        "user": "thinkcmf",
+        "created_at": "2019-01-11T02:25:45Z",
+        "body": "> \u4f60\u8fd9\u79cd\u60c5\u51b5, \u540c\u6b65\u548c\u5f02\u6b65\u4e00\u8d77\u4f7f\u7528, \u6ca1\u6709\u610f\u4e49, \u4f1a\u4ea7\u751f\u9519\u8bef\r\n\r\n\u5176\u5b9e\u5c31\u662f\u8ba9 worker \u53ea\u5904\u7406\u4e00\u4e2a\u8bf7\u6c42\uff0c\u8fd9\u4e2a\u8bf7\u6c42\u5904\u7406\u5b8c\uff0c\u518d\u63a5\u7740\u5904\u7406\u65b0\u7684\u8bf7\u6c42\uff0c\u8fd9\u6837\u5c31\u4e0d\u7528\u62c5\u5fc3\uff0c\u9759\u6001\u53d8\u91cf\u88ab\u8986\u76d6\u4e86\u3002\r\n\r\n```\r\nfunction onRequest($request, $response) {\r\n     // \u8fd9\u91cc\u6807\u8bb0 worker \u522b\u63a5\u53d7\u65b0\u8bf7\u6c42\u4e86\r\n\r\n    go(function () use (&$request, &$response) {\r\n        // do something...\r\n        // \u8fd9\u91cc\u53ef\u4ee5\u5f00\u5fc3\u5730\u4f7f\u7528\u534f\u7a0b\u4e86\r\n        $response->end();\r\n        // \u8bf7\u6c42\u5904\u7406\u5b8c,\u544a\u8bc9worker\u53ef\u4ee5\u63a5\u53d7\u65b0\u8bf7\u6c42\u4e86\r\n    });\r\n\r\n}\r\n```\r\n\u8fd9\u79cd\u65b9\u5f0f\u53ef\u4ee5\u8ba9\u5f88\u591a\u8001\u7a0b\u5e8f\u4f7f\u7528\u4e0a\u534f\u7a0b\uff0c\u611f\u89c9\u53ef\u4ee5\u662f\u534a\u5f02\u6b65\u534a\u540c\u6b65\u4e86"
+      },
+      {
+        "user": "twose",
+        "created_at": "2019-01-11T02:28:26Z",
+        "body": "\u90a3\u4e3a\u4ec0\u4e48\u8981\u7528\u534f\u7a0b?.."
+      },
+      {
+        "user": "thinkcmf",
+        "created_at": "2019-01-11T02:42:14Z",
+        "body": "> \u90a3\u4e3a\u4ec0\u4e48\u8981\u7528\u534f\u7a0b?..\r\n\r\n```\r\nfunction onRequest($request, $response)\r\n{\r\n    // \u8fd9\u91cc\u6807\u8bb0 worker \u522b\u63a5\u53d7\u65b0\u8bf7\u6c42\u4e86\r\n    \r\n    go(function () use (&$request, &$response) {\r\n        // do something...\r\n        //\u5e76\u53d1\u8bf7\u6c42 n\r\n        $n = 5;\r\n        for ($i = 0; $i < $n; $i++) {\r\n            $cli = new Swoole\\Coroutine\\Http\\Client('127.0.0.1', 80);\r\n            $cli->setHeaders([\r\n                'Host'            => \"local.ad.oa.com\",\r\n                \"User-Agent\"      => 'Chrome/49.0.2587.3',\r\n                'Accept'          => 'text/html,application/xhtml+xml,application/xml',\r\n                'Accept-Encoding' => 'gzip',\r\n            ]);\r\n            $cli->set(['timeout' => 2]);\r\n            $cli->setDefer();\r\n            $cli->get('/test.php');\r\n            $clients[] = $cli;\r\n        }\r\n\r\n        for ($i = 0; $i < $n; $i++) {\r\n            $r        = $clients [$i]->recv();\r\n            $result[] = $clients[$i]->body;\r\n        }\r\n        $response->end(json_encode($data));\r\n\r\n        // \u8bf7\u6c42\u5904\u7406\u5b8c,\u544a\u8bc9worker\u53ef\u4ee5\u63a5\u53d7\u65b0\u8bf7\u6c42\u4e86\r\n    });\r\n\r\n}\r\n```\r\n\r\n\u8fd9\u6837\u5c31\u53ef\u4ee5\u4f7f\u7528\u534f\u7a0b\u5e76\u53d1\u5904\u7406\u6b64\u7c7b\u95ee\u9898\uff0c\u540c\u65f6\u4e5f\u4e0d\u5f71\u54cd\u8001\u4ee3\u7801\n\n---\n\n\u53ea\u8981\u80fd\u6807\u8bb0 worker \u662f\u5426\u63a5\u53d7\u65b0\u8bf7\u6c42\u7684\u5f00\u5173\uff0c\u8fd9\u79cd\u60f3\u6cd5\u611f\u89c9\u8fd8\u662f\u6709\u610f\u4e49\u7684\uff0c\u81f3\u5c11\u6bd4\u5168\u540c\u6b65\u597d\u70b9"
+      },
+      {
+        "user": "twose",
+        "created_at": "2019-01-11T02:44:28Z",
+        "body": "\u5f00\u542f\u534f\u7a0b, \u505a\u4e00\u4e2a\u5168\u5c40\u7684channel, \u7136\u540e\u5411\u91cc\u9762push([$request, $response]), \u7136\u540e\u5355\u72ec\u5f00\u4e00\u4e2a\u534f\u7a0b, pop\u51fa\u6765, \u9010\u4e2a\u5904\u7406."
+      },
+      {
+        "user": "thinkcmf",
+        "created_at": "2019-01-11T03:26:23Z",
+        "body": "> \u5f00\u542f\u534f\u7a0b, \u505a\u4e00\u4e2a\u5168\u5c40\u7684channel, \u7136\u540e\u5411\u91cc\u9762push([$request, $response]), \u7136\u540e\u5355\u72ec\u5f00\u4e00\u4e2a\u534f\u7a0b, pop\u51fa\u6765, \u9010\u4e2a\u5904\u7406.\r\n\r\n\u611f\u8c22\uff0c\u5b8c\u7f8e\u89e3\u51b3\u4e86\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures sequential processing of requests without concurrency conflicts",
+      "Maintains compatibility with existing static variables/properties",
+      "Guarantees worker availability signaling after request completion",
+      "Prevents race conditions in synchronous-asynchronous hybrid workflows"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:16:54"
+    }
+  },
+  {
+    "number": 1977,
+    "title": "Does \\Co::getUid() has the possibility to return same number in a worker process?",
+    "created_at": "2018-09-17T11:51:31Z",
+    "closed_at": "2018-09-19T12:41:35Z",
+    "labels": [
+      "question",
+      "coroutine"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1977",
+    "body": "for example:\r\n\\Co:;getUid() return 117, after some time, but before worker reload, may it return 117 again?",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1977/comments",
+    "author": "scil",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2018-09-18T02:27:15Z",
+        "body": "it will start at 1."
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2018-09-18T02:51:58Z",
+        "body": "Like the process id, It will be reused"
+      },
+      {
+        "user": "scil",
+        "created_at": "2018-09-18T11:28:26Z",
+        "body": "Thank you.\r\n\r\ndoes the id start with 1 and grow by step 1, and  go back to 1  when reaching a max number ?"
+      },
+      {
+        "user": "twose",
+        "created_at": "2018-09-19T08:00:34Z",
+        "body": "@scil \r\ncid map uses the bitmap, it will find the first available position.\r\nWe have also considered this problem (use string like uuid is better?)\r\n\r\nwe can confirm it by\r\n```php\r\n\r\nco::set([\r\n    'max_coroutine' => PHP_INT_MAX,\r\n    'log_level' => SWOOLE_LOG_INFO,\r\n    'trace_flags' => 0\r\n]);\r\n$map = [];\r\nwhile (true) {\r\n    if (empty($map)){\r\n        $cid = go(function () {co::sleep(5);});\r\n    }else{\r\n        $cid = go(function () { });\r\n    }\r\n    if (!isset($map[$cid])) {\r\n        $map[$cid] = $cid;\r\n    } else {\r\n        var_dump(end($map));\r\n        var_dump($cid);\r\n        exit;\r\n    }\r\n}\r\n```\n\n---\n\n@scil \r\ncid map uses the bitmap, it will find the first available position.\r\nWe have also considered this problem (use string like uuid is better?)\r\n\r\nwe can confirm it by:\r\n```php\r\nco::set([\r\n    'max_coroutine' => PHP_INT_MAX,\r\n    'log_level' => SWOOLE_LOG_INFO,\r\n    'trace_flags' => 0\r\n]);\r\n$map = [];\r\nwhile (true) {\r\n    if (empty($map)){\r\n        $cid = go(function () {co::sleep(5);});\r\n    }else{\r\n        $cid = go(function () { });\r\n    }\r\n    if (!isset($map[$cid])) {\r\n        $map[$cid] = $cid;\r\n    } else {\r\n        var_dump(end($map));\r\n        var_dump($cid);\r\n        exit;\r\n    }\r\n}\r\n```\r\n\r\nit will print like:\r\n```php\r\nint(524288)\r\nint(2)\r\n```\n\n---\n\nWe have MAX_CORO_NUM_LIMIT => 0x80000, coroutine num can not be bigger than 524288 on the same time"
+      },
+      {
+        "user": "scil",
+        "created_at": "2018-09-19T12:41:35Z",
+        "body": "@twose Thank you! I've got it.  For me, bitmap is good enough!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how coroutine ID reuse works in Swoole's worker process lifecycle",
+      "Clarification of the maximum coroutine limit and its impact on ID uniqueness",
+      "Description of the allocation mechanism (bitmap vs sequential)",
+      "Identification of conditions when ID reuse might occur"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:17:38"
+    }
+  },
+  {
+    "number": 1886,
+    "title": "http_sever and websocket_server",
+    "created_at": "2018-08-15T17:32:56Z",
+    "closed_at": "2018-08-20T06:20:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1886",
+    "body": "I don't get it. How can I make a http_server and a websocket_server in one process? \r\n\r\ntried to create two instanced but wont work\r\n\r\nWarning: Swoole\\Server::__construct(): server is running. unable to create swoole_server.",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1886/comments",
+    "author": "Kapsonfire",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2018-08-16T01:26:14Z",
+        "body": "Easy, you should know WebSocket is upgraded by HTTP\r\n```php\r\n<?php\r\n\r\n$server = new swoole_websocket_server('127.0.0.1', 9501);\r\n\r\n$server->on('open', function (swoole_websocket_server $server, swoole_http_request $req) {\r\n    echo \"connection open: {$req->fd}\\n\";\r\n});\r\n\r\n//websocket\r\n$server->on('message', function (swoole_websocket_server $server, swoole_websocket_frame $frame) {\r\n    echo \"received message: {$frame->data}\\n\";\r\n    $server->push($frame->fd, json_encode([\"hello\", \"world\"]));\r\n});\r\n\r\n//http\r\n$server->on('request', function (swoole_http_request $req, swoole_http_response $resp) {\r\n    $resp->end(\"<h1>hello world</h1>\");\r\n});\r\n\r\n$server->on('close', function (swoole_websocket_server $server, int $fd) {\r\n    echo \"connection close: {$fd}\\n\";\r\n});\r\n\r\n$server->start();\r\n```"
+      },
+      {
+        "user": "Kapsonfire",
+        "created_at": "2018-08-18T11:47:10Z",
+        "body": "ok, i tried it already that way, but with http2 in the option.\r\n\r\nso im not able to use http2 then, since websocket server cant use http2 \n\n---\n\nany way to allow http2 in websocket server?"
+      },
+      {
+        "user": "twose",
+        "created_at": "2018-08-20T02:30:42Z",
+        "body": "@Kapsonfire \r\nNot yet, but on the roadmap. Please use nginx to proxy it."
+      },
+      {
+        "user": "Kapsonfire",
+        "created_at": "2018-08-20T06:20:47Z",
+        "body": "thanks - this is the only reason for me to use a apache2 reverse proxy to achieve http2 - may be closed"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrate how to handle both HTTP and WebSocket protocols within a single server instance",
+      "Address HTTP/2 compatibility concerns when using WebSocket",
+      "Provide a proxy-compatible solution for protocol limitations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:17:43"
+    }
+  },
+  {
+    "number": 1602,
+    "title": "swoole_server->addProcess \u662f\u5426\u53ef\u4ee5\u8003\u8651\u652f\u6301 Process\\Pool \uff1f",
+    "created_at": "2018-05-08T07:08:15Z",
+    "closed_at": "2018-05-15T03:10:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1602",
+    "body": "When I want to use `addProcess` and `Process\\Pool` in the same time, this will throw an error\r\nIt's there any plan to support it in the `swoole_server->addProcess`?\r\nThis will help us to manage processes more comfortable\r\nOr this suggest is not reasonable?\r\n\r\n\u76ee\u524d\u5982\u679c\u6211\u60f3\u540c\u65f6\u4f7f\u7528 `addProcess` \u548c `Process\\Pool` \u5b9e\u9645\u4e0a\u662f\u65e0\u6cd5\u5b9e\u73b0\u7684\r\n\u53ef\u5426\u6709\u8fd9\u6837\u7684\u8ba1\u5212\uff1f\r\n\u8fd9\u6837\u53ef\u4ee5\u5728\u4e00\u4e2a\u5e94\u7528\u4e0b\u65b9\u4fbf\u8fdb\u884c\u7ba1\u7406\r\n\u6216\u8005\u8bf4\u8fd9\u6837\u5176\u5b9e\u662f\u4e0d\u5408\u7406\u7684\uff1f",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1602/comments",
+    "author": "HuangStomach",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2018-05-15T03:10:36Z",
+        "body": "Process\\Pool \u76f8\u5f53\u4e8e\u662f Manager \u7684\u529f\u80fd\uff0c\u672c\u8eab Swoole\\Server \u5df2\u81ea\u5e26\u4e86\u3002"
+      },
+      {
+        "user": "HuangStomach",
+        "created_at": "2018-05-15T09:40:31Z",
+        "body": "\u4e5f\u5c31\u662f\u8bf4\u5982\u679c\u6211\u60f3\u5229\u7528`Swoole\\Server`\u6765\u5b9e\u73b0\u7c7b\u4f3c\u4e8e`Process\\Pool`\u7684\u529f\u80fd\uff0c\r\n\u76f8\u5f53\u4e8e\u5176\u5b9e\u53ef\u4ee5\u6307\u5b9a\u4e00\u90e8\u5206`work`\u53bb\u63a5\u6536\u8bf7\u6c42\uff0c\u53e6\u4e00\u90e8\u5206\u53ef\u4ee5\u4e3a\u6211\u5904\u7406\u5176\u4ed6\u7684\u540e\u53f0\u670d\u52a1\u903b\u8f91\uff0c\u5982\u961f\u5217\u76d1\u542c\u6d88\u8d39\u7b49\u529f\u80fd\uff1f\r\n\u53ef\u4ee5\u8fd9\u4e48\u53bb\u7406\u89e3\u4f7f\u7528\u5427"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2018-05-25T02:52:44Z",
+        "body": "\u53ef\u4ee5\u8fd9\u6837\u7528\u3002"
+      },
+      {
+        "user": "HuangStomach",
+        "created_at": "2018-05-25T03:24:54Z",
+        "body": "\u591a\u8c22\u89e3\u7b54\ud83d\udc4d"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of architectural compatibility between Process\\Pool and Swoole\\Server's built-in process management",
+      "Validation of concurrent process management strategies within Swoole\\Server",
+      "Guidance on logical separation of process responsibilities"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:17:52"
+    }
+  },
+  {
+    "number": 1520,
+    "title": "How create new process when parent process already set timer",
+    "created_at": "2018-03-14T16:14:22Z",
+    "closed_at": "2018-03-15T10:53:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1520",
+    "body": "I know I should set timer when all child process created. \r\nBut, I want to catch `SIGCHLD` signal and create a new child process.\r\n```PHP\r\nSwoole\\Process::signal(SIGCHLD, function ($sig) {\r\n    while ($ret = Swoole\\Process::wait(false)) {\r\n        // create a new child process\r\n        $p = new Swoole\\Process('callback_function');\r\n        $p->start();\r\n    }\r\n});\r\n```\r\nThis new child process inherit parent timer ? \r\nHow can I avoid this problem ? \r\nClear timer in child process callback function ?",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1520/comments",
+    "author": "iyaozhen",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2018-03-15T09:46:04Z",
+        "body": "Do not need to clear the parent process timer, the swoole extension will automatically clear the parent process timer & signal listener & event listener when the child process starts.\r\n\r\ndemo\r\n----\r\n```php\r\nfunction callback_function () {\r\n    Swoole\\Timer::after(10000, function () {\r\n        echo \"hello world\";\r\n    });\r\n};\r\n\r\nSwoole\\Timer::tick(1000, function () {\r\n    echo \"parent timer\\n\";\r\n});\r\n\r\nSwoole\\Process::signal(SIGCHLD, function ($sig) {\r\n    while ($ret = Swoole\\Process::wait(false)) {\r\n        // create a new child process\r\n        $p = new Swoole\\Process('callback_function');\r\n        $p->start();\r\n    }\r\n});\r\n\r\n// create a new child process\r\n$p = new Swoole\\Process('callback_function');\r\n$p->start();\r\n```"
+      },
+      {
+        "user": "iyaozhen",
+        "created_at": "2018-03-15T10:53:19Z",
+        "body": "Thx\r\nI find you already update document. \r\n\r\n\u975e\u5e38\u611f\u8c22\u97e9\u8001\u5927\u89e3\u7b54"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation that child processes do not inherit parent process timers automatically",
+      "Explanation of framework-level resource cleanup mechanisms during process creation",
+      "Clarification about parent/child process isolation in the context of scheduled tasks"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:19:04"
+    }
+  },
+  {
+    "number": 1270,
+    "title": "\u534f\u7a0bmysql\u5ba2\u6237\u7aef",
+    "created_at": "2017-07-04T08:58:32Z",
+    "closed_at": "2017-07-04T09:22:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1270",
+    "body": "\u6700\u8fd1\u5728\u9879\u76ee\u91cc\u4f7f\u7528\u534f\u7a0bMysql\u5ba2\u6237\u7aef\uff0c\u6709\u90e8\u5206\u4e1a\u52a1\u5fc5\u987b\u4f7f\u7528\u4e8b\u52a1\u64cd\u4f5c\uff0c\u4f46\u662f\u76ee\u524d\u6ca1\u6709\u652f\u6301\u4e8b\u52a1\uff0c\u8bf7\u95ee\u4e0b\uff0c\u6709\u540e\u7eed\u589e\u52a0\u8ba1\u5212\u4e48\u3002",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1270/comments",
+    "author": "stelin",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2017-07-04T09:22:39Z",
+        "body": "\u5728Swoole\\MySQL\u4e2d\u6267\u884c\u4e0b\u5217SQL\u8bed\u53e5\u53ef\u4ee5\u5b9e\u73b0\u4e8b\u52a1\u5904\u7406\u3002\r\n\r\n\u542f\u52a8\u4e8b\u52a1\uff1aSTART TRANSACTION\r\n\u63d0\u4ea4\u4e8b\u52a1\uff1aCOMMIT\r\n\u56de\u6eda\u4e8b\u52a1\uff1aROLLBACK"
+      },
+      {
+        "user": "stelin",
+        "created_at": "2017-07-04T13:46:10Z",
+        "body": "\u660e\u767d\u600e\u4e48\u505a\u4e86\uff0c\u8c22\u8c22\u5cf0\u54e5\uff01"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to implement transaction operations using the existing client's capabilities",
+      "Confirmation that transactional workflows are achievable with current tools"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:19:14"
+    }
+  },
+  {
+    "number": 1083,
+    "title": "How i can check is connecton was closed clean or not in WebsocketServer?",
+    "created_at": "2017-02-14T01:21:37Z",
+    "closed_at": "2017-02-14T06:15:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1083",
+    "body": "In JavaScript i can check is connection was normaly closed or not by this code:\r\n```\r\n                var socket = new WebSocket(\"ws://127.0.0.1:9501\");\r\n                socket.onclose = function(event){\r\n                  if(event.wasClean){\r\n                    alert('Good close.');\r\n                  }else{\r\n                    alert('Bad close. Connection broken');\r\n                  }\r\n                };\r\n```\r\n\r\nCan I check it in Swoole WebsocketServer?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1083/comments",
+    "author": "kse300489",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2017-02-14T05:53:39Z",
+        "body": "```php\r\n$info = $serv->getClientInfo($fd);\r\n$errno = $info['close_errno'];\r\n```\r\n\r\nIf it is abnormal, the value of errno is non-zero."
+      },
+      {
+        "user": "kse300489",
+        "created_at": "2017-02-14T06:14:07Z",
+        "body": "Big thanks for fast answer."
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2017-02-14T06:15:27Z",
+        "body": ":)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a method to determine if WebSocket connection closure was clean or abnormal",
+      "Identifies error codes or flags indicating closure status",
+      "Works with Swoole's WebSocketServer client information"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:19:43"
+    }
+  },
+  {
+    "number": 912,
+    "title": "\u5728swoole_websocket_server start\u56de\u8c03\u542f\u52a8\u7684swoole_process\u4e2d\u65e0\u6cd5\u5411\u5ba2\u6237\u7aefpush\u6d88\u606f?",
+    "created_at": "2016-11-15T02:39:40Z",
+    "closed_at": "2016-11-15T07:56:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/912",
+    "body": "\u5b9e\u4f8b\u4ee3\u7801\u5982\u4e0b:\r\n```php\r\n<?php\r\n$server = new \\swoole_websocket_server(\"0.0.0.0\", 9443);\r\n\r\n$server->set(array(\r\n    'worker_num' => 1,\r\n    'max_request' => 500,\r\n    'task_worker_num' => 1,\r\n    'max_connection' => 1024\r\n));\r\n\r\n$server->on('start', function (\\swoole_websocket_server $server) {\r\n    $pid = getmypid();\r\n    $mPid = getmypid();\r\n    echo \"this is Master pid: $mPid\\n\";\r\n    \r\n    $process = new swoole_process('process');\r\n    $pid = $process->start();\r\n});\r\n\r\n$server->on('message', function (\\swoole_websocket_server $server, $frame) {\r\n    echo \"receive from {$frame->fd}:{$frame->data},opcode:{$frame->opcode},fin:{$frame->finish} workerid: {$server->worker_id}\\n\";\r\n});\r\n\r\n$server->on('task', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\r\n$server->on('finish', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\r\n\r\n$server->start();\r\n\r\nfunction process(swoole_process $process)\r\n{\r\n    global $server;\r\n    swoole_set_process_name(\"php processor\");\r\n    // \u7b49\u5f85\u5ba2\u6237\u7aef\u8fde\u63a5, 20\u79d2\u540e\u5411\u5ba2\u6237\u7aef\u5faa\u73af\u53d1\u9001\u6570\u636e\r\n    swoole_timer_after(20 * 1000, function() use ($server){\r\n        foreach ($server->connections as $fd) {\r\n            var_dump($fd);\r\n            $server->push($fd, 'hello');\r\n        }\r\n    });\r\n    \r\n}\r\n```\r\n20\u79d2\u540e, var_dump\u51fa\u4e86fd, \u4f46\u662f\u5ba2\u6237\u7aef\u6ca1\u6709\u6536\u5230\u6570\u636e.",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/912/comments",
+    "author": "kings36503",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-11-15T07:56:16Z",
+        "body": "\u4f7f\u7528`addProcess`\uff0c\u4e0d\u8981\u5728`onStart`\u56de\u8c03\u51fd\u6570\u4e2d\u521b\u5efaprocess\n"
+      },
+      {
+        "user": "kings36503",
+        "created_at": "2016-11-15T09:04:52Z",
+        "body": "ok, \u53ef\u4ee5\u4e86, \u591a\u8c22.\n\n\n---\n\n\u8d34\u4e0a\u4fee\u6539\u540e\u7684\u5b9e\u4f8b\u4ee3\u7801:\n\n``` php\n<?php\n$server = new \\swoole_websocket_server(\"0.0.0.0\", 9443);\n\n$server->set(array(\n    'worker_num' => 1,\n    'max_request' => 500,\n    'task_worker_num' => 1,\n    'max_connection' => 1024\n));\n\n$process = new swoole_process('process');\n$pid = $process->start();\n$server->addProcess($process);\n\n\n$server->on('start', function (\\swoole_websocket_server $server) {\n    $pid = getmypid();\n    echo \"this is Master pid: $pid\\n\";\n});\n\n$server->on('message', function (\\swoole_websocket_server $server, $frame) {\n    echo \"receive from {$frame->fd}:{$frame->data},opcode:{$frame->opcode},fin:{$frame->finish} workerid: {$server->worker_id}\\n\";\n});\n\n$server->on('task', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\n$server->on('finish', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\n\n$server->start();\n\nfunction process(swoole_process $process)\n{\n    global $server;\n    swoole_set_process_name(\"php processor\");\n\n    swoole_timer_after(10 * 1000, function() use ($server){\n        foreach ($server->connections as $fd) {\n            var_dump($fd);\n            $server->push($fd, 'hello');\n        }\n    });\n\n}\n```\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Proper integration of Swoole processes with the server lifecycle",
+      "Correct process creation context",
+      "Maintain access to server connections from child processes"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:20:34"
+    }
+  },
+  {
+    "number": 870,
+    "title": "\u8bf7\u95eeswoole_http_request->header \u80fd\u652f\u6301\u53d1\u9001 nginx sendfile \u7684X-Accel-Redirect \u5417",
+    "created_at": "2016-10-10T12:08:30Z",
+    "closed_at": "2016-10-11T10:04:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/870",
+    "body": "\u5982\u9898\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/870/comments",
+    "author": "hackingluoluo",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-10-11T10:04:41Z",
+        "body": "header\u65b9\u6cd5\u53ef\u4ee5\u53d1\u9001\u4efb\u610fHttp\u5934\u3002\n"
+      },
+      {
+        "user": "hackingluoluo",
+        "created_at": "2016-10-12T03:44:56Z",
+        "body": "\u8c22\u8c22!  \u90a3\u5e94\u8be5\u662f\u6211nginx\u914d\u7f6e\u6709\u95ee\u9898\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation that Swoole's header method supports sending arbitrary HTTP headers",
+      "Clarification that header functionality isn't the limiting factor for X-Accel-Redirect implementation"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:20:41"
+    }
+  },
+  {
+    "number": 636,
+    "title": "Unix domain Socket\u5957\u63a5\u5b57\u6587\u4ef6\u5c5e\u6027\u5982\u4f55\u66f4\u6539\uff1f",
+    "created_at": "2016-04-19T08:51:19Z",
+    "closed_at": "2016-04-19T09:12:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/636",
+    "body": "\u589e\u52a0linux domain socket\u7684\u652f\u6301\n$serv->addlistener(\"/var/run/myserv.sock\", 0, SWOOLE_UNIX_STREAM);\n\n\u672c\u673afpm\u6a21\u5f0f(nobody\u7528\u6237)\u4e0b\uff0cphp\u65e0\u6cd5\u901a\u8fc7 /var/run/myserv.sock \u8fde\u63a5\u670d\u52a1\n/var/run/myserv.sock\u6587\u4ef6\u53ea\u6709root\u7528\u6237\u624d\u5177\u6709\u8bfb\u5199\u6743\u9650\uff0c\u5982\u4f55\u6539\u53d8\u6b64\u6587\u4ef6\u5c5e\u6027\uff0c\u8ba9\u5176\u5b83\u7528\u6237\u53ef\u4ee5\u8fde\u63a5\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/636/comments",
+    "author": "stcer",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-04-19T09:10:04Z",
+        "body": "\u53ef\u4ee5\u5728`onStart`\u56de\u8c03\u51fd\u6570\u4e2d\u4fee\u6539`unixsock`\u6587\u4ef6\u7684\u6743\u9650\u3002\n\n``` php\nchmod('/var/run/myserv.sock', 0777);\n```\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Mechanism to modify socket file permissions after creation",
+      "Solution must work within server lifecycle hooks",
+      "Persistent permission management across restarts"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:20:57"
+    }
+  }
+]

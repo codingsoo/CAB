@@ -1,0 +1,73 @@
+[
+  {
+    "number": 434,
+    "title": "How to use in_systemd_plugin",
+    "created_at": "2017-11-16T08:43:27Z",
+    "closed_at": "2017-11-21T02:01:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/434",
+    "body": "I want to collect log messages from the Journald daemon on Linux environments, and I find that the Systemd/Journald input plugin has been developed. Yesterday, I got the latest source code from Github. But when I try to use that input plugin, the fluent-bit.conf is as flowing:\r\n/---------------------------------------------------------------------------------/\r\n[INPUT]\r\n    Name systemd\r\n    Path /home/xh/Desktop/logdata/journal/*\r\n    Tag  k8s-system\r\n\r\n[OUTPUT]\r\n    Name  stdout\r\n    Match *\r\n/---------------------------------------------------------------------------------/\r\n\r\nI got the following error log:\r\n\r\n/---------------------------------------Error------------------------------------------/\r\nInput plugin 'systemd' cannot be loaded\r\n/---------------------------------------------------------------------------------/\r\n\r\nSo I try to find out why got this, I find that \r\n     1.  fluent-bit.c     \r\n                   /* Create configuration context */\r\n                   config = flb_config_init();\r\n\r\n     2.  flb_config.c  \r\n                   /* Register plugins */\r\n                   flb_register_plugins(config);\r\n\r\n     3.   flb_plugin.h\r\n     \r\nThe flb_plugin.h is produced during compling period according to flb_plugin.h.in.\r\nDuring the compling, I got this \r\n/---------------------------------------------------------------------------------/\r\n-- Could NOT find Journald (missing: JOURNALD_LIBRARY JOURNALD_INCLUDE_DIR) \r\n/---------------------------------------------------------------------------------/\r\n\r\nthen I further to find that in Findjournal.cmake\r\n/----------------------------------------------------------------------------------------------------/\r\nfind_package(PkgConfig)\r\npkg_check_modules(PC_JOURNALD QUIET systemd)\r\n\r\n/----------------------------------------------------------------------------------------------------------/\r\n\r\nIn fact\uff0cI find that the package pkg-config is existed , so find_package(PkgConfig) is true.\r\n\r\nIf I use pkg_check_modules(PC_JOURNALD REQUIRED systemd),  I find the systemd are existed.\r\n/----------------------------------------------------------------------------------------------------------/\r\n-- Checking for module 'systemd'\r\n--   Found systemd, version 229\r\n/----------------------------------------------------------------------------------------------------------/\r\n And the PC_JOURNALD_FOUND ia assigned 1. But PC_JOURNALD_CFLAGS_OTHER, PC_JOURNALD_INCLUDEDIR, PC_JOURNALD_INCLUDE_DIRS, PC_JOURNALD_LIBDIR and PC_JOURNALD_LIBRARY_DIRS are not assigned. \r\n\r\nMy OS is Ubuntu 16.04. The cmake version is 3.9.4. The pkg-config version is 0.29.1. The systemd version is 229. \r\n\r\nSo I hope someone can tell me how to do, if I want to use in_systemd_plugin. Thanks very much!\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/434/comments",
+    "author": "wst-casd",
+    "comments": [
+      {
+        "user": "nokute78",
+        "created_at": "2017-11-19T13:27:07Z",
+        "body": "Do you install a header of systemd ? (e.g. systemd-devel in CentOS)\r\nlibsystemd-dev may help to build.\r\n"
+      },
+      {
+        "user": "wst-casd",
+        "created_at": "2017-11-21T02:00:57Z",
+        "body": "Thanks very much\uff0cI will make sure whether or not a header of systemd have been installed and have a try of libsystemd-dev.\n\n---\n\n@nokute78   @edsiper   Thanks, I install the libsystemd-dev on my os and alter  pkg_check_modules(PC_JOURNALD QUIET systemd) to pkg_check_modules(PC_JOURNALD QUIET libsystemd),  then solve the problem."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of required systemd development dependencies",
+      "Verification of correct pkg-config module name for systemd",
+      "Confirmation of successful plugin registration in build process",
+      "Clear linkage between systemd libraries and Fluent Bit build"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:50:01"
+    }
+  },
+  {
+    "number": 359,
+    "title": "How do in_tail deal with Scroll log",
+    "created_at": "2017-08-17T03:50:52Z",
+    "closed_at": "2017-08-18T02:08:20Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/359",
+    "body": "I am sorry to trouble you again \u00b7\u00b7\r\nI have a little test with in_tail a scrolling log and find a problem:\r\n\r\n- first I touch a log file by `echo aaa > a.log` and run flb\r\n```\r\n./fluent-bit-dev -i tail -p path=$(pwd)/a.log -o stdout\r\n```\r\n\r\n- then append content by echo \r\n\r\n```\r\necho bbb >> a.log\r\necho ccc >> a.log\r\necho ddd >> a.log\r\n```\r\nsince now out put is correct\r\n```\r\nFluent-Bit v0.12.0\r\nCopyright (C) Treasure Data\r\n\r\n[2017/08/17 03:33:49] [ info] [engine] started\r\n[0] tail.0: [1502940829.966728341, {\"log\"=>\"aaa\"}]\r\n[0] tail.0: [1502940841.515776656, {\"log\"=>\"bbb\"}]\r\n[0] tail.0: [1502940850.129314776, {\"log\"=>\"ccc\"}]\r\n[0] tail.0: [1502940856.325415717, {\"log\"=>\"ddd\"}]\r\n```\r\n- then I clean flie and append other  content\r\n```\r\necho eee > a.log \r\necho fff >> a.log\r\n```\r\nNow can't get new record, like docker log if limit the log's max-size and max-file it will do a similar operation, so there is any way to deal with it?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/359/comments",
+    "author": "vinkdong",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2017-08-18T02:00:21Z",
+        "body": "@VinkDong \r\n\r\nin_tail always follow the file changes like _tail -F_ command does. Meaning it keep tracks of the last position read, if you truncate the file (clear file content) Fluent Bit will not read new changes as there is no way to track backward changes.\r\n\r\nWhen Docker engine rotates a file, what it does is that it rename the file, then Fluent Bit catch that change and assumes the file was rotated. Then in a new scan to lookup for new files will pick up the new generated file by Docker engine.\r\n\r\n"
+      },
+      {
+        "user": "vinkdong",
+        "created_at": "2017-08-18T02:08:09Z",
+        "body": "I got it, Thanks "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how Fluent Bit's in_tail handles file rotation vs truncation",
+      "Clarification of file tracking requirements for in_tail",
+      "Guidance on compatible log rotation strategies",
+      "Explanation of position tracking limitations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:50:17"
+    }
+  }
+]

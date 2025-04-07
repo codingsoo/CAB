@@ -1,0 +1,40 @@
+[
+  {
+    "number": 111,
+    "title": "Why Batch size 4 training is much slower than Batch size 1 training under deepspeed yaml",
+    "created_at": "2024-12-04T02:00:58Z",
+    "closed_at": "2025-01-02T14:27:37Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/111",
+    "body": "### System Info / \u7cfb\u7d71\u4fe1\u606f\n\nThis part is correct, everything works.\n\n### Information / \u95ee\u9898\u4fe1\u606f\n\n- [X] The official example scripts / \u5b98\u65b9\u7684\u793a\u4f8b\u811a\u672c\n- [ ] My own modified scripts / \u6211\u81ea\u5df1\u4fee\u6539\u7684\u811a\u672c\u548c\u4efb\u52a1\n\n### Reproduction / \u590d\u73b0\u8fc7\u7a0b\n\nI am using 8 A800 GPUS to train the cogvideo 5b model sft, and I realize the training speed is slower when I set batch size to 4 compared with when I set batch size equal to 1. Below is an example of the speed difference. I am using the deepspeed setup to help training.\r\n\r\nGPU train 4 batch 8 gpu:\r\nSteps:   0%|\u258f                                                                                                                                                          | 18/20000 [23:57<403:54:45, 72.77s/it, loss=0.0777, lr=2.25e-6]\r\ntrain 1 batch 8 gpu:\r\nSteps:   0%|\u258f                                                                                                                                                           | 17/20000 [07:43<119:15:51, 21.49s/it, loss=0.118, lr=2.13e-6]\r\n\r\n\n\n### Expected behavior / \u671f\u5f85\u8868\u73b0\n\nShouldn't it be the other way around, the training should be faster with batch size 4? Maybe it is because of the cpu offload option in the deepspeed?",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/111/comments",
+    "author": "Bensong0506",
+    "comments": [
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-04T05:27:49Z",
+        "body": "When you increase batch_size, you are doing more computation per step, so this is expected behaviour. In fact, your training is indeed happening slightly faster, because at `batch_size=1`, I see each step taking about `21` seconds, and at `batch_size=4` it's taking a little less than 4x that.\r\n\r\nHowever, note that when you set `batch_size=1`, you are training for `8 GPU x 1 batch_size x 20000 steps` for an effective `160000` sample data points. But for `batch_size=4`, you are training for `8 GPU x 4 batch_size x 20000 steps` for an effective `640000` sample data points. In order to do the comparison fairly, you should reduce the number of training steps to 5000, so that the effective number of samples seen by the model is the same (this will however reduce the number of gradient updates that happen, but that is what is expected when increasing batch_size and keeping effective number of samples seen by the model the same).\r\n\r\nThen, the time taken by `batch_size=1` run would be roughly `21 * 20000 = 420000 seconds`, and the time taken by `batch_size=4` run would be roughly `72 * 5000 = 360000 seconds`, which is indeed lower.\n\n---\n\nOn another note, yes DeepSpeed training is a bit slower but it lets you squeeze in higher batch size, due to the gradient offloading and optimizer state existing on the CPU. I would recommend using torch.compile with dynamic=True (if you're doing multiresolution, otherwise dynamic=False would be better) to speed up training quite a bit"
+      },
+      {
+        "user": "lijain",
+        "created_at": "2024-12-04T07:20:50Z",
+        "body": "> to speed up training quite a bit\r\nDo you want to ask why bs=1 itertime=21.49, bs=4 itertime=72.77, why the itertime of a single card is so large, and then why the multiple cards are multiplied\r\n"
+      },
+      {
+        "user": "Bensong0506",
+        "created_at": "2024-12-04T08:39:50Z",
+        "body": "Thanks a lot for your kind reply. This really helps a lot! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why increased batch size leads to longer per-iteration time despite using more GPUs",
+      "Analysis of DeepSpeed's CPU offloading impact on training speed with different batch sizes",
+      "Comparison methodology for fair speed evaluation between different batch sizes",
+      "Identification of optimization opportunities for DeepSpeed configurations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:58:27"
+    }
+  }
+]

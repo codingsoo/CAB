@@ -1,0 +1,135 @@
+[
+  {
+    "number": 73,
+    "title": "Question: Vips.init & threads",
+    "created_at": "2024-09-25T09:59:44Z",
+    "closed_at": "2024-09-25T17:09:59Z",
+    "labels": [],
+    "url": "https://github.com/lopcode/vips-ffm/issues/73",
+    "body": "Going by the code of Vips.init() and Vips.shutdown(), I would assume to only call both once per application and not once per thread. The library would then be usable from all threads, without any kind of synchronization needed, as long as someone doesn't share VImage objects or the like across threads.\r\n\r\nOr do I need to always call Vips.init() and Vips.shutdown() in every thread where vips-ffm is used? \r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/73/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-25T16:23:09Z",
+        "body": "vips-ffm doesn't do anything special with threading and the rules will generally be whatever works for libvips - I believe you're right and that initialising once on any thread will be enough, and shutting down once on any thread is also fine\n\nI think however that an \"Arena.ofConfined\" might have threading requirements - so any \"Vips.run\" call likely needs to have all users of the provided arena do so from the same thread "
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-25T17:09:59Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "image to byte array - segment too large",
+    "created_at": "2024-09-25T09:38:27Z",
+    "closed_at": "2024-09-26T16:08:44Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/lopcode/vips-ffm/issues/72",
+    "body": "This might be more of a question, depending on if this is actually solvable with the current vips-ffm api.\r\n\r\nJVips:\r\n```\r\n\t@Override\r\n\tpublic byte[] writeJpegImage(VipsImage image, float quality) {\r\n\t\ttry {\r\n\t\t\timage.applyIccTransform(\"srgb\", new ICCTransformOptions().embedded(true));\r\n\t\t} catch(VipsException ignored) {}\r\n\r\n\t\treturn image.writeJPEGToArray(toVipsQuality(quality), true);\r\n\t}\r\n```\r\nThis works for all our images, independent of size.\r\n\r\nvips-ffm:\r\n```\r\n\t@Override\r\n\tpublic byte[] writeJpegImage(VImage image, float quality) {\r\n\t\tVBlob blob = image\r\n\t\t\t.iccTransform(\"srgb\", VipsOption.Boolean(\"embedded\", true))\r\n\t\t\t.jpegsaveBuffer(VipsOption.Int(\"Q\", toVipsQuality(quality)));\r\n\r\n\t\treturn blob.getUnsafeAddress().toArray(ValueLayout.JAVA_BYTE);\r\n\t}\r\n```\r\nThis works up to a certain image size.\r\n\r\nFor larger images though, it produces the following:\r\n```\r\nCaused by: java.lang.IllegalStateException: Segment is too large to wrap as byte[]. Size: 9223372036854775807\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.checkArraySize(AbstractMemorySegmentImpl.java:396) ~[?:?]\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.toArray(AbstractMemorySegmentImpl.java:352) ~[?:?]\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.toArray(AbstractMemorySegmentImpl.java:318) ~[?:?]\r\n        at some.package.SomeClass.writeJpegImage(SomeClass.java:80) ~[app_B:?]\r\n```\r\n\r\nWhat would be the correct way to get a byte array from an image, without writing it out to disk and reading it in again?",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/72/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-25T09:41:22Z",
+        "body": "Looking at the reported size, it looks to me like either a NUL termination byte is missing at the end of the blob, or I need to get the length somewhere to limit the used blob size, because a jpeg image is definitely not around 9 petabyte."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-25T20:50:03Z",
+        "body": "I think it's reasonable to want a safe (no raw pointers) and efficient (no copying) way to get at raw VBlob (VipsArea) data, so I've added a couple of new methods to VBlob in `0.5.8`:\r\n* `VBlob.asByteBuffer()` - recommended way to get at the bytes, should be directly mapped to native memory for efficiency, and you can still access its `byte[]` array from there if you need it (though the raw array might require an explicit copy, I think not all ByteBuffers necessarily implement `array()` - this isn't any worse than JVips though which I believe always makes a copy)\r\n* `VBlob.byteSize()` - if you're sure you just want the byte length of the data, grabbed right out of the `VipsArea` struct\r\n* `VBlob.getUnsafeDataAddress()` - if you really want access to the raw bytes - the MemorySegment is sliced to the length of the data, so it's safer even if the data isn't null-terminated"
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-26T16:08:44Z",
+        "body": "@lopcode this seems to work now (0.5.9), thanks!\r\nI think it would be good to add to docs/readme/javadoc/... that the ByteBuffer returned by these is a DirectByteBuffer pointing to the memory inside the Arena, and thus should not be accessed once the arena goes out of scope (I just had to debug an issue with that, and have now switched back to returning only byte[] from our final write* methods to make sure there'll be no issue with that)."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-26T21:01:22Z",
+        "body": "Yep agree about the docs - I made some improvements:\r\n* Renamed `VipsBlob.asByteBuffer` to `VipsBlob.asArenaScopedByteBuffer`\r\n* Added `VipsBlob.asClonedByteBuffer`\r\n* Made docs clearer for both"
+      }
+    ]
+  },
+  {
+    "number": 68,
+    "title": "Attempted to ref invalid pointer",
+    "created_at": "2024-09-24T17:01:51Z",
+    "closed_at": "2024-09-25T08:53:27Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/lopcode/vips-ffm/issues/68",
+    "body": "```\r\nCaused by: app.photofox.vipsffm.VipsError: attempted to ref invalid pointer\r\n        at app.photofox.vipsffm.VipsInvoker.refGObjectToArenaScope(VipsInvoker.java:399) ~[vips-ffm-core-0.5.3.jar:?]\r\n        at app.photofox.vipsffm.VipsInvoker.readOutputOption(VipsInvoker.java:113) ~[vips-ffm-core-0.5.3.jar:?]\r\n        at app.photofox.vipsffm.VipsInvoker.lambda$readOutputOptions$2(VipsInvoker.java:47) ~[vips-ffm-core-0.5.3.jar:?]\r\n        at java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:184) ~[?:?]\r\n        at java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:194) ~[?:?]\r\n        at java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1709) ~[?:?]\r\n        at java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:556) ~[?:?]\r\n        at java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:546) ~[?:?]\r\n        at java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:151) ~[?:?]\r\n        at java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:174) ~[?:?]\r\n        at java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265) ~[?:?]\r\n        at java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:611) ~[?:?]\r\n        at app.photofox.vipsffm.VipsInvoker.readOutputOptions(VipsInvoker.java:47) ~[vips-ffm-core-0.5.3.jar:?]\r\n        at app.photofox.vipsffm.VipsInvoker.invokeOperation(VipsInvoker.java:37) ~[vips-ffm-core-0.5.3.jar:?]\r\n        at app.photofox.vipsffm.VImage.jpegsaveBuffer(VImage.java:2984) ~[vips-ffm-core-0.5.3.jar:?]\r\n```\r\n\r\non linux",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/68/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-24T17:07:32Z",
+        "body": "While looking at the operations in that chain, I found the following in VImage.iccTransform\r\n```\r\n        VipsOption.String outputProfileOption = VipsOption.String(\"output-profile\", outputProfile);\r\n```\r\nI think this should be `output_profile` with an underline. Not sure if it's the underlying issue though."
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-24T17:08:46Z",
+        "body": "Searching for the regex\r\n`\"[^\"]*-[^\"]*\"` in IntelliJ IDEA inside VImage yields 25 results of probably wrong params."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-24T17:39:10Z",
+        "body": "Thanks for reporting - looking at the stacktrace I'm pretty sure this is because `VipsBlob` isn't actually a `VipsObject` subtype so it's not correct to reference count - I'll investigate and fix."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-24T21:20:31Z",
+        "body": "Fixed in `0.5.6` 🙂 "
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-25T08:53:27Z",
+        "body": "Works. We've now deployed vips-ffm in production (linux) and already are seeing reduced times for image generation (we're generating a lot of high-res images when building customizable PDFs). Can't give you any real numbers (except for the test numbers I already posted), but it definitely feels faster.\r\nThanks a lot!"
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-25T09:03:28Z",
+        "body": "That's awesome - thanks so much for filing issues and sticking with the library as I get it towards a 1.0 release 🎉"
+      }
+    ]
+  },
+  {
+    "number": 62,
+    "title": "WIndows JVM crash",
+    "created_at": "2024-09-21T18:02:56Z",
+    "closed_at": "2024-09-23T08:53:09Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/lopcode/vips-ffm/issues/62",
+    "body": "```\r\nv  ~RuntimeStub::nep_invoker_blob 0x0000013af8451508\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac09400.invoke(Ljava/lang/Object;JJ)J+10 java.base@22.0.2\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac0ac00.invokeExact_MT(Ljava/lang/Object;JJLjava/lang/Object;)J+21 java.base@22.0.2\r\nj  jdk.internal.foreign.abi.DowncallStub+0x0000013a9ac09800.invoke(Ljava/lang/foreign/SegmentAllocator;Ljava/lang/foreign/MemorySegment;Ljava/lang/foreign/MemorySegment;)Ljava/lang/foreign/MemorySegment;+80 java.base@22.0.2\r\nj  java.lang.invoke.DirectMethodHandle$Holder.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+14 java.base@22.0.2\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac0a800.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+44 java.base@22.0.2\r\nj  java.lang.invoke.Invokers$Holder.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+19 java.base@22.0.2\r\nj  app.photofox.vipsffm.jextract.VipsRaw.g_object_ref(Ljava/lang/foreign/MemorySegment;)Ljava/lang/foreign/MemorySegment;+26\r\nj  app.photofox.vipsffm.VipsInvoker.lambda$invokeOperation$3(Ljava/lang/foreign/Arena;Ljava/lang/foreign/MemorySegment;Lapp/photofox/vipsffm/VipsOption;)V+390\r\nj  app.photofox.vipsffm.VipsInvoker$$Lambda+0x0000013a9ac1c470.accept(Ljava/lang/Object;)V+12\r\nj  java.util.stream.ForEachOps$ForEachOp$OfRef.accept(Ljava/lang/Object;)V+5 java.base@22.0.2\r\nj  java.util.stream.ReferencePipeline$2$1.accept(Ljava/lang/Object;)V+21 java.base@22.0.2\r\nj  java.util.ArrayList$ArrayListSpliterator.forEachRemaining(Ljava/util/function/Consumer;)V+95 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.copyInto(Ljava/util/stream/Sink;Ljava/util/Spliterator;)V+32 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.wrapAndCopyInto(Ljava/util/stream/Sink;Ljava/util/Spliterator;)Ljava/util/stream/Sink;+13 java.base@22.0.2\r\nj  java.util.stream.ForEachOps$ForEachOp.evaluateSequential(Ljava/util/stream/PipelineHelper;Ljava/util/Spliterator;)Ljava/lang/Void;+3 java.base@22.0.2\r\nj  java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(Ljava/util/stream/PipelineHelper;Ljava/util/Spliterator;)Ljava/lang/Object;+3 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.evaluate(Ljava/util/stream/TerminalOp;)Ljava/lang/Object;+88 java.base@22.0.2\r\nj  java.util.stream.ReferencePipeline.forEach(Ljava/util/function/Consumer;)V+6 java.base@22.0.2\r\nj  app.photofox.vipsffm.VipsInvoker.invokeOperation(Ljava/lang/foreign/Arena;Ljava/lang/String;Ljava/util/List;)V+146\r\nj  app.photofox.vipsffm.VImage.autorot([Lapp/photofox/vipsffm/VipsOption;)Lapp/photofox/vipsffm/VImage;+48\r\n```\r\n\r\nThis is the relevant part of the stacktrace. Unfortunately there's no error or anything else, and the issue is reproducible.\r\n\r\nIn case it helps, here's the code of the method calling autorot:\r\n\r\n```\r\n\tpublic VImage rotateByExif(File file) {\r\n\t\tVImage image = VImage.newFromFile(currentArena, file.getPath());\r\n\t\treturn image.autorot();\r\n\t}\r\n```\r\n\r\nThe issue happens inside a JUnit test, though it doesn't look like that should matter?",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/62/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-21T19:44:46Z",
+        "body": "There's definitely something wrong with operation caching that I'm looking in to - I'm wondering if setting `VipsHelper.cache_set_max(0);` helps, or if it's something else."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-23T01:05:08Z",
+        "body": "Ok, I've published `0.5.3` with a few fixes/improvements:\r\n* A fix for a crash caused by using the wrong pointer to read output options, which only showed up for cached operations\r\n* Defensive code to avoid segfaults when reffing output options, by validating them and throwing a Java exception if invalid for whatever reason - and this way we can also get a stack trace to figure out the problem\r\n* Added a sample to validate the improvements above, and included usage of `autorot()` to validate it on Windows\r\n\r\nShould be up on Maven Central shortly, if you could give it a try please 🙂 "
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-23T08:53:09Z",
+        "body": "Works! No more crashing now."
+      }
+    ]
+  }
+]

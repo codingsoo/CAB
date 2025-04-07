@@ -1,0 +1,219 @@
+[
+  {
+    "number": 197,
+    "title": "Feature: Handle task chaining through `sequential` and `hierarchy` mode",
+    "created_at": "2025-01-20T12:32:50Z",
+    "closed_at": "2025-01-22T23:21:41Z",
+    "labels": [],
+    "url": "https://github.com/kaiban-ai/KaibanJS/pull/197",
+    "body": "- Refactored task management in the application by adding a TaskManager for better task lifecycle handling.\r\n- Enhanced task and team store functionalities to support new task status updates and flow types.\r\n   - Add workflow execution strategies (Sequential and Hierarchy) to handle different workflow types.\r\n- Removed the workflow controller as part of the task management refactor.\r\n- Added new ESLint rules to disable focused and disabled tests in Jest.\r\n- Updated Jest configuration to specify a test match pattern.\r\n- Introduced a new dependency, `dependency-graph`, in package.json and package-lock.json.\r\n\r\nRelated GH Issue: #153",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/197/comments",
+    "author": "ernestocarrasco",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2025-01-20T19:47:42Z",
+        "body": "**Current Flux Architecture (Original Design)**:\r\n- Stores (like `teamStore.js`) act as the single source of truth\r\n- Actions are dispatched to modify state\r\n- Agents act as components that subscribe to store changes\r\n- Follows unidirectional data flow\r\n\r\n**New Manager Layer (PR Addition)**:\r\n1. Introduces OOP-style managers that:\r\n   - Hold their own state (`this.strategy`)\r\n   - Manage execution logic\r\n   - Subscribe to store changes\r\n   - Control workflow\r\n\r\nThis new manager layer does indeed create some architectural tension with Flux principles for several reasons:\r\n\r\n1. **Violation of Single Source of Truth**:\r\n   - The managers maintain their own state (`this.strategy`)\r\n   - This creates multiple sources of truth between stores and managers\r\n\r\n2. **Bidirectional Flow**:\r\n   - In Flux, data should flow one way: Action → Store → Components\r\n   - The manager both:\r\n     - Subscribes to store changes (`_subscribeToTaskStatusChanges`)\r\n     - Modifies store state through strategies\r\n   - This creates a circular dependency\r\n\r\n3. **Control Inversion**:\r\n   - In Flux, stores should orchestrate state changes\r\n   - The manager is now orchestrating workflow logic that should arguably be in the store\r\n\r\n**Recommendations**:\r\n\r\n1. **Refactor to Store Actions**:\r\n   The execution strategies could be converted to pure functions that are called from store actions:\r\n\r\n```javascript\r\n// Instead of OOP manager:\r\nclass TaskManager {\r\n  start() {\r\n    this._subscribeToTaskStatusChanges();\r\n    this.strategy.startExecution();\r\n  }\r\n}\r\n\r\n// Could become store actions:\r\nconst useTeamStore = create((set, get) => ({\r\n  // ... other store code ...\r\n  \r\n  executeTask: (taskId) => {\r\n    const state = get();\r\n    const strategy = state.flowType === 'hierarchy' \r\n      ? executeHierarchicalTask\r\n      : executeSequentialTask;\r\n    \r\n    strategy(taskId, state, (newState) => set(newState));\r\n  },\r\n  \r\n  startWorkflow: () => {\r\n    const state = get();\r\n    const tasks = state.tasks;\r\n    \r\n    // Execute first task based on strategy\r\n    if (state.flowType === 'hierarchy') {\r\n      executeRootTasks(tasks, state, (newState) => set(newState));\r\n    } else {\r\n      executeNextSequentialTask(tasks, state, (newState) => set(newState));\r\n    }\r\n  }\r\n}));\r\n```\r\n\r\n2. **Move Strategy Logic to Store**:\r\n   - Execution strategies could be pure functions that receive state and return new state\r\n   - This maintains single source of truth\r\n   - Keeps data flow unidirectional\r\n\r\n3. **Keep Managers as Coordinators Only**:\r\n   If you want to keep the manager pattern, they should:\r\n   - Not hold state\r\n   - Only coordinate between stores through actions\r\n   - Act more like traditional Flux action creators\r\n\r\nHere's a more Flux-compliant approach:\r\n\r\n```javascript\r\n// Action creators (could be in a manager file)\r\nconst workflowActions = {\r\n  startWorkflow: (inputs) => {\r\n    const store = useTeamStore.getState();\r\n    store.setInputs(inputs);\r\n    store.executeNextTask();\r\n  },\r\n  \r\n  handleTaskCompletion: (taskId) => {\r\n    const store = useTeamStore.getState();\r\n    store.completeTask(taskId);\r\n    store.executeNextTask();\r\n  }\r\n};\r\n\r\n// Store remains single source of truth\r\nconst useTeamStore = create((set, get) => ({\r\n  executeNextTask: () => {\r\n    const state = get();\r\n    const nextTask = selectNextTask(state.tasks, state.flowType);\r\n    if (nextTask) {\r\n      set(state => ({\r\n        tasks: updateTaskStatus(state.tasks, nextTask.id, 'RUNNING')\r\n      }));\r\n    }\r\n  },\r\n  // ... other store logic\r\n}));\r\n```\r\n\r\nThis approach would:\r\n1. Maintain Flux principles\r\n2. Keep single source of truth\r\n3. Preserve unidirectional data flow\r\n4. Make the system more predictable and easier to debug\r\n"
+      },
+      {
+        "user": "ernestocarrasco",
+        "created_at": "2025-01-22T23:22:12Z",
+        "body": "This PR is closed because its changes will be included in a further PR."
+      }
+    ]
+  },
+  {
+    "number": 175,
+    "title": "[BUG] - Code inside template literals in task descriptions is incorrectly executed",
+    "created_at": "2024-12-18T18:37:17Z",
+    "closed_at": "2025-01-24T15:40:45Z",
+    "labels": [
+      "bug",
+      "playground"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/175",
+    "body": "### **Descripción**:\r\n\r\n#### **Describe the Bug**  \r\nWhen adding example code within a **template literal** or string in the `description` attribute of a task, KaibanJS incorrectly interprets the code as executable, resulting in errors such as \"X is not defined\" if the example contains references to undefined variables.\r\n\r\n---\r\n\r\n#### **KaibanJS Team Config**  \r\nProvide a playground link or configuration file to reproduce the issue:  \r\n```javascript\r\nimport { Agent, Task, Team } from 'kaibanjs';\r\n\r\n// Define agent\r\nconst exampleAgent = new Agent({\r\n    name: 'ExampleAgent',\r\n    role: 'QA Specialist',\r\n    goal: 'Analyze code and validate standards.',\r\n    background: 'Testing Specialist',\r\n    tools: [],\r\n});\r\n\r\n// Define task\r\nconst exampleTask = new Task({\r\n    description: `\r\n    Review the following example:\r\n    \\`\\`\\`javascript\r\n    const complianceTeam = new Team({\r\n        name: 'Compliance Team',\r\n        agents: [syntaxChecker],\r\n        tasks: [checkSyntaxTask],\r\n    });\r\n    \\`\\`\\`\r\n    Ensure the code adheres to KaibanJS standards.\r\n    `,\r\n    expectedOutput: 'Valid report based on code analysis.',\r\n    agent: exampleAgent,\r\n});\r\n\r\n// Define team\r\nconst qaTeam = new Team({\r\n    name: 'Example QA Team',\r\n    agents: [exampleAgent],\r\n    tasks: [exampleTask],\r\n    inputs: {\r\n        Code: 'Example code here',\r\n        Context: 'Review compliance of tasks and teams.',\r\n    },\r\n});\r\n\r\nqaTeam.start();\r\n```\r\n\r\n---\r\n\r\n#### **Steps to Reproduce**  \r\n1. Create a **Task** with a `description` that includes example code wrapped in a template literal.  \r\n2. Add JavaScript code examples inside the `description`, formatted with backticks for clarity.  \r\n3. Execute the team using `team.start()`.  \r\n4. Observe the runtime error where the example code (e.g., `complianceTeam`) is executed instead of treated as plain text.\r\n\r\n---\r\n\r\n#### **Current vs. Expected Behavior**  \r\n- **Current Behavior**: Code examples written inside `description` strings or template literals are interpreted and executed, causing errors like \"X is not defined.\"  \r\n- **Expected Behavior**: KaibanJS should treat code examples in strings or template literals as plain text and not attempt to execute them.\r\n\r\n---\r\n\r\n#### **Environment**  \r\n- **Framework/Library**: Node.js + KaibanJS  \r\n- **KaibanJS Version**: 0.1.0  \r\n- **JavaScript Runtime**: Node.js 18.x  \r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/175/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2025-01-24T15:40:39Z",
+        "body": "This is an expected behavior in Javascript. You should try to find an alternative character or escape it."
+      }
+    ]
+  },
+  {
+    "number": 174,
+    "title": "Structure task output",
+    "created_at": "2024-12-17T17:56:02Z",
+    "closed_at": "2024-12-21T12:08:40Z",
+    "labels": [],
+    "url": "https://github.com/kaiban-ai/KaibanJS/pull/174",
+    "body": "# Add Structured Output Feature\r\n\r\nThis PR adds Structured Output support to KaibanJS, allowing users to define and enforce specific output structures for their agent tasks using Zod schemas.\r\n\r\n## Changes\r\n- Add outputSchema property to Task class\r\n- Implement schema validation in ReactChampionAgent\r\n- Add OUTPUT_SCHEMA_VALIDATION_ERROR state\r\n- Integrate with workflowLogs for error tracking\r\n- Add schema validation feedback loop in agent processing\r\n\r\n## Implementation Details\r\n- Use Zod for schema validation\r\n- Add schema validation to agent's output processing\r\n- Integrate with existing state management system\r\n- Add validation error handling in agent loop\r\n- Track validation events in workflowLogs\r\n\r\n## Testing\r\n- Add tests for schema validation\r\n- Add tests for error handling\r\n- Add tests for agent recovery from validation errors",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/174/comments",
+    "author": "anthonydevs17",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-12-17T21:11:35Z",
+        "body": "Solves #171 "
+      }
+    ]
+  },
+  {
+    "number": 170,
+    "title": "[BUG] - Validation and error handling issues with payloads sent to custom APIs",
+    "created_at": "2024-12-05T21:34:16Z",
+    "closed_at": "2024-12-06T11:08:03Z",
+    "labels": [
+      "bug",
+      "enhancement",
+      "feedback discord"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/170",
+    "body": "### Describe the Bug\r\n\r\nWhen sending payloads to custom APIs like LM Studio, KaibanJS does not validate the payload structure properly. This can result in errors such as missing required fields (e.g., `messages`), leading to failed requests. Additionally, errors like CORS issues are not well-documented or handled, which complicates troubleshooting for users.\r\n\r\n### KaibanJS Team Config\r\n\r\nThis issue occurs when attempting to integrate KaibanJS with a custom API, such as LM Studio, and using a payload that does not conform to the expected structure. Example payload:\r\n\r\n```json\r\n{\r\n  \"model\": \"lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF\",\r\n  \"temperature\": 1,\r\n  \"top_p\": 1,\r\n  \"frequency_penalty\": 0,\r\n  \"presence_penalty\": 0,\r\n  \"n\": 1,\r\n  \"stream\": false,\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"system\",\r\n      \"content\": \"System message content.\"\r\n    },\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"User message content.\"\r\n    }\r\n  ]\r\n}\r\n```\r\n\r\n### Steps to Reproduce\r\n\r\n1. Configure KaibanJS to send requests to a custom API endpoint (e.g., LM Studio).\r\n2. Provide a payload missing a required field (e.g., `messages`) or with an incorrect structure.\r\n3. Attempt to send a request through KaibanJS.\r\n4. Observe the error returned by the API (e.g., \"Field 'messages' is required\").\r\n\r\n### Current vs. Expected Behavior\r\n\r\n**Current behavior**: Requests fail due to unvalidated or incorrectly structured payloads, and errors like CORS are not clearly surfaced to the user.\r\n\r\n**Expected behavior**: \r\n- Payloads should be validated before being sent to the API.\r\n- Errors should include clear, actionable messages for users.\r\n- CORS issues should have troubleshooting steps in the documentation or mitigations in the code.\r\n\r\n### Environment\r\n\r\n- **Framework/Library**: Vanilla JavaScript\r\n- **KaibanJS Version**: [e.g., 0.1.0]\r\n- **JavaScript Runtime**: NodeJS, Chrome\r\n- **OS**: Windows 10/11, Linux\r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/170/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-12-06T11:08:04Z",
+        "body": "Disregard. It was a missconfiguration on LLMStudio"
+      }
+    ]
+  },
+  {
+    "number": 167,
+    "title": "[BUG] - .env file gets deleted after running KaibanJS",
+    "created_at": "2024-12-04T20:41:44Z",
+    "closed_at": "2024-12-06T13:30:56Z",
+    "labels": [
+      "bug",
+      "feedback discord"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/167",
+    "body": "#### Describe the Bug:\r\nWhen running KaibanJS locally, the `.env` file inside the `.kaiban` folder is overwritten by the `.env` file located in the project's root directory. This behavior occurs when both files are present and contain environment variables, which leads to the loss of the intended configuration inside the `.kaiban` folder.\r\n\r\n#### KaibanJS Team Config:\r\nThe issue occurs in a standard local setup for KaibanJS where:\r\n- A `.env` file exists in the project root directory.\r\n- A separate `.env` file is present in the `.kaiban` folder.\r\n\r\n#### Steps to Reproduce:\r\n1. Create a `.env` file in the root directory with valid environment variables.\r\n2. Create another `.env` file in the `.kaiban` folder with a different set of valid environment variables.\r\n3. Run KaibanJS locally.\r\n4. Observe that the `.env` file inside the `.kaiban` folder is overwritten by the content of the root `.env` file.\r\n\r\n#### Current vs. Expected Behavior:\r\n**Current behavior:**  \r\nThe `.env` file inside the `.kaiban` folder is overwritten by the `.env` file in the root directory when KaibanJS runs.  \r\n\r\n**Expected behavior:**  \r\nKaibanJS should prioritize the `.env` file in the `.kaiban` folder for configurations specific to KaibanJS and avoid overwriting it with the root `.env` file. Both files should coexist without interference.\r\n\r\n#### Environment:\r\n- **Framework/Library:** Node.js, Vanilla JavaScript  \r\n- **KaibanJS Version:** (e.g., 0.1.0 - adjust as necessary)  \r\n- **JavaScript Runtime:** (e.g., Node.js v16.x - adjust as necessary)  \r\n- **Operating System:** (e.g., macOS Monterey, Windows 10, Ubuntu 20.04 - adjust as necessary)  \r\n\r\n#### Additional Context:\r\nThis issue can cause significant confusion and potential misconfigurations, especially when users rely on separate `.env` files for project-wide and KaibanJS-specific environment variables.  ",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/167/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-12-06T13:30:56Z",
+        "body": "Thank you for bringing this up! This is actually the expected behavior, as the .env file in the project root is prioritized over the one in the .kaiban folder. To avoid conflicts, please ensure all critical variables are defined in the root .env file. We appreciate your understanding!"
+      }
+    ]
+  },
+  {
+    "number": 166,
+    "title": "[BUG] - Teams.js file not recognized inside src folder",
+    "created_at": "2024-12-04T20:38:03Z",
+    "closed_at": "2024-12-06T11:07:21Z",
+    "labels": [
+      "bug",
+      "feedback discord"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/166",
+    "body": "#### Describe the Bug:\r\nWhen configuring teams in KaibanJS locally, the `teams.js` file is only recognized if it is located in the root directory and has a `.kban.js` extension. Files placed inside the `src` directory or other subdirectories (e.g., `src/blogTeam.js`) are not recognized, even when they contain valid configurations.\r\n\r\n#### KaibanJS Team Config:\r\nThe issue occurs during local testing of KaibanJS. The structure of the project includes:\r\n- A `.kaiban` folder in the root directory.\r\n- A `team.kban.js` file in the root directory that is recognized correctly.\r\n- Multiple `teams.js` configurations within the `src` directory (e.g., `src/blogTeam.js` and `src/quoteTeam.js`), which are not detected by KaibanJS.\r\n\r\n#### Steps to Reproduce:\r\n1. Create a `blogTeam.js` or `quoteTeam.js` file inside the `src` directory with valid team configuration for KaibanJS.\r\n2. Run KaibanJS locally and observe that these files are not detected.\r\n3. Move the same configuration file to the root directory and rename it to `team.kban.js`.\r\n4. Run KaibanJS again and confirm that the file is now recognized.\r\n\r\n#### Current vs. Expected Behavior:\r\n**Current behavior:** KaibanJS only recognizes team configuration files located in the root directory with the `.kban.js` extension. Files in the `src` directory or other subdirectories are ignored.  \r\n**Expected behavior:** KaibanJS should recognize team configuration files located within the `src` directory or subdirectories without requiring them to be in the root directory.\r\n\r\n#### Environment:\r\n- **Framework/Library:** NodeJS, Vanilla JavaScript  \r\n- **KaibanJS Version:** 0.1.0 (example, adjust as necessary)  \r\n- **JavaScript Runtime:** NodeJS v16.x (example, adjust as necessary)  \r\n- **Operating System:** (e.g., macOS Monterey, Windows 10, Ubuntu 20.04)",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/166/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-12-06T11:07:21Z",
+        "body": "Disregard."
+      }
+    ]
+  },
+  {
+    "number": 152,
+    "title": "[BUG] - Unable to set CORS headers using dangerouslyAllowBrowser in llmConfig",
+    "created_at": "2024-11-18T16:08:32Z",
+    "closed_at": "2025-01-29T14:36:47Z",
+    "labels": [
+      "bug",
+      "feedback discord",
+      "pending-validation",
+      "priority-focus"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/152",
+    "body": "### Describe the Bug\r\n\r\nWhen attempting to set the `dangerouslyAllowBrowser: true` option in `llmConfig` under `clientOptions`, the expected behavior of bypassing CORS issues does not occur. This requires the use of additional tools like a proxy or disabling web security in the browser to make the calls work locally.\r\n\r\n### KaibanJS Team Config\r\n\r\n```\r\nconst agent = new Agent({\r\n  name: 'Test Agent',\r\n  role: 'Assistant',\r\n  llmConfig: {\r\n    provider: 'openai',\r\n    model: 'gpt-4',\r\n    clientOptions: {\r\n      dangerouslyAllowBrowser: true,\r\n    },\r\n  },\r\n});\r\n```\r\n\r\n### Steps to Reproduce\r\n\r\n1. Set up a basic KaibanJS agent using the above configuration. \r\n2. Attempt to run the agent locally on a browser with CORS enabled. \r\n3. Observe that the call fails unless CORS is bypassed via browser settings or a proxy.\r\n\r\n### Current vs. Expected behavior\r\n\r\n- Current Behavior: Calls to LLM providers fail due to CORS restrictions, even when `dangerouslyAllowBrowser: true` is set in `llmConfig`.\r\n\r\n- Expected Behavior: The `dangerouslyAllowBrowser` setting should allow bypassing CORS restrictions, as documented.\r\n\r\n### Environment\r\n\r\n- Framework/Library: [e.g., React, Vue, NodeJS, Vanilla JavaScript]\r\n- KaibanJS Version: 0.10.0\r\n- JavaScript Runtime: [e.g., Chrome, NodeJS]\r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/152/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "anthonydevs17",
+        "created_at": "2025-01-29T14:36:47Z",
+        "body": "After thorough testing, we were unable to reproduce this issue in the latest versions. Calls to LLM providers from the browser environment are functioning correctly as expected.\n\nIf you encounter this issue again, please provide additional details, including specific steps to reproduce and environment configurations.\n\nClosing this issues for now."
+      }
+    ]
+  },
+  {
+    "number": 99,
+    "title": "[BUG] - inputs type definition error",
+    "created_at": "2024-10-29T03:03:01Z",
+    "closed_at": "2024-11-08T22:24:28Z",
+    "labels": [
+      "bug",
+      "good first issue",
+      "library"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/99",
+    "body": "inputs type\r\n\r\n(property) ITeamParams.inputs?: Record<string, string> | undefined\r\n\r\n\r\nthe example code:\r\n\r\n```\r\n  const tripPlanningTeam = new Team({\r\n    name: 'Trip Planning Team',\r\n    agents: [citySelectorAgent, localExpertAgent, travelConciergeAgent],\r\n    tasks: [identifyTask, gatherTask, planTask],\r\n    logLevel: 'info',\r\n    inputs: {\r\n      origin: 'New York',\r\n      cities: ['Tokyo', 'Paris', 'Berlin'],// this line\r\n      interests: 'Art and Culture',\r\n      range: '2024-12-01 to 2024-12-15'\r\n    },  // Actual dynamic inputs\r\n  });\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/99/comments",
+    "author": "zhaopengme",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-10-29T08:37:49Z",
+        "body": "@alienkarma Do you mind checking this out?"
+      }
+    ]
+  },
+  {
+    "number": 93,
+    "title": "Create a RAG Agent for KaibanJS Documentation to Advise and Code AI Agents",
+    "created_at": "2024-10-17T05:55:15Z",
+    "closed_at": "2024-11-04T09:59:10Z",
+    "labels": [
+      "documentation",
+      "feature",
+      "in progress",
+      "enhancement"
+    ],
+    "url": "https://github.com/kaiban-ai/KaibanJS/issues/93",
+    "body": "**Is your feature request related to a problem? Please describe.**  \r\nKaibanJS users, especially those unfamiliar with JavaScript, may face challenges when learning to configure and manage multi-agent systems. Providing them with direct support within the documentation could significantly improve their experience. Having an interactive, AI-powered assistant that knows the framework deeply and can generate code in real-time would make the learning curve smoother and increase engagement with the tool.\r\n\r\n**Describe the solution you'd like**  \r\nI propose creating a **Retrieval-Augmented Generation (RAG) agent** specifically trained to understand and advise on KaibanJS. This agent would:  \r\n1. Assist users by answering questions about the framework.  \r\n2. Generate working code snippets for configuring agents, tasks, and workflows.  \r\n3. Provide real-time help embedded as a chatbot in the /documentation section, allowing users to query and interact with the agent directly.\r\n\r\n**Describe alternatives you've considered**  \r\n- Using static documentation with sample code only.  \r\n- Hosting external tutorials or videos.  \r\n- Community Q&A or forums to address questions.  \r\nHowever, none of these provide the dynamic, in-context help that an intelligent agent could offer.\r\n\r\n**Additional context**  \r\nThis RAG agent could be trained on the KaibanJS documentation and codebase, ensuring that it has an in-depth understanding of the framework’s features. It could be especially useful for guiding users through common workflows, troubleshooting, and helping them set up their own agents.\r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/93/comments",
+    "author": "dannleft",
+    "comments": [
+      {
+        "user": "OdinSweng",
+        "created_at": "2024-10-17T15:30:12Z",
+        "body": "Great proposal! Definitely, a RAG agent for KaibanJS would be very useful. The idea of having an AI assistant that can generate code and answer questions directly in the documentation sounds excellent"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "Styles in Css, zustand subscribe, colors, add ul, Spinner while running",
+    "created_at": "2024-07-12T15:14:52Z",
+    "closed_at": "2024-09-12T04:02:41Z",
+    "labels": [],
+    "url": "https://github.com/kaiban-ai/KaibanJS/pull/1",
+    "body": "For the React part\r\n\r\nStyles in .css files\r\nadd a Spinner while running\r\nchange some colors and layout\r\nadd unordered lists\r\nzustand store subscribes to update local state and unsubscribes on unmount\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/kaiban-ai/KaibanJS/issues/1/comments",
+    "author": "Kbueno1077",
+    "comments": [
+      {
+        "user": "darielnoel",
+        "created_at": "2024-07-12T15:54:35Z",
+        "body": "Thank you @Kbueno1077 . We will take a look. 🤗"
+      },
+      {
+        "user": "OdinSweng",
+        "created_at": "2024-07-13T04:55:45Z",
+        "body": "Hi @Kbueno1077 thank you so much for submitting the first pull request. We really appreciate your contribution! Thanks again!"
+      }
+    ]
+  }
+]

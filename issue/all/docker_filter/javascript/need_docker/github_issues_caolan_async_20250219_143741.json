@@ -1,0 +1,42 @@
+[
+  {
+    "number": 1458,
+    "title": "async.auto & the curious case of try ... catch",
+    "created_at": "2017-07-26T20:08:39Z",
+    "closed_at": "2017-07-26T21:23:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/caolan/async/issues/1458",
+    "body": "<!--\r\nThis template is for bug reports. If you are reporting a bug, please continue on. If you are here for another reason (such as a feature request, change, or question) you can disregard this template\r\n-->\r\n\r\n**What version of async are you using?**\r\nv2.5.0\r\n**Which environment did the issue occur in (Node version/browser version)**\r\nv6.10.3\r\n**What did you do? Please include a minimal reproducable case illustrating issue.**\r\n```javascript\r\nasync.auto({\r\n  returnOne: (callback) => callback(null, 1),\r\n  tryCatch: [\"returnOne\", (results, callback) => {\r\n    try {\r\n      assert(results.returnOne === 1);\r\n      return callback(null);\r\n    } catch (err) {\r\n      console.log(`Caught an error: ${err.message}`);\r\n      return callback(err);\r\n    }\r\n  }],\r\n}, (err, results) => {\r\n  assert(results.returnOne !== 1);\r\n  console.log(`All Done!`);\r\n});\r\n```\r\n**What did you expect to happen?**\r\nThe assert inside the final aync.auto callback fails and throws an error which is not caught and stops the Node.js process. In my real world example of this, we are testing a block of code within Mocha, which handles the error and reports that the test failed with information about the assertion that caused the failure.\r\n\r\n**What was the actual result?**\r\nTry / Catch from the previous auto step catches the error and calls the tryCatch callback a second time, resulting in a different error:\r\n```\r\nasync/dist/async.js:903\r\n        if (fn === null) throw new Error(\"Callback was already called.\");\r\n                         ^\r\nError: Callback was already called.\r\n```",
+    "comments_url": "https://api.github.com/repos/caolan/async/issues/1458/comments",
+    "author": "trvra",
+    "comments": [
+      {
+        "user": "aearly",
+        "created_at": "2017-07-26T21:06:02Z",
+        "body": "```js\r\ntry {\r\n  //...\r\n  return callback(null, result)\r\n} catch (e) {\r\n  //..\r\n  return callback(e)\r\n}\r\n```\r\n\r\nIs a huge anti-pattern because if something throws later in the callback chain (e.g. your assert), it will be caught in the `try` block, causing a double callback in the `catch`.  Correct way:\r\n\r\n```js\r\nlet err, result\r\ntry {\r\n  result = doSomething()\r\n} catch (e) {\r\n  err = e\r\n}\r\ncallback(err, result)\r\n```"
+      },
+      {
+        "user": "trvra",
+        "created_at": "2017-07-26T21:23:22Z",
+        "body": "@aearly Makes sense, thanks for the tip!\r\n\r\n(Also, hello! \ud83d\udc4b)"
+      },
+      {
+        "user": "aearly",
+        "created_at": "2017-07-26T21:49:12Z",
+        "body": "\ud83d\udc4b\ud83d\ude0a"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why try/catch blocks around callback invocations cause double callback errors in async.auto",
+      "Guidance on proper error handling patterns for async operations that prevent multiple callback executions",
+      "Clarification of error propagation mechanics in async.js workflows",
+      "Solution that maintains test framework (Mocha) compatibility for error reporting"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:49:16"
+    }
+  }
+]

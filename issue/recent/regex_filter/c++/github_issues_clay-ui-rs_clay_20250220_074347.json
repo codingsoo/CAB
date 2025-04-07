@@ -1,0 +1,200 @@
+[
+  {
+    "number": 43,
+    "title": "Id now returns TypedConfig",
+    "created_at": "2025-01-12T17:02:26Z",
+    "closed_at": "2025-01-14T09:25:26Z",
+    "labels": [],
+    "url": "https://github.com/clay-ui-rs/clay/pull/43",
+    "body": "This changes how IDs are handled. They now matches closer to the Odin bindings in that they don't depend on other primitives being added during the setup.\r\n\r\nAlso changed so only `static str` are accepted to to `Id::new(...)` to enforce proper lifetimes.",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/43/comments",
+    "author": "emoon",
+    "comments": [
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2025-01-12T20:09:41Z",
+        "body": "Not a fan of the change that `end` takes `self`, it was a good way to provide reusable elements"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2025-01-12T20:13:48Z",
+        "body": "I'm not sure what you mean by \"reuseable\" elements. Doing stuff like this\r\n```Rust\r\n       let content_background_config = Rectangle::new()\r\n            .color(Color::u_rgb(90, 90, 90))\r\n            .corner_radius(CornerRadius::All(8.))\r\n            .end();\r\n\r\n                clay.with(\r\n                    [\r\n                        Id::new(\"HeaderBar\"),\r\n                        content_background_config,\r\n                        ...\r\n```\r\nWorks just fine.\r\n\r\n\r\n"
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2025-01-12T22:38:56Z",
+        "body": "Wouldnt allowing for multiple end make it so you can change some properties each time you call end, to have some kind of \"component\" behavior"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2025-01-13T09:03:24Z",
+        "body": "I still think it's the wrong choice, but I changed back."
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2025-01-13T21:26:49Z",
+        "body": "We can discuss about that on the discord to get others opinions, and then we can make another PR changing it if needs be"
+      }
+    ]
+  },
+  {
+    "number": 20,
+    "title": "Updating README.md support for render commands",
+    "created_at": "2024-12-25T17:17:52Z",
+    "closed_at": "2024-12-25T17:38:58Z",
+    "labels": [],
+    "url": "https://github.com/clay-ui-rs/clay/pull/20",
+    "body": "The title says it all",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/20/comments",
+    "author": "Mathys-Gasnier",
+    "comments": [
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T17:19:52Z",
+        "body": "@emoon Could you also make a quick PR for `no-std` to handle string ? I've never worked in a no-std env in rust, so no idea on how to do that"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T17:20:30Z",
+        "body": "Yes, I will fix it. hold"
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "New API front and back to support RenderCommands",
+    "created_at": "2024-12-25T14:22:14Z",
+    "closed_at": "2024-12-25T17:13:31Z",
+    "labels": [],
+    "url": "https://github.com/clay-ui-rs/clay/pull/16",
+    "body": "The current API doesn't make it easy to support RenderCommands in it's current state, making it mandatory to duplicate code/structs\r\n\r\nSo this new API should allow use on the two fronts. Some things were changed a bit, other were completly replaced.\r\n\r\nPS. `Text` is still not working because we are waiting on what clay does with this",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/16/comments",
+    "author": "Mathys-Gasnier",
+    "comments": [
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T16:20:26Z",
+        "body": "I'm fine with duplicating structs when we have to. What I recommend we do is something like this\r\n\r\n```Rust\r\n#[repr(C)]\r\nstruct FFI {\r\n    a: i32,\r\n    b: f64,\r\n    c: u8,\r\n}\r\n\r\n#[repr(C)]\r\nstruct RustStruct {\r\n    a: i32,\r\n    b: f64,\r\n    c: u8,\r\n}\r\n\r\nfn offset_of<T, F>(field: &F, base: &T) -> usize {\r\n    let base_ptr = base as *const T as *const u8;\r\n    let field_ptr = field as *const F as *const u8;\r\n    (field_ptr as usize) - (base_ptr as usize)\r\n}\r\n\r\n#[test]\r\nfn verify_field_offsets() {\r\n    let dummy_ffi = FFI {\r\n        a: 0,\r\n        b: 0.0,\r\n        c: 0,\r\n    };\r\n    let dummy_rust = RustStruct {\r\n        a: 0,\r\n        b: 0.0,\r\n        c: 0,\r\n    };\r\n\r\n    // Field offsets in FFI\r\n    let ffi_a_offset = offset_of(&dummy_ffi.a, &dummy_ffi);\r\n    let ffi_b_offset = offset_of(&dummy_ffi.b, &dummy_ffi);\r\n    let ffi_c_offset = offset_of(&dummy_ffi.c, &dummy_ffi);\r\n\r\n    // Field offsets in RustStruct\r\n    let rust_a_offset = offset_of(&dummy_rust.a, &dummy_rust);\r\n    let rust_b_offset = offset_of(&dummy_rust.b, &dummy_rust);\r\n    let rust_c_offset = offset_of(&dummy_rust.c, &dummy_rust);\r\n\r\n    // Assert that offsets match\r\n    assert_eq!(ffi_a_offset, rust_a_offset);\r\n    assert_eq!(ffi_b_offset, rust_b_offset);\r\n    assert_eq!(ffi_c_offset, rust_c_offset);\r\n}\r\n\r\nfn main() {\r\n    println!(\"Run `cargo test` to verify field offsets.\");\r\n}\r\n```\r\n\r\nThis will verify that the structs always matches so when a new `clay.h` pop up we won't miss updating something if they have been moved around."
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T16:27:20Z",
+        "body": "On my side i'm not ok with having two structs that do the same thing just in a different context, the value stored is the same... So why not having only one struct to store it.\r\n\r\nTests like those are not going to work, every fields are not a one to one representation because of how rust bindings work (See `BorderRadius` for example).\r\nIt might work on most struct, but some aren't going to like that, even more for struct that use enums..."
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T16:30:12Z",
+        "body": "Right, I was thinking of the case if we need to duplicate them for some reason. I just don't want us to get into a case where the some structs doesn't match for some reason which can be very annoying to track down."
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T16:32:22Z",
+        "body": "No i meant like for example you use `Clay_RectangleElementConfig` to create the rectangle, and it gets passed back on `Clay_RenderCommand.config`, so why have two struct to store a rectangle config instead of one, since they are pretty much the same thing"
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T16:33:18Z",
+        "body": "And my PR name isn't very good... I didn't change the API front, I switched around some things, but i changed a lot of the API \"back-end\" if we can call it that"
+      }
+    ]
+  },
+  {
+    "number": 15,
+    "title": "Added no_std support",
+    "created_at": "2024-12-25T13:26:29Z",
+    "closed_at": "2024-12-25T16:18:42Z",
+    "labels": [],
+    "url": "https://github.com/clay-ui-rs/clay/pull/15",
+    "body": "This adds `no_std` support to the crate. By default `std` is enabled.",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/15/comments",
+    "author": "emoon",
+    "comments": [
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T15:55:42Z",
+        "body": "I have merged with your changes now"
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T15:59:28Z",
+        "body": "You're missing `custom.rs` which has a use of std that could be replaced to core"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T16:06:30Z",
+        "body": "Ah, I will fix."
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T16:18:26Z",
+        "body": "Should all be fixed up now"
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Add an example",
+    "created_at": "2024-12-23T15:50:11Z",
+    "closed_at": "2024-12-29T17:04:52Z",
+    "labels": [
+      "documentation",
+      "good first issue"
+    ],
+    "url": "https://github.com/clay-ui-rs/clay/issues/13",
+    "body": "Add example code and screenshot.",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/13/comments",
+    "author": "EmmanuelMess",
+    "comments": [
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-24T10:22:26Z",
+        "body": "There is a temporary test in `lib.rs` that shows you how you can use the lib, but yes we need to add an example.\r\nA warning, the binding is not fully finished yet, some parts are not even implemented in the rust layer"
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-29T17:04:52Z",
+        "body": "Even if it's only a small example that was added, I will close this issue, more examples will be added soon."
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Crate name",
+    "created_at": "2024-12-21T13:06:57Z",
+    "closed_at": "2024-12-25T17:44:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/clay-ui-rs/clay/issues/3",
+    "body": "I suggest it should be called `clay-ui-layout` instead of `rust_clay` thoughts?",
+    "comments_url": "https://api.github.com/repos/clay-ui-rs/clay/issues/3/comments",
+    "author": "emoon",
+    "comments": [
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-21T13:09:05Z",
+        "body": "Imo `clay-ui` would be enough, since we could also support renderers with feature flags (raylib, macroquad, etc)"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-21T13:13:47Z",
+        "body": "For me `clay-ui` feels like a \"full ui\" system while it's not. The description of clay is `Clay (short for C Layout) is a high performance 2D UI layout library.`"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T17:37:53Z",
+        "body": "Maybe `clay-layout` is good?"
+      },
+      {
+        "user": "Mathys-Gasnier",
+        "created_at": "2024-12-25T17:39:51Z",
+        "body": "For me it sounds good, not too long,  but still descriptive enough"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2024-12-25T17:41:24Z",
+        "body": "Cool. I will do a pr to update the name (also it's not taken on `crates.io`)"
+      }
+    ]
+  }
+]

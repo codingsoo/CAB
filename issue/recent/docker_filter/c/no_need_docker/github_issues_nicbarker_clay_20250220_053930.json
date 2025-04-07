@@ -1,0 +1,163 @@
+[
+  {
+    "number": 251,
+    "title": "[Core] add CLAY_DISABLE_SIMD flag to conditionally disable SIMD includes",
+    "created_at": "2025-02-06T18:26:11Z",
+    "closed_at": "2025-02-06T20:41:38Z",
+    "labels": [],
+    "url": "https://github.com/nicbarker/clay/pull/251",
+    "body": "`#include <emmintrin.h>` was problematic for my use case as emmintrin.h depends on libc. \r\nI propose adding a CLAY_DISABLE_SIMD flag to conditionally disable SIMD includes to solve this kind of issues.",
+    "comments_url": "https://api.github.com/repos/nicbarker/clay/issues/251/comments",
+    "author": "johan0A",
+    "comments": [
+      {
+        "user": "nicbarker",
+        "created_at": "2025-02-06T20:40:21Z",
+        "body": "Thanks, this is a good idea and I should have included it initially. Just OOI, which compiler are you using? If you're generating a lib for zig to use via clang, you should be able to avoid the libc include by using `-ffreestanding` flag"
+      },
+      {
+        "user": "emoon",
+        "created_at": "2025-02-06T20:44:10Z",
+        "body": "I ran into this issue as well. Because the Rust bind generator does recursive visit of the included files when generating bindings and `emmintrin.h` included stdlib.h and other stuff which drag into pthread symbols and what not :( I managed to get rid of most of it as the bindgen tool allow you to blacklist with a regex, but a define will help more."
+      },
+      {
+        "user": "johan0A",
+        "created_at": "2025-02-06T22:31:18Z",
+        "body": "> you should be able to avoid the libc include by using `-ffreestanding` flag   \r\n\r\nnice, ill do that instead then, thanks"
+      },
+      {
+        "user": "nicbarker",
+        "created_at": "2025-02-06T22:33:38Z",
+        "body": "It's something we'll need to make clear to library maintainers, because it's not an obvious or well understood flag \ud83d\ude05"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a way to avoid including system headers (like libc) when using SIMD functionality",
+      "Offers compatibility with freestanding environments",
+      "Maintains clear documentation for library consumers",
+      "Avoids introducing platform-specific symbols in cross-compilation scenarios"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:48:54"
+    }
+  },
+  {
+    "number": 61,
+    "title": "Include Path Issues (C++)",
+    "created_at": "2024-12-20T03:12:40Z",
+    "closed_at": "2024-12-20T20:07:56Z",
+    "labels": [
+      "Attempted Fix"
+    ],
+    "url": "https://github.com/nicbarker/clay/issues/61",
+    "body": "This is a relatively minor issue and I'm sure I'll find a work around, but more so just wanted to let you know of the use case regardless. I've been building a small sample to play around with Clay in C++ using Zig as the build system and I kept running into a weird error that was driving me crazy for awhile. \r\n\r\nWith Zig, fetching dependencies is fairly trivial, just tell it to fetch a link and then point it at the right files and you are good to go. Apparently because of a header inside of the C++ stdlib `#include <version>` and the `VERSION` file at the root of this repository, a compilation conflict was happening in my include paths (namely including the root of this repo to ensure `clay.h` is in my path). Was wondering if in the GitHub releases you could also have one with the header nested inside of an `include/` directory or something to side step this? I could see it being an issue in CMake as well.\r\n\r\nEither way, the framework seems super cool, and excited to keep working with it!",
+    "comments_url": "https://api.github.com/repos/nicbarker/clay/issues/61/comments",
+    "author": "Anthony-J-G",
+    "comments": [
+      {
+        "user": "nicbarker",
+        "created_at": "2024-12-20T06:49:48Z",
+        "body": "That's interesting, the VERSION file is not necessary by any means, would it help if I just deleted it?"
+      },
+      {
+        "user": "Anthony-J-G",
+        "created_at": "2024-12-20T17:26:08Z",
+        "body": "Deleting the file would for sure solve the problem because of the way clang handles include paths. The only other foreseeable problem would be if another conflicting file gets added to the project root, but that seems like a rare edge case.\r\n\r\nFor the moment I just have `clay.h` copy pasted into my own project structure, but having access to Zig/CMake automating it also makes fetching things like the license or other important informational files."
+      },
+      {
+        "user": "nicbarker",
+        "created_at": "2024-12-20T19:51:21Z",
+        "body": "Great, I'll delete the VERSION - it doesn't need to be there \ud83d\ude42\n\n---\n\nOk done, let me know if it fixes it for you!"
+      },
+      {
+        "user": "Anthony-J-G",
+        "created_at": "2024-12-20T20:04:22Z",
+        "body": "Works like a charm, thank you so much!! All the include paths resolve properly with no collisions/redefinition."
+      },
+      {
+        "user": "nicbarker",
+        "created_at": "2024-12-20T20:07:56Z",
+        "body": "Great!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Eliminates file name conflicts between project files and standard library headers in include paths",
+      "Maintains compatibility with common build systems (Zig/CMake) dependency management",
+      "Preserves access to non-header project files (like licenses) without path conflicts"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:49:29"
+    }
+  },
+  {
+    "number": 18,
+    "title": "[Bug] Compilation error: 'isPointerActive' undeclared",
+    "created_at": "2024-09-19T09:36:27Z",
+    "closed_at": "2024-09-19T19:21:15Z",
+    "labels": [
+      "Attempted Fix"
+    ],
+    "url": "https://github.com/nicbarker/clay/issues/18",
+    "body": "Hello,\r\n\r\nI wanted to give Clay a try but when compiling this:  \r\n```c\r\n#include \"../deps/clay.h\"\r\n\r\nint main(void) {\r\n    uint64_t clay_memory_size = Clay_MinMemorySize();\r\n    \r\n    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_memory_size, malloc(clay_memory_size));\r\n    Clay_Initialize(arena, (Clay_Dimensions){800, 600});\r\n}\r\n```\r\n\r\nI got this compilation error from gcc:\r\n```\r\n/src/../deps/clay.h:3059:14: error: \u2018isPointerActive\u2019 undeclared (first use in this function)\r\n 3059 |         if (!isPointerActive && scrollData->pointerScrollActive)\r\n```\r\n\r\nThe build command I used:\r\n```\r\ngcc -o test ./src/main.c $(curl-config --libs) -lraylib -std=c99 -Wall\r\n```\r\n\r\nDo you know how I can fix this ?",
+    "comments_url": "https://api.github.com/repos/nicbarker/clay/issues/18/comments",
+    "author": "Quentindeve",
+    "comments": [
+      {
+        "user": "nicbarker",
+        "created_at": "2024-09-19T19:12:59Z",
+        "body": "Hi, thanks for the report. Silly mistake on my part here, badly merged two sets of changes. Have fixed `main` for you, should be good to go \ud83d\udc4d "
+      },
+      {
+        "user": "Quentindeve",
+        "created_at": "2024-09-19T19:14:26Z",
+        "body": "Gonna give it another try, thanks !\r\n\r\nEdit: The fix works, well played :^)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves the 'isPointerActive' undeclared identifier error during compilation",
+      "Ensures compatibility with the user's existing build command and dependencies",
+      "Provides a fix that doesn't require significant code modifications on the user's side"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:49:44"
+    }
+  },
+  {
+    "number": 11,
+    "title": "Pre-built binaries missing for Linux in the Odin bindings ",
+    "created_at": "2024-08-31T18:56:43Z",
+    "closed_at": "2024-09-01T01:56:00Z",
+    "labels": [],
+    "url": "https://github.com/nicbarker/clay/issues/11",
+    "body": "Trying to build an example outputs:\r\n\r\ncannot find -l \"[pathtoclay]/clay/bindings/odin/clay-odin//linux/libclay.a\"",
+    "comments_url": "https://api.github.com/repos/nicbarker/clay/issues/11/comments",
+    "author": "Valnir17",
+    "comments": [
+      {
+        "user": "nicbarker",
+        "created_at": "2024-08-31T22:45:55Z",
+        "body": "Thanks for the heads up, somehow managed to forget to build the linux lib. Would you be able to test it out for me if I push the file? I don't have access to a linux box at the moment \ud83d\ude42\n\n---\n\nI've pushed the linux lib, please let me know if it works for you!"
+      },
+      {
+        "user": "Valnir17",
+        "created_at": "2024-09-01T01:56:00Z",
+        "body": "It did, thanks! \r\n"
+      },
+      {
+        "user": "nicbarker",
+        "created_at": "2024-09-01T08:58:09Z",
+        "body": "Awesome, good to hear!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Pre-built Linux binaries for the Odin bindings must be available and accessible"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:50:01"
+    }
+  }
+]

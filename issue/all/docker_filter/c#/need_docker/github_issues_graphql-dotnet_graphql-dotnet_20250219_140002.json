@@ -1,0 +1,105 @@
+[
+  {
+    "number": 3449,
+    "title": "Exception when I iterate through the types of a schema before defining any resolvers etc",
+    "created_at": "2022-12-09T20:22:42Z",
+    "closed_at": "2022-12-09T21:17:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/graphql-dotnet/graphql-dotnet/issues/3449",
+    "body": "I am trying to read a string as a `Schema` and then print out all of the type names in that schema. \r\n\r\nHere is my script:\r\n\r\n```fsharp\r\n#r \"nuget: GraphQL, 7.2.1\"\r\n#r \"nuget: GraphQL.SystemTextJson\"\r\n\r\nopen GraphQL\r\nopen GraphQL.Types\r\nopen GraphQL.SystemTextJson\r\n\r\nlet definition =\r\n  \"\"\"type User {\r\n  id : ID!\r\n  handle : String!\r\n  bio : String\r\n  karma : Int!\r\n}\r\n\r\nunion CommentParent = Post | Comment\r\n\r\ntype Post {\r\n  id : ID!\r\n  created : String!\r\n  title : String!\r\n  url : String!\r\n  posterId : ID!\r\n  poster : User\r\n  karma : Int!\r\n}\r\n\r\ntype Comment {\r\n  id : ID!\r\n  created : String!\r\n  commenterId : ID!\r\n  commenter : User\r\n  parent : CommentParent\r\n  content : String!\r\n  karma : Int!\r\n}\r\n\r\ntype Query {\r\n  posts(page : Int! = 0) : [Post!]!\r\n  profile(id : ID!) : User\r\n}\r\n\"\"\"\r\n\r\nlet schema = Schema.For(definition)\r\n\r\nprintfn \"Found these GraphQL types: \"\r\n\r\nfor graphQLType in schema.AllTypes do\r\n  match graphQLType with\r\n  | :? GraphQL.Types.INamedType as namedType ->\r\n    printfn $\" - {namedType.Name}\"\r\n  | _ -> ()\r\n\r\nprintfn \"Done. \"\r\n```\r\n\r\nIt throws an error:\r\n\r\n```\r\nSystem.InvalidOperationException: Union type 'CommentParent' does not provide a 'resolveType' function and possible Type 'CommentParent' does not provide a 'isTypeOf' function. There is no way to resolve this possible type during execution.\r\n   at GraphQL.Types.SchemaTypes.ApplyTypeReference(IGraphType type) in /_/src/GraphQL/Types/Collections/SchemaTypes.cs:line 842\r\n   at GraphQL.Types.SchemaTypes.ApplyTypeReferences() in /_/src/GraphQL/Types/Collections/SchemaTypes.cs:line 790\r\n   at GraphQL.Types.SchemaTypes.Initialize(ISchema schema, IServiceProvider serviceProvider, IEnumerable`1 graphTypeMappings) in /_/src/GraphQL/Types/Collections/SchemaTypes.cs:line 225\r\n   at GraphQL.Types.SchemaTypes..ctor(ISchema schema, IServiceProvider serviceProvider, IEnumerable`1 graphTypeMappings) in /_/src/GraphQL/Types/Collections/SchemaTypes.cs:line 133\r\n   at GraphQL.Types.SchemaTypes..ctor(ISchema schema, IServiceProvider serviceProvider) in /_/src/GraphQL/Types/Collections/SchemaTypes.cs:line 118\r\n   at GraphQL.Types.Schema.CreateSchemaTypes() in /_/src/GraphQL/Types/Schema.cs:line 471\r\n   at GraphQL.Types.Schema.CreateAndInitializeSchemaTypes() in /_/src/GraphQL/Types/Schema.cs:line 442\r\n   at GraphQL.Types.Schema.Initialize() in /_/src/GraphQL/Types/Schema.cs:line 210\r\n   at <StartupCode$FSI_0002>.$FSI_0002.main@() in /home/njlr/Repro.fsx:line 8\r\nStopped due to error\r\n```\r\n\r\nIs there a way to examine the types of a schema parsed from a string?",
+    "comments_url": "https://api.github.com/repos/graphql-dotnet/graphql-dotnet/issues/3449/comments",
+    "author": "njlr",
+    "comments": [
+      {
+        "user": "Shane32",
+        "created_at": "2022-12-09T20:39:29Z",
+        "body": "You can parse the SDL using the GraphQLParser project and iterate through the type definitions there.  Call `GraphQLParser.Parser.Parse(definitions)`\r\n"
+      },
+      {
+        "user": "njlr",
+        "created_at": "2022-12-09T21:17:19Z",
+        "body": "> You can parse the SDL using the GraphQLParser project and iterate through the type definitions there. Call `GraphQLParser.Parser.Parse(definitions)`\r\n\r\nWorks a treat!\r\n\r\n```fsharp\r\n#r \"nuget: GraphQL, 7.2.1\"\r\n#r \"nuget: GraphQL.SystemTextJson\"\r\n\r\nopen GraphQLParser\r\nopen GraphQLParser.AST\r\n\r\nlet definition =\r\n  \"\"\"type User {\r\n  id : ID!\r\n  handle : String!\r\n  bio : String\r\n  karma : Int!\r\n}\r\n\r\nunion CommentParent = Post | Comment\r\n\r\ntype Post {\r\n  id : ID!\r\n  created : String!\r\n  title : String!\r\n  url : String!\r\n  posterId : ID!\r\n  poster : User\r\n  karma : Int!\r\n}\r\n\r\ntype Comment {\r\n  id : ID!\r\n  created : String!\r\n  commenterId : ID!\r\n  commenter : User\r\n  parent : CommentParent\r\n  content : String!\r\n  karma : Int!\r\n}\r\n\r\ntype Query {\r\n  posts(page : Int! = 0) : [Post!]!\r\n  profile(id : ID!) : User\r\n}\r\n\"\"\"\r\n\r\nlet doc = Parser.Parse(definition)\r\n\r\nprintfn \"Found these GraphQL types: \"\r\n\r\nfor node in doc.Definitions do\r\n  match node with\r\n  | :? GraphQLTypeDefinition as typeDefinition ->\r\n    printfn $\" - {typeDefinition.Name}\"\r\n  | _ -> ()\r\n\r\n```\r\n\r\n```\r\nFound these GraphQL types: \r\n - User\r\n - CommentParent\r\n - Post\r\n - Comment\r\n - Query\r\n\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow parsing schema definitions without requiring resolver configuration",
+      "Method must provide access to raw type definitions from schema documentation",
+      "Approach must handle schema inspection before runtime validation/initialization",
+      "Must support enumeration of all defined types including unions"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:57:44"
+    }
+  },
+  {
+    "number": 3109,
+    "title": "Operation is not valid due to the current state of the object error",
+    "created_at": "2022-04-28T23:31:21Z",
+    "closed_at": "2023-04-03T19:55:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/graphql-dotnet/graphql-dotnet/issues/3109",
+    "body": "Hello, yesterday I had a question related to variables and ended up making this change,\r\n\r\nI changed Variables to,\r\n```\r\npublic JsonElement Variables\r\n{\r\n    get; set;\r\n}\r\n```\r\nand changed,\r\n```\r\nopts.Variables = serializer.ReadNode<Inputs>(request?.Variables);\r\n```\r\n\r\nHowever, today just the build with this change seems to be giving me an \r\n`Operation is not valid due to the current state of the object error` in the GraphQLMiddleware. I was wondering if I've missed something else during the variable upgrade ? Thank you",
+    "comments_url": "https://api.github.com/repos/graphql-dotnet/graphql-dotnet/issues/3109/comments",
+    "author": "giy",
+    "comments": [
+      {
+        "user": "giy",
+        "created_at": "2022-04-29T01:32:39Z",
+        "body": "So, I am going back to the other way,\r\n```\r\n[JsonConverter(typeof(ObjectDictionaryConverter))]\r\n        public Dictionary<string, object> Variables\r\n        {\r\n            get; set;\r\n```\r\n\r\nI tried replacing `ObjectDictionaryConverter` with \r\n```\r\n[JsonConverter(typeof(InputsJsonConverter))]\r\n        public Dictionary<string, object> Variables\r\n```\r\n\r\nBut that gives me an error too,\r\n```\r\n The converter specified on ...Api.Kestrel.GraphQLRequest.Variables' is not compatible with the type 'System.Collections.Generic.Dictionary`2[System.String,System.Object]'\r\n```\r\n\r\nWhat is the right way for me to replace `ObjectDictionaryConverter` ?\n\n---\n\nAdded,\r\n```\r\nif (request?.Variables != null && request.Variables.ValueKind != JsonValueKind.Undefined)\r\n{\r\n    variables = serializer.ReadNode<Inputs>(request.Variables);\r\n}\r\n``` but just want to make sure this looks right for all cases"
+      },
+      {
+        "user": "Shane32",
+        "created_at": "2022-04-29T02:02:47Z",
+        "body": "```cs\r\n[JsonConverter(typeof(InputsJsonConverter))]\r\npublic Inputs Variables { get; set; }\r\n```\n\n---\n\nThen `opts.Variables = request.Variables;`"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clear explanation of JsonConverter compatibility requirements",
+      "Proper handling of JSON value states (Undefined/Null)",
+      "Correct type pairing between Variables property and converter",
+      "Middleware variable assignment pattern validation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:58:17"
+    }
+  },
+  {
+    "number": 1445,
+    "title": "Classes derived from InputObjectGraphType *sometimes* return error when given a name and a field is given a description.",
+    "created_at": "2019-12-02T15:25:07Z",
+    "closed_at": "2019-12-03T05:49:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/graphql-dotnet/graphql-dotnet/issues/1445",
+    "body": "After a ton of testing to figure out exactly why my mutations were sometimes working and sometimes not I've finally isolated the problem down to whether or not the InputObjectGraphType class has been given a name and a field in that class has a description but this only seems to matter _sometimes_ as bizarre as that is.\r\n\r\nFor example, this\r\n```\r\n    public class WololoInputType : InputObjectGraphType\r\n    {\r\n        public WololoInputType()\r\n        {\r\n            Name = \"Enemies are red, allies are blue, WOLOLO, now you're blue too.\";\r\n            /// Attribute Fields\r\n            FieldAsync<NonNullGraphType<EntityReferenceInputType>, EntityReferenceType>(\"customerid\").Description == \"PepperoniPizza\";\r\n        }\r\n    }\r\n```\r\n\r\nGives me this error:\r\n\r\n```\r\n{\r\n    \"errors\": [\r\n        {\r\n            \"message\": \"GraphQL.Validation.ValidationError: Variable \\\"salesorder\\\" cannot be non-input type \\\"SalesOrderCreateInput\\\".\",\r\n            \"locations\": [\r\n                {\r\n                    \"line\": 1,\r\n                    \"column\": 10\r\n                }\r\n            ],\r\n            \"extensions\": {\r\n                \"code\": \"5.7.3\"\r\n            }\r\n        },\r\n        {\r\n            \"message\": \"GraphQL.Validation.ValidationError: Unknown type SalesOrderCreateInput.\",\r\n            \"locations\": [\r\n                {\r\n                    \"line\": 1,\r\n                    \"column\": 23\r\n                }\r\n            ],\r\n            \"extensions\": {\r\n                \"code\": \"5.4.1.2\"\r\n            }\r\n        }\r\n    ]\r\n}\r\n```\r\n\r\nHowever this:\r\n\r\n```\r\n    public class WololoInputType : InputObjectGraphType\r\n    {\r\n        public WololoInputType()\r\n        {\r\n            /// Attribute Fields\r\n            FieldAsync<NonNullGraphType<EntityReferenceInputType>, EntityReferenceType>(\"customerid\");\r\n        }\r\n    }\r\n```\r\n\r\nWill perform the mutation as expected.\r\n\r\nThe _strangest_ part about this error is that if I delete just the field description, rebuild the solution and run it, I still get the above error. However, if I delete both of them, rebuild it and then _add name back to class_ it runs fine, only failing yet again if I add Description back to any field.\r\n",
+    "comments_url": "https://api.github.com/repos/graphql-dotnet/graphql-dotnet/issues/1445/comments",
+    "author": "bigbizze",
+    "comments": [
+      {
+        "user": "sungam3r",
+        "created_at": "2019-12-02T18:09:32Z",
+        "body": "Name is a GraphType's name, not description. Name must have only alphanumeric symbols. Try the latest preview version and you will see runtime error about that when schema is built."
+      },
+      {
+        "user": "bigbizze",
+        "created_at": "2019-12-03T05:49:28Z",
+        "body": "Ah, this makes sense then why it would often confuse one input type for another. Good to know, not sure how I mixed up the name and description properties so thoroughly, thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why setting a Name property with spaces/special characters in InputObjectGraphType causes schema validation errors",
+      "Identification of the relationship between InputObjectGraphType naming and type recognition in mutations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:00:25"
+    }
+  }
+]

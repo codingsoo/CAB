@@ -1,0 +1,499 @@
+[
+  {
+    "number": 2973,
+    "title": "Sharp get crash when run on docker with node:12-alpine",
+    "created_at": "2021-11-15T11:44:47Z",
+    "closed_at": "2021-11-15T14:09:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/2973",
+    "body": "\r\nI'm using the sharp version 0.26.3 to resize my images, when I run my application on local (using Windows 11), it working fine but when I deploy the code to server using docker with node:12-alpine image, my application crash when sharp resize uploaded image without any exception.\r\nI was tried to set cache to false or set cache to  sharp.cache({ memory: 0, files: 0, items: 0 }) but nothing helpful.\r\nMy size image code\r\n const image = await sharp(`${destPath}/${fileName}`)\r\n              .resize({ height })\r\n              .toFormat('jpeg')\r\n              .toFile(localStoragePath);",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/2973/comments",
+    "author": "sonnguyenjom",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2021-11-15T11:49:27Z",
+        "body": "This is probably #2570, please can you upgrade to the latest version."
+      },
+      {
+        "user": "sonnguyenjom",
+        "created_at": "2021-11-15T14:09:41Z",
+        "body": "> This is probably #2570, please can you upgrade to the latest version.\r\n\r\nafter after the latest version, it working correctly now. Thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve version incompatibility between sharp and the Node.js Alpine environment",
+      "Ensure stable image processing in Dockerized Node.js environments",
+      "Address environment-specific dependencies without requiring manual cache configuration"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:54:57"
+    }
+  },
+  {
+    "number": 2163,
+    "title": "Conversion some time leading to blur on images",
+    "created_at": "2020-04-13T19:19:03Z",
+    "closed_at": "2020-04-14T05:52:38Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/2163",
+    "body": "TLDR; Using blur filter randomly blurs the images which are not to be blurred.\r\nI am converting images into 5 resolutions and blurring the lowest resolution on i.e. 200px wid only. but some how some random images gets blurred. Using blur is high priority to reduce images size. Calling convert image function using calbackify.\r\n`\r\nvar WebpOptions = {\r\n    reductionEffort: 4,\r\n    quality: 70,\r\n}\r\n\r\nvar JpegOptions = {\r\n    quantisationTable: 8,\r\n    quality: 60,\r\n    trellisQuantisation: true,\r\n    overshootDeringing: true,\r\n    chromaSubsampling: '4:2:0'\r\n}\r\nasync function convertImage(Map) {\r\n\r\n    var promises = [];\r\n    var logs = [];\r\n\r\n    if (typeof (Map) !== 'object')\r\n        throw Error(`Given Map ${Map} data is not in the form of an object`);\r\n\r\n    for (let [key, value] of Object.entries(Map)) {\r\n\r\n        var files = fs.readdirSync(key);\r\n\r\n        for (let i = 0; i < files.length; i++) {\r\n            let ls = fs.lstatSync(`${key}${files[i]}`)\r\n            if (ls.isFile())\r\n                files[i] = {\r\n                    name: files[i],\r\n                    path: `${key}${files[i]}`,\r\n                    size: ls.size\r\n                };\r\n            else\r\n                files[i] = null;\r\n        }\r\n\r\n        for (var i = 0; i < files.length; i++) {\r\n            if (files[i] === null)\r\n                continue;\r\n            var filename = path.basename(files[i].name).split('.');\r\n            filename[0] = filename[0].replace(/ /g, '_');\r\n\r\n            var res = [2000, 1000, 800, 600, 100];\r\n\r\n            for (let j = 0; j < res.length; j++) {\r\n                let target = path.resolve(`${value}${res[j]}/`);\r\n                if (!fs.existsSync(target)) {\r\n                    console.log(`MKDIR ${target}`);\r\n                    fs.mkdirSync(target, { recursive: true });\r\n                }\r\n            }\r\n\r\n            var Image = sharp(files[i].path).resize(res[0]);\r\n            \r\n            var pipeline = Image.clone().webp(WebpOptions)\r\n\r\n            for (let j = 0; j < res.length; j++) {\r\n                let target = `${value}${res[j]}/${filename[0]}.webp`;\r\n                if (res[j] == 100) {\r\n\r\n                    let rendition = pipeline;\r\n                    let size = res[j]\r\n                    promises.push(blurImage(rendition, size, target))\r\n                }\r\n                else {\r\n\r\n                    let rendition = pipeline;\r\n                    let size = res[j]\r\n                    promises.push(fineImage(rendition, size, target))\r\n\r\n                }\r\n            }\r\n\r\n            pipeline = Image.clone().jpeg(JpegOptions)\r\n\r\n            for (let j = 0; j < res.length; j++) {\r\n                let target = `${value}${res[j]}/${filename[0]}.jpg`;\r\n                if (res[j] == 100) {\r\n\r\n                    let rendition = pipeline;\r\n                    let size = res[j]\r\n                    promises.push(blurImage(rendition, size, target))\r\n                }\r\n                else {\r\n\r\n                    let rendition = pipeline;\r\n                    let size = res[j]\r\n                    promises.push(fineImage(rendition, size, target))\r\n\r\n                }\r\n            }\r\n        }\r\n    }\r\n\r\n    function fineImage(rendition, size, target) {\r\n        return rendition\r\n            .clone()\r\n            .metadata()\r\n            .then(metadata => rendition\r\n                .resize(size, null, { fastShrinkOnLoad: false })\r\n                .toFile(target)\r\n                .then(info => { return { info, target, metadata, shape : 'fine' }; }))\r\n            .catch(err => console.log(err));\r\n    }\r\n\r\n    function blurImage(rendition, size, target) {\r\n        return rendition\r\n            .clone()\r\n            .metadata()\r\n            .then(metadata => rendition\r\n                .resize(size, null, { kernel: sharp.kernel.cubic, fastShrinkOnLoad: true })\r\n                .blur(20)\r\n                .toFile(target)\r\n                .then(info => { return { info, target, metadata, shape : 'blur' }; }))\r\n            .catch(err => console.log(err));\r\n    }\r\n\r\n    return await Promise.all(promises)\r\n        .then((values) => {\r\n            values.forEach((value) => console.log(value.target+ ' ' + value.shape))\r\n            return differenceTime(Benchmark)\r\n        });\r\n}\r\n`\r\n\r\nSystem:\r\n    OS: Linux 5.3 Ubuntu 18.04.4 LTS (Bionic Beaver)\r\n    CPU: (4) x64 Intel(R) Core(TM) i5-6200U CPU @ 2.30GHz\r\n    Memory: 6.45 GB / 15.48 GB\r\n    Container: Yes\r\n    Shell: 4.4.20 - /bin/bash\r\n  Binaries:\r\n    Node: 12.16.1 - ~/.nvm/versions/node/v12.16.1/bin/node\r\n    npm: 6.14.4 - ~/.nvm/versions/node/v12.16.1/bin/npm\r\n\r\nSome random webp and Jpg Images are coming blurred. If you use blur filter. If you dont use blur filter all images are fine.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/2163/comments",
+    "author": "navanshu",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2020-04-13T20:02:14Z",
+        "body": "Hi, there's a race condition in this code. The `rendition` object passed to the `blurImage` function is modified asynchronously.\r\n\r\n```diff\r\nfunction blurImage(rendition, size, target) {\r\n    return rendition\r\n        .clone()\r\n        .metadata()\r\n        .then(metadata => rendition\r\n+           .clone()\r\n            .resize(size, null, { kernel: sharp.kernel.cubic, fastShrinkOnLoad: true })\r\n```"
+      },
+      {
+        "user": "navanshu",
+        "created_at": "2020-04-14T05:52:38Z",
+        "body": "Thankyou so much. I fixed it."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent race conditions in asynchronous image processing operations",
+      "Ensure independent processing pipelines for different image resolutions",
+      "Maintain image quality consistency across resolution variants"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:56:43"
+    }
+  },
+  {
+    "number": 1808,
+    "title": "Error: Input buffer contains unsupported image format on composite",
+    "created_at": "2019-07-25T22:40:57Z",
+    "closed_at": "2019-07-31T15:17:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/1808",
+    "body": "Hi\r\nI have created a function which gets an image buffer(jpeg, png...).\r\nIt should resize images and depending from options also make them circle.\r\nThe code is working on my local machine.\r\nIt's also working on the server without circle block, but getting following error on the server for circle images:\r\n` Error: Input buffer contains unsupported image format `\r\nCan you please help me? Is it happening because of some packages versions difference?\r\n\r\n```\r\nconst sharp = require('sharp');\r\n\r\nmodule.exports = async function (image, options) {\r\n    let img = sharp(image);\r\n    const imgInfo = await img.metadata();\r\n    let format = options.format || imgInfo.format;\r\n\r\n    if (options.circle) {\r\n        const circle = new Buffer(\r\n            `<svg style=\"background-color: white\">\r\n                <circle cy=\"${options.height / 2}\" cx=\"${options.width / 2}\" r=\"${options.width / 2}\" />\r\n            </svg>`\r\n        );\r\n\r\n        format = 'png';\r\n        img.composite([{ input: circle, blend: 'dest-in' }]);\r\n    }\r\n\r\n    switch (format) {\r\n        case 'png':\r\n            img = img.png({ quality: options.quality || 100 });\r\n            break;\r\n        default:\r\n            img = img.jpeg({ quality: options.quality || 100 });\r\n    }\r\n\r\n    return img\r\n        .resize(options.width, options.height)\r\n        .toBuffer();\r\n};\r\n```",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/1808/comments",
+    "author": "susannaHayrapetyan",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2019-07-26T08:36:25Z",
+        "body": "The output of `console.log(sharp.format)` will tell you which image formats are supported at runtime.\r\n\r\nIf you're using the prebuilt binaries these include librsvg. If you're relying on a globally-installed libvips this may be different."
+      },
+      {
+        "user": "susannaHayrapetyan",
+        "created_at": "2019-07-31T15:17:00Z",
+        "body": "@lovell thank you, works now :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identify supported image formats in the server environment",
+      "Explain environment-specific dependencies affecting image processing",
+      "Resolve SVG processing capability in composite operations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:57:19"
+    }
+  },
+  {
+    "number": 1604,
+    "title": "Error: Input file is missing or of an unsupported image format on some requests",
+    "created_at": "2019-03-09T17:20:46Z",
+    "closed_at": "2019-03-11T11:21:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/1604",
+    "body": "Hello,\r\nThis code for image upload and compression works in most cases but some requests fail ((Number of fails increase in load testing) with error: 'Error: Input file is missing or of an unsupported image format'\r\n\r\nI checked the path whenever this error appears. The file really exists and is usable. Also this error does not appear for all requests. The exception occurs when I give the temp file path (saved to disk via streams to reduce memory footprint) to sharp.\r\n\r\n```\r\n'use strict';\r\n\r\nconst fs = require('fs');\r\nconst fsx = require('fs-extra');\r\nconst path = require('path');\r\nconst sharp = require('sharp');\r\nconst Config = require('../config/image');\r\nconst Rand = require('../utils/random');\r\nconst TAG = '\\services\\image';\r\nfunction readImageStream(buffer, owner, tempFileName){\r\n\tconst tempFilepath = Config.UPLOAD_PATH+'tmp\\\\'+owner+'\\\\'+tempFileName;\r\n\treturn new Promise(function(resolve, reject){\r\n\t\t//const readStream = fs.createReadStream(buffer);\r\n\t\tconst readStream = buffer;\r\n\t\tconst writeStream = fs.createWriteStream(tempFilepath);\r\n\t\tlet output;\r\n\t\treadStream.on('data', function(chunk){\r\n\t\t\twriteStream.write(chunk, {flags: 'a', encoding:null, mode:0o666});\r\n\t\t});\r\n\t\treadStream.on('end', function(){\r\n\t\t\tconst path = writeStream.path;\r\n\t\t\twriteStream.end();\r\n\t\t\tresolve(path);\r\n\t\t});\r\n\t\treadStream.on('error', function(err){\r\n\t\t\tconsole.log(\"Error in reading image stream \" + TAG, err);\r\n\t\t\treject(err);\r\n\t\t});\r\n\t});\r\n}\r\n\r\nfunction checkImageDimensions(owner, filename){\r\n\tconst path = Config.UPLOAD_PATH + \"tmp\\\\\"+ owner + \"\\\\\" + filename;\r\n\treturn new Promise(function(resolve, reject){\r\n\t\t\r\n\t\tsharp(path)\r\n\t\t\t.metadata()\r\n\t\t\t.then(function(info){\r\n\t\t\t\tif(info.width < 100 || info.height <100 || \r\n\t\t\t      (info.width / info.height < 0.5) ||\r\n\t\t\t\t  (info.height / info.width < 0.5)){\r\n\t\t\t\t\t\treject('Bad image size');\r\n\t\t}\r\n\t\telse{\r\n\t\t\tresolve();\r\n\t\t}\r\n\t\t})\r\n\t\t.catch(function(err){\r\n\t\t\tconsole.log(\"Error in image size check \" + TAG, err);\r\n\t\t\treject(err);\r\n\t\t})\r\n\t}); \r\n}\r\n\r\nexports.Save = async function(owner, buffer){\r\n\tconst tempDir = Config.UPLOAD_PATH+\"tmp\\\\\"+owner;\r\n\tconst tempFileName1 = Rand.UUID() + Config.EXTENSION; //Creates UUID for filename\r\n\tconst tempFileName2 = Rand.UUID() + Config.EXTENSION;\r\n\tconst tempPath = tempDir + \"\\\\\"+tempFileName1;\r\n\tconst ensureDirExists = await fsx.ensureDir(Config.UPLOAD_PATH+ \"tmp\\\\\"+owner);\r\n\t//await checkMaxTempSize(owner);\r\n\tawait readImageStream(buffer, owner, tempFileName1);\r\n\tawait checkImageDimensions(owner, tempFileName1);\r\n\ttry{\r\n\t\tawait sharp(tempPath)\r\n\t\t\t\t\t.resize(800, 494, {\r\n\t\t\t\t\t\t\t\t\t\tkernel: sharp.kernel.nearest,\r\n\t\t\t\t\t\t\t\t\t\tfit: 'contain',\r\n\t\t\t\t\t\t\t\t\t\tbackground: { r: 255, g: 255, b: 255}\r\n\t\t\t\t\t\t\t\t\t}).toFile(Config.UPLOAD_PATH+ \"tmp\\\\\"+owner+ \"\\\\\" + tempFileName2, {quality:80});\r\n\t\t\t\treturn {\r\n\t\t\t\t\t\tfilename: tempFileName2\r\n\t\t\t\t};\r\n\t}\r\n\tcatch(err){\r\n\t\tconsole.log(\"Error in image compression \" + TAG, err);\r\n\t\treturn err;\r\n\t}\r\n} \r\n```",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/1604/comments",
+    "author": "danialkhansari",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2019-03-09T20:18:38Z",
+        "body": "Hi, there's a race condition in the following section of your code, unrelated to sharp:\r\n```javascript\r\nreadStream.on('end', function(){\r\n\tconst path = writeStream.path;\r\n\twriteStream.end();\r\n\tresolve(path);\r\n});\r\n```\r\nThe call to `writeStream.end()` is not synchronous so `resolve` could occur before `writeStream` has finished writing to and closing the underlying file descriptor.\r\n\r\nInstead listen for the `close` event on `writeStream` before resolving."
+      },
+      {
+        "user": "gergo0720",
+        "created_at": "2019-03-09T23:31:23Z",
+        "body": "Hi, I've experienced the same issue. In some cases it works properly, but it often happens to get the error mentioned above. I've tried to check the details of a \"working\" image and a \"non-working\" image. The only difference is the file-type. For not working images we have:\r\n\r\nFile Type: JPEG image data, **JFIF standard 1.02**\r\n\r\nMy current settings to resize is:\r\n\r\n`sharp(filePath)\r\n\t\t\t.withMetadata()\r\n\t\t\t.resize(200, 200, {\r\n\t\t\t\twithoutEnlargement: true\r\n\t\t\t})\r\n\t\t\t.png()\r\n\t\t\t.toFile(newFilePath);`\r\n\r\nI am using the latest version, but also tried an earlier one (0.20.5). The result was the same.\r\n\r\nI hope we can figure this out, and thanks in advance."
+      },
+      {
+        "user": "lovell",
+        "created_at": "2019-03-09T23:41:14Z",
+        "body": "@gergo0720 Please open a new issue with a standalone code sample and example input image that consistently fails."
+      },
+      {
+        "user": "danialkhansari",
+        "created_at": "2019-03-11T09:05:21Z",
+        "body": "Thanks a million @lovell I spent almost a month on solving the issue and tried many possibilities, finally I suspected about internal streams that sharp use to open files. It now works like a charm. God bless you man!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure complete file write before processing",
+      "Handle asynchronous file operations correctly",
+      "Provide reliable file availability for image processing",
+      "Prevent premature resource access under load"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:58:31"
+    }
+  },
+  {
+    "number": 1210,
+    "title": "Error: The specified procedure could not be found.",
+    "created_at": "2018-04-27T09:48:02Z",
+    "closed_at": "2018-04-28T09:01:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/1210",
+    "body": "I have two Electron projects using sharp. I have a small testing project for testing sharp but it gave me an initialization DLL error at first. The commands I used were these and it got fixed.\r\n\r\n```\r\nnpm install --save-dev electron-rebuild\r\nnpm install sharp\r\n.\\node_modules\\.bin\\electron-rebuild.cmd\r\n```\r\nI can use sharp now and tested it with some code which generated cropped output from the original image.\r\n\r\n```\r\nsharp('input.jpg')\r\n  .resize(300, 200)\r\n  .toFile('output.jpg', function(err) {\r\n  });\r\n```\r\n\r\nThe bigger project (electron-builder/yarn) where I want to implement sharp gives me this error. \r\n```\r\nError: The specified procedure could not be found.\r\n  \\\\?\\C:\\Users\\Noblesse\\Documents\\GitHub\\desktop-gen-electron - kopie\\node_modules\\sharp\\build\\Release\\sharp.node\r\n      at process.module.(anonymous function) [as dlopen] (ELECTRON_ASAR.js:172:20)\r\n      at Object.Module._extensions..node (module.js:598:18)\r\n      at Object.module.(anonymous function) [as .node] (ELECTRON_ASAR.js:172:20)\r\n      at Module.load (module.js:503:32)\r\n      at tryModuleLoad (module.js:466:12)\r\n      at Function.Module._load (module.js:458:3)\r\n      at Module.require (module.js:513:17)\r\n      at require (internal/module.js:11:18)\r\n      at Object.<anonymous> (C:\\Users\\Noblesse\\Documents\\GitHub\\desktop-gen-electron - kopie\\node_modules\\sharp\\lib\\constructor.js:10:15)\r\n      at Object.<anonymous> (C:\\Users\\Noblesse\\Documents\\GitHub\\desktop-gen-electron - kopie\\node_modules\\sharp\\lib\\constructor.js:256:3)\r\n```\r\n\r\nI use the yarn way in this one but it doesn't work. There certainly is sharp.node in sharp/build/release/.\r\n```\r\nyarn add --dev electron-rebuild\r\nyarn add sharp\r\n.\\node_modules\\.bin\\electron-rebuild.cmd\r\n```",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/1210/comments",
+    "author": "OualidYousfi",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2018-04-27T10:40:26Z",
+        "body": "Does the \"bigger project\" include `node-canvas` as a dependency? If so, please see #1157"
+      },
+      {
+        "user": "OualidYousfi",
+        "created_at": "2018-04-28T00:26:24Z",
+        "body": "It did, actually. As well as `text2png` which required `node-canvas`. Removed the two as they weren't essential to the project. Got no errors anymore. I implemented the .tiff() method to be sure (because JIMP doesn't seem to have an option for reducing the file size for TIFFs) and all my images are ~50 KB now instead of ~5 MB.\r\n\r\nThanks for the quick tip!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identify conflicting native module dependencies in Electron projects",
+      "Address Electron-specific native module loading failures",
+      "Ensure compatibility between sharp and other native modules in the build chain"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:00:19"
+    }
+  },
+  {
+    "number": 1136,
+    "title": "Throw error on problem",
+    "created_at": "2018-02-23T14:29:38Z",
+    "closed_at": "2018-02-23T17:56:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/1136",
+    "body": "Some problematic files (e.g. a `.png` file that is accidentally a `.html` file because a download didn't 404 but 302 to html) cause `sharp` to hang indefinitely.\r\n\r\nI think this should throw an Error in stead.\r\n\r\n```javascript\r\ntry {\r\n\tsharp(src, {failOnError: true})\r\n\t\t.resize(width, height)\r\n\t\t.background(bg)\r\n\t\t.embed()\r\n\t\t.toFile(dest, cb)\r\n}\r\ncatch (err) {\r\n\t// Never fires\r\n\tconsole.error(err.stack)\r\n\tcb()\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/1136/comments",
+    "author": "Redsandro",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2018-02-23T14:49:52Z",
+        "body": "Hello, `toFile()` is asynchronous and any error during image processing will be passed as the first parameter to the provided callback function, `cb` in your example.\r\n\r\nIf you want try/catch behaviour you'll need to use async/await.\r\n\r\n```javascript\r\ntry {\r\n\tawait sharp(src, {failOnError: true})\r\n\t\t.resize(width, height)\r\n\t\t.background(bg)\r\n\t\t.embed()\r\n\t\t.toFile(dest)\r\n}\r\ncatch (err) {\r\n\tconsole.error(err.stack)\r\n}\r\n```"
+      },
+      {
+        "user": "Redsandro",
+        "created_at": "2018-02-23T17:56:20Z",
+        "body": "Great, thank you! :+1: "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates proper error handling for asynchronous Sharp operations",
+      "Ensures processing errors trigger error propagation instead of silent hangs",
+      "Uses Sharp's recommended error handling pattern",
+      "Avoids reliance on synchronous error catching for async operations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:00:44"
+    }
+  },
+  {
+    "number": 994,
+    "title": "Silent crash when calling sharp without arguments",
+    "created_at": "2017-10-17T17:58:01Z",
+    "closed_at": "2017-10-17T20:06:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/994",
+    "body": "Minimal test case:\r\n\r\n```js\r\nconst sharp = require('sharp')\r\nconst main = async () => {\r\n  const image = sharp()\r\n  const info = await image.metadata()\r\n  console.log('done')\r\n}\r\n\r\nmain()\r\n```\r\n\r\nThe process simply exits with status 0.  There is no error message, and 'done' is never logged to the console.",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/994/comments",
+    "author": "whmountains",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2017-10-17T18:16:31Z",
+        "body": "Hello, the parameter-less constructor is for Stream-based input.\r\n\r\n> \"JPEG, PNG, WebP, GIF, SVG, TIFF or raw pixel image data can be streamed into the object when not present.\" \r\n\r\nIn your example, this might look like the following:\r\n```diff\r\n  const image = sharp()\r\n+ readableSteam.pipe(image)\r\n  const info = await image.metadata()\r\n```"
+      },
+      {
+        "user": "whmountains",
+        "created_at": "2017-10-17T20:06:25Z",
+        "body": "Thank you, I missed that."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why parameter-less sharp constructor usage causes silent failure",
+      "Clarification of valid usage context for stream-based initialization"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:01:44"
+    }
+  },
+  {
+    "number": 973,
+    "title": "SVG to JPG not working with image files",
+    "created_at": "2017-10-03T19:56:52Z",
+    "closed_at": "2017-11-13T21:19:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/973",
+    "body": "I'm trying to rasterize an SVG image which contains an image tag pointing to a local file. However, the image is not rendered. I've tried the same svg directly with rsvg-convert and it works. I've tried relative and absolute paths with the image in the project root or descendant folder. Sharp does work if the image tag contains a data uri.\r\n\r\nAny help would be appreciated!",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/973/comments",
+    "author": "hbar-digital",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2017-11-11T09:51:58Z",
+        "body": "Hello, is this with file-based input or Buffer/Stream based input? If the latter please try the former as librsvg places security limits on the location of included files.\r\n\r\nIt's also worth trying with absolute filesystem paths or ensuring paths are relative to the process' working directory (which may not be the same as the directory your script is in).\n\n---\n\n@hbar-digital Were you able to make any progress with this?"
+      },
+      {
+        "user": "hbar-digital",
+        "created_at": "2017-11-13T21:14:20Z",
+        "body": "@lovell You are correct in that it's a librsvg limitation as I was using a stream based input. The workaround was to convert the image to base64."
+      },
+      {
+        "user": "lovell",
+        "created_at": "2017-11-13T21:19:18Z",
+        "body": "Thanks for confirming. I'll close as this is a security feature of librsvg with a workaround for trusted input."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of security limitations in librsvg when using non-file-based input",
+      "Workaround for including local images without triggering security restrictions",
+      "Differentiation between file-based vs stream/Buffer input handling"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:01:54"
+    }
+  },
+  {
+    "number": 860,
+    "title": "Error: /lib64/libz.so.1: version `ZLIB_1.2.9' not found (required by /some_path/my_project/node_modules/sharp/build/Release/../../vendor/lib/libpng16.so.16)",
+    "created_at": "2017-06-27T19:51:48Z",
+    "closed_at": "2017-06-27T20:41:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/860",
+    "body": "So... it was working... the server is CentOS... i'm working with nvm, pm2 and i know i got it running last time. Because of how all of that was installed(nvm, pm2) i had to switch users and `nvm use X`.. but it worked!! ... i remember i had to install sharp again(i think this is sth to do with another C/C++ compiled module - uws)... now no matter with what user(root, myUser) i `npm install` and run it i have this error^...any suggestions?",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/860/comments",
+    "author": "purepear",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2017-06-27T20:41:32Z",
+        "body": "Please see #843"
+      },
+      {
+        "user": "purepear",
+        "created_at": "2017-06-28T09:48:54Z",
+        "body": "Thank you @lovell ... i put `require('sharp')` on the first line of the app and the error was gone :)"
+      },
+      {
+        "user": "elliotthill",
+        "created_at": "2018-03-07T14:56:19Z",
+        "body": "I'm getting this error and putting the require on the first line of the app is not a good solution for me. I only have one specific API endpoint that needs this.\r\n\r\nI don't have electron, node-canvas or any other image libraries being required.\r\n\r\nIts looking for 1.2.9:\r\n`Error: /lib64/libz.so.1: version `ZLIB_1.2.9' not found`\r\n\r\nBut 1.2.7 seems to be the one installed:\r\n\r\n`node -e \"console.log(process.versions.zlib)\"\r\n1.2.7\r\n`\r\n\r\nAny ideas?\r\n\r\nEDIT:\r\n\r\nAlso have glibc installed\r\n```\r\nInstalled Packages\r\nglibc.x86_64   \r\n```  "
+      },
+      {
+        "user": "lovell",
+        "created_at": "2018-03-07T16:04:13Z",
+        "body": "@elliotthill Please see #892"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve dependency conflict between sharp and system zlib version",
+      "Ensure compatibility with existing system libraries without requiring code structure changes",
+      "Maintain compatibility with CentOS environment constraints",
+      "Address native module rebuild requirements"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:02:35"
+    }
+  },
+  {
+    "number": 802,
+    "title": "Sharp fails to build on Centos7 x64 using Node LTS",
+    "created_at": "2017-05-08T21:42:02Z",
+    "closed_at": "2017-05-09T08:59:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/802",
+    "body": "inside of ../node_modules/sharp\r\n\r\n```\r\n$ node-gyp rebuild\r\ngyp info it worked if it ends with ok\r\ngyp info using node-gyp@3.6.1\r\ngyp info using node@6.10.3 | linux | x64\r\ngyp info spawn /usr/bin/python2\r\ngyp info spawn args [ '/usr/lib/node_modules/node-gyp/gyp/gyp_main.py',\r\ngyp info spawn args   'binding.gyp',\r\ngyp info spawn args   '-f',\r\ngyp info spawn args   'make',\r\ngyp info spawn args   '-I',\r\ngyp info spawn args   '/vagrant/client-website/node_modules/sharp/build/config.gypi',\r\ngyp info spawn args   '-I',\r\ngyp info spawn args   '/usr/lib/node_modules/node-gyp/addon.gypi',\r\ngyp info spawn args   '-I',\r\ngyp info spawn args   '/home/vagrant/.node-gyp/6.10.3/include/node/common.gypi',\r\ngyp info spawn args   '-Dlibrary=shared_library',\r\ngyp info spawn args   '-Dvisibility=default',\r\ngyp info spawn args   '-Dnode_root_dir=/home/vagrant/.node-gyp/6.10.3',\r\ngyp info spawn args   '-Dnode_gyp_dir=/usr/lib/node_modules/node-gyp',\r\ngyp info spawn args   '-Dnode_lib_file=node.lib',\r\ngyp info spawn args   '-Dmodule_root_dir=/vagrant/client-website/node_modules/sharp',\r\ngyp info spawn args   '-Dnode_engine=v8',\r\ngyp info spawn args   '--depth=.',\r\ngyp info spawn args   '--no-parallel',\r\ngyp info spawn args   '--generator-output',\r\ngyp info spawn args   'build',\r\ngyp info spawn args   '-Goutput_dir=.' ]\r\nPackage vips was not found in the pkg-config search path.\r\nPerhaps you should add the directory containing `vips.pc'\r\nto the PKG_CONFIG_PATH environment variable\r\nNo package 'vips' found\r\ngyp: Call to 'PKG_CONFIG_PATH=\":$PKG_CONFIG_PATH:/usr/local/lib/pkgconfig:/usr/lib/pkgconfig\" pkg-config --libs vips' returned exit status 1 while in binding.gyp. while trying to load binding.gyp\r\ngyp ERR! configure error\r\ngyp ERR! stack Error: `gyp` failed with exit code: 1\r\ngyp ERR! stack     at ChildProcess.onCpExit (/usr/lib/node_modules/node-gyp/lib/configure.js:336:16)\r\ngyp ERR! stack     at emitTwo (events.js:106:13)\r\ngyp ERR! stack     at ChildProcess.emit (events.js:191:7)\r\ngyp ERR! stack     at Process.ChildProcess._handle.onexit (internal/child_process.js:215:12)\r\ngyp ERR! System Linux 3.10.0-514.16.1.el7.x86_64\r\ngyp ERR! command \"/usr/bin/node\" \"/usr/bin/node-gyp\" \"rebuild\"\r\ngyp ERR! cwd /vagrant/client-website/node_modules/sharp\r\ngyp ERR! node -v v6.10.3\r\ngyp ERR! node-gyp -v v3.6.1\r\ngyp ERR! not ok\r\n```\r\n\r\nshould I try installing vips from source? ",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/802/comments",
+    "author": "troyxmccall",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2017-05-08T22:13:17Z",
+        "body": "Hello, which version of sharp is this? Does the latest v0.17.3 work?"
+      },
+      {
+        "user": "troyxmccall",
+        "created_at": "2017-05-08T22:21:41Z",
+        "body": "hey @lovell, it's sharp@0.11.4 from Laravel Elixir/ gulp-responsive, if I do a clean install of sharp@0.17.3 it works. Apologies, it's probably a dependency issue. I should've checked that before filing this issue. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves version compatibility between sharp and its dependencies",
+      "Addresses dependency management in the build environment",
+      "Ensures compatibility with CentOS7 environment constraints"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:02:59"
+    }
+  },
+  {
+    "number": 733,
+    "title": "Module version mismatch. Expected 47, got 48.",
+    "created_at": "2017-03-14T18:14:31Z",
+    "closed_at": "2017-03-17T06:46:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/733",
+    "body": "Thanks for the help - I've seen this issue with other npm libs but haven't been able to resolve by switching around node versions etc. I have tried 6.0-7.7.2. Sharp runs great on my local machine but I get this error every time on AWS instance. \r\n\r\nError: Module version mismatch. Expected 47, got 48.\r\n    at Error (native)\r\n    at Object.Module._extensions..node (module.js:444:18)\r\n    at Module.load (module.js:357:32)\r\n    at Function.Module._load (module.js:314:12)\r\n    at Module.require (module.js:367:17)\r\n    at require (internal/module.js:16:19)\r\n    at Object.<anonymous> (/home/ec2-user/projects/resizer/node_modules/sharp/lib/constructor.js:8:15)\r\n    at Module._compile (module.js:417:34)\r\n    at Object.Module._extensions..js (module.js:426:10)\r\n    at Module.load (module.js:357:32)\r\n    at Function.Module._load (module.js:314:12)\r\n    at Module.require (module.js:367:17)\r\n    at require (internal/module.js:16:19)\r\n    at Object.<anonymous> (/home/ec2-user/projects/resizer/node_modules/sharp/lib/index.js:3:15)\r\n    at Module._compile (module.js:417:34)\r\n    at Object.Module._extensions..js (module.js:426:10)",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/733/comments",
+    "author": "alanweissman",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2017-03-14T20:48:52Z",
+        "body": "Hello, did you see #468?"
+      },
+      {
+        "user": "alanweissman",
+        "created_at": "2017-03-14T21:32:54Z",
+        "body": "Thanks Lovell my mistake for the dupe I searched earlier but didn't see #468. Appreciate the help!"
+      },
+      {
+        "user": "DroidGar",
+        "created_at": "2017-03-16T21:13:16Z",
+        "body": "same problem to me, npm install doesnt solve the problem, any help?"
+      },
+      {
+        "user": "alanweissman",
+        "created_at": "2017-03-16T22:44:20Z",
+        "body": "Using 'n' and not 'nvm' I was able to update my AWS machine to node 7.6.0, rm -rf node_modules, npm cache clean, npm cache clear, npm install. Make sure node version in /usr/local/bin matches version on command line. Good luck!"
+      },
+      {
+        "user": "DroidGar",
+        "created_at": "2017-03-16T22:59:52Z",
+        "body": "I resolve it by installing 'n', my mistake was install twice node.js to keep same version use command: n 'node_x.x.x' this way you select witch node u want to use (Use the same version of runing node). and problem resolved."
+      },
+      {
+        "user": "lovell",
+        "created_at": "2017-03-17T06:46:49Z",
+        "body": "Glad to hear you both managed to get the correct version of node installed and working."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure Node.js version consistency between development and deployment environments",
+      "Provide a reliable method to manage/switch Node.js versions on AWS instances",
+      "Include proper cleanup steps after version changes",
+      "Address binary module compatibility across environments"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:03:09"
+    }
+  },
+  {
+    "number": 422,
+    "title": "Can't install sharp v0.12.2 with node 6",
+    "created_at": "2016-04-30T16:53:53Z",
+    "closed_at": "2016-04-30T17:37:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/422",
+    "body": "Error shown when I tried to install:\n\nnpm ERR! Darwin 15.4.0\nnpm ERR! argv \"/usr/local/bin/node\" \"/usr/local/bin/npm\" \"install\"\nnpm ERR! node v6.0.0\nnpm ERR! npm  v3.8.6\nnpm ERR! code ELIFECYCLE\n\nnpm ERR! sharp@0.12.2 install: `node-gyp rebuild`\nnpm ERR! Exit status 1\nnpm ERR! \nnpm ERR! Failed at the sharp@0.12.2 install script 'node-gyp rebuild'.\nnpm ERR! Make sure you have the latest version of node.js and npm instal\n",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/422/comments",
+    "author": "MichaelBuen",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2016-04-30T16:58:54Z",
+        "body": "Please can you try with v0.14.1, the latest version.\n"
+      },
+      {
+        "user": "MichaelBuen",
+        "created_at": "2016-04-30T17:37:55Z",
+        "body": "Thanks Lovell, it worked!\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures compatibility between the sharp package version and the user's Node.js/npm environment",
+      "Resolves the node-gyp rebuild failure during installation",
+      "Provides a working installation path without requiring Node.js version upgrades"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:04:15"
+    }
+  },
+  {
+    "number": 119,
+    "title": "Perf question",
+    "created_at": "2014-11-18T08:18:50Z",
+    "closed_at": "2014-12-02T11:28:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/lovell/sharp/issues/119",
+    "body": "First of all, thank you for the great binding.  \nPlease help.  I'm not sure if I'm doing something wrong.  Libvip and sharp is great for processing one image at a time.  But when I have lots concurrent requests, it doesn't seem to perform on the same level as graphics magick.  \nHere's my sample code \n\n```\nvar util = require('util');\nvar fs = require('fs');\nvar Promise = require('es6-promise').Promise;\nvar _ = require('underscore');\nvar sharp = require('sharp');\n\nvar totalTime = 0;\nvar count = 100;\n\n// concurrency does not help\n//sharp.concurrency(32);\n\nvar originalImage = fs.readFile('./lib/test.jpg', function(err, data) {\n    var promises = [];\n    if(err) {\n        return console.log(' ERROR in reading file ' + err);\n    }\n    for(var i = 0; i < count; i++ ) {\n        promises[i] = sharpResize(data, _.random(400) + 1, _.random(400) + 1);\n    }\n\n    Promise.all(promises)\n    .then(function() {\n        console.log('  Final avg time is ' + totalTime / count);\n    }).catch(function(err) {\n        console.log('  Final ERROR ' + err);\n    });\n});\n\nfunction sharpResize(data, width, height) {\n    return new Promise(function (resolve, reject) {\n        var start = Date.now();\n        var counter = sharp.counters();\n        console.log('  counter stats ' + util.inspect(counter));\n        var stats = sharp.cache();\n        console.log('  cache stats ' + util.inspect(stats));\n\n        var pipeline = sharp(data)\n        .resize(width, height)\n        .embed()\n        .toBuffer(function sharpDone(err, buffer, info) {\n            var timeDelta = (Date.now() - start);\n            if (err) {\n                return reject('failed ' + err);\n            }\n            console.log(' success time ' + timeDelta.toFixed(0));\n            totalTime += timeDelta;\n            resolve(buffer);\n        });\n    });\n}\n```\n\nand this is my output\nsuccess time 143\n success time 147\n success time 147\n success time 168\n...\n...\nsuccess time 2926\nsuccess time 2930\nsuccess time 2943\nsuccess time 2949\n  Final avg time is 1542.15\n\nThe queue stacks up, and the number of working process doesn't really get past 4 (even if I increase the concurrency value).  (I'm on a 8 core Mac laptop).  \nSo, am I missing something?  \n\nThank you.  (btw.. I'm not sure if this is the place to ask question)\n",
+    "comments_url": "https://api.github.com/repos/lovell/sharp/issues/119/comments",
+    "author": "jsongHBO",
+    "comments": [
+      {
+        "user": "lovell",
+        "created_at": "2014-12-01T22:42:30Z",
+        "body": "If you're only seeing 4 concurrent processes (`sharp.counters()` can confirm) then it sounds like libuv thinks you only have 4 CPUs. To force it to use 8 worker threads, try adding this as the first line of the script:\n\n```\nprocess.env.UV_THREADPOOL_SIZE=8;\n```\n\nThe value passed to `sharp.concurrency(...)` is used by libvips to spawn that many threads per resize operation. Large reductions will benefit from more threads, but go too high and you get too much thread-management overhead.\n\nI recommend a max value of the number of cores and you may find that no threading (a value of 1) is more performant - it depends on the situation.\n\nIf your input is a file on the filesystem, passing the filename as the input may be faster to take advantage of libvips (and OS) caching.\n\n\n---\n\n@jsongHBO did you have any success by modifying `UV_THREADPOOL_SIZE` and/or `sharp.concurrency`?\n"
+      },
+      {
+        "user": "jsongHBO",
+        "created_at": "2014-12-01T23:45:29Z",
+        "body": "Yes.  There is increase perf when I set threadpool_size to 2, and concurrency value low.  \nThere's still an increase per request.  But much better than before.  \n\nThank you.\n"
+      },
+      {
+        "user": "lovell",
+        "created_at": "2014-12-02T11:28:26Z",
+        "body": "Great, thanks for confirming.\n\nFor the future benefit of anyone else discovering this question:\n1. the value of `UV_THREADPOOL_SIZE` limits the maximum number of concurrent tasks, and\n2. the value passed to `sharp.concurrency` controls the number of threads working on each task.\n\nBoth values default to the number of CPU cores, which may or may not not provide the best performance for a given workload - YMMV.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to configure Node.js/libuv thread pool size for concurrent image processing",
+      "Guidance on balancing sharp.concurrency with system resources",
+      "Clear distinction between task-level concurrency and operation-level parallelism",
+      "Performance optimization strategy for CPU-bound workloads",
+      "Explanation of environment-specific configuration tradeoffs"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:05:03"
+    }
+  }
+]

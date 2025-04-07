@@ -1,0 +1,186 @@
+[
+  {
+    "number": 18,
+    "title": "protect code from being run again, while it is still running",
+    "created_at": "2024-09-06T18:26:27Z",
+    "closed_at": "2024-09-07T12:58:37Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/18",
+    "body": "In `Discovered HardwareMonitor.Timer_Elapsed`\r\n\r\nWhile investigating NullReferenceException that happens sometimes inside `computer.Open()`, discovered that `Timer_Elapsed` was called again, before first call finished.\r\n\r\nI examined this by giving each call a new \"ID\". And tracking what the latest ID started was, in the middle and at end of a given method run.\r\n\r\nGot output like this:\r\n```cs\r\nHardwareMonitor EXCEPTION #6 seeing #8\r\nHardwareMonitor BEFORE #9 seeing #9\r\nHardwareMonitor AFTER #7 seeing #9\r\nHardwareMonitor BEFORE #10 seeing #10\r\nHardwareMonitor BEFORE #11 seeing #11\r\nHardwareMonitor AFTER #11 seeing #11\r\n```\r\n\r\nExplanation:  \r\n```\r\n* Timer_Elapsed run #6 got an exception, while trying to run at the same time as run #8.\r\n* By the time run #7 finished, run #9 had started.\r\n```\r\n\r\nFix:  \r\nUse a boolean flag to know when this code is already running.  \r\nIf it is, skip this run.  \r\n```cs\r\nprivate static long _iPrevCall;\r\nprivate static bool _isBusy;\r\nprivate void Timer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)\r\n{\r\n\tif (_isBusy)\r\n\t{\r\n\t\t// Skip this time.\r\n\t\tDebug.WriteLine($\"HardwareMonitor SKIPPED when called again during #{_iPrevCall}\");\r\n\t\treturn;\r\n\t}\r\n\t\r\n\t_isBusy = true;\r\n\t_iPrevCall++;\r\n\tvar iCall = _iPrevCall;\r\n\ttry\r\n\t{\r\n\t\tDebug.WriteLine($\"HardwareMonitor BEFORE #{iCall}\");\r\n... \t// ... YOUR CODE HERE ...\r\n\t\tDebug.WriteLine($\"HardwareMonitor AFTER #{iCall}\");\r\n\t}\r\n\tcatch (Exception ex)\r\n\t{\r\n\t\tDebug.WriteLine(ex.ToString());\r\n\t\tDebug.WriteLine($\"HardwareMonitor EXCEPTION #{iCall}\");\r\n\t\treturn;\r\n\t}\r\n\tfinally\r\n\t{\r\n\t\t_isBusy = false;\r\n\t}\r\n}\r\n```\r\n\r\nNow output is similar to this:\r\n```cs\r\nHardwareMonitor BEFORE #2\r\nHardwareMonitor SKIPPED when called again during #2\r\nHardwareMonitor SKIPPED when called again during #2\r\nHardwareMonitor AFTER #2\r\nHardwareMonitor BEFORE #3\r\nHardwareMonitor SKIPPED when called again during #3\r\nHardwareMonitor SKIPPED when called again during #3\r\nHardwareMonitor AFTER #3\r\n```\r\n\r\nOBSERVE: No Exceptions. Those were caused by attempting to use multiple `LibreHardwareMonitor.Hardware.Computer`s at same time.  \r\n (I did see one System.Management.Exception; don't know if this code or other code.)\r\n\r\nThis also should be better performance than running multiple at same time.  \r\n(Likely not significant performance for this code, but if app has other code with similar re-entrancy, could become significant.)\r\n",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/18/comments",
+    "author": "ToolmakerSteve",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-09-07T12:58:34Z",
+        "body": "I've implemented your fix and did some changes to the class and it works fine now. Thanks"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "add try catch around LibreMonitor calls that might fail",
+    "created_at": "2024-09-06T16:50:24Z",
+    "closed_at": "2024-09-07T13:00:00Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/17",
+    "body": "HardwareMonitor.Timer_Elapsed:\r\n\r\nln. 40  \r\n`computer.Open();`  \r\ninternally got NullReference Exception.\r\n\r\nCan't do remaining code in that case.\r\n\r\nIt's running on a timer, so the exception doesn't stop the rest of the app.  \r\nBut it is cleaner coding to catch it. If only to show a line in Visual Studio Output, when debugging the app.\r\n",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/17/comments",
+    "author": "ToolmakerSteve",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-09-07T13:00:00Z",
+        "body": "The Computer instance is now created before the timer is started. A null reference exception should be excluded now"
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "title": "Build instructions",
+    "created_at": "2024-08-18T22:45:18Z",
+    "closed_at": "2024-08-19T11:27:33Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/14",
+    "body": "Hi! I'm compiling and adapting the code for ARM machines (take a look at my fork!, I'm removing the COMReference and doing a ComImport instead). \r\n\r\nI suposed that you were using Inno Setup, but since I'm new to this tool I'm getting an error because Windows Defender is flagging the temp file as trojan...\r\n\r\nI would like (and for new contributors) to see a build guide!",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/14/comments",
+    "author": "AdriRed",
+    "comments": [
+      {
+        "user": "AdriRed",
+        "created_at": "2024-08-19T11:27:33Z",
+        "body": "Just compiled with `iscc.exe` and removed the false positive of windows defender."
+      },
+      {
+        "user": "AdriRed",
+        "created_at": "2024-08-19T11:29:26Z",
+        "body": "In case that you need, commands are:\r\n\r\n`dotnet build -c Release`\r\n\r\n`iscc .\\Other\\DynamicWinSetupProject.iss`\r\n\r\nYou may have to adapt for the folder structure that you have, I'm editing the iss for being relative instead of absolute."
+      },
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-19T13:26:49Z",
+        "body": "Thanks. I was planing to add a build batch file anyway. I was alseep, so I wasn‘t available."
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Hi",
+    "created_at": "2024-08-18T03:46:22Z",
+    "closed_at": "2024-08-18T09:06:25Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/13",
+    "body": "Can you make a Dynamic project for iPhone ios 12 pro max or devices that do not support it? Few developers are offering this project ",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/13/comments",
+    "author": "O4dg",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-18T09:06:25Z",
+        "body": "That is sadly not possible. It is up to apple to do that"
+      }
+    ]
+  },
+  {
+    "number": 9,
+    "title": "[BUG] Opening settings too quickly hard locks the application",
+    "created_at": "2024-08-14T13:46:25Z",
+    "closed_at": "2024-08-14T14:29:14Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/9",
+    "body": "If you open the app and immediately navigate to settings, the entire island is blurred and there is no option to cancel. ",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/9/comments",
+    "author": "DerekGooding",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-14T14:29:14Z",
+        "body": "I think this issue was fixed after I updated the menu animation which will be in v1.0.3R. I can't recreate the issue, as I am too slow. If the bug still persists, you can re-open the issue."
+      },
+      {
+        "user": "DerekGooding",
+        "created_at": "2024-08-14T14:33:06Z",
+        "body": "Correction, this isn't a hard lock. Although the menu is blurry, you can still hover over and click Apply and Back. So for anyone having that issue, there is a workaround. "
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "[BUG] Crashes if no devices are connected",
+    "created_at": "2024-08-14T13:45:16Z",
+    "closed_at": "2024-08-14T15:44:42Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/8",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/8/comments",
+    "author": "DerekGooding",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-14T14:31:36Z",
+        "body": "Can you provide a list of steps needed to re-produce this issue? With devices, are you referring to microphone/camera or something else?"
+      },
+      {
+        "user": "DerekGooding",
+        "created_at": "2024-08-14T14:34:48Z",
+        "body": "Certainly. Listening devices. If I don't have a speaker or headphones active, it crashes on line \r\n\r\ndefaultDevice = devEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);\r\n\r\nin app.OnStartup. \r\n\r\nLikely just needs a handler. "
+      },
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-14T15:44:42Z",
+        "body": "Should be fixed in v1.0.3R"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "Themes should Preview in options menu",
+    "created_at": "2024-08-13T15:06:36Z",
+    "closed_at": "2024-08-13T15:26:12Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/4",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/4/comments",
+    "author": "DerekGooding",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-13T15:26:12Z",
+        "body": "Due to the way the Theme system works it can't display the Themes without having to reload the main control. After reloading it automatically reverts back to the home menu."
+      },
+      {
+        "user": "DerekGooding",
+        "created_at": "2024-08-13T15:34:07Z",
+        "body": "I'm sure it can be done. I'll take a look. "
+      },
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-13T16:59:43Z",
+        "body": "Yes, technically everything would work. However icons/text won't update unless restart of the control. The problem I'm facing is, is that I can't just update the color to the active theme every frame like with other objects because not every text / icon is supposed to have the same color."
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "Add Microphone Activity Status",
+    "created_at": "2024-08-13T04:01:58Z",
+    "closed_at": "2024-08-13T13:17:48Z",
+    "labels": [],
+    "url": "https://github.com/FlorianButz/DynamicWin/issues/1",
+    "body": "The current version of DynamicWin lacks a visual indicator for microphone activity, which would help users see when their microphone is actively capturing sound. I propose adding this feature similar to Discord, where an indicator lights up or changes color when the audio level exceeds a certain dB threshold.\r\n\r\n**Functional Requirements:**\r\n\r\n1. **Microphone Activity Indicator:**\r\n   - Implement a visual indicator (e.g., LED or animation) that lights up or changes color when the microphone picks up sound above a specified dB threshold.\r\n\r\n2. **Threshold Settings:**\r\n   - Provide users with the ability to adjust the microphone activity threshold through the program's settings, allowing them to set the dB level at which the indicator activates.",
+    "comments_url": "https://api.github.com/repos/FlorianButz/DynamicWin/issues/1/comments",
+    "author": "fedmog1lnkv",
+    "comments": [
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-13T07:51:07Z",
+        "body": "I can look in to that, thanks for the suggestion"
+      },
+      {
+        "user": "FlorianButz",
+        "created_at": "2024-08-13T13:17:48Z",
+        "body": "The feature will come in version 1.0.2r which I will probably release later this day."
+      }
+    ]
+  }
+]

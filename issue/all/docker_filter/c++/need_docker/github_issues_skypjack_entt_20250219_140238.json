@@ -1,0 +1,156 @@
+[
+  {
+    "number": 999,
+    "title": "meta_any::invoke dose not change a instance which is passed as reference.",
+    "created_at": "2023-03-22T14:29:07Z",
+    "closed_at": "2023-03-22T14:47:55Z",
+    "labels": [
+      "question",
+      "solved"
+    ],
+    "url": "https://github.com/skypjack/entt/issues/999",
+    "body": "### Environment\r\n- entt : v3.11.1\r\n- visual studio 2022 : Version17.4.5\r\n\r\n### Issue\r\nI called meta_any::invoke with a function which receive a reference parameter and modify it.\r\n\r\nI read issue #460, so I used std::ref.\r\n\r\nBut the caller's instance value was not changed.\r\n\r\nMy code is as follow.\r\n\r\n``` cpp\r\nstruct Position\r\n{\r\n\tdouble x, y, z;\r\n\r\n\tvoid get(double& tmp)\r\n\t{\r\n\t\ttmp = x;\r\n\t}\r\n};\r\n\r\nBOOST_AUTO_TEST_CASE(Test)\r\n{\r\n\tusing entt::operator\"\"_hs;\r\n\r\n\tentt::meta<::Position>()\r\n\t\t.type(entt::type_id<::Position>().hash())\r\n\t\t.func<&::Position::get>(\"get\"_hs);\r\n\r\n\t::Position data{ 1.0, 2.0, 3.0 };\r\n\tauto any = entt::resolve(entt::type_id<Position>()).from_void(&data);\r\n\r\n\tdouble value;\r\n\tany.invoke(\"get\"_hs, std::ref(value));\r\n\r\n\tBOOST_TEST(value == data.x);\r\n}\r\n```\r\n\r\nIn addition, I executed the code in 460 with a slight modification.\r\nResults were similar.\r\n\r\n``` cpp\r\nBOOST_AUTO_TEST_CASE(MutateByRef)\r\n{\r\n\tusing entt::operator\"\"_hs;\r\n\r\n\tentt::meta<get_last_hour_data>().type(\"/getLastHourData\"_hs).template base<Base>().\r\n\t\ttemplate func<&get_last_hour_data::exec>(\"exec\"_hs).\r\n\t\ttemplate ctor<&get_last_hour_data::create>();\r\n\tauto type = entt::resolve(\"/getLastHourData\"_hs);\r\n\tassert(type);\r\n\r\n\tauto func = type.func(\"exec\"_hs);\r\n\tassert(func);\r\n\r\n\tauto any = type.construct(std::string{});\r\n\tassert(any);\r\n\r\n\tstd::string s;\r\n\tauto any_2 = func.invoke(any, std::ref(s));\r\n\tassert(any_2);\r\n\tBOOST_TEST(\".\" == s);\r\n}\r\n\r\nBOOST_AUTO_TEST_CASE(MutateBySharedPtrRef)\r\n{\r\n\tusing entt::operator\"\"_hs;\r\n\r\n\tentt::meta<get_last_hour_data>().template func<&get_last_hour_data::exec_ptr>(\"exec_ptr\"_hs);\r\n\r\n\tauto type = entt::resolve(\"/getLastHourData\"_hs);\r\n\tassert(type);\r\n\r\n\r\n\tauto func = type.func(\"exec_ptr\"_hs);\r\n\tassert(func);\r\n\r\n\tauto any = type.construct(std::string{});\r\n\tassert(any);\r\n\r\n\tauto s = std::make_shared<std::string>();\r\n\tauto any_2 = func.invoke(any, std::ref(s));\r\n\tassert(any_2);\r\n\tBOOST_TEST(\".\" == *s);\r\n}\r\n```\r\n\r\nThank you for your help in advance.",
+    "comments_url": "https://api.github.com/repos/skypjack/entt/issues/999/comments",
+    "author": "tetrisplusplus",
+    "comments": [
+      {
+        "user": "Green-Sky",
+        "created_at": "2023-03-22T14:34:50Z",
+        "body": "you can use `entt::forward_as_meta(value)` instead of `std::ref(value)`"
+      },
+      {
+        "user": "tetrisplusplus",
+        "created_at": "2023-03-22T14:47:55Z",
+        "body": "It worked fine by using entt::forward_as_meta.\r\nThank you very much!\r\n\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates proper handling of reference parameters in EnTT's meta system",
+      "Shows correct use of EnTT's type forwarding mechanism for mutable references",
+      "Ensures meta_any interactions preserve reference semantics for output parameters",
+      "Uses EnTT-specific mechanisms rather than standard library reference wrappers"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:54:01"
+    }
+  },
+  {
+    "number": 460,
+    "title": "invoking an entt::meta function doesn't change caller by-ref parameter ",
+    "created_at": "2020-04-10T23:55:57Z",
+    "closed_at": "2020-04-11T08:50:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/skypjack/entt/issues/460",
+    "body": "Hi, \r\n  I was implementing a JsonRPC web-socket server based on entt::meta when I fell into this flaws (??):\r\npassing the parameter by reference (to be mutated) yields no change in the caller's instance.\r\n\r\nBecause I trust reproducibility is still a value, I've written a couple of unit tests which behaves differently, but should (??) be interchangeable in my opinion.\r\n\r\ng++ _Ubuntu 7.5.0-3ubuntu1~18.04_\r\n\r\n```\r\n#include <gtest/gtest.h>\r\n#include <entt/entt.hpp>\r\n\r\nstruct Base {\r\n    virtual ~Base() = 0;\r\n\r\n    static constexpr auto jsonrpc = \"2.0\";\r\n};\r\n\r\ninline Base::~Base() = default;\r\n\r\nstruct get_last_hour_data : public Base {\r\n    static get_last_hour_data create(std::string const &jsonValue);\r\n\r\n    [[nodiscard]] static bool exec(std::string &s);\r\n\r\n    [[nodiscard]] static bool exec_ptr(std::shared_ptr<std::string> &s);\r\n\r\nprivate:\r\n    [[nodiscard]] static bool init(std::string const &options);\r\n};\r\n\r\nget_last_hour_data get_last_hour_data::create(std::string const &jsonValue) {\r\n    get_last_hour_data glhd;\r\n    if(!get_last_hour_data::init(jsonValue)) {\r\n        return {};\r\n    }\r\n    return glhd;\r\n}\r\n\r\nbool get_last_hour_data::exec(std::string &s) {\r\n    s += \".\";\r\n    return true;\r\n}\r\n\r\nbool get_last_hour_data::exec_ptr(std::shared_ptr<std::string> &s) {\r\n    *s += \".\";\r\n    return false;\r\n}\r\n\r\nbool get_last_hour_data::init(std::string const &options) {\r\n    return true;\r\n}\r\n\r\nTEST(EnTTMeta, MutateByRef) {\r\n    entt::meta<get_last_hour_data>().alias(\"/getLastHourData\"_hs).template base<Base>().\r\n            template func<&get_last_hour_data::exec>(\"exec\"_hs).\r\n                                            template ctor<&get_last_hour_data::create>();\r\n    auto type = entt::resolve(\"/getLastHourData\"_hs);\r\n    assert (type);\r\n\r\n    auto func = type.func(\"exec\"_hs);\r\n    assert (func);\r\n\r\n    auto any = type.construct(std::string{});\r\n    assert (any);\r\n\r\n    std::string s;\r\n    auto any_2 = func.invoke(any, s);\r\n    assert (any_2);\r\n    ASSERT_EQ(\".\", s);\r\n}\r\n\r\nTEST(EnTTMeta, MutateBySharedPtrRef) {\r\n    entt::meta<get_last_hour_data>().template func<&get_last_hour_data::exec_ptr>(\"exec_ptr\"_hs);\r\n\r\n    auto type = entt::resolve(\"/getLastHourData\"_hs);\r\n    assert (type);\r\n\r\n\r\n    auto func = type.func(\"exec_ptr\"_hs);\r\n    assert (func);\r\n\r\n    auto any = type.construct(std::string{});\r\n    assert (any);\r\n\r\n    auto s = std::make_shared<std::string>();\r\n    auto any_2 = func.invoke(any, s);\r\n    assert (any_2);\r\n    ASSERT_EQ(\".\", *s);\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/skypjack/entt/issues/460/comments",
+    "author": "stefanofiorentino",
+    "comments": [
+      {
+        "user": "indianakernick",
+        "created_at": "2020-04-11T00:20:59Z",
+        "body": "Did you try invoking with a reference wrapper? (`std::ref`)"
+      },
+      {
+        "user": "stefanofiorentino",
+        "created_at": "2020-04-11T08:50:49Z",
+        "body": "Gotcha! Thank you, I'll close the \"issue\"."
+      },
+      {
+        "user": "skypjack",
+        "created_at": "2020-04-11T08:58:43Z",
+        "body": "Yeah, the doc for meta should be updated.\n\nThere are two ways to pass something by reference:\n* Using an `std::ref` if it's a plain variable.\n* By dereferencing it if it's in a `meta_any` (eg `*any`).\n\nIn other terms, you can always get modified the values in the outer context if you need it, no matter what. :+1:\nIt's up to the user to decide when to pass something by copy or by value at the call site."
+      },
+      {
+        "user": "stefanofiorentino",
+        "created_at": "2020-04-11T09:01:03Z",
+        "body": "> you can always get modified the values in the outer context if you need it\r\n\r\nThis definitely makes sense. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly pass parameters by reference in entt::meta function invocations",
+      "Clarification on reference vs value semantics when using meta_any arguments",
+      "Documentation of parameter passing strategies for mutable out-parameters",
+      "Clear distinction between copy semantics and reference semantics at call sites"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:57:39"
+    }
+  },
+  {
+    "number": 427,
+    "title": "Unexpected behaviour when iterating a view",
+    "created_at": "2020-02-25T06:42:58Z",
+    "closed_at": "2020-02-25T08:05:16Z",
+    "labels": [
+      "invalid",
+      "question"
+    ],
+    "url": "https://github.com/skypjack/entt/issues/427",
+    "body": "Sorry if I'm massively misunderstanding here, but I'm getting some quite unexpected behaviour from running the following code (part of my test suite, but I've put together a Minimal Reproducible Example):\r\n\r\n```cpp\r\n#include <iostream>\r\n\r\n#include <entt/entt.hpp>\r\n\r\nstruct Parent\r\n{\r\n    unsigned int children = 0;\r\n    entt::entity first = entt::null;\r\n};\r\n\r\nstruct Child\r\n{\r\n    entt::entity parent = entt::null;\r\n    entt::entity next = entt::null;\r\n};\r\n\r\nint main()\r\n{\r\n    entt::registry registry;\r\n\r\n    const auto parent_entity = registry.create();\r\n    const auto child_entity_1 = registry.create();\r\n    const auto child_entity_2 = registry.create();\r\n\r\n    auto &parent_component = registry.assign<Parent>(parent_entity);\r\n    auto &child_component_1 = registry.assign<Child>(child_entity_1);\r\n    auto &child_component_2 = registry.assign<Child>(child_entity_2);\r\n\r\n    parent_component.children = 2;\r\n    parent_component.first = child_entity_1;\r\n\r\n    child_component_1.next = child_entity_2;\r\n    child_component_1.parent = parent_entity;\r\n    child_component_2.parent = parent_entity;\r\n\r\n    registry.view<Child>().each([&](const auto entity, const auto &child) {\r\n        if (!registry.valid(child.parent))\r\n        {\r\n            registry.destroy(entity);\r\n        }\r\n    });\r\n\r\n    std::cout << registry.valid(child_entity_1) << \"\\n\";\r\n    std::cout << registry.valid(child_entity_2) << \"\\n\";\r\n    std::cout << registry.valid(parent_entity) << \"\\n\";\r\n}\r\n```\r\n\r\nOutput:\r\n```\r\n1\r\n1\r\n0\r\n```\r\n\r\nDuring the `registry.view<Child>().each()` call, first `child_entity_1` is visited, but then `parent_entity` is visited (even though it doesn't have a `Child` component!). This results in `parent_entity` being destroyed. `child_entity_2` is never visited.\r\n\r\nAm I misunderstanding something concept here? I was under the impression that all the entities with a `Child` component should be visited, and since they all have a valid parent entity they shouldn't be destroyed.",
+    "comments_url": "https://api.github.com/repos/skypjack/entt/issues/427/comments",
+    "author": "Omegastick",
+    "comments": [
+      {
+        "user": "skypjack",
+        "created_at": "2020-02-25T07:45:20Z",
+        "body": "You're doing a common mistake in C++, it has nothing to do with `EnTT`.\r\nImagine this:\r\n```\r\nstd::vector<int> vec{};\r\nauto &ref = vec.emplate_back(1);\r\nvec.emplate_back(2);\r\n```\r\nIs `ref` still valid after the last line? It's not guaranteed, it may be or may be not invalidated. This depends on the fact that the vector reallocated, thus invalidating the reference.\r\n\r\nYou've exactly the same issue here:\r\n```\r\nauto &child_component_1 = registry.assign<Child>(child_entity_1);\r\nauto &child_component_2 = registry.assign<Child>(child_entity_2);\r\n```\r\nIs `child_component_1` still valid after the second line? If it's not, then you've an UB when you modify it and this means that everything could happen.\r\nPools of components are just containers. They can reallocate as any other container.\r\n\r\nThe following version works as expected:\r\n```\r\nint main()\r\n{\r\n    entt::registry registry;\r\n\r\n    const auto parent_entity = registry.create();\r\n    const auto child_entity_1 = registry.create();\r\n    const auto child_entity_2 = registry.create();\r\n\r\n    registry.assign<Parent>(parent_entity, 2, child_entity_1);\r\n    registry.assign<Child>(child_entity_1, parent_entity, child_entity_2);\r\n    registry.assign<Child>(child_entity_2, parent_entity);\r\n\r\n    registry.view<Child>().each([&](const auto entity, const auto &child) {\r\n        if (!registry.valid(child.parent))\r\n        {\r\n            registry.destroy(entity);\r\n        }\r\n    });\r\n\r\n    std::cout << registry.valid(child_entity_1) << \"\\n\";\r\n    std::cout << registry.valid(child_entity_2) << \"\\n\";\r\n    std::cout << registry.valid(parent_entity) << \"\\n\";\r\n}\r\n```\r\n\r\nIf you don't want to pass arguments on construction, then:\r\n* Initialize your components before creating new ones to avoid using potentially dangling pointers.\r\n* Get (as in `registry::get<T>(entity)`) the component when you want to use it, so that you are guaranteed that the returned reference is a valid one."
+      },
+      {
+        "user": "Omegastick",
+        "created_at": "2020-02-25T08:05:16Z",
+        "body": "Ah thanks, that's my bad then. Thanks a lot for the help. I had forgotten that the EnTT registry is basically a collection of vectors under the hood."
+      },
+      {
+        "user": "skypjack",
+        "created_at": "2020-02-25T08:10:44Z",
+        "body": "Yup. It's a collection of pools and you can specialize them but at the end of the day all them are dynamic containers in a way or the other, so this issue is pretty common. :+1: "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how component assignment order affects reference validity in EnTT's registry",
+      "Clarification of safe patterns for component modification in EnTT"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:57:55"
+    }
+  },
+  {
+    "number": 387,
+    "title": "In which cases would sorting a full-owning group cause an assertion to fail?",
+    "created_at": "2020-01-10T17:52:34Z",
+    "closed_at": "2020-01-11T00:58:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/skypjack/entt/issues/387",
+    "body": "Apologies for so many tickets \ud83d\ude43 \r\n\r\nI have a full-owning group of components called `global_transform_group` that holds a three-component tuple of components. I also have a nested group called `global_render_group` that has the same three components, along with an additional render-related component.\r\n\r\nWith any more than 1 entity belonging to those groups (0 works fine, too), I either get an assertion failure when calling `global_transform_group.sort()` or `false` when calling `global_transform_group.sortable()`.\r\n\r\nThe documentation seems to contradict itself:\r\n\r\n> Sorting owned components is no longer allowed once the group has been created. However, full-owning groups can be sorted by means of their sort member functions. Sorting a full-owning group affects all its instances.\r\n\r\nWhich, at least to me, starts by saying you cannot sort, but then goes on to say that full-owning groups _can_ sort, which leaves me a bit confused \ud83d\ude05 \r\n\r\nSo, in which circumstances can I sort a full-owning group? Should I eliminate the nested group and just use a single full-owning group with all four components?\r\n\r\nIt's worth mentioning I'm using a custom sort function.",
+    "comments_url": "https://api.github.com/repos/skypjack/entt/issues/387/comments",
+    "author": "Qix-",
+    "comments": [
+      {
+        "user": "skypjack",
+        "created_at": "2020-01-10T21:21:32Z",
+        "body": "When you use groups, you can sort only the most restrictive ones, that is the one with the higher number of rules.\r\nFrom your example:\r\n```\r\nauto global_transform_group = registry.group<A, B, C>();\r\nauto global_render_group = registry.group<A, B, C, D>();\r\n```\r\nThis is allowed, they are nested groups. In this case, `global_render_group` is more restrictive because it sets more constraints on the entities that want to enter it. Therefore, it will be fully contained within `global_transform_group` by construction.\r\nNow, consider what would happen if you sorted `global_transform_group`. Since it's _larger_ that `global_render_group`, the elements contained by the latter could be moved around and exit it during the sort. This isn't an option of course.\r\nWhat happens if you sort `global_render_group`? Since it's fully contained within `global_transform_group`, it doesn't matter how it's elements are arranged, they cannot exit the _outer_ group in any case.\r\nTherefore, it's allowed to sort `global_render_group` and this is the reason for which `global_render_group.sortable()` returns true while `global_transform_group` isn't sortable.\r\n\r\n---\r\n\r\nIf you want to sort both, you can't make all them full-owning group.\r\nThere doesn't exist an architecture that allows you to sort stuff and reaches the maximum performance at the same time. Long story short, this is because we need to arrange things in a specific way to get the best from the data and you cannot shuffle them for your purposes.\r\nIf sorting is more important than iterating 1M entities in 0.005ms rather 0.006ms (I guess so), you can define the two groups as partially owning ones in such a way that they don't overlap on owned components. In this case, both will be sortable."
+      },
+      {
+        "user": "Qix-",
+        "created_at": "2020-01-11T00:58:07Z",
+        "body": "Right okay, that makes much more sense :D Thank you~!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify the relationship between group restrictiveness and sorting capability",
+      "Define criteria for when a full-owning group can be sorted",
+      "Explain trade-offs between group structure and sorting needs"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:58:03"
+    }
+  }
+]

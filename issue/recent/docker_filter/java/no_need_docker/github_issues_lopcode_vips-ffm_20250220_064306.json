@@ -1,0 +1,75 @@
+[
+  {
+    "number": 73,
+    "title": "Question: Vips.init & threads",
+    "created_at": "2024-09-25T09:59:44Z",
+    "closed_at": "2024-09-25T17:09:59Z",
+    "labels": [],
+    "url": "https://github.com/lopcode/vips-ffm/issues/73",
+    "body": "Going by the code of Vips.init() and Vips.shutdown(), I would assume to only call both once per application and not once per thread. The library would then be usable from all threads, without any kind of synchronization needed, as long as someone doesn't share VImage objects or the like across threads.\r\n\r\nOr do I need to always call Vips.init() and Vips.shutdown() in every thread where vips-ffm is used? \r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/73/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-25T16:23:09Z",
+        "body": "vips-ffm doesn't do anything special with threading and the rules will generally be whatever works for libvips - I believe you're right and that initialising once on any thread will be enough, and shutting down once on any thread is also fine\n\nI think however that an \"Arena.ofConfined\" might have threading requirements - so any \"Vips.run\" call likely needs to have all users of the provided arena do so from the same thread "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarifies thread safety requirements for Vips.init()/Vips.shutdown() calls",
+      "Identifies thread confinement requirements for specific Vips operations",
+      "Explains synchronization requirements for shared resources",
+      "Differentiates between library initialization and operation-level threading rules"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:46:05"
+    }
+  },
+  {
+    "number": 72,
+    "title": "image to byte array - segment too large",
+    "created_at": "2024-09-25T09:38:27Z",
+    "closed_at": "2024-09-26T16:08:44Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/lopcode/vips-ffm/issues/72",
+    "body": "This might be more of a question, depending on if this is actually solvable with the current vips-ffm api.\r\n\r\nJVips:\r\n```\r\n\t@Override\r\n\tpublic byte[] writeJpegImage(VipsImage image, float quality) {\r\n\t\ttry {\r\n\t\t\timage.applyIccTransform(\"srgb\", new ICCTransformOptions().embedded(true));\r\n\t\t} catch(VipsException ignored) {}\r\n\r\n\t\treturn image.writeJPEGToArray(toVipsQuality(quality), true);\r\n\t}\r\n```\r\nThis works for all our images, independent of size.\r\n\r\nvips-ffm:\r\n```\r\n\t@Override\r\n\tpublic byte[] writeJpegImage(VImage image, float quality) {\r\n\t\tVBlob blob = image\r\n\t\t\t.iccTransform(\"srgb\", VipsOption.Boolean(\"embedded\", true))\r\n\t\t\t.jpegsaveBuffer(VipsOption.Int(\"Q\", toVipsQuality(quality)));\r\n\r\n\t\treturn blob.getUnsafeAddress().toArray(ValueLayout.JAVA_BYTE);\r\n\t}\r\n```\r\nThis works up to a certain image size.\r\n\r\nFor larger images though, it produces the following:\r\n```\r\nCaused by: java.lang.IllegalStateException: Segment is too large to wrap as byte[]. Size: 9223372036854775807\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.checkArraySize(AbstractMemorySegmentImpl.java:396) ~[?:?]\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.toArray(AbstractMemorySegmentImpl.java:352) ~[?:?]\r\n        at jdk.internal.foreign.AbstractMemorySegmentImpl.toArray(AbstractMemorySegmentImpl.java:318) ~[?:?]\r\n        at some.package.SomeClass.writeJpegImage(SomeClass.java:80) ~[app_B:?]\r\n```\r\n\r\nWhat would be the correct way to get a byte array from an image, without writing it out to disk and reading it in again?",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/72/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-25T09:41:22Z",
+        "body": "Looking at the reported size, it looks to me like either a NUL termination byte is missing at the end of the blob, or I need to get the length somewhere to limit the used blob size, because a jpeg image is definitely not around 9 petabyte."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-25T20:50:03Z",
+        "body": "I think it's reasonable to want a safe (no raw pointers) and efficient (no copying) way to get at raw VBlob (VipsArea) data, so I've added a couple of new methods to VBlob in `0.5.8`:\r\n* `VBlob.asByteBuffer()` - recommended way to get at the bytes, should be directly mapped to native memory for efficiency, and you can still access its `byte[]` array from there if you need it (though the raw array might require an explicit copy, I think not all ByteBuffers necessarily implement `array()` - this isn't any worse than JVips though which I believe always makes a copy)\r\n* `VBlob.byteSize()` - if you're sure you just want the byte length of the data, grabbed right out of the `VipsArea` struct\r\n* `VBlob.getUnsafeDataAddress()` - if you really want access to the raw bytes - the MemorySegment is sliced to the length of the data, so it's safer even if the data isn't null-terminated"
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-26T16:08:44Z",
+        "body": "@lopcode this seems to work now (0.5.9), thanks!\r\nI think it would be good to add to docs/readme/javadoc/... that the ByteBuffer returned by these is a DirectByteBuffer pointing to the memory inside the Arena, and thus should not be accessed once the arena goes out of scope (I just had to debug an issue with that, and have now switched back to returning only byte[] from our final write* methods to make sure there'll be no issue with that)."
+      },
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-26T21:01:22Z",
+        "body": "Yep agree about the docs - I made some improvements:\r\n* Renamed `VipsBlob.asByteBuffer` to `VipsBlob.asArenaScopedByteBuffer`\r\n* Added `VipsBlob.asClonedByteBuffer`\r\n* Made docs clearer for both"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a method to safely access the JPEG byte array without triggering memory segment size errors",
+      "Ensures the returned data length matches the actual JPEG content size",
+      "Avoids reliance on raw pointers or unsafe memory access outside the Arena's scope",
+      "Offers zero-copy or efficient memory access for large images"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:46:13"
+    }
+  }
+]

@@ -1,0 +1,1883 @@
+[
+  {
+    "number": 100674,
+    "title": "Environment.GetEnvironmentVariable(\"DOTNET_ENVIRONMENT\") does not return the environment variable's value entered in the CLI",
+    "created_at": "2024-04-05T12:57:25Z",
+    "closed_at": "2024-04-05T15:17:00Z",
+    "labels": [
+      "question",
+      "area-Host"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/100674",
+    "body": "### Description\r\n\r\nWe have a dotnet 8.0 console application that is supposed to read an `appsettings.{Environment.GetEnvironmentVariable(\"DOTNET_ENVIRONMENT\")}.json` file based on the value entered for the `DOTNET_ENVIRONMENT` environment variable. Unfortunately `Environment.GetEnvironmentVariable(\"DOTNET_ENVIRONMENT\")` always returns null.\r\n\r\n### Reproduction Steps\r\n\r\nIssue the following command:\r\n\r\n```\r\n dotnet run -c Release -e DOTNET_ENVIRONMENT=Docker\r\n```\r\n\r\n### Expected behavior\r\n\r\n`Environment.GetEnvironmentVariable(\"DOTNET_ENVIRONMENT\")`  should return the value `Docker` per the reproduction step to be able to utilize `appsettings.Docker.json` file.\r\n\r\n### Actual behavior\r\n\r\n`Environment.GetEnvironmentVariable(\"DOTNET_ENVIRONMENT\")`  returns null or empty.\r\n\r\n### Regression?\r\n\r\n_No response_\r\n\r\n### Known Workarounds\r\n\r\n_No response_\r\n\r\n### Configuration\r\n\r\n.NET SDK:\r\n Version:           8.0.203\r\n Commit:            5e1ceea679\r\n Workload version:  8.0.200-manifests.8cf8de6d\r\n\r\nRuntime Environment:\r\n OS Name:     Windows\r\n OS Version:  10.0.22631\r\n OS Platform: Windows\r\n RID:         win-x64\r\n Base Path:   C:\\Program Files\\dotnet\\sdk\\8.0.203\\\r\n\r\n### Other information\r\n\r\n_No response_",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/100674/comments",
+    "author": "Arash-Sabet",
+    "comments": [
+      {
+        "user": "tommysor",
+        "created_at": "2024-04-05T14:03:03Z",
+        "body": "I don't think `-e` is a valid switch for `dotnet run`.\r\nI also don't know of any way to pass an environment variable as a switch.\r\nPossibly mixup with `docker run` that does have a switch `-e, --env list                         Set environment variables`\r\n\r\nFor `dotnet run` I believe you need to set the environment variable first.\r\n\r\nGiven a console application:\r\n```csharp\r\nvar myValue = Environment.GetEnvironmentVariable(\"MyVar\");\r\nConsole.WriteLine($\"MyVar: '{myValue}'\");\r\n```\r\nCan be invoked with windows cmd:\r\n```\r\nset \"MyVar=SomeValue\" & dotnet run\r\nMyVar: 'SomeValue'\r\n```"
+      },
+      {
+        "user": "Arash-Sabet",
+        "created_at": "2024-04-05T14:57:08Z",
+        "body": "Thanks @tommysor \r\nIt worked well on Windows 11's command prompt but not on PowerShell. Is there something to consider in PS?"
+      },
+      {
+        "user": "tommysor",
+        "created_at": "2024-04-05T15:16:20Z",
+        "body": "> It worked well on Windows 11's command prompt but not on PowerShell. Is there something to consider in PS?\r\n\r\nOnly that you need to use PowerShells way to set the environment variable and separate commands.\r\nPowerShell:\r\n```PowerShell\r\n$env:MyVar='OtherValue' ; dotnet run\r\nMyVar: 'OtherValue'\r\n```\r\n\r\nFor completeness, on Linux the environment variable can be set inline (without separating the commands and environment variable only set for the specific command)\r\nBash:\r\n```bash\r\nMyVar='BashValue' dotnet run\r\nMyVar: 'BashValue'\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 99559,
+    "title": "[System.Reflection.Emit] AssemblyBuilderAccess.RunAndCollect not collecting assemblies",
+    "created_at": "2024-03-11T19:45:12Z",
+    "closed_at": "2024-03-11T22:20:54Z",
+    "labels": [
+      "question",
+      "area-AssemblyLoader-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/99559",
+    "body": "### Description\r\n\r\nSo I've been playing around with `AssemblyBuilderAccess.RunAndCollect`, but it turns out it's not working and has the same behavior as `Run`.\r\nAccording to the docs:\r\n```\r\nThe dynamic assembly will be automatically unloaded and its memory reclaimed,\r\nwhen it's no longer accessible.\r\n```\r\n\r\nEven after fully unreferencing everything related to my dynamic assembly, it will not unload, even after a forced GC collection.\r\nI have fully tested this, using the code in the section below.\r\n\r\n### Reproduction Steps\r\n\r\nI tested this with the following script:\r\n```cs\r\nint id = 0;\r\nfor (; ; )\r\n{\r\n    GC.Collect();\r\n\r\n    var name = $\"Test{id++}\";\r\n    var asm = AssemblyBuilder.DefineDynamicAssembly(new(name), AssemblyBuilderAccess.RunAndCollect);\r\n    var mod = asm.DefineDynamicModule(name);\r\n\r\n    var type1 = mod.DefineType(\"TestClass\", TypeAttributes.Public);\r\n    var met = type1.DefineMethod(\"Foo\", MethodAttributes.Public | MethodAttributes.Static);\r\n    var il = met.GetILGenerator();\r\n    il.EmitWriteLine(\"Hello World!\");\r\n    il.Emit(OpCodes.Ret);\r\n    var t = type1.CreateType();\r\n\r\n    t.InvokeMember(\"Foo\", BindingFlags.Static | BindingFlags.Public | BindingFlags.InvokeMethod, null, null, null);\r\n\r\n    Console.WriteLine(\"----\");\r\n\r\n    foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n    {\r\n        if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n            continue;\r\n\r\n        Console.WriteLine(ass.FullName);\r\n    }\r\n\r\n    Thread.Sleep(100);\r\n    Console.Clear();\r\n}\r\n```\r\n\r\n### Expected behavior\r\n\r\nAfter a `GC.Collect`, the AppDomain should not contain the previously loaded dynamic assembly, and the console output should only contain the latest dyanmic assembly.\r\n\r\nExpected console output after 6th iteration:\r\n```\r\nHello World!\r\n----\r\nTest5, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```\r\n\r\n### Actual behavior\r\n\r\nThe AppDomain still contains the old dynamic assemblies, even after a forced collection, as seen in the console output.\r\n\r\nActual console output after 6th iteration:\r\n```\r\nHello World!\r\n----\r\nTest0, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest1, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest2, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest3, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest4, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest5, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```\r\n\r\n### Regression?\r\n\r\nI have tested the same code in net48 and net472, but the results are the same.\r\n\r\n### Known Workarounds\r\n\r\n_No response_\r\n\r\n### Configuration\r\n\r\nnet8.0\r\nWindows 11\r\nx64\r\nI don't believe the issue is related to these configs.\r\n\r\n### Other information\r\n\r\n_No response_",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/99559/comments",
+    "author": "slxdy",
+    "comments": [
+      {
+        "user": "slxdy",
+        "created_at": "2024-03-11T20:08:49Z",
+        "body": "Ok, I have done some extra research, and it turns out that `GetAssemblies` prevents collectible assemblies from being unloaded in the future.\r\nFrom what I've read, that should only happen when using `Assembly.Load`. I don't think `GetAssemblies` should replicate this behavior, considering that we should have the ability to check for loaded assemblies, collectible or not, without forcing collectible assemblies to stay alive forever.\r\nIs it worth opening another issue for this problem?"
+      },
+      {
+        "user": "reflectronic",
+        "created_at": "2024-03-11T20:22:14Z",
+        "body": "The issue does not reproduce for me after extracting the `foreach` to a separate method:\r\n```cs\r\n// ...\r\n    Console.WriteLine(\"----\");\r\n\r\n    PrintAssemblies();\r\n\r\n    Thread.Sleep(100);\r\n    Console.Clear();\r\n}\r\n\r\n\r\nstatic void PrintAssemblies()\r\n{\r\n    foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n    {\r\n        if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n            continue;\r\n\r\n        Console.WriteLine(ass.FullName);\r\n    }\r\n}\r\n``` \r\n\r\nThen I get output like this:\r\n```\r\nHello World!\r\n----\r\nTest33, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest34, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```"
+      },
+      {
+        "user": "slxdy",
+        "created_at": "2024-03-11T20:34:20Z",
+        "body": "> The issue does not reproduce for me after extracting the `foreach` to a separate method:\r\n> \r\n> ```cs\r\n> // ...\r\n>     Console.WriteLine(\"----\");\r\n> \r\n>     PrintAssemblies();\r\n> \r\n>     Thread.Sleep(100);\r\n>     Console.Clear();\r\n> }\r\n> \r\n> \r\n> static void PrintAssemblies()\r\n> {\r\n>     foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n>     {\r\n>         if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n>             continue;\r\n> \r\n>         Console.WriteLine(ass.FullName);\r\n>     }\r\n> }\r\n> ```\r\n> \r\n> Then I get output like this:\r\n> \r\n> ```\r\n> Hello World!\r\n> ----\r\n> Test33, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n> Test34, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n> ```\r\n\r\nOh wow. I thought i was gonna be stuck with an annoying issue for a while, tysm.\r\nBefore I close the issue, mind explaining why this is the case tho, if you know at least? If I had to guess, it's probably because I'm getting the assemblies in the same stack?"
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2024-03-11T21:49:46Z",
+        "body": "Yes, `GetAssemblies()` returns the array of with all assemblies, the JIT may extend the lifetime of the array till end of the method (depends on many factors)."
+      }
+    ]
+  },
+  {
+    "number": 90925,
+    "title": "[Question] Ref reassignment",
+    "created_at": "2023-08-22T14:48:16Z",
+    "closed_at": "2023-08-22T14:58:36Z",
+    "labels": [
+      "question",
+      "needs-area-label"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/90925",
+    "body": "Below is the simple repro which is quite self-explanatory. The question is - why upon exit from `fn` our char reference `c` is not changed to '**b**' char?\r\n```csharp\r\nusing System;\r\nusing System.Runtime.CompilerServices;\r\nusing System.Runtime.InteropServices;\r\n\r\nstatic void fn(ref char c)\r\n{\r\n    c = ref Unsafe.Add(ref c, 1);\r\n\t// now we have c = 'b'\r\n}\r\n\r\nvar input = \"abc\";\r\nref var c = ref MemoryMarshal.GetReference(input.AsSpan());\r\n\r\nfn(ref c);\r\n// but on exit we still have c = 'a'\r\nConsole.WriteLine(c);\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/90925/comments",
+    "author": "hypeartist",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2023-08-22T14:58:36Z",
+        "body": "> why upon exit from fn our char reference c is not changed to 'b' char?\r\n\r\n`c = ref Unsafe.Add(ref c, 1);` reassigns where `c` points to. It does not change the value that `c` points to. It is how `ref` works in C#.\r\n\r\nYou would need to omit the `ref` to make it do what you are trying to.\r\n\r\nNote that string objects are expected to be immutable. It is not legal to modify their content. It breaks the runtime invariants that can lead to a lot of surprising behaviors."
+      },
+      {
+        "user": "hypeartist",
+        "created_at": "2023-08-22T15:02:13Z",
+        "body": "@jkotas Thank you. That was it. \r\n\r\nPS: as of `string` - yep, it was not best type for example."
+      }
+    ]
+  },
+  {
+    "number": 76175,
+    "title": "Incorrect marshalling of IntPtr in union",
+    "created_at": "2022-09-26T11:05:43Z",
+    "closed_at": "2022-09-26T15:12:07Z",
+    "labels": [
+      "question",
+      "area-Interop-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/76175",
+    "body": "### Description\r\n\r\nNext example shows incorrect output in managed code of `StructA.Y`. For some reason the value is truncated.\r\n\r\nManaged part:\r\n```c#\r\nusing System;\r\nusing System.Runtime.InteropServices;\r\n\r\npublic class Program\r\n{\r\n  [StructLayout(LayoutKind.Sequential)]\r\n  internal struct StructA\r\n  {\r\n    internal IntPtr X;\r\n    internal IntPtr Y;\r\n    internal IntPtr Z;\r\n    internal uint XLength;\r\n    internal uint YLength;\r\n    internal uint ZLength;\r\n  }\r\n\r\n  [StructLayout(LayoutKind.Sequential)]\r\n  internal struct StructB\r\n  {\r\n    internal IntPtr Data;\r\n    internal uint DataLength;\r\n    internal bool Flag;\r\n  }\r\n\r\n  [StructLayout(LayoutKind.Explicit)]\r\n  internal struct UnionStruct\r\n  {\r\n    [FieldOffsetAttribute(0)]\r\n    internal StructA A;\r\n    [FieldOffsetAttribute(0)]\r\n    internal StructB B;\r\n  }\r\n\r\n  [DllImport(\"tmp.so\", EntryPoint = \"test_func\")]\r\n  internal static extern IntPtr testFunc(int value);\r\n\r\n  static void Main(string[] args)\r\n  {\r\n    Console.WriteLine(\"Hello World!\");\r\n\r\n    IntPtr ptr = testFunc(10);\r\n\r\n    var unmanagedStruct = Marshal.PtrToStructure<UnionStruct>(ptr);\r\n\r\n    Console.WriteLine(\">>> managed:\");\r\n    Console.WriteLine(unmanagedStruct.A.X);\r\n    Console.WriteLine(unmanagedStruct.A.Y);\r\n    Console.WriteLine(unmanagedStruct.A.Z);\r\n    Console.WriteLine(unmanagedStruct.A.XLength);\r\n    Console.WriteLine(unmanagedStruct.A.YLength); \r\n    Console.WriteLine(unmanagedStruct.A.ZLength);\r\n\r\n    Console.WriteLine(unmanagedStruct.B.Data);\r\n    Console.WriteLine(unmanagedStruct.B.DataLength);\r\n    Console.WriteLine(unmanagedStruct.B.Flag);\r\n  }\r\n}\r\n```\r\n\r\nNative part:\r\n```c\r\n#include <malloc.h>\r\n#include <string.h>\r\n#include <stdio.h>\r\n#include <stdbool.h>\r\n\r\ntypedef union {\r\n  struct {\r\n    unsigned char *x;\r\n    unsigned char *y;\r\n    unsigned char *z;\r\n    unsigned int x_length;\r\n    unsigned int y_length;\r\n    unsigned int z_length;\r\n  } A;\r\n\r\n  struct {\r\n    unsigned char *data;\r\n    unsigned int size;\r\n    bool flag;\r\n  } B;\r\n} union_s;\r\n\r\nvoid* test_func()\r\n{\r\n  printf(\">>> test_func:\\n\");\r\n\r\n  union_s * x = (union_s *) malloc(sizeof(union_s));\r\n\r\n  x->A.x = (unsigned char *) (0x7ea33f5000);\r\n  x->A.y = (unsigned char *) (0x7ea3440000);\r\n  x->A.z = (unsigned char *) (0x7ea3452c00);\r\n  x->A.x_length = (555);\r\n  x->A.y_length = (666);\r\n  x->A.z_length = (1010);\r\n\r\n  printf(\"x = %p, y = %p, z = %p, x_length = %u, y_length = %u, z_length = %u\\n\", \r\n    x->A.x, x->A.y, x->A.z, x->A.x_length, x->A.y_length, x->A.z_length);\r\n\r\n  return x;\r\n}\r\n```\r\n\r\n\r\n### Reproduction Steps\r\n\r\nCompile native part with `gcc -shared -fPIC 1.c -o tmp.so`. \r\n\r\n\r\n\r\n### Expected behavior\r\n\r\nExpected output:\r\n```\r\nHello World!\r\n>>> test_func:\r\nx = 0x7ea33f5000, y = 0x7ea3440000, z = 0x7ea3452c00, x_length = 555, y_length = 666, z_length = 1010\r\n>>> managed:\r\n543904714752\r\n543905021952\r\n543905098752\r\n555\r\n666\r\n1010\r\n543904714752\r\n2739142656\r\nTrue\r\n```\r\n\r\n### Actual behavior\r\n\r\nActual output:\r\n```\r\nHello World!\r\n>>> test_func:\r\nx = 0x7ea33f5000, y = 0x7ea3440000, z = 0x7ea3452c00, x_length = 555, y_length = 666, z_length = 1010\r\n>>> managed:\r\n543904714752\r\n7034109952\r\n543905098752\r\n555\r\n666\r\n1010\r\n543904714752\r\n2739142656\r\nTrue\r\n```\r\n\r\n`7034109952` value corresponds to truncated `543905021952`.\r\n\r\n### Regression?\r\n\r\n_No response_\r\n\r\n### Known Workarounds\r\n\r\n_No response_\r\n\r\n### Configuration\r\n\r\n- Reproduces on x64/arm64. Managed part of test is built with dotnet sdk 6.0.201 or dotnet sdk 5.0.408.\r\n- Reproduces on 6.0.0, 6.0.9 and main (8bf6a86f1bc309529604430c568c14490d44d069).\r\n- Reproduces with Release/Debug builds of managed part of test.\r\n- Reproduces both for Release/Debug builds of runtime.\r\n- Reproduces both with and without any R2R images.\r\n- Doesn't reproduce if type of `Struct.B.DataLength` is changed to ulong (as well as type of corresponding field in native part).\r\n\r\n### Other information\r\n\r\ncc @alpencolt @jkotas ",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/76175/comments",
+    "author": "gbalykov",
+    "comments": [
+      {
+        "user": "DaZombieKiller",
+        "created_at": "2022-09-26T12:20:57Z",
+        "body": "The issue here is that your `StructB` type contains a managed `bool` field, which causes it to be treated as a non-blittable type. Since `UnionStruct` contains a field of `StructB`, it too is considered non-blittable. This means that `Marshal.PtrToStructure` will attempt to marshal your type instead of just blitting the data across, resulting in the corruption of your pointer.\r\n\r\nFor ease of reproduction, here is a managed replacement for the native `test_func` method, which still reproduces the problem:\r\n```cs\r\nstatic unsafe IntPtr testFunc(int value)\r\n{\r\n    Console.WriteLine(\">>> test_func:\");\r\n    var a = (StructA*)NativeMemory.Alloc((uint)sizeof(StructA));\r\n    a->X = unchecked((nint)0x7ea33f5000);\r\n    a->Y = unchecked((nint)0x7ea3440000);\r\n    a->Z = unchecked((nint)0x7ea3452c00);\r\n    a->XLength = 555;\r\n    a->YLength = 666;\r\n    a->ZLength = 1010;\r\n    Console.WriteLine($\"x = 0x{a->X:X}, y = 0x{a->Y:X}, z = 0x{a->Z:X}, x_length = {a->XLength}, y_length = {a->YLength}, z_length = {a->ZLength}\");\r\n    return (IntPtr)a;\r\n}\r\n```\r\n\r\nThere are a few solutions:\r\n1. Use `*(UnionStruct*)ptr` instead of `Marshal.PtrToStructure`.\r\n2. Change the `bool` field to `byte`, which will cause the types to be considered blittable and no marshaling will occur.\r\n3. Add `[assembly: DisableRuntimeMarshaling]` and use `*(UnionStruct*)ptr` instead of `Marshal.PtrToStructure`.\r\n\r\nMy personal recommendation would be to go with option 2 and use `*(UnionStruct*)ptr` to read the value."
+      },
+      {
+        "user": "gbalykov",
+        "created_at": "2022-09-26T12:35:58Z",
+        "body": "Thanks for response.\r\n\r\nDoesn't it mean then that `Marshal.PtrToStructure` works incorrectly in such case of non-blittable types? Or marshaler is expected to work incorrectly in such case of non-blittable types?\r\n\r\nI've checked solution 2, as a workaround it works, thanks. "
+      },
+      {
+        "user": "DaZombieKiller",
+        "created_at": "2022-09-26T12:54:36Z",
+        "body": "I think this is expected behaviour, even if it may be a bit confusing.\r\n\r\nThink about how the type would be marshaled. Each field will be written in order. The marshaller normalizes booleans to `0` (`false`) or `1` (`true`).\r\n\r\nThey are also marshaled as a Win32 `BOOL` by default, which is a 32-bit integer (so it actually needs `[MarshalAs(UnmanagedType.U1)]` to have a matching layout with native).\r\n\r\nThis means that if your pointer overlaps with a `bool`, the overlapping byte will be normalized, corrupting the value once the marshaller starts marshaling `StructB`.\r\n\r\nTo help with understanding the problem, you can try performing the marshaling yourself. Define `StructB` as:\r\n```cs\r\n[StructLayout(LayoutKind.Sequential)]\r\ninternal struct StructB\r\n{\r\n    internal IntPtr Data;\r\n    internal uint DataLength;\r\n    internal int Flag; // Win32 BOOL = int\r\n}\r\n```\r\nAnd then read the value with:\r\n```cs\r\nvar unmanagedStruct = *(UnionStruct*)ptr;\r\n\r\n// normalize the bool\r\nunmanagedStruct.B.Flag = unmanagedStruct.B.Flag != 0 ? 1 : 0;\r\n```\r\nAnd you will see the same pointer corruption.\r\nAs a result, you can actually \"hide\" the problem by defining `UnionStruct` like this:\r\n```cs\r\n[StructLayout(LayoutKind.Explicit)]\r\ninternal struct UnionStruct\r\n{\r\n    [FieldOffset(0)]\r\n    internal StructB B;\r\n    [FieldOffset(0)]\r\n    internal StructA A;\r\n}\r\n```\r\nBecause `StructB` is marshaled first, you won't see the pointer corruption."
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2022-09-26T15:12:07Z",
+        "body": "```\r\n  struct {\r\n    unsigned char *data;\r\n    unsigned int size;\r\n    bool flag;\r\n  } B;\r\n```\r\nNote that your managed definition of B does not match this structure. Size of `bool` is likely 1 byte in your C/C++ compiler. The default marshalling for `bool` assumes that the size is 4 bytes. This mismatch is contributing to the confusing behavior that you are seeing.\r\n\r\nManual marshalling that @DaZombieKiller suggested is the best way to avoid problems like this for more complex structs with unions, etc. You should use `byte` as managed equivalent for unmanaged `bool`.\r\n\r\nAlso, take a look at `DisableRuntimeMarshallingAttribute` that is new in .NET 7."
+      },
+      {
+        "user": "gbalykov",
+        "created_at": "2022-09-26T15:16:40Z",
+        "body": "@DaZombieKiller @jkotas thanks for detailed descriptions!"
+      }
+    ]
+  },
+  {
+    "number": 46661,
+    "title": "Question about memory barriers in .NET",
+    "created_at": "2021-01-07T01:06:26Z",
+    "closed_at": "2021-01-22T16:55:25Z",
+    "labels": [
+      "question",
+      "area-System.Threading",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/46661",
+    "body": "In .NET, there are some APIs that explicitly mention the use of memory barriers in their implementation (`Volatile`, `Interlocked`, `Thread.MemoryBarrier`, etc.). But then there are other APIs (such as `ThreadPool.QueueUserWorkItem`, `Task.Run`, and `Threading.Timer`) where it's generally assumed that there is an implicit memory barrier, but the API doesn't explicitly state this. For example:\r\n\r\n```c#\r\nprivate int _i;\r\n\r\npublic void Method()\r\n{\r\n    _i = 1;\r\n    var timer = new Timer(_ => Console.WriteLine(_i), null, 0, -1); //Guaranteed to print 1?\r\n}\r\n```\r\n\r\nMore generally, is there somehow a way to tell which APIs guarantee a memory barrier and which don't? I have a hard time blindly _trusting_ without strong API guarantees to fall back on, especially knowing that implementations are allowed change over time.",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/46661/comments",
+    "author": "WizardBrony",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2021-01-07T14:37:09Z",
+        "body": "In order to successfully achieve the defined purpose of the API, any method (Timer's ctor, ThreadPool.QueueUserWorkItem, Task.Run, etc.) which queues work necessarily incurs the appropriate barriers to ensure that the queued work can read any state set by the thread doing the queueing prior to the queueing.  How it achieves that is an implementation detail, but that it achieves it is just necessary for the method to be functionally correct.\r\n\r\n> //Guaranteed to print 1?\r\n\r\nYes (unless some other code changes _i to something else before the callback actually runs)."
+      },
+      {
+        "user": "WizardBrony",
+        "created_at": "2021-01-07T15:12:16Z",
+        "body": "@stephentoub Okay, I can accept that. Does this rationale also apply to all concurrent APIs? For example:\r\n\r\n```c#\r\nprivate class C\r\n{\r\n    public int I;\r\n}\r\n\r\nprivate readonly ConcurrentDictionary<int, C> _dictionary = new ConcurrentDictionary<int, C>();\r\n\r\npublic void Thread1()\r\n{\r\n    var c = new C();\r\n    c.I = 1;\r\n\r\n    // No memory barrier\r\n\r\n    _dictionary.TryAdd(0, c);\r\n}\r\n\r\npublic void Thread2()\r\n{\r\n    if (_dictionary.TryGetValue(0, out var c))\r\n        Console.WriteLine(c.I); // Guaranteed to print 1?\r\n}\r\n```"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2021-01-07T16:33:18Z",
+        "body": "> Does this rationale also apply to all concurrent APIs?\r\n\r\nYes"
+      },
+      {
+        "user": "WizardBrony",
+        "created_at": "2021-01-22T16:43:43Z",
+        "body": "@stephentoub Thank you very much for your time.\n\n---\n\n@stephentoub I'm really sorry to bring this up again, but if you could calm my paranoia about one other API I'd really appreciate it. Is `CancellationTokenSource.Cancel` guaranteed to incur a barrier such that all state changes are visible prior to the request for cancellation?"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2021-01-22T16:55:25Z",
+        "body": "> Is CancellationTokenSource.Cancel guaranteed to incur a barrier such that all state changes are visible prior to the request for cancellation?\r\n\r\nYes."
+      }
+    ]
+  },
+  {
+    "number": 44623,
+    "title": "ThrowAsyncIOInProgress invoked from time to time",
+    "created_at": "2020-11-13T01:05:17Z",
+    "closed_at": "2020-11-13T02:31:59Z",
+    "labels": [
+      "question",
+      "area-System.IO"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/44623",
+    "body": "### Description\r\nCalling into the following method (single threaded) throws exception from time to time. Please help understanding why:\r\n```csharp\r\n        public Task SerializeAsync(IEnumerable<SampleActivity> samples, string destinationFilePath)\r\n        {\r\n            using StreamWriter file = File.CreateText(destinationFilePath);\r\n            return file.WriteAsync(JsonConvert.SerializeObject(samples));\r\n        }\r\n```\r\n\r\nCall stack:\r\n```shell\r\n2020-11-11 17:18:12.819 -08:00 [VRB] System.InvalidOperationException: The stream is currently in use by a previous operation on the stream.\r\n   at System.IO.StreamWriter.ThrowAsyncIOInProgress()\r\n   at System.IO.StreamWriter.Dispose(Boolean disposing)\r\n   at System.IO.TextWriter.Dispose()\r\n   at Project.Client.SampleActivitySerializer.SerializeAsync(IEnumerable`1 samples, String destinationFilePath) in D:\\Repos\\Project\\src\\SampleActivitySerializer.cs:line 14\r\n   at Project.Client.ServiceProfilerProvider.PostStopProcessAsync(PostStopOptions e) in D:\\Repos\\Project\\src\\Provider.cs:line 251\r\n```\r\n\r\n\r\n### Configuration\r\n.NET Core 3.1;\r\nOS: x64, Windows / x64 Ubuntu 16.04 LTS\r\n* Do you know whether it is specific to that configuration?\r\nNot as I know.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/44623/comments",
+    "author": "xiaomi7732",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2020-11-13T02:32:18Z",
+        "body": "The code you wrote is basically:\r\n```C#\r\nStreamWriter file = File.CreateText(destinationFilePath);\r\nTask t = file.WriteAsync(JsonConvert.SerializeObject(samples));\r\nfile.Dispose();\r\nreturn t;\r\n```\r\nIn other words, you're Dispose'ing of the file while the async operation is still in flight.\r\n\r\nI think you likely wanted this instead:\r\n```C#\r\n        public async Task SerializeAsync(IEnumerable<SampleActivity> samples, string destinationFilePath)\r\n        {\r\n            using StreamWriter file = File.CreateText(destinationFilePath);\r\n            return await file.WriteAsync(JsonConvert.SerializeObject(samples));\r\n        }\r\n```\n\n---\n\nClosing as answered.  Please feel free to re-open if there's still an issue to be discussed. Thanks."
+      },
+      {
+        "user": "xiaomi7732",
+        "created_at": "2020-11-13T18:26:49Z",
+        "body": "Thanks @stephentoub for the pointer. I thought the state machine would be the same between those 2, they aren't.\r\n\r\nThis is notes just for myself:\r\nThe state machine, on the caller, for the original code looks like this: no dispose() involved because it is called inside  SerializeAsync(), and as pointed out, at that moment, the task, aka WriteAsyncTask, is not fully completed yet:\r\n\r\n```csharp\r\n\tprivate sealed class <Caller>d__1 : IAsyncStateMachine\r\n\t{\r\n\t\tpublic int <>1__state;\r\n\r\n\t\tpublic AsyncTaskMethodBuilder <>t__builder;\r\n\r\n\t\tpublic Program <>4__this;\r\n\r\n\t\tprivate string <fileName>5__1;\r\n\r\n\t\tprivate SampleActivitySerializer <target>5__2;\r\n\r\n\t\tprivate ConfiguredTaskAwaitable.ConfiguredTaskAwaiter <>u__1;\r\n\r\n\t\tprivate void MoveNext()\r\n\t\t{\r\n\t\t\tint num = <>1__state;\r\n\t\t\ttry\r\n\t\t\t{\r\n\t\t\t\tConfiguredTaskAwaitable.ConfiguredTaskAwaiter awaiter;\r\n\t\t\t\tif (num != 0)\r\n\t\t\t\t{\r\n\t\t\t\t\t<fileName>5__1 = null;\r\n\t\t\t\t\t<target>5__2 = new SampleActivitySerializer();\r\n\t\t\t\t\tawaiter = <target>5__2.SerializeAsync(GenSample(), <fileName>5__1).ConfigureAwait(false).GetAwaiter();\r\n\t\t\t\t\tif (!awaiter.IsCompleted)\r\n\t\t\t\t\t{\r\n\t\t\t\t\t\tnum = (<>1__state = 0);\r\n\t\t\t\t\t\t<>u__1 = awaiter;\r\n\t\t\t\t\t\t<Caller>d__1 stateMachine = this;\r\n\t\t\t\t\t\t<>t__builder.AwaitUnsafeOnCompleted(ref awaiter, ref stateMachine);\r\n\t\t\t\t\t\treturn;\r\n\t\t\t\t\t}\r\n\t\t\t\t}\r\n\t\t\t\telse\r\n\t\t\t\t{\r\n\t\t\t\t\tawaiter = <>u__1;\r\n\t\t\t\t\t<>u__1 = default(ConfiguredTaskAwaitable.ConfiguredTaskAwaiter);\r\n\t\t\t\t\tnum = (<>1__state = -1);\r\n\t\t\t\t}\r\n\t\t\t\tawaiter.GetResult();\r\n\t\t\t}\r\n\t\t\tcatch (Exception exception)\r\n\t\t\t{\r\n\t\t\t\t<>1__state = -2;\r\n\t\t\t\t<fileName>5__1 = null;\r\n\t\t\t\t<target>5__2 = null;\r\n\t\t\t\t<>t__builder.SetException(exception);\r\n\t\t\t\treturn;\r\n\t\t\t}\r\n\t\t\t<>1__state = -2;\r\n\t\t\t<fileName>5__1 = null;\r\n\t\t\t<target>5__2 = null;\r\n\t\t\t<>t__builder.SetResult();\r\n\t\t}\r\n\t\tvoid IAsyncStateMachine.MoveNext()\r\n\t\t{\r\n\t\t\t//ILSpy generated this explicit interface implementation from .override directive in MoveNext\r\n\t\t\tthis.MoveNext();\r\n\t\t}\r\n\r\n\t\t[DebuggerHidden]\r\n\t\tprivate void SetStateMachine(IAsyncStateMachine stateMachine)\r\n\t\t{\r\n\t\t}\r\n\r\n\t\tvoid IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)\r\n\t\t{\r\n\t\t\t//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine\r\n\t\t\tthis.SetStateMachine(stateMachine);\r\n\t\t}\r\n\t}\r\n```\r\n\r\nWrite it the other way, the dispose is called on 'final' statement, after all the operation is done, right before returning.\r\n\r\n```csharp\r\n[CompilerGenerated]\r\nprivate sealed class <SerializeAsync2>d__1 : IAsyncStateMachine\r\n{\r\n\tpublic int <>1__state;\r\n\r\n\tpublic AsyncTaskMethodBuilder <>t__builder;\r\n\r\n\tpublic IEnumerable<SampleActivity> samples;\r\n\r\n\tpublic string destinationFilePath;\r\n\r\n\tpublic SampleActivitySerializer <>4__this;\r\n\r\n\tprivate StreamWriter <file>5__1;\r\n\r\n\tprivate TaskAwaiter <>u__1;\r\n\r\n\tprivate void MoveNext()\r\n\t{\r\n\t\tint num = <>1__state;\r\n\t\ttry\r\n\t\t{\r\n\t\t\tif (num != 0)\r\n\t\t\t{\r\n\t\t\t\t<file>5__1 = File.CreateText(destinationFilePath);\r\n\t\t\t}\r\n\t\t\ttry\r\n\t\t\t{\r\n\t\t\t\tTaskAwaiter awaiter;\r\n\t\t\t\tif (num != 0)\r\n\t\t\t\t{\r\n\t\t\t\t\tawaiter = <file>5__1.WriteAsync(JsonConvert.SerializeObject(samples)).GetAwaiter();\r\n\t\t\t\t\tif (!awaiter.IsCompleted)\r\n\t\t\t\t\t{\r\n\t\t\t\t\t\tnum = (<>1__state = 0);\r\n\t\t\t\t\t\t<>u__1 = awaiter;\r\n\t\t\t\t\t\t<SerializeAsync2>d__1 stateMachine = this;\r\n\t\t\t\t\t\t<>t__builder.AwaitUnsafeOnCompleted(ref awaiter, ref stateMachine);\r\n\t\t\t\t\t\treturn;\r\n\t\t\t\t\t}\r\n\t\t\t\t}\r\n\t\t\t\telse\r\n\t\t\t\t{\r\n\t\t\t\t\tawaiter = <>u__1;\r\n\t\t\t\t\t<>u__1 = default(TaskAwaiter);\r\n\t\t\t\t\tnum = (<>1__state = -1);\r\n\t\t\t\t}\r\n\t\t\t\tawaiter.GetResult();\r\n\t\t\t}\r\n\t\t\tfinally\r\n\t\t\t{\r\n\t\t\t\tif (num < 0 && <file>5__1 != null)\r\n\t\t\t\t{\r\n\t\t\t\t\t((IDisposable)<file>5__1).Dispose();\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t\tcatch (Exception exception)\r\n\t\t{\r\n\t\t\t<>1__state = -2;\r\n\t\t\t<file>5__1 = null;\r\n\t\t\t<>t__builder.SetException(exception);\r\n\t\t\treturn;\r\n\t\t}\r\n\t\t<>1__state = -2;\r\n\t\t<file>5__1 = null;\r\n\t\t<>t__builder.SetResult();\r\n\t}\r\n\r\n\tvoid IAsyncStateMachine.MoveNext()\r\n\t{\r\n\t\t//ILSpy generated this explicit interface implementation from .override directive in MoveNext\r\n\t\tthis.MoveNext();\r\n\t}\r\n\r\n\t[DebuggerHidden]\r\n\tprivate void SetStateMachine(IAsyncStateMachine stateMachine)\r\n\t{\r\n\t}\r\n\r\n\tvoid IAsyncStateMachine.SetStateMachine(IAsyncStateMachine stateMachine)\r\n\t{\r\n\t\t//ILSpy generated this explicit interface implementation from .override directive in SetStateMachine\r\n\t\tthis.SetStateMachine(stateMachine);\r\n\t}\r\n}\r\n```\r\n"
+      }
+    ]
+  },
+  {
+    "number": 39627,
+    "title": "GetFromJsonAsync(HttpClient, String, Type, CancellationToken) Losing Track of its Type",
+    "created_at": "2020-07-20T12:46:04Z",
+    "closed_at": "2020-07-21T22:31:43Z",
+    "labels": [
+      "question",
+      "area-System.Net.Http"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/39627",
+    "body": "Using GetFromJsonAsync(HttpClient, String, Type, CancellationToken) via Blazor hosted WebAssembly (Version 16.7.0 Preview 4.0 and WebAssembly v5.0.0-preview.6.20312.15.\r\n\r\nI don't want to use the `GetFromJsonAsync<TValue>(HttpClient, String, CancellationToken)` because I specifically don't want to make any explicit casts. The following only works successfully with the explicit cast, it won't return the result from the Json call without it.\r\n\r\nThis should work, since it knows it's a `List<Means>` type via the DataType parameter but does not:\r\n`Items = ((List<TableEntity>)await Server.GetFromJsonAsync(GetAPIs, DataType));`\r\n\r\nThis does, but the need for explicit casting takes away the power of the non TValue version of the function:\r\n\r\n`Items = ((List<Means>)await Server.GetFromJsonAsync(GetAPIs, DataType)).Cast<TableEntity>().ToList();`\r\n\r\nNote: GetAPIs a string with the correct path to the API on the controller. DataType is set as `typeof(List<Means>)` and Items is `List<TableEntity>`.\r\n\r\nPerhaps I'm missing something, but I expect the source code may have a bug.\r\n\r\nThank you in advance - EP\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/39627/comments",
+    "author": "ericpincus",
+    "comments": [
+      {
+        "user": "scalablecory",
+        "created_at": "2020-07-21T15:26:32Z",
+        "body": "The behavior you're seeing is that you can't cast a `List` of one type as a `List` of another type. This is happening outside of `GetFromJsonAsync`.\r\n\r\nAs an example of what you're seeing, this will fail for the same reason:\r\n```c#\r\nList<Means> listA = new List<Means>();\r\nList<TableEntity> listB = listA;\r\n```\r\n\r\nCalling `.Cast<TableEntity>.ToList()` is one correct solution, if you do need a `List`. Another, if you don't need to modify the list, is to use the covariant `IEnumerable` instead of `List`:\r\n\r\n```c#\r\nItems = ((IEnumerable<TableEntity>)await Server.GetFromJsonAsync(GetAPIs, DataType));\r\n```"
+      },
+      {
+        "user": "ericpincus",
+        "created_at": "2020-07-21T22:31:34Z",
+        "body": "Thank you @scalablecory - IEnumerable is an acceptable workaround for my purposes."
+      }
+    ]
+  },
+  {
+    "number": 34097,
+    "title": "System.InvalidOperationException: StandardIn has not been redirected",
+    "created_at": "2020-03-25T22:51:00Z",
+    "closed_at": "2020-03-30T15:36:42Z",
+    "labels": [
+      "question",
+      "area-System.Diagnostics.Process"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/34097",
+    "body": "I got the following exception from time to time in my application whereas the standard input is  redirected.\r\n\r\n````\r\nException has occurred: CLR/System.InvalidOperationException\r\nAn exception of type 'System.InvalidOperationException' occurred in System.Diagnostics.Process.dll but was not handled in user code: 'StandardIn has not been redirected.'\r\n   at System.Diagnostics.Process.get_StandardInput()\r\n   at repro_process.Program.ExecuteProcessAsync(ProcessStartInfo psi) in /home/meziantou/repro-process/Program.cs:line 72\r\n   at repro_process.Program.<>c.<Main>b__0_0(Int32 i) in /home/meziantou/repro-process/Program.cs:line 27\r\n   at System.Threading.Tasks.Parallel.<>c__DisplayClass19_0`1.<ForWorker>b__1(RangeWorker& currentWorker, Int32 timeout, Boolean& replicationDelegateYieldedBeforeCompletion)\r\n````\r\n\r\nI tried to make a small repro of the code I have in production. Note that it doesn't always throw the exception. You may need to run the code 10 times to get the exception.\r\n\r\nA similar exception sometimes occurs on `process.BeginErrorReadLine()` or `process.BeginOutputReadLine()` with a similar message indicating the the standard output/error is not redirected.\r\n\r\n````c#\r\nusing System;\r\nusing System.Diagnostics;\r\nusing System.Threading.Tasks;\r\n\r\nnamespace repro_process\r\n{\r\n    class Program\r\n    {\r\n        static void Main()\r\n        {\r\n            // In the actual code, multiple unit tests (xUnit) run in parallel so I tried to reproduce this behavior by using Parallel.For\r\n            Parallel.For(0, 10000, i =>\r\n            {\r\n                var psi = new ProcessStartInfo\r\n                {\r\n                    FileName = \"git\",\r\n                    ArgumentList =\r\n                    {\r\n                        \"config\",\r\n                        \"--global\",\r\n                        \"test.a\",\r\n                        \"abc\" + i,\r\n                    },\r\n                    RedirectStandardError = true,\r\n                    RedirectStandardInput = true,\r\n                    RedirectStandardOutput = true,\r\n                };\r\n                ExecuteProcessAsync(psi).Wait(); // In the actual code, there is no wait/Result, only await\r\n                Console.WriteLine(i);\r\n            });\r\n        }\r\n\r\n        private static Task<bool> ExecuteProcessAsync(ProcessStartInfo psi)\r\n        {\r\n            var process = new System.Diagnostics.Process\r\n            {\r\n                StartInfo = psi,\r\n                EnableRaisingEvents = true,\r\n            };\r\n\r\n            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);\r\n            process.Exited += (sender, e) =>\r\n            {\r\n                try\r\n                {\r\n                    process.WaitForExit();\r\n                    process.Dispose();\r\n                    tcs.TrySetResult(true);\r\n                }\r\n                catch (Exception ex)\r\n                {\r\n                    tcs.SetException(ex);\r\n                }\r\n            };\r\n\r\n            process.Start();\r\n\r\n            if (psi.RedirectStandardOutput)\r\n            {\r\n                process.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };\r\n                process.BeginOutputReadLine();\r\n            }\r\n\r\n            if (psi.RedirectStandardError)\r\n            {\r\n                process.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };\r\n                process.BeginErrorReadLine();\r\n            }\r\n\r\n            if (psi.RedirectStandardInput)\r\n            {\r\n                process.StandardInput.Close();\r\n            }\r\n\r\n            return tcs.Task;\r\n        }\r\n    }\r\n}\r\n````\r\n\r\n**Environment:**\r\n- .NET Core 3.1.3 but I also get the exception on 3.1.0 and 3.1.2\r\n\r\n````\r\n$> lsb_release -a\r\nNo LSB modules are available.\r\nDistributor ID: Ubuntu\r\nDescription:    Ubuntu 18.04.2 LTS\r\nRelease:        18.04\r\nCodename:       bionic\r\n\r\n$> uname -a\r\nLinux DESKTOP-TV4IPEK 4.4.0-19041-Microsoft #1-Microsoft Fri Dec 06 14:06:00 PST 2019 x86_64 x86_64 x86_64 GNU/Linux\r\n\r\n$> lscpu\r\nArchitecture:        x86_64\r\nCPU op-mode(s):      32-bit, 64-bit\r\nByte Order:          Little Endian\r\nCPU(s):              4\r\nOn-line CPU(s) list: 0-3\r\nThread(s) per core:  1\r\nCore(s) per socket:  4\r\nSocket(s):           1\r\nVendor ID:           GenuineIntel\r\nCPU family:          6\r\nModel:               94\r\nModel name:          Intel(R) Core(TM) i5-6600 CPU @ 3.30GHz\r\nStepping:            3\r\nCPU MHz:             3301.000\r\nCPU max MHz:         3301.0000\r\nBogoMIPS:            6602.00\r\nHypervisor vendor:   Windows Subsystem for Linux\r\nVirtualization type: container\r\nFlags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm pni pclmulqdq dtes64 est tm2 ssse3 fma cx16 xtpr pdcm pcid sse4_1 sse4_2 movbe popcnt aes xsave osxsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap clflushopt ibrs ibpb stibp ssbd\r\n````\r\n\r\nEdit: I've just got the issue on Windows too (.NET Core 3.1.2).",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/34097/comments",
+    "author": "meziantou",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2020-03-30T01:16:15Z",
+        "body": "This looks like a bug in your repro. Your `process.Exited` event handler is calling `process.Dispose`.  That can race with your subsequent call to `process.StandardInput.Close()`.  If the process exits and the `process.Dispose` is invoked before you access `process.StandardInput`, the call to `StandardInput` will throw, by design."
+      },
+      {
+        "user": "meziantou",
+        "created_at": "2020-03-30T15:36:42Z",
+        "body": "You are right! That's explain why it occurs very rarely. I've seen the new method `WaitForExitAsync` in the repository. I'll take inspiration from it to fix my code :)"
+      },
+      {
+        "user": "pakrym",
+        "created_at": "2020-11-12T21:25:17Z",
+        "body": "Wonder if it's worth throwing an `ObjectDisposedException` instead to make this situation more discoverable."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2020-11-24T05:34:54Z",
+        "body": "> Wonder if it's worth throwing an ObjectDisposedException instead to make this situation more discoverable.\r\n\r\nSeems reasonable to consider.\r\ncc: @adamsitnik @eiriktsarpalis"
+      }
+    ]
+  },
+  {
+    "number": 33935,
+    "title": "System.Runtime.Loader Nuget out of date AssemblyLoadContext constructors",
+    "created_at": "2020-03-22T20:50:28Z",
+    "closed_at": "2020-03-23T06:57:58Z",
+    "labels": [
+      "question",
+      "area-AssemblyLoader-coreclr",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/33935",
+    "body": "I am making use of the collectable assemblies functionality in AssemblyLoadContext released with Core3.1.  It works fine within a Core3.1 project, but if i try to move it out to a Standard2.1 library for reuse, the System.Runtime.Loader Nuget is out of date and does not have the new collectable constructor.\r\n\r\nDoes the Nuget need updating, or is there another reason for this?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/33935/comments",
+    "author": "luhis",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2020-03-23T03:44:45Z",
+        "body": ".NET Standard 2.1 does not include collectible assemblies feature. You have to target netcoreapp3.0+ to use collectible assemblies.\r\n\r\nSystem.Runtime.Loader is left over from .NET Core 1.0 where the platform was composed from many small NuGet packages. We are not planning to update these NuGet packages."
+      },
+      {
+        "user": "luhis",
+        "created_at": "2020-03-23T06:57:58Z",
+        "body": "ah, that explains it.  thanks"
+      }
+    ]
+  },
+  {
+    "number": 31698,
+    "title": "Encoding.UTF8.GetString: The output char buffer is too small...",
+    "created_at": "2020-02-03T21:57:21Z",
+    "closed_at": "2020-02-04T00:46:00Z",
+    "labels": [
+      "question",
+      "area-System.Text.Encoding",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/31698",
+    "body": "NET 3.1\r\n\r\nFeeding some garbage data into Encoding.UTF8.GetString, I occasionally get this exception:\r\n`System.ArgumentException: 'The output char buffer is too small to contain the decoded characters, encoding 'Unicode (UTF-8)' fallback 'System.Text.DecoderReplacementFallback'. (Parameter 'chars')'`\r\n\r\nStack trace:\r\n```\r\n   at System.Text.Encoding.ThrowCharsOverflow()\r\n   at System.Text.Encoding.ThrowCharsOverflow(DecoderNLS decoder, Boolean nothingDecoded)\r\n   at System.Text.Encoding.GetCharsWithFallback(ReadOnlySpan`1 bytes, Int32 originalBytesLength, Span`1 chars, Int32 originalCharsLength, DecoderNLS decoder)\r\n   at System.Text.UTF8Encoding.GetCharsWithFallback(ReadOnlySpan`1 bytes, Int32 originalBytesLength, Span`1 chars, Int32 originalCharsLength, DecoderNLS decoder)\r\n   at System.Text.Encoding.GetCharsWithFallback(Byte* pOriginalBytes, Int32 originalByteCount, Char* pOriginalChars, Int32 originalCharCount, Int32 bytesConsumedSoFar, Int32 charsWrittenSoFar)\r\n   at System.Text.UTF8Encoding.GetChars(Byte* bytes, Int32 byteCount, Char* chars, Int32 charCount)\r\n   at System.String.CreateStringFromEncoding(Byte* bytes, Int32 byteLength, Encoding encoding)\r\n   at System.Text.Encoding.GetString(ReadOnlySpan`1 bytes)\r\n   at ...Our code...\r\n```\r\n\r\nI was accidentally using it on binary data while doing some debugging.  \r\n\r\nIt happened using the ReadOnlySpan<byte> overload, but these byte arrays are the data:\r\n```\r\nnew byte[] { 1,6,104,97,115,104,116,120,1,32,125,34,109,16,93,67,238,247,111,164,124,222,214,204,168,122,3,194,48,190,150,196,26,251,175,111,65,1,97,0,30,248,0,4,207,225,40,0 } ;\r\nnew byte[] { 1,6,104,97,115,104,116,120,1,32,146,49,170,24,95,32,149,96,115,203,170,163,193,27,202,95,134,122,121,85,104,162,76,212,216,15,177,166,148,80,204,57,0,4,222,80,41,0 } ;\r\n```\r\n\r\nNeither of these is reproducible though.\r\n\r\nEven when visual studio has the \"Exception Thrown!\" exception window open and highlighted, re-executing the same statement doesn't throw an exception the second time.\r\n\r\nMy suspicion would be something to do with ArrayPool, if that's even used by this method.\r\n\r\nNot sure how to be more useful with this one...",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/31698/comments",
+    "author": "joshlang",
+    "comments": [
+      {
+        "user": "GrabYourPitchforks",
+        "created_at": "2020-02-04T00:42:34Z",
+        "body": "Normally this means that the input buffer's contents have changed in the middle of the operation. The `Encoding.GetString(ReadOnlySpan<char>)` API performs two passes: the first pass to calculate the necessary `string` length, and the second pass to perform the actual conversion. If the data within the byte buffer changes between these two operations, the conversion routine might fail because the number of resulting output chars could have increased.\n\n---\n\n@joshlang - double-check that another thread in your application isn't mutating the buffers passed to this API while the operation is in progress. If you're seeing that this exception still occurs with static data, please let me know so that we can investigate further."
+      },
+      {
+        "user": "joshlang",
+        "created_at": "2020-02-04T00:46:00Z",
+        "body": "I just did.  I've confirmed that it's probably what happened.  I was calling TrySetResult on a TaskCompletionSource before doing the ghetto debug outputting statements that caused the exception.\r\n\r\nYou're a genius.  I'll close this issue.  Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 2385,
+    "title": " WebRequest.DefaultWebProxy Return null exeption",
+    "created_at": "2020-01-30T13:40:09Z",
+    "closed_at": "2020-01-30T14:34:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/2385",
+    "body": "Hello,\r\n\r\nI have migrated my project .NET FrameWork to .NET Core, and i have a null exeption when i used \r\nWebRequest.DefaultWebProxy.GetType().GetProperty(\"WebProxy\", BindingFlags.NonPublic | BindingFlags.Instance);\r\n\r\n\r\n\r\nCordially",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/2385/comments",
+    "author": "HASSEN-MEDDEB-ATOS",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2020-01-30T13:46:54Z",
+        "body": "> WebRequest.DefaultWebProxy.GetType().GetProperty(\"WebProxy\", BindingFlags.NonPublic | BindingFlags.Instance);\r\n\r\nThis is trying to use private implementation details. They're private for a reason, and are in no way guaranteed to work the same from version to version."
+      },
+      {
+        "user": "HASSEN-MEDDEB-ATOS",
+        "created_at": "2020-01-30T14:01:37Z",
+        "body": "Hello, thank you for your answer, what can i do in this situation, i readed in some other disccsussion that i should delete   WebRequest.DefaultWebProxy; beacause it's not supported, \r\n"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2020-01-30T14:03:55Z",
+        "body": "> i readed in some other disccsussion that i should delete WebRequest.DefaultWebProxy; beacause it's not supported\r\n\r\nWebRequest.DefaultWebProxy should work fine.  Did you try it and it doesn't work?  If so, what version of .NET Core are you using?"
+      },
+      {
+        "user": "HASSEN-MEDDEB-ATOS",
+        "created_at": "2020-01-30T14:07:50Z",
+        "body": "I used .Net Core 3.1, WebRequest.DefaultWebProxy.GetType().GetProperty(\"WebProxy\", BindingFlags.NonPublic | BindingFlags.Instance); at this line, it return NullExeption"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2020-01-30T14:08:42Z",
+        "body": "Why are you doing \".GetType().GetProperty(\"WebProxy\", BindingFlags.NonPublic | BindingFlags.Instance)\"?  That's the bad part.  Don't do that ;)"
+      },
+      {
+        "user": "HASSEN-MEDDEB-ATOS",
+        "created_at": "2020-01-30T14:13:36Z",
+        "body": "This will force the DefaultWebProxy to use default credentials\r\n wProxy.Credentials = System.Net.CredentialCache.DefaultNetworkCredentials;\r\n"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2020-01-30T14:23:05Z",
+        "body": "You can do that with just WebRequest.DefaultWebProxy.  It is the IWebProxy.  You don't need to try to use its private members, which is what that NonPublic reflection code is trying to do.\r\n```C#\r\nWebRequest.DefaultWebProxy.Credentials = CredentialCache.DefaultNetworkCredentials;\r\n```"
+      },
+      {
+        "user": "HASSEN-MEDDEB-ATOS",
+        "created_at": "2020-01-30T14:27:42Z",
+        "body": "Perfect ! tkank you, i find it also\r\n\r\nCordially ;) "
+      }
+    ]
+  },
+  {
+    "number": 1191,
+    "title": "How to disable using HTTP_PROXY as default",
+    "created_at": "2019-12-27T16:05:19Z",
+    "closed_at": "2019-12-28T16:07:11Z",
+    "labels": [
+      "question",
+      "area-System.Net.Http"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/1191",
+    "body": "#36553\r\n\r\nHow can we turn off this new default implementation?\r\n\r\nI have environment variables HTTP_PROXY. But I want to use system-level proxy default instead of environment variables. I don't want to delete the environment variables because it used by other applications. How can I set to go for system proxy?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/1191/comments",
+    "author": "dhmuralikrishna",
+    "comments": [
+      {
+        "user": "scalablecory",
+        "created_at": "2019-12-27T16:19:58Z",
+        "body": "You'll need to remove the envvars, either prior to launching the app or in your app itself prior to using HttpClient:\r\n\r\n```c#\r\nEnvironment.SetEnvironmentVariable(\"HTTP_PROXY\", null);\r\nEnvironment.SetEnvironmentVariable(\"HTTPS_PROXY\", null);\r\nEnvironment.SetEnvironmentVariable(\"ALL_PROXY\", null);\r\nEnvironment.SetEnvironmentVariable(\"NO_PROXY\", null);\r\n```"
+      },
+      {
+        "user": "dhmuralikrishna",
+        "created_at": "2019-12-28T16:07:08Z",
+        "body": "Thanks that works. You are awesome \ud83d\udc4f "
+      }
+    ]
+  },
+  {
+    "number": 31419,
+    "title": "about method Write(byte[] buffer, int offset, int count)   the  class of memoryStream ",
+    "created_at": "2019-11-07T08:26:40Z",
+    "closed_at": "2020-02-01T05:24:09Z",
+    "labels": [
+      "question",
+      "area-System.IO"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/31419",
+    "body": "if ((count <= 8) && (buffer != _buffer))\r\n            {\r\n                int byteCount = count;\r\n                while (--byteCount >= 0)\r\n                {\r\n                    _buffer[_position + byteCount] = buffer[offset + byteCount];\r\n                }\r\n            }\r\n            else\r\n            {\r\n                Buffer.BlockCopy(buffer, offset, _buffer, _position, count);\r\n            }\r\n\r\n\r\nwhy does the  count of buffer more than 8 and Less than or equal to 8 use different copy method",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/31419/comments",
+    "author": "changhengyu",
+    "comments": [
+      {
+        "user": "Gnbrkm41",
+        "created_at": "2019-11-07T08:50:52Z",
+        "body": "`Buffer.BlockCopy` is implemented with a private method called `Memmove` which either calls a native `memmove` function, probably written in assembly for maximum performance, or for smaller sizes, use tricks like unrolling and moving bytes in blocks to move the data more efficiently. The number 8 there probably is something that was figured out to be faster with a simple loop, because the Memmove method involves a few checks which probably isn't worth it for small data.\r\n\r\n(tl;dr: performance optimisations)"
+      }
+    ]
+  },
+  {
+    "number": 31386,
+    "title": "Reasons behind having duplicate type for S.R.CS.Unsafe and Internals.R.CS.Unsafe",
+    "created_at": "2019-11-04T06:32:21Z",
+    "closed_at": "2020-02-01T05:20:31Z",
+    "labels": [
+      "question",
+      "area-System.Runtime.CompilerServices"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/31386",
+    "body": "All the members are identical, but it seems weird to have two separate types that have all the same members; is there a reason behind that? It doesn't feel quite right, and would be nice if it could be merged into S.R.CS one.",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/31386/comments",
+    "author": "Gnbrkm41",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2019-11-04T16:55:51Z",
+        "body": "Internal.S.R.CS.Unsafe has a subset of methods for internal consumption by S.P.CoreLib. It is implement by complex IL patching - since it is not possible to write IL in CoreLib directly.\r\n\r\nS.R.CS.Unsafe has all methods, it is implemented directly in IL and it ships as separate NuGet package.\r\n\r\nIf we merged these two:\r\n- We would need to use the complex IL patching (or some alternative) to implement all methods.\r\n- S.R.CS.Unsafe NuGet package would be dead. Once the type moves from NuGet package to CoreLib, the NuGet package gets frozen and cannot evolve anymore."
+      }
+    ]
+  },
+  {
+    "number": 30894,
+    "title": "Q: TaskStatus.Canceled for non-matching OperationCanceledException",
+    "created_at": "2019-09-18T21:10:55Z",
+    "closed_at": "2020-02-01T04:29:52Z",
+    "labels": [
+      "question",
+      "area-System.Threading.Tasks"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/30894",
+    "body": "When I run:\r\n```cs\r\n        static void Main(string[] args)\r\n        {\r\n            Task fooTask = Foo();\r\n            System.Console.WriteLine(fooTask.Status);\r\n            Task tokenTask = Task.Run(() => throw new OperationCanceledException(), new CancellationTokenSource().Token);\r\n            tokenTask.ContinueWith(t => System.Console.WriteLine(t.Status)).Wait();\r\n        }\r\n\r\n        static async Task Foo()\r\n        {\r\n            throw new OperationCanceledException();\r\n        }\r\n```\r\nit outputs:\r\n```\r\nCanceled\r\nCanceled\r\n```\r\nI expected the Tasks to be in the `Faulted` state because the `OperationCanceledException` isn't associated with the Task token.\r\n\r\nWhy are these Tasks `Canceled`?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/30894/comments",
+    "author": "tmds",
+    "comments": [
+      {
+        "user": "davidsh",
+        "created_at": "2019-09-19T04:04:58Z",
+        "body": "@stephentoub "
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-09-19T12:55:44Z",
+        "body": "This is by design.\r\n\r\nFor all `async` methods, `OperationCanceledException` is special-cased to complete the returned `Task` as `Canceled` rather than `Faulted`.  It pays zero attention to cancellation tokens, because the C# language / compiler for `async` methods has zero knowledge of cancellation tokens.  As such, rather than having all exceptions (even if for cancellation) be `Faulted`, we chose to special-case all `OperationCanceledExceptions`.\r\n\r\nThe `Task.Run` case is just an extension of that.  There are multiple `Task.Run` overloads that differ only by delegate return type, and since your lambda always throws and doesn't have any return statements that would indicate which delegate type to map to and thus which overload to map to, the C# betterness rules are selecting the `Func<Task>` overload.  That overload (as well as the `Func<Task<TResult>>` overload) are primarily intended to be used with `async` methods, as they \"unwrap\" the returned task in order to marshal it to the task returned from the `Run` call.  In order to not have a subtle difference in behavior based on whether the delegate synchronously or asynchronously throws an `OperationCanceledException`, this overload similarly treats all `OperationCanceledException`s as cancellation."
+      },
+      {
+        "user": "tarekgh",
+        "created_at": "2019-09-19T16:06:34Z",
+        "body": "@tmds I am closing this issue per @stephentoub answer. Feel free to respond back with any more questions if there is anything unclear. Thanks."
+      },
+      {
+        "user": "tmds",
+        "created_at": "2019-09-19T17:51:58Z",
+        "body": "Yes, question answered. Thanks @stephentoub ."
+      }
+    ]
+  },
+  {
+    "number": 30439,
+    "title": "Crypto: Is it safe to pool X509Chain objects without resetting the X509ChainPolicy?",
+    "created_at": "2019-07-31T19:55:52Z",
+    "closed_at": "2020-02-01T03:42:08Z",
+    "labels": [
+      "question",
+      "area-System.Security"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/30439",
+    "body": "I\u2019m building a high-throughput message broker in .net core (2.1 today, upgrading to 3.0-preview7 soon), and need to do client certificate based authentication with a custom cert chain (that I set up on the chain.ChainPolicy.ExtraStore).\r\n\r\nTo reduce GC pressure, I tend to pool all the byte arrays / batch message arrays / etc.\r\n\r\nIs it a good idea to also pool X509Chain objects? And not do a chain.Policy.Reset call on every rent/return?\r\n\r\nIt\u2019s the X509ChainPolicy.ExtraStore allocation and 5x X509ChainPolicy.ExtraStore.Add(customCert) calls that lead to array resizing, that I want to avoid.\r\n\r\n-\tWhen the chain is returned to the pool, I dispose off all the chainElement.Certificate objects and do a chain.Reset() to dispose off the _pal object.\r\n-\tI am explicitly resetting chain.ChainPolicy.VerificationTime to DateTime.Now after every pool.Rent().\r\n\r\nIn other words - Does the X509ChainPolicy ever end up holding on to any valid / invalid state from an old call to chain.Build()?\r\n\r\nI couldn\u2019t find anything in the source code that says the Policy leads to any cross-talk between multiple chain.Build() calls using the same Policy object, but still wanted someone from corefx to weigh in and give an all clear.\r\n\r\nThanks!\r\n\r\ncc @bartonjs @stephentoub \r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/30439/comments",
+    "author": "hiteshmadan",
+    "comments": [
+      {
+        "user": "bartonjs",
+        "created_at": "2019-08-01T15:33:06Z",
+        "body": "`X509ChainPolicy` is just an options input type in the end, nothing is written back to it during chain walking.  It should be fine to keep it long term if (as you already acknowledged) you are explicitly setting VerificationTime before each call to X509Chain.Build."
+      },
+      {
+        "user": "hiteshmadan",
+        "created_at": "2019-08-01T17:13:02Z",
+        "body": "ok. thanks!"
+      }
+    ]
+  },
+  {
+    "number": 30409,
+    "title": "Dataflow does not process messages in parallel?",
+    "created_at": "2019-07-29T13:42:34Z",
+    "closed_at": "2020-02-01T03:39:02Z",
+    "labels": [
+      "question",
+      "area-System.Threading.Tasks"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/30409",
+    "body": "Hello.\r\nIt seems that specifying MaxDegreeOfParallelism does not actually allows dataflow blocks to process multiple messages in parallel. Or I'm missing something?\r\n\r\n```\r\npublic class DataflowTests\r\n{\r\n    private readonly ITestOutputHelper output;\r\n\r\n\r\n    public DataflowTests(ITestOutputHelper output)\r\n    {\r\n        this.output = output;\r\n    }\r\n\r\n    [Fact]\r\n    public async Task Test()\r\n    {\r\n        // arrange\r\n        var second_item_finished = new SemaphoreSlim(0, 1);\r\n        var completed_items = new ConcurrentBag<string>();\r\n\r\n        var start_block = new BufferBlock<string>(new DataflowBlockOptions { BoundedCapacity = 10 });\r\n\r\n        var process_block = new TransformBlock<string, string>(\r\n            async x =>\r\n            {\r\n                // await Task.Yield();\r\n\r\n                this.output.WriteLine(\"Process block: {0}\", x);\r\n\r\n                if (x == \"1\")\r\n                    await second_item_finished.WaitAsync();\r\n\r\n                return x;\r\n            },\r\n            new ExecutionDataflowBlockOptions\r\n            {\r\n                MaxDegreeOfParallelism = 4,\r\n                BoundedCapacity = 10\r\n            });\r\n\r\n\r\n        var final_block = new ActionBlock<string>(\r\n            x =>\r\n            {\r\n                this.output.WriteLine(\"Final block: {0}\", x);\r\n\r\n                if (x == \"2\")\r\n                    second_item_finished.Release();\r\n\r\n                completed_items.Add(x);\r\n            },\r\n            new ExecutionDataflowBlockOptions\r\n            {\r\n                MaxDegreeOfParallelism = 4,\r\n                BoundedCapacity = 10\r\n            });\r\n\r\n        start_block.LinkTo(process_block, new DataflowLinkOptions { PropagateCompletion = true });\r\n        process_block.LinkTo(final_block, new DataflowLinkOptions { PropagateCompletion = true });\r\n\r\n        // act\r\n        foreach (var item in new[] { \"1\", \"2\" })\r\n            if (!await start_block.SendAsync(item))\r\n                this.output.WriteLine(\"Unable to send: {0}\", item);\r\n\r\n        start_block.Complete();\r\n\r\n        if (!final_block.Completion.Wait(2000))\r\n            throw new TimeoutException();\r\n\r\n\r\n        // assert\r\n        completed_items.Should().BeEquivalentTo(\"1\", \"2\");\r\n    }\r\n}\r\n```\r\n\r\nI've tried changing MaxMessagesPerTask to 1 for both process and final block and got the same result (timeout exception).",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/30409/comments",
+    "author": "MichaelLogutov",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2019-07-29T14:04:01Z",
+        "body": "By default items are propagated from a block in order.  So if you block the processing of item 1 such that item 1 won't complete until item 2 has propagated, you will deadlock.  Try setting EnsureOrdered to false on your ExecutionDataflowBlockOptions."
+      },
+      {
+        "user": "MichaelLogutov",
+        "created_at": "2019-07-29T21:07:56Z",
+        "body": "Thanks! It works. I must admit - this is not default behavior I was expecting. I thought that just specifying max DOP was enough to get dataflow block working in parallel. But it seems that without changing EnsureOrdered max DOP ignored and dataflow block always working in single task mode. Am I correct?"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-07-29T21:09:40Z",
+        "body": "> But it seems that without changing EnsureOrdered max DOP ignored and dataflow block always working in single task mode.  Am I correct?\r\n\r\nNo.  An individual block will still be able to process up to DOP operations in parallel, but that's not what your test is doing."
+      },
+      {
+        "user": "MichaelLogutov",
+        "created_at": "2019-07-29T21:25:03Z",
+        "body": "Thanks. I got it."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-07-29T21:26:15Z",
+        "body": "Thanks."
+      }
+    ]
+  },
+  {
+    "number": 30188,
+    "title": "Double.TryParse succeeds and returns an incorrect value for strings in scientific notation that exceed the bounds of a double.",
+    "created_at": "2019-07-08T18:42:57Z",
+    "closed_at": "2020-02-01T03:17:02Z",
+    "labels": [
+      "question",
+      "area-System.Numerics"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/30188",
+    "body": ".NET Core Version: Version: 3.0.100-preview6-012264 - I think. VS2019 apparently hides the NetCore packages, now, so I am not 100% sure. \r\nHave you experienced this same bug with .NET Framework?: No\r\n\r\nRun the following code: \r\n            var text = \"123e466\";\r\n            var provider = new CultureInfo(\"en-US\");\r\n            double value;\r\n\r\n            var success = Double.TryParse(\r\n                text,\r\n                NumberStyles.Any & ~NumberStyles.AllowTrailingSign,\r\n                provider,\r\n                out value);\r\n\r\n            MessageBox.Show(this, value.ToString(), success.ToString());\r\n\r\nResults in DotNetFramework: \r\n\tsuccess = false\r\n\tvalue = 0\r\n\r\nResults in NetCore:\r\n\tsuccess = true\r\n\tvalue = double.Infinity\r\n\r\nIt seems to me that the original .Net Framework results were correct. \"123e466\" exceeds the bounds of a double, but it should fail to parse, not return Infinity. \r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/30188/comments",
+    "author": "IGMikeS",
+    "comments": [
+      {
+        "user": "danmoseley",
+        "created_at": "2019-07-08T20:29:35Z",
+        "body": "@tannergooding "
+      },
+      {
+        "user": "tannergooding",
+        "created_at": "2019-07-08T20:38:34Z",
+        "body": "This was updated to be IEEE 754 compliant for .NET Core 3.0. The correct behavior is that values are parsed to the \"infinitely precise\" value and then rounded to the \"nearest representable\" result (which in this case is `Infinity`).\r\n\r\nThe new behavior is correct, compliant, and expected."
+      },
+      {
+        "user": "danmoseley",
+        "created_at": "2019-07-08T22:35:00Z",
+        "body": "I'm going to close this @IGMikeS . Feel free to reopen if you have more questions."
+      },
+      {
+        "user": "IGMikeS",
+        "created_at": "2019-07-09T12:54:34Z",
+        "body": "Okay, thanks for the info. :)"
+      }
+    ]
+  },
+  {
+    "number": 29988,
+    "title": "Hardware Acceleration for unsupported overloads",
+    "created_at": "2019-06-23T21:28:14Z",
+    "closed_at": "2020-02-01T02:57:40Z",
+    "labels": [
+      "question",
+      "area-System.Runtime.Intrinsics"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29988",
+    "body": "Some methods in System.Runtime.Intrinsics.X86 don't have overloads for certain data types. For example:\r\n\r\n```\r\nlong u1 = 12L,\r\nlong u2 = 14L;\r\nvar vectorOne = Vector128.Create(u1);\r\nvar vectorTwo = Vector128.Create(u2);\r\nvar mask = Sse2.MoveMask(Sse2.CompareEqual(vectorOne, vectorTwo))\r\n...\r\n```\r\n\r\nWhile this is expected as there is no hardware instruction for them. Is there **anything** I can do as a workaround to compare, in this case, two Vector128 of data type long using Sse2? Such as reinterpreting, casting, different APIs?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29988/comments",
+    "author": "Symbai",
+    "comments": [
+      {
+        "user": "mikedn",
+        "created_at": "2019-06-24T05:52:17Z",
+        "body": "If you only care about equality/inequality then yes, you can reinterpret vectors to use a different integer type. Otherwise you should be able to use `Subtract` and then `MoveMask` to extract the sign bits."
+      },
+      {
+        "user": "Symbai",
+        "created_at": "2019-06-24T06:08:13Z",
+        "body": "Thanks, I've tried reinterpreting it as double as I thought it needs to have the same amount of 8 bytes in memory but that didn't worked in some cases. Using an integer type as you said however works fine.\r\n\r\nI'm also checking for CompareGreaterThan and CompareLessThan. Can you show me a short code example how I can compare them then?"
+      },
+      {
+        "user": "mikedn",
+        "created_at": "2019-06-24T07:17:08Z",
+        "body": "> Thanks, I've tried reinterpreting it as double as I thought it needs to have the same amount of 8 bytes in memory but that didn't worked in some cases. Using an integer type as you said however works fine.\r\n\r\nYes, floating point compares cannot be used in this case because floating point has various special values (NaN, negative 0 etc.).\r\n\r\n> I'm also checking for CompareGreaterThan and CompareLessThan. Can you show me a short code example how I can compare them then?\r\n\r\nIf you're not concerned about integer overflow then `LessThan` is pretty simple: `x < y` iff `x - y < 0` and `x - y < 0` iff `signbit(x - y) = 1`. To get the sign bits:\r\n```C#\r\nSse2.MoveMask(Sse2.Subtract(v1, v2).AsByte()) & 0x8080\r\n```\r\nNow it depends what do you want to do with the result. Perhaps you don't really need `MoveMask`, perhaps you need the result in vector format, like normal vector compares provide?\r\n"
+      },
+      {
+        "user": "Symbai",
+        "created_at": "2019-06-24T07:49:54Z",
+        "body": "I have a byte array which I iterate through and trying to find matches for a specific value, which itself can be in various data types T, such as long. Matches can be either based on equality, or bigger or smaller. To gain maximum performance I'm casting the byte array into a span of vector128<T> and then use hardware acceleration of SSE2 to compare.\r\n\r\nBut I also need to save the position of the match in the original byte array, as well as the matched value as data type T. For this I'm using MoveMask and then TrailingZeroCount and IsBitSet from the BitOps class.  This is what I've seen in this repo once and all together is 2-4x times faster than reinterpreting the original byte array as an array of long and iterate through it with a simple loop.\r\n\r\nIf I just compare two vectors I know if I got a match, but I dont know which of the elements in the vector triggered the match. And calling GetElement for all of them is slower than MoveMask and only call GetElement when needed. Please tell me when I'm wrong and there is a faster and easier way."
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2019-06-24T17:01:41Z",
+        "body": "cc: @tannergooding "
+      },
+      {
+        "user": "tannergooding",
+        "created_at": "2019-06-24T17:12:22Z",
+        "body": "Using `MoveMask` to get the element which triggered the match and `BitOperations.LeadingZeroCount` or `BitOperations.TrailingZeroCount` (the former hardware accelerated on more computers) to get the index of that byte is likely the right thing to do here.\r\n\r\nWe do similar things in the `SpanHelpers` class."
+      },
+      {
+        "user": "Symbai",
+        "created_at": "2019-06-24T18:13:53Z",
+        "body": "Okay thanks :+1:  I'm closing this then."
+      }
+    ]
+  },
+  {
+    "number": 29909,
+    "title": "[System.Text.Json] merging two json structures",
+    "created_at": "2019-06-16T19:52:43Z",
+    "closed_at": "2020-02-01T02:49:32Z",
+    "labels": [
+      "question",
+      "area-System.Text.Json",
+      "json-functionality-doc"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29909",
+    "body": "I ran into this use case recently and I was unable to find a solution. \r\n\r\nOn one hand I read the contents of a file, then I obtained the JSON representaiton of that content with\r\n\r\n```\r\nvar document = JsonDocument.Parse(fileContent);\r\n```\r\n\r\nNow I have access to all that data. The second thing I did was build a custom JSON object with the `Utf8JsonWriter`.\r\n\r\n**Question:** how can I integrate the latter object into the former (`document`)? I want to create a property in `document` (maybe nested quite deeply) and set the value of that property to the object that I build with `Utf8JsonWriter`.",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29909/comments",
+    "author": "axm",
+    "comments": [
+      {
+        "user": "ahsonkhan",
+        "created_at": "2019-06-17T19:50:21Z",
+        "body": "The `JsonDocument`, in its v1 implementation, is read-only (i.e. it is not modifiable).\r\n\r\nOne thing you could do as a workaround, via the `Utf8JsonWriter`, is enumerate all the tokens of the `JsonDocument`, and write them out to the writer (including inserting the custom JSON object you have). You can then pass the output of the `Utf8JsonWriter` to `JsonDocument.Parse` to get a `JsonDocument` containing your whole JSON.\r\n\r\nMaybe something like this (note: this isn't fully tested, just a sample):\r\n```C#\r\n[Fact]\r\npublic static void ModifyJsonDocument()\r\n{\r\n    string originalJson = \"{\\\"hi\\\": 1}\";\r\n    JsonDocument doc = JsonDocument.Parse(originalJson);\r\n\r\n    JsonDocument newDoc = AddJsonData(doc, doc);\r\n\r\n    Assert.Equal(\"{\\\"hi\\\":1,\\\"mySubElement\\\":{\\\"hi\\\":1}}\", newDoc.RootElement.ToString());\r\n}\r\n\r\nprivate static JsonDocument AddJsonData(JsonDocument original, JsonDocument subOject)\r\n{\r\n    JsonElement element = original.RootElement;\r\n    var abw = new ArrayBufferWriter<byte>();\r\n    using var writer = new Utf8JsonWriter(abw);\r\n\r\n    writer.WriteStartObject();\r\n    foreach(JsonProperty properties in element.EnumerateObject())\r\n    {\r\n        properties.Value.WriteProperty(properties.Name, writer);\r\n    }\r\n    JsonElement subElement = subOject.RootElement;\r\n    subElement.WriteProperty(\"mySubElement\", writer);\r\n    writer.WriteEndObject();\r\n\r\n    writer.Flush();\r\n\r\n    return JsonDocument.Parse(abw.WrittenMemory);\r\n}\r\n```"
+      },
+      {
+        "user": "axm",
+        "created_at": "2019-06-18T08:55:23Z",
+        "body": "Thanks @ahsonkhan that works.\r\n\r\nAre there any plans to introduce this functionality out of the box in 1.1 or above?"
+      },
+      {
+        "user": "ahsonkhan",
+        "created_at": "2019-06-18T08:57:48Z",
+        "body": "> Are there any plans to introduce this functionality out of the box in 1.1 or above?\r\n\r\nWhen you say 1.1 or above, what do you mean? If you mean the next version of .NET Core, we will likely add support for a modifiable `JsonDocument` in the next release of .NET Core (after 3.0)."
+      }
+    ]
+  },
+  {
+    "number": 29815,
+    "title": ".NET Core 3 and WPF library",
+    "created_at": "2019-06-07T22:23:21Z",
+    "closed_at": "2020-02-01T02:41:45Z",
+    "labels": [
+      "question",
+      "area-Meta"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29815",
+    "body": "I just tried some existing WPF code using .NET Core 3.0 preview 5 and VS 16.2 Preview 1. I read the porting guide for WPF and it seems to only talk about apps not libraries. The main changes seem to be \r\n```\r\n    <OutputType>WinExe</OutputType>\r\n    <UseWPF>true</UseWPF>\r\n```\r\nWhen I try \r\n```\r\n    <OutputType>Library</OutputType>\r\n    <UseWPF>true</UseWPF>\r\n```\r\nI get unresolved references for all the WPF related stuff. I did try WinLibrary but that is rejected. Does this only work for applications at present?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29815/comments",
+    "author": "davidhunter22",
+    "comments": [
+      {
+        "user": "wangfu91",
+        "created_at": "2019-06-08T07:15:04Z",
+        "body": "@davidhunter22  For libraries, you need change the ```Sdk``` to ```Microsoft.NET.Sdk.WindowsDesktop```, and add the ```<UseWPF>true</UseWPF>``` tag.\r\n```xml\r\n<Project Sdk=\"Microsoft.NET.Sdk.WindowsDesktop\">\r\n  <PropertyGroup>\r\n    <TargetFramework>netcoreapp3.0</TargetFramework>\r\n    <UseWPF>true</UseWPF>\r\n  </PropertyGroup>\r\n</Project>\r\n```"
+      },
+      {
+        "user": "davidhunter22",
+        "created_at": "2019-06-08T14:03:31Z",
+        "body": "Ah can't believe I didn't see the WindowsDesktop thing. That works great thanks."
+      }
+    ]
+  },
+  {
+    "number": 29465,
+    "title": "ProcessInfo Linux/Windows incompatibility",
+    "created_at": "2019-05-06T12:40:26Z",
+    "closed_at": "2020-02-01T02:07:07Z",
+    "labels": [
+      "question",
+      "area-System.Diagnostics.Process"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29465",
+    "body": "Hi,\r\n\r\nI'm trying to run same process as a child of current process. Showed below code works just fine under windows, but fails in Linux with  error\r\n\r\nNo executable found matching command \"dotnet-MyDll.dll\"\r\n\r\n```\r\nvar processInfo = new ProcessStartInfo\r\n            {\r\n                FileName = \"dotnet\",\r\n                Arguments = \"MyDll.dll \" + id.ToString()\r\n            };\r\n\r\n            Console.WriteLine(\"Starting child process...\");\r\n            var process = Process.Start(processInfo);\r\n            return process;\r\n\r\n```\r\n\r\nIve also tried\r\n         `       FileName = \"dotnet MyDll.dll\"+ id.ToString(),`\r\nbut it ends up with different error \r\nUnhandled Exception: System.ComponentModel.Win32Exception: No such file or directory\r\n\r\nI've also tried \r\n```\r\n\r\n            var parentP = Process.GetCurrentProcess();\r\n            string fullPath = parentP.MainModule.FileName;\r\n            var command = fullPath+\" \"+Assembly.GetEntryAssembly().Location+\" \"+ id.ToString();\r\n            Console.WriteLine(\"Command = \"+command);\r\n            var processInfo = new ProcessStartInfo\r\n            {\r\n                FileName = command\r\n            };\r\n            var process = Process.Start(processInfo);\r\n```\r\nStill \r\nUnhandled Exception: System.ComponentModel.Win32Exception: No such file or directory\r\n\r\nwhat is proper way of running currently running dll again under Linux with dotnet core",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29465/comments",
+    "author": "pragmaticadam",
+    "comments": [
+      {
+        "user": "wfurt",
+        "created_at": "2019-05-06T20:43:41Z",
+        "body": "cc: @tmds "
+      },
+      {
+        "user": "pragmaticadam",
+        "created_at": "2019-05-07T09:21:32Z",
+        "body": "I've also tried :\r\n\r\n```\r\nvar parrentP = Process.GetCurrentProcess();\r\n        string fullPath = parrentP.MainModule.FileName;\r\n        var command = \"\\\"\" + fullPath + \"\\\" \" ;\r\n        var args = Assembly.GetEntryAssembly().Location + \" \" + id;\r\n        var processInfo = new ProcessStartInfo\r\n        {\r\n            FileName = command,\r\n            Arguments = args\r\n        };\r\n            var process = Process.Start(processInfo);\r\n```\r\n\r\n\r\nWorks under windows, do not work under LINUX\r\n\r\n\r\nException No such file or directory\r\nException    at System.Diagnostics.Process.StartCore(ProcessStartInfo startInfo)\r\n   at System.Diagnostics.Process.Start()\r\n   at System.Diagnostics.Process.Start(ProcessStartInfo startInfo)\r\n\r\nLooks for me like something with path building, \r\n\r\nWHAT IS WORK AROUND FOR THIS ?\r\n\r\n\r\n"
+      },
+      {
+        "user": "tmds",
+        "created_at": "2019-05-07T10:03:19Z",
+        "body": "This works:\r\n\r\n```cs\r\nstatic void Main(string[] args)\r\n{\r\n    if (args.Length == 0)\r\n    {\r\n        var psi = new ProcessStartInfo\r\n        {\r\n            FileName = Process.GetCurrentProcess().MainModule.FileName,\r\n            Arguments = $\"\\\"{Assembly.GetEntryAssembly().Location}\\\" \\\"hello world\\\"\"\r\n        };\r\n        Process.Start(psi).WaitForExit();\r\n    }\r\n    else\r\n    {\r\n        System.Console.WriteLine(\"Called with arg: \" + args[0]);\r\n    }\r\n}\r\n```\r\n\r\nIf you want to use the `Arguments` property, you need to surround the individual arguments with double quotes. For example:\r\n```cs\r\nArguments = $\"\\\"{Assembly.GetEntryAssembly().Location}\\\" \\\"hello world\\\"\"\r\n```\r\n\r\nIf it doesn't work for you, what is the values of: `Process.GetCurrentProcess().MainModule.FileName` and `Assembly.GetEntryAssembly().Location`.\r\n\r\n> WHAT IS WORK AROUND FOR THIS ?\r\n\r\nDon't use CAPS unless you're angry and want to yell at someone."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-05-07T12:14:33Z",
+        "body": "> If you want to use the Arguments property, you need to surround the individual arguments with double quotes\r\n\r\nOnly if they may have whitespace, right?"
+      },
+      {
+        "user": "tmds",
+        "created_at": "2019-05-08T11:56:36Z",
+        "body": "> Only if they may have whitespace, right?\r\n\r\nYes, only needed then. They get stripped of the other arguments, so adding them everywhere is a simple way to avoid forgetting them somewhere.\n\n---\n\n@pragmaticadam is it working for you now? may this be closed?"
+      },
+      {
+        "user": "pragmaticadam",
+        "created_at": "2019-05-09T08:27:13Z",
+        "body": "> @pragmaticadam is it working for you now? may this be closed?\r\n\r\nYes,\r\nthank You!"
+      }
+    ]
+  },
+  {
+    "number": 29160,
+    "title": "What kind EqualityComparer use to unknown in compile time type?",
+    "created_at": "2019-04-04T08:23:28Z",
+    "closed_at": "2020-02-01T01:39:08Z",
+    "labels": [
+      "question",
+      "area-System.Runtime"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29160",
+    "body": "Is it possible get `EqualityComparer<>.Default`\r\nby `Type` in runtime?\r\nIn compile time I don't know what type will be.\r\n\r\nIs it correct to use `EqualityComparer<object>.Default`?\r\nCan there be problems with this?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29160/comments",
+    "author": "westfin",
+    "comments": [
+      {
+        "user": "bartonjs",
+        "created_at": "2019-05-15T19:23:49Z",
+        "body": "@westfin Do you mean you want to get the default equality comparer for a type that you learn about at runtime, but not in a generic way?\r\n\r\n```C#\r\nIEqualityComparer comparer = (IEqualityComparer)typeof(EqualityComparer<>).\r\n    MakeGenericType(o.GetType()).\r\n    GetProperty(\"Default\", BindingFlags.Static | BindingFlags.Public);\r\n```\r\n\r\nSeems like maybe what you want?\r\n\r\nI think `EqualityComparer<object>.Default` is just going to end up calling `((object)x).Equals((object)y)`; which is probably functionally equivalent for any particular T, but I can't speak to that without a lot more digging."
+      },
+      {
+        "user": "westfin",
+        "created_at": "2019-06-19T09:05:07Z",
+        "body": "> @westfin Do you mean you want to get the default equality comparer for a type that you learn about at runtime, but not in a generic way?\r\n\r\n@bartonjs Yes, you are right. Thanks for help\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 29130,
+    "title": "Potential Bug with a pinned GCHandle.Alloc call",
+    "created_at": "2019-03-31T20:05:18Z",
+    "closed_at": "2020-02-01T01:36:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29130",
+    "body": "There's a problem with GCHandle.Alloc where if you try to allocate the same object (in my case the same byte array) with the GCHandle.Pinned parameter, it doesn't store the byte array again and instead just uses a reference to the first byte array that was stored.\r\n\r\nHere's an example\r\n\r\n```csharp\r\nvar bytes = new byte[] { 0x00, 0xFF, 0x00, 0xFF };\r\n\r\nvar buffer1 = GCHandle.Alloc(bytes, GCHandleType.Pinned);\r\n\r\nvar buffer1Address = buffer1.AddrOfPinnedObject();\r\n\r\nvar buffer2 = GCHandle.Alloc(bytes, GCHandleType.Pinned);\r\n\r\nvar buffer2Address = buffer2.AddrOfPinnedObject();\r\n```\r\n\r\nIn this case, buffer1Address and buffer2Address will be the exact same.\r\n\r\nI was just wondering if this is intentional or if it is indeed a bug?\r\n\r\nIf this is intentional maybe offering an option to not do this could be useful (at least in my case it is)\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29130/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2019-03-31T20:26:05Z",
+        "body": "AddrOfPinnedObject returns the same address because it's the same object.  There's only one array object here and thus only has one location in memory: AddrOfPinnedObject returns that location, the \"address of the pinned object\"."
+      },
+      {
+        "user": "GrabYourPitchforks",
+        "created_at": "2019-03-31T21:23:34Z",
+        "body": "To add to what @stephentoub said, I think the confusion might be coming from the `Alloc` method name. The `GCHandle.Alloc` method is allocating a new _handle_ to the object, not duplicating the object passed in to it. So if you compare the two `GCHandle` instances directly, you'll see that they have two different values for the stored handle, but each handle points to the exact same backing object. Hence the behavior you're seeing with `AddrOfPinnedObject`."
+      },
+      {
+        "user": "ghost",
+        "created_at": "2019-03-31T21:54:49Z",
+        "body": "I see what you mean. I was under the impression that the `Alloc` was allocating unmanaged memory for each object. Thanks for the clarification."
+      }
+    ]
+  },
+  {
+    "number": 11367,
+    "title": "ECMA 335 II.15.2 Static, instance, and virtual methods",
+    "created_at": "2018-10-30T22:18:06Z",
+    "closed_at": "2020-01-31T05:25:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/11367",
+    "body": "Hello all\r\n\r\nWe have two notices in this article\r\n\r\n-  Instance methods on classes (including boxed value types), have a this pointer that is\r\nby default an object reference to the class on which the method is defined.\r\n\r\n-  Instance methods on (unboxed) value types, have a this pointer that is by default a\r\nmanaged pointer to an instance of the type on which the method is defined.\r\n\r\nWhat is a difference between a **object reference** and **managed pointer** in this case?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/11367/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2018-10-30T22:27:39Z",
+        "body": "The difference between object reference and managed pointer is described in section I.12.1.1.2 Object reference and managed pointer types: O and &\r\n\r\nThe short answer is that object reference points to an object vs. managed pointer points to the interior of an object."
+      },
+      {
+        "user": "ghost",
+        "created_at": "2018-10-31T08:06:54Z",
+        "body": "@jkotas thank you"
+      }
+    ]
+  },
+  {
+    "number": 27737,
+    "title": "I am wondering if you support .NET Standard 2.0 for System.Data.Common as well as System.Net.Http",
+    "created_at": "2018-10-25T12:36:10Z",
+    "closed_at": "2020-01-31T23:30:23Z",
+    "labels": [
+      "question",
+      "area-Meta"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/27737",
+    "body": "",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/27737/comments",
+    "author": "learnersm",
+    "comments": [
+      {
+        "user": "karelz",
+        "created_at": "2018-10-25T16:29:14Z",
+        "body": "@learnersm what do you mean by that?\r\nAFAIK both libraries are PART of .NET Standard 2.0."
+      }
+    ]
+  },
+  {
+    "number": 11072,
+    "title": "Linked cancellation token source where all tokens must be cancelled",
+    "created_at": "2018-09-12T16:37:40Z",
+    "closed_at": "2020-01-31T05:05:23Z",
+    "labels": [
+      "question",
+      "area-System.Threading"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/11072",
+    "body": "This is more of an question of whether such functionality exists within the coreclr already.\r\n\r\nI've used `CancellationTokenSource.CreateLinkedTokenSource` to get a `CancellationToken` which will be cancelled when any of the subject tokens are cancelled.\r\n\r\nMy current scenario is I invoke an HTTP API and I would like to record in Entity Framework the result of that call.  Currently the EF call uses the same token I used for the HTTP API.  This works fine so long the token does not become cancelled.\r\n\r\nThe obvious solution to use a separate `CancellationToken` for the database call, which resulted in me making a small one that expires after 3 seconds, works fine for most scenarios but sometimes it operation takes longer than 3 seconds, so despite the first token still having time left left, the database operation fails due to the 3 second token.\r\n\r\nMy question is: \r\nIs there functionality within the `CancellationTokenSource` class (or elsewhere) that creates a linked token where *all* of the subject tokens must be cancelled for the derived one to be considered cancelled?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/11072/comments",
+    "author": "MatthewLymer",
+    "comments": [
+      {
+        "user": "kouvel",
+        "created_at": "2018-09-12T18:46:34Z",
+        "body": "CC @tarekgh "
+      },
+      {
+        "user": "tarekgh",
+        "created_at": "2018-09-19T19:28:10Z",
+        "body": "I am not aware of any API support this scenario. you may create your custom type doing that. \r\n\r\nCC @stephentoub just in case he knows any API doing that."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2018-09-19T20:36:38Z",
+        "body": "> Is there functionality within the CancellationTokenSource class (or elsewhere) that creates a linked token where all of the subject tokens must be cancelled for the derived one to be considered cancelled?\r\n\r\nThere's nothing built into .NET, but you could easily build your own, e.g. (untested)\r\n```C#\r\nsealed class AllLinkedSource : CancellationTokenSource\r\n{\r\n    private readonly CancellationTokenRegistration[] _registrations;\r\n    private int _remaining;\r\n\r\n    public AllLinkedSource(params CancellationToken[] tokens)\r\n    {\r\n        _remaining = tokens.Length;\r\n        _registrations = new CancellationTokenRegistration[tokens.Length];\r\n        for (int i = 0; i < tokens.Length; i++)\r\n        {\r\n            _registrations[i] = tokens[i].Register(t =>\r\n            {\r\n                var thisRef = (AllLinkedSource)t;\r\n                if (Interlocked.Decrement(ref thisRef._remaining) == 0) thisRef.Cancel();\r\n            }, this);\r\n        }\r\n    }\r\n\r\n    protected override void Dispose(bool disposing)\r\n    {\r\n        foreach (CancellationTokenRegistration reg in _registrations) reg.Dispose();\r\n        base.Dispose(disposing);\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "tarekgh",
+        "created_at": "2018-09-19T20:58:21Z",
+        "body": "@MatthewLymer I am closing this issue but feel free to reply back with any more follow up questions."
+      },
+      {
+        "user": "MatthewLymer",
+        "created_at": "2018-09-20T12:50:49Z",
+        "body": "Awesome, thanks for your help guys!"
+      }
+    ]
+  },
+  {
+    "number": 27285,
+    "title": "Can not send email with SmtpClient on Ubuntu 18.4 LTS",
+    "created_at": "2018-09-01T04:58:33Z",
+    "closed_at": "2020-01-31T22:53:26Z",
+    "labels": [
+      "question",
+      "area-System.Net",
+      "os-linux"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/27285",
+    "body": "I'm trying to send email using Google SMTP server but its throwing exception:\r\n```\r\nAn unhandled exception occurred while processing the request.\r\nWin32Exception: GSSAPI operation failed with error - An invalid status code was supplied (Unknown error).\r\n\r\nSystem.Net.Security.NegotiateStreamPal.AcquireCredentialsHandle(string package, bool isServer, NetworkCredential credential)\r\nSmtpException: Failure sending mail.\r\n\r\nSystem.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n```\r\nAt `Startup` Class:\r\n```c#\r\n services.AddScoped<SmtpClient>((provider) =>\r\n            {\r\n                var config = provider.GetRequiredService<IConfiguration>();\r\n                return new SmtpClient()\r\n                {\r\n                    Host = config.GetValue<String>(\"MailService:Smtp\"),\r\n                    Port = config.GetValue<int>(\"MailService:Port\"),\r\n                    Credentials = new NetworkCredential(\r\n                            config.GetValue<String>(\"MailService:Username\"),\r\n                            config.GetValue<String>(\"MailService:Password\")\r\n                        )\r\n                };\r\n            });\r\n```\r\nAnd in `Controller`:\r\n```c#\r\n        private readonly SmtpClient _smtpClient;\r\n\r\n        public ValuesController(\r\n            SmtpClient smtpClient\r\n        )\r\n        {\r\n            _smtpClient = smtpClient;\r\n        }\r\n\r\n        [HttpGet]\r\n        public async Task<IActionResult> Get()\r\n        {\r\n            await _smtpClient.SendMailAsync(new MailMessage(\r\n                from: \"sender@domain.com\",\r\n                to: \"receiver@domain.com\",\r\n                subject: \"Test message subject\",\r\n                body: \"Test message body\"\r\n                        ));\r\n            return Ok();\r\n        }\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/27285/comments",
+    "author": "shakeri",
+    "comments": [
+      {
+        "user": "danmoseley",
+        "created_at": "2018-09-02T05:43:07Z",
+        "body": "Hello, it may not help, but can you please confirm this reproes on 2.1 (or master)? 2.0 is about to go out of support."
+      },
+      {
+        "user": "shakeri",
+        "created_at": "2018-09-03T10:40:57Z",
+        "body": "@danmosemsft thanks for reply.\r\nI upgraded this project to version 2.1, but there is still a similar error:\r\n```\r\nAn unhandled exception occurred while processing the request.\r\nWin32Exception: GSSAPI operation failed with error - An invalid status code was supplied (Unknown error).\r\n\r\nSystem.Net.Security.NegotiateStreamPal.AcquireCredentialsHandle(string package, bool isServer, NetworkCredential credential)\r\nSmtpException: Failure sending mail.\r\n```"
+      },
+      {
+        "user": "danmoseley",
+        "created_at": "2018-09-03T15:18:27Z",
+        "body": "Thanks. Do you have a different machine to try? Not much to go on."
+      },
+      {
+        "user": "shakeri",
+        "created_at": "2018-09-04T06:31:42Z",
+        "body": "I tested this project on Windows Server 2012 R2 on the same network and it worked without problems."
+      },
+      {
+        "user": "karelz",
+        "created_at": "2018-09-04T16:08:18Z",
+        "body": "I suspect a problem with configuration on Linux - similar to dotnet/runtime#25885\r\n@tmds @wfurt any tips & tricks for troubleshooting?"
+      },
+      {
+        "user": "wfurt",
+        "created_at": "2018-09-04T16:18:20Z",
+        "body": "I would suggest packet capture with wireshark or tcpdump. I would also suggest to install gss-ntlmssp package (or verify that it is in place) \r\nJust some background @shakeri: Windows do have all the necessary parts needed for NTLM and Kerberos. On Unix, this varies based on distribution and configuration.    "
+      },
+      {
+        "user": "shakeri",
+        "created_at": "2018-09-05T18:37:00Z",
+        "body": "@wfurt I installed gss-ntlmssp package and test again.It worked.\r\nThanks."
+      },
+      {
+        "user": "karelz",
+        "created_at": "2018-09-05T18:44:03Z",
+        "body": "Closing as answered."
+      },
+      {
+        "user": "danmoseley",
+        "created_at": "2018-09-05T19:11:21Z",
+        "body": "@karelz I wonder if it would make sense for the exceptoin message to suggest installing it."
+      },
+      {
+        "user": "wfurt",
+        "created_at": "2018-09-05T20:44:17Z",
+        "body": "we talk about it while back @danmosemsft. I think that would be good idea. "
+      },
+      {
+        "user": "davidsh",
+        "created_at": "2018-09-05T20:51:53Z",
+        "body": ">we talk about it while back @danmosemsft. I think that would be good idea.\r\n\r\nIt's not a trivial problem to solve.  The error message we get back when doing NTLM operations is not always specific enough to determine that the problem is configuration (i.e. gss-ntlmssp not installed)."
+      }
+    ]
+  },
+  {
+    "number": 27225,
+    "title": "Why RSACng use SignHash with RSASignaturePadding.Pkcs1 need input hash length equal to HashAlgorithmName's hash's length?",
+    "created_at": "2018-08-24T07:06:45Z",
+    "closed_at": "2020-01-31T22:48:17Z",
+    "labels": [
+      "question",
+      "area-System.Security"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/27225",
+    "body": "I'm use .NET Framework 4.6.1 on Windows.\r\n\r\nAnd I found when use RSACng SignHash, which is \r\n```c#\r\nbyte[] SignHash(byte[] hash, HashAlgorithmName hashAlgorithm, RSASignaturePadding padding);\r\n```\r\nwhen the parameter hash, the byte array 's length is not equal to hashAlgorithm's hash length, it will throw exception: wrong parameter.\r\nFor example:\r\nwhen use hashAlgorithm Sha256, whose result length is 32 , the length of hash must also be 32.\r\n\r\nPSS padding has no such restrictions.\r\nI think native library like Openssl also has no such restrictions.",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/27225/comments",
+    "author": "avalon1610",
+    "comments": [
+      {
+        "user": "bartonjs",
+        "created_at": "2018-08-25T05:46:49Z",
+        "body": "If you're using `SignHash` (the hash is already computed) then the hash needs to be correct for it's size.  If PSS isn't requiring that then that sounds like a bug with the PSS handler (though I'd have to dig in and double check).\r\n\r\nIf you are signing data (which needs to be hashed first) then you should use `SignData` instead.  It has no size restrictions."
+      },
+      {
+        "user": "avalon1610",
+        "created_at": "2018-08-25T06:45:03Z",
+        "body": "OK, I made a mistake. \r\nI found openssl's `EVP_DigestSignUpdate` will auto hash for the data, equals to `SignData` here. \r\nBut signing with PSS padding has different behavior here as I tested."
+      },
+      {
+        "user": "bartonjs",
+        "created_at": "2019-02-25T21:23:58Z",
+        "body": "The PSS format allows the hash to mismatch because PSS technically doesn't have a requirement that the PSS hash and the data hash match, and that functionality is the escape valve for implementing custom logic (e.g. hash the data using SHA384 then verify the signature with PSS/SHA256... for... reasons.... :smile:).\r\n\r\nThere doesn't seem to be any other action required here, so closing."
+      }
+    ]
+  },
+  {
+    "number": 10483,
+    "title": "StringBuidler  support Offset(int length)",
+    "created_at": "2018-06-09T08:20:03Z",
+    "closed_at": "2020-01-31T04:23:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/10483",
+    "body": "New API:\r\n```C#\r\n//\r\npublic void Offset(int length){\r\n   if(length<0)\r\n   {\r\n       // throw........   \r\n   }\r\n   if(length>count){\r\n       // alloc more space\r\n   }else{ \r\n      // reset the offset\r\n       m_ChunkLength=length;\r\n   }\r\n}\r\n```\r\n\r\nUse:\r\n```C#\r\nStringBuilder builder = new StringBuilder();\r\nfor(int i=0;i<10;i+=1)\r\n{\r\n    builder.Append(array[i]);\r\n    builder.Append(',');\r\n}\r\nbuilder.Offset(builder.length-1);\r\nbuilder.Append(others);\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/10483/comments",
+    "author": "NMSAzulX",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2018-06-09T12:00:51Z",
+        "body": "I don't understand... what's the purpose of this proposed method? Why can't Length be used in your example?"
+      },
+      {
+        "user": "NMSAzulX",
+        "created_at": "2018-06-10T04:05:31Z",
+        "body": "\u201c1\uff0c2\uff0c3\uff0c\u201d\r\nI want to remove the latest ',' \r\n\r\nresult:\r\n\u201c1\uff0c2\uff0c3\u201d\r\n"
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2018-06-10T04:12:30Z",
+        "body": "Replace `builder.Offset(builder.length-1);` with `builder.Length=builder.Length-1` in your example. It will remove the latest ','.\n\n---\n\nAnother way to remove the latest character from StringBuilder is: `builder.Remove(builder.Length - 1, 1)`."
+      },
+      {
+        "user": "NMSAzulX",
+        "created_at": "2018-06-10T04:16:03Z",
+        "body": " OK. Thank you~"
+      }
+    ]
+  },
+  {
+    "number": 26310,
+    "title": "Reflection is missing type information for ByRef generic arguments",
+    "created_at": "2018-05-30T10:59:22Z",
+    "closed_at": "2020-01-31T21:29:40Z",
+    "labels": [
+      "question",
+      "area-System.Reflection"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/26310",
+    "body": "`IsGenericType` for generic byRef arugments returns false. For both .NET and .NET Core. Because of that, it's impossible to generic arguments for such types.\r\n\r\n```cs\r\npublic class MyClass<T1, T2>{}\r\n\r\npublic class GenericByRef\r\n{\r\n    public void TheMethod(ref MyClass<int, short> _) { }\r\n}\r\n\r\nclass Program\r\n{\r\n    static void Main(string[] args)\r\n    {\r\n        var byRefGenericType = typeof(GenericByRef).GetMethod(nameof(GenericByRef.TheMethod)).GetParameters().Single().ParameterType;\r\n        \r\n        Console.WriteLine($\"FullName = {byRefGenericType.FullName}\");\r\n        Console.WriteLine($\"Name = {byRefGenericType.Name}\");\r\n        Console.WriteLine($\"IsGenericType = {byRefGenericType.IsGenericType}\");\r\n        Console.WriteLine($\"UnderlyingSystemType.IsGenericType = {byRefGenericType.UnderlyingSystemType.IsGenericType}\");\r\n    }\r\n}\r\n```\r\n\r\nPrints:\r\n\r\n```log\r\nFullName = Tests.MyClass`2[[System.Int32, System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int16, System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]&\r\nName = MyClass`2&\r\nIsGenericType = False\r\nUnderlyingSystemType.IsGenericType = False\r\n```\r\n\r\n@jkotas @VSadov do you have any idea how can I get the generic arguments in that case?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/26310/comments",
+    "author": "adamsitnik",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2018-05-30T11:57:59Z",
+        "body": "Try:\r\n\r\n```\r\n        Console.WriteLine($\"GetElementType() = {byRefGenericType.GetElementType()}\");\r\n        Console.WriteLine($\"GetElementType().IsGenericType = {byRefGenericType.GetElementType().IsGenericType}\");\r\n```"
+      },
+      {
+        "user": "adamsitnik",
+        "created_at": "2018-05-30T12:15:47Z",
+        "body": "@jkotas it works, big thanks for help!"
+      }
+    ]
+  },
+  {
+    "number": 10245,
+    "title": "ICLRRuntimeHost2\uff0cis it multithread  safe\uff1f",
+    "created_at": "2018-04-26T13:03:47Z",
+    "closed_at": "2020-01-31T04:06:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/10245",
+    "body": "ICLRRuntimeHost2\uff0cis it multithread  safe\uff1f\r\nthank you",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/10245/comments",
+    "author": "daodol",
+    "comments": [
+      {
+        "user": "RussKeldorph",
+        "created_at": "2018-04-26T17:52:15Z",
+        "body": "@jkotas Can you redirect or answer?"
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2018-04-26T18:38:39Z",
+        "body": "cc @jeffschwMSFT \r\n\r\nSome of the methods are (like CreateDelegate), some of the methods are not (like CreateAppDomainWithManager)."
+      },
+      {
+        "user": "daodol",
+        "created_at": "2018-04-27T12:08:56Z",
+        "body": "ok,thank you"
+      }
+    ]
+  },
+  {
+    "number": 25542,
+    "title": "Microsoft.Tpl.Dataflow does not contain assembly reference for .NET version 4",
+    "created_at": "2018-03-20T21:21:39Z",
+    "closed_at": "2020-01-31T20:25:06Z",
+    "labels": [
+      "question",
+      "area-System.Threading.Tasks"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/25542",
+    "body": "Hi, I am in need of a version of dataflow that targets .net version 4. This is the error I get when I try to install Microsoft.Tpl.Dataflow or System.Threading.Tasks.Dataflow.\r\n``` Could not install package 'Microsoft.Tpl.Dataflow 4.5.8'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.0', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author.```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/25542/comments",
+    "author": "oneilj",
+    "comments": [
+      {
+        "user": "danmoseley",
+        "created_at": "2018-03-21T16:41:42Z",
+        "body": "@weshaggard any context?"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2018-03-21T19:01:34Z",
+        "body": "It is a feature request for the package. The owner should decide if they can support it there and wants to add the configurations. "
+      },
+      {
+        "user": "kouvel",
+        "created_at": "2018-03-21T19:14:50Z",
+        "body": "@AlexGhiondea "
+      },
+      {
+        "user": "tarekgh",
+        "created_at": "2018-03-27T23:55:52Z",
+        "body": "@oneilj  can you use System.Threading.Tasks.Dataflow package and target at least 4.5? this is the min version of the supported framework."
+      },
+      {
+        "user": "oneilj",
+        "created_at": "2018-03-28T14:45:20Z",
+        "body": "Yeah, that's what i ended up doing"
+      }
+    ]
+  },
+  {
+    "number": 24982,
+    "title": "Crypto provider wrappers in System.Security.Cryptography.Algorithms",
+    "created_at": "2018-02-09T10:36:37Z",
+    "closed_at": "2020-01-31T19:40:31Z",
+    "labels": [
+      "question",
+      "area-System.Security"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/24982",
+    "body": "PR dotnet/corefx#12964 added crypto wrappers.\r\n\r\nI'm able to use them targeting netstandard 2.x but not for netstandard1.x.\r\n\r\nI see that those providers are not included as part of `System.Security.Cryptography.Algorithms` package (v4.3.1). Would it be possible to include them as part of the nuget package?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/24982/comments",
+    "author": "jorgebay",
+    "comments": [
+      {
+        "user": "bartonjs",
+        "created_at": "2018-02-09T17:43:14Z",
+        "body": "Are you having a compilation problem, or a runtime problem?"
+      },
+      {
+        "user": "jorgebay",
+        "created_at": "2018-02-09T18:28:13Z",
+        "body": "Its a compilation issue, wrappers are not available on net standard 1.x and not included in `System.Security.Cryptography.Algorithms` package."
+      },
+      {
+        "user": "bartonjs",
+        "created_at": "2018-02-09T18:46:12Z",
+        "body": "Okay, that's what I would expect.  The wrappers were added for netstandard 2.0.  There's no expectation that they will be available when targeting lower versions.\r\n\r\nWhether using netstandard 1.x or 2.0 the recommended pattern is to use the algorithm factory methods.\r\n\r\n| Replace This | With This |\r\n| --- | --- |\r\n| new SHA1CryptoServiceProvider() | SHA1.Create() |\r\n| new SHA256CryptoServiceProvider() | SHA256.Create() |\r\n| new SHA384CryptoServiceProvider() | SHA384.Create() |\r\n| new SHA512CryptoServiceProvider() | SHA512.Create() |\r\n| new AesCryptoServiceProvider() | Aes.Create() |\r\n\r\netc\r\n"
+      },
+      {
+        "user": "jorgebay",
+        "created_at": "2018-02-13T09:05:26Z",
+        "body": "If that means that wrappers are not going to be provided in .NET Standard 1.x, this ticket can be closed :)"
+      }
+    ]
+  },
+  {
+    "number": 24279,
+    "title": "System.IO.FileNotFoundException: Could not load file or assembly 'System.Net.Http, Version=4.1.1.0",
+    "created_at": "2017-11-30T00:14:33Z",
+    "closed_at": "2020-01-31T18:44:50Z",
+    "labels": [
+      "question",
+      "area-System.Net.Http"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/24279",
+    "body": "I recently created a .NET Core 2.0 library that multitargeted `net46`. It included this in the .csproj file:\r\n\r\n```\r\n  <ItemGroup Condition=\"'$(TargetFramework)'=='net46'\">\r\n    <Reference Include=\"System.Net.Http\" />\r\n  </ItemGroup>\r\n\r\n  <ItemGroup Condition=\"'$(TargetFramework)'=='netstandard2.0'\">\r\n    <PackageReference Include=\"System.Net.Http\" Version=\"4.3.3\" />\r\n    <PackageReference Include=\"System.Net.Primitives\" Version=\"4.3.0\" />\r\n    <PackageReference Include=\"System.Net.Requests\" Version=\"4.3.0\" />\r\n    <PackageReference Include=\"System.Net.Sockets\" Version=\"4.3.0\" />\r\n  </ItemGroup>\r\n```\r\n\r\nI referenced this library is a .NET Framework 4.7 console app and get this exception:\r\n```\r\nUnhandled Exception: System.IO.FileNotFoundException: Could not load file or assembly 'System.Net.Http, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a' or one of its dependencies. The system cannot find the file specified. ---> System.IO.FileNotFoundException: Could not load file or assembly 'System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a' or one of its dependencies. The system cannot find the file specified.\r\n```\r\n\r\nI didn't see any warnings in the error list, but I decided to check the build log and found a conflict.\r\n\r\nThis is what I see in the detailed build log:\r\n```\r\n1>  There was a conflict between \"System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\" and \"System.Net.Http, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\".\r\n1>      \"System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\" was chosen because it was primary and \"System.Net.Http, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\" was not.\r\n1>      References which depend on \"System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\" [C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.7\\System.Net.Http.dll].\r\n1>          C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.7\\System.Net.Http.dll\r\n1>            Project file item includes which caused reference \"C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.7\\System.Net.Http.dll\".\r\n1>              System.Net.Http\r\n```\r\n\r\nMy `App.config` includes a redirect which should have been used\r\n```\r\n<dependentAssembly>\r\n        <assemblyIdentity name=\"System.Net.Http\" publicKeyToken=\"b03f5f7f11d50a3a\" culture=\"neutral\" />\r\n        <bindingRedirect oldVersion=\"0.0.0.0-4.1.1.0\" newVersion=\"4.1.1.0\" />\r\n      </dependentAssembly>\r\n```\r\n\r\nWhat I don't fully understand in why System.Net.Http includes a reference to itself. Is this corruption of some sort or am I missing something?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/24279/comments",
+    "author": "shravan2x",
+    "comments": [
+      {
+        "user": "karelz",
+        "created_at": "2017-11-30T00:39:25Z",
+        "body": "System.Net.Http.dll 4.1.1.0 shipped in nuget package System.Net.Http 4.3.0. It caused a problem on .NET Framework - see dotnet/runtime#18280 for details.\r\nWe shipped updated package System.Net.Http 4.3.1 which passes through to the underlying platform on .NET Framework (with assembly version 4.0.0.0).\r\nI assume something in your app is referencing older nuget package with higher assembly version. You need a binding redirect like this:\r\n\r\n```xml\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<configuration>\r\n    <runtime>\r\n        <assemblyBinding xmlns=\"urn:schemas-microsoft-com:asm.v1\">\r\n            <dependentAssembly>\r\n                <assemblyIdentity name=\"System.Net.Http\" culture=\"neutral\" publicKeyToken=\"b03f5f7f11d50a3a\" />\r\n                <bindingRedirect oldVersion=\"0.0.0.0-4.1.1.0\" newVersion=\"4.0.0.0\" />\r\n            </dependentAssembly>\r\n        </assemblyBinding>\r\n    </runtime>\r\n</configuration>\r\n```"
+      },
+      {
+        "user": "shravan2x",
+        "created_at": "2017-11-30T01:24:34Z",
+        "body": "@karelz The issue is that I do not use System.Net.Http 4.3.0 anywhere. My multi target for `netstandard2.0` uses version 4.3.3 and the reference for `net46` directly uses an assembly reference `<Reference Include=\"System.Net.Http\" />`.\r\n\r\nAlso, the project that uses the library already has the binding redirect you mentioned.\r\n```\r\n      <dependentAssembly>\r\n        <assemblyIdentity name=\"System.Net.Http\" publicKeyToken=\"b03f5f7f11d50a3a\" culture=\"neutral\" />\r\n        <bindingRedirect oldVersion=\"0.0.0.0-4.1.1.0\" newVersion=\"4.1.1.0\" />\r\n      </dependentAssembly>\r\n```\r\n\r\n**EDIT**: Nevermind I didn't notice the `newVersion` in your post was different than mine. Your fix seems to work for me.\r\n\r\nI vaguely remember encountering this issue in the past; it might help future users to maintain a wiki page for this issue with enough keywords that it shows up in a google search.\r\n\r\nThanks for the help!"
+      },
+      {
+        "user": "fernandozamoraj",
+        "created_at": "2020-05-04T15:14:19Z",
+        "body": "In my case the team was using Visual Studio 2019.  I was using VS 2015 because that is what the sln would default to.  Once I opened in in VS 2019 it worked.  I guess that's because of the references in one applicaiton vs. the other.  And actually in my case it was the System.Net.Sockets file."
+      }
+    ]
+  },
+  {
+    "number": 23566,
+    "title": "Few questions about the Memory",
+    "created_at": "2017-09-15T12:04:33Z",
+    "closed_at": "2020-01-31T17:50:11Z",
+    "labels": [
+      "question",
+      "area-System.Memory"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/23566",
+    "body": "Hello guys!\r\n\r\nI am currently trying to update my blog post/presentation about Span. I read the code and I have few questions. I hope that you can help me to get a better understanding.\r\n\r\n1. One of the reasons for making `Span` and `ReadOnlySpan` a stack-only types was to avoid struct tearing. `Memory` is a struct and it consist of 3 fields. By design it's not stack-only. Is it not going to suffer from struct tearing? Why is it not a class?\r\n2. `ReadOnlyMemory.DangerousTryGetArray` is breaking the encapsulation by exposing `ArraySegment` which allows to modify the content via indexer (it has a setter). It's hidden from the IDE via `EditorBrowsable` attribute and has a name that indicates the consequences. Is this method really needed? Why not to introduce new type like `ReadOnlyArraySegment` ?\r\n\r\ncc @KrzysztofCwalina @jkotas ",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/23566/comments",
+    "author": "adamsitnik",
+    "comments": [
+      {
+        "user": "KrzysztofCwalina",
+        "created_at": "2017-09-15T13:52:19Z",
+        "body": "Memory needs to be a struct to allow cheap slicing and to be an allocation-free factory of spans. It's a tradeoff between safety and efficiency.\r\n\r\nReadOnlyArraySegment would mean that now we need to have 2 overloads for APIs that otherwise take ReadOnlyMemory. \r\n\r\ncc: @ahsonkhan, @stephentoub "
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2017-09-15T14:16:04Z",
+        "body": "System.Memory does not provide as nice safety guarantees as Span. We will need very good documentation that explains how to use it correctly and what to avoid. Related to dotnet/runtime#23481."
+      },
+      {
+        "user": "adamsitnik",
+        "created_at": "2017-09-15T16:42:03Z",
+        "body": "thanks for the explanation!"
+      }
+    ]
+  },
+  {
+    "number": 23265,
+    "title": "C# new operate bug?",
+    "created_at": "2017-08-20T05:49:39Z",
+    "closed_at": "2020-01-31T17:27:12Z",
+    "labels": [
+      "question",
+      "area-Meta"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/23265",
+    "body": "```c#\r\npublic class ListTest\r\n{\r\n    public List<int> MyList;\r\n    public ListTest()\r\n    {\r\n        MyList = new List<int> { 1, 2, 3 };\r\n    }\r\n}\r\n\r\nvar listTest = new ListTest()\r\n{\r\n    MyList = {4,5,6}\r\n};\r\n```\r\n\r\nDo you know the value of listTest.MyList ???\r\n\r\nIt would be {1,2,3,4,5,6}   (on .net framework 4.6.1)\r\n\r\nSomeone can explain that??\r\n\r\n[EDIT] Fixed proper code formatting by @karelz",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/23265/comments",
+    "author": "TimRowe",
+    "comments": [
+      {
+        "user": "mikedn",
+        "created_at": "2017-08-20T05:59:32Z",
+        "body": "This is really a C# language question. Collection initialization works by calling collection's Add method so your `MyList = {4,5,6}` is really:\r\n```c#\r\nlistTest.MyList.Add(4);\r\nlistTest.MyList.Add(5);\r\nlistTest.MyList.Add(6);\r\n```\r\nBut more importantly:\r\n> C# new operate bug?\r\n\r\nWhat `new`? There's no `new` in `MyList = {4,5,6}` :smile: So there's no reason to expect a new list containing 4, 5 and 6 to be created.\r\n\r\n[EDIT] Added C# syntax highlight by @karelz"
+      },
+      {
+        "user": "TimRowe",
+        "created_at": "2017-08-20T06:08:18Z",
+        "body": "It's really a big pit !  Someone would forget `new` , but they think they have done that. It's better to raise error without `new` ."
+      },
+      {
+        "user": "mikedn",
+        "created_at": "2017-08-20T06:18:39Z",
+        "body": ">  It's better to raise error without new.\r\n\r\nThat would block a very common scenario - initializing readonly collection properties:\r\n```C#\r\npublic class ListTest\r\n{\r\n    public List<int> MyList { get; } = new List<int>();\r\n}\r\nvar listTest = new ListTest\r\n{\r\n     // You can't do = new List<int> { 4, 5, 6 } here because the property is readonly\r\n    MyList = { 4, 5, 6 }\r\n};\r\n```"
+      },
+      {
+        "user": "JonHanna",
+        "created_at": "2017-08-20T11:25:01Z",
+        "body": "From the C#5 spec (all specs after initializers were introduced have similar language):\r\n\r\n> A member initializer that specifies an object initializer after the equals sign is a nested object initializer, i.e. an initialization of an embedded object. Instead of assigning a new value to the field or property, the assignments in the nested object initializer are treated as assignments to members of the field or property. Nested object initializers cannot be applied to properties with a value type, or to read-only fields with a value type.\r\n> \r\n> A member initializer that specifies an object initializer after the equals sign is a nested object initializer, i.e. an initialization of an embedded object. Instead of assigning a new value to the field or property, the assignments in the nested object initializer are treated as assignments to members of the field or property. Nested object initializers cannot be applied to properties with a value type, or to read-only fields with a value type.\r\nA member initializer that specifies a collection initializer after the equals sign is an initialization of an embedded collection. Instead of assigning a new collection to the field or property, the elements given in the initializer are added to the collection referenced by the field or property. The field or property must be of a collection type that satisfies the requirements specified in \u00a77.6.10.3.\r\n\r\nSo the code:\r\n\r\n```c#\r\nvar listTest = new ListTest()\r\n{\r\n    MyList = {4,5,6}\r\n};\r\n```\r\n\r\nShould be equivalent to:\r\n\r\n```c#\r\nvar listTest = new ListTest();\r\nlistTest.MyList.Add(4);\r\nlistTest.MyList.Add(5);\r\nlistTest.MyList.Add(6);\r\n```\r\n\r\nSo `listTest.MyList` should contain `1, 2, 3, 4, 5, 6`. Anything else would be a bug.\r\n\r\n> It's really a big pit ! Someone would forget `new`, but they think they have done that. It's better to raise error without `new`.\r\n\r\nPeople can forget all manner of things, but if the definition of `ListTest` defaults to setting a `MyList` to `{1, 2, 3}` then presumably there's a reason for that. It's just as sensible to use that as a starting point to then add more numbers as it is to use `new` to set something completely different, and the language allows both to be expressed.\r\n\r\nThe code is also analogous to the way that when using a collection initialiser on its own first either `new TheType()` is called or whatever constructor is explicitly used, and then the further items added. E.g.:\r\n\r\n```c#\r\nvar starter = new[] { 1, 2, 3 };\r\nvar list = new List<int>(starter) { 4, 5, 6 };\r\nforeach (int item in list)\r\n{\r\n\tConsole.WriteLine(item);\r\n}\r\n```\r\nOutputs the numbers 1 through 6.\r\n\r\nUltimately though the biggest problem would be that if nested collection initialisers didn't go through the constructor included in `ListTest` would break encapsulation. Consider:\r\n\r\n```c#\r\npublic class ListTest\r\n{\r\n\tpublic readonly AddOnlyList<int> MyList;\r\n\tpublic ListTest()\r\n\t{\r\n\t\tMyList = new AddOnlyList<int> { 1, 2, 3 };\r\n\t}\r\n}\r\n```\r\n\r\nIt is part of the class invariant of `ListTest` that `MyList` starts with `1, 2, 3`. If outside code is allowed to break the encapsulation and force other values into it then `ListTest` no longer controls its own invariants and can no longer be reasoned about by its author.\r\n\r\nAlso, there's no reason why a type with `Add()` that implements `IEnumerable` need have a parameterless constructor, so no reason why having the code in the example equivalent to `new TheListType { 4, 5, 6 }` should even be valid.\r\n\r\n[EDIT] Fixed C# syntax highlighting by @karelz"
+      },
+      {
+        "user": "TimRowe",
+        "created_at": "2017-08-21T02:29:40Z",
+        "body": "@JonHanna,\r\nThanks for your greate answer\uff0cI understand now !!!"
+      }
+    ]
+  },
+  {
+    "number": 8527,
+    "title": "[RyuJIT/ARM32][Question] status of JIT/superpmi/superpmicollect/superpmicollect.sh",
+    "created_at": "2017-07-11T09:03:21Z",
+    "closed_at": "2020-01-31T02:13:19Z",
+    "labels": [
+      "question",
+      "arch-arm32",
+      "area-CodeGen-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/8527",
+    "body": "When running with `COMPlus_AltJit=*`, following test is PASSED with `COMPlus_AltJit already exists: skipping SuperPMI collection and returning success` message.\r\n\r\nCan we just skip and consider it PASSED ?\r\n\r\n```\r\nPASSED   - [6603][  10s]JIT/superpmi/superpmicollect/superpmicollect.sh\r\n               BEGIN EXECUTION\r\n               /home/dotnet_jenkins/workspace/hqueue/Run_coreclr_tests_Checked_ryujit_nyi_all/runtime/tests/Tests/coreoverlay/corerun superpmicollect.exe\r\n               COMPlus_AltJit already exists: skipping SuperPMI collection and returning success\r\n               Expected: 100\r\n               Actual: 100\r\n               END EXECUTION - PASSED\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/8527/comments",
+    "author": "hqueue",
+    "comments": [
+      {
+        "user": "BruceForstall",
+        "created_at": "2017-07-11T17:38:56Z",
+        "body": "@hqueue This is a limitation of the way the SuperPMI test works: the test itself sets COMPlus_AltJit, so if COMPlus_AltJit is already set, there is a kind of collision, and it can't do its job.\r\n\r\nIf you really want to test RyuJIT/arm32, you'll need to build it as the \"main\" JIT (don't define ALT_JIT in the build, and name it clrjit.dll), then run the test without setting COMPlus_AltJit.\r\n\r\nI don't think it's necessary to do this for RyuJIT/arm32 yet. There are plenty of other bugs to work on first :-)"
+      },
+      {
+        "user": "hqueue",
+        "created_at": "2017-07-11T23:18:07Z",
+        "body": "@BruceForstall Thank you for the detailed explanation.\r\nIf so, I also think that it's not necessary now and let's leave it for future task until ryujit/arm32 can be default jit.\r\n"
+      },
+      {
+        "user": "RussKeldorph",
+        "created_at": "2017-07-12T20:11:25Z",
+        "body": "Assuming this is answered.  Reopen if not."
+      }
+    ]
+  },
+  {
+    "number": 22442,
+    "title": "Quiet msbuild mode",
+    "created_at": "2017-06-23T04:52:09Z",
+    "closed_at": "2020-01-31T16:30:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/22442",
+    "body": "Can we get a build mode, maybe `msbuild /T:BuildAndTest /P:Quiet=true` that gets rid of all the build logs and just prints out the test results?\r\n\r\nThis is useful to compare test failures and I don't really care about what's compiling.",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/22442/comments",
+    "author": "hughbe",
+    "comments": [
+      {
+        "user": "ViktorHofer",
+        "created_at": "2017-06-23T09:45:54Z",
+        "body": "Yes verbosity switch set to minimal: `/v:m`"
+      }
+    ]
+  },
+  {
+    "number": 8294,
+    "title": "How can I debug Access Violation Exception on .net core 2 preview?",
+    "created_at": "2017-06-06T08:33:45Z",
+    "closed_at": "2020-01-31T01:59:29Z",
+    "labels": [
+      "question",
+      "area-Diagnostics-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/8294",
+    "body": "Hi,\r\n\r\n I am receiving Access Violation Exception in my .net core 2 application, when this happens the debugger terminates and I have no way of knowing where the program was when this happened.\r\n\r\nIn full .net I could have set mixed mode debugging, however I cant see how to set this for .net core 2 projects.\r\n\r\nThanks in advance.\r\n\r\n@mikem8361 I'm mentioning you since I think you work on the debugger and may know. :)",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/8294/comments",
+    "author": "danwalmsley",
+    "comments": [
+      {
+        "user": "mikem8361",
+        "created_at": "2017-06-06T22:02:23Z",
+        "body": "You could try windbg/cdb and SOS. \r\n\r\nOn Windows .NET Core 2.0 does  support mixed mode debug but there seems to be problems with VS Launch (see dotnet/coreclr#8603).  "
+      },
+      {
+        "user": "danwalmsley",
+        "created_at": "2017-06-13T10:49:11Z",
+        "body": "@mikem8361 I used windbg for now thanks \ud83d\udc4d "
+      }
+    ]
+  },
+  {
+    "number": 8071,
+    "title": "dotnet build failed",
+    "created_at": "2017-05-12T10:44:27Z",
+    "closed_at": "2020-01-31T01:47:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/8071",
+    "body": "I have just installed documentation in the VS 2017 Help Viewer and am attempting to complete the first C# Tutorial which is for a console application:\r\nThe initial instructions are : \r\nin a command window enter\r\ndotnet new console   ( to which I had to add -all)                      .... this worked ok\r\ndotnet restore                                                                             .... this worked ok\r\ndotnet build                                                                                .... this failed as follows\r\n\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(225,99): error CS0117: 'Environment' does not contain a definition for 'GetFolderPath' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(225,125): error CS0117: 'Environment' does not contain a definition for 'SpecialFolder' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(232,88): error CS0117: 'Environment' does not contain a definition for 'GetFolderPath' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(232,114): error CS0117: 'Environment' does not contain a definition for 'SpecialFolder' [C:\\Windows\\System32\\system32.csproj]\r\n\r\nBuild FAILED.\r\n\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(225,99): error CS0117: 'Environment' does not contain a definition for 'GetFolderPath' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(225,125): error CS0117: 'Environment' does not contain a definition for 'SpecialFolder' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(232,88): error CS0117: 'Environment' does not contain a definition for 'GetFolderPath' [C:\\Windows\\System32\\system32.csproj]\r\nWindowsPowerShell\\v1.0\\Modules\\PSDesiredStateConfiguration\\DSCClassResources\\WindowsPackageCab\\WindowsPackageCab.cs(232,114): error CS0117: 'Environment' does not contain a definition for 'SpecialFolder' [C:\\Windows\\System32\\system32.csproj]\r\n    0 Warning(s)\r\n    4 Error(s)\r\n\r\n\r\nCan anyone please advise what I need to do to overcome this problem ?\r\n\r\nThanking you in anticipation.\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/8071/comments",
+    "author": "Whomsonever",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2017-05-12T15:05:30Z",
+        "body": "> dotnet new console\r\n> dotnet restore\r\n> dotnet build\r\n\r\nTry to execute these steps in a new empty directory.\r\n\r\nThe error suggest that you have done them in c:\\windows\\system32 and unrelated powershell files under this directory are getting picked up by `dotnet build` causing the error. `dotnet build` will try to build everything under current directory by default."
+      },
+      {
+        "user": "Whomsonever",
+        "created_at": "2017-05-12T16:02:51Z",
+        "body": "Dear JKotas,\r\nThank you for your prompt response, but I do not understand what to do.\r\n\r\nI would agree that the first time I attempted this tutorial that I probably just opened a standard command prompt whereas the second time (with the errors shown above) I used a Developer Command Prompt for VS2017 as administrator.\r\n\r\nDo I need to delete a folder in system32 or run a command to clean a folder or ?\r\n\r\nThank you"
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2017-05-12T16:09:04Z",
+        "body": "Try this:\r\n\r\n```\r\nmkdir c:\\HelloWorld\r\ncd /d c:\\HelloWorld\r\ndotnet new console\r\ndotnet restore\r\ndotnet build\r\n```"
+      },
+      {
+        "user": "Whomsonever",
+        "created_at": "2017-05-13T01:04:32Z",
+        "body": "Dear JKotas,\r\n\r\nWorked a treat !\r\n\r\nMany thanks for the time you took to help and for your invaluable assistance."
+      }
+    ]
+  },
+  {
+    "number": 21269,
+    "title": "Attempt to improve no unobserved task exception being raised when trying to await null task",
+    "created_at": "2017-04-21T20:24:09Z",
+    "closed_at": "2020-01-31T15:12:42Z",
+    "labels": [
+      "question",
+      "area-System.Threading.Tasks"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/21269",
+    "body": "My application stopped working after targetting `netcoreapp2.0` while working perfectly fine in `netcoreapp1.1`. While the root cause for that is for another issue, it generated quite interesting scenario that I decided to extract.\r\n\r\nConsider following reproducable case:\r\n\r\n```c#\r\nusing System;\r\nusing System.Diagnostics.CodeAnalysis;\r\nusing System.Threading;\r\nusing System.Threading.Tasks;\r\n\r\nnamespace test {\r\n        internal static class Program {\r\n                private static readonly ManualResetEventSlim ShutdownEvent = new ManualResetEventSlim(false);\r\n\r\n                private static void Main() {\r\n                        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;\r\n                        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;\r\n                        Console.WriteLine(\"Start\");\r\n                        Reproduce().Forget();\r\n                        Console.WriteLine(\"Forget\");\r\n                        ShutdownEvent.Wait();\r\n                        Console.WriteLine(\"End\");\r\n                }\r\n\r\n                private static async Task Reproduce() {\r\n                        Console.WriteLine(\"Start inner\");\r\n                        await GetNullTask().ConfigureAwait(false);\r\n                        Console.WriteLine(\"Set event\");\r\n                        ShutdownEvent.Set();\r\n                        Console.WriteLine(\"End inner\");\r\n                }\r\n\r\n                private static Task GetNullTask() { return null; }\r\n\r\n                private static void Forget(this object obj) { }\r\n\r\n                private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e) {\r\n                        Console.WriteLine(\"OnUnhandledException!\");\r\n                }\r\n\r\n                private static void OnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e) {\r\n                        Console.WriteLine(\"OnUnobservedTaskException!\");\r\n                }\r\n        }\r\n}\r\n```\r\n\r\nAs you can see, `await GetNullTask().ConfigureAwait(false);` is trying to await a `Task` that is null. Thing is, nothing is happening, the function is entirely frozen - no unhandled exception being raised, no unobserved task exception being raised (which should happen), and no function returning - limbo.\r\n\r\n```\r\nroot@debian:~/test/test# dotnet exec bin/test.dll\r\nStart\r\nStart inner\r\nForget\r\n```\r\n\r\nI'm pretty sure this is **really** unwanted - I didn't test if the same behaviour exists in .NET core 1.1, but regardless if it does, I think this should be corrected with proper (unobserved task) exception being raised. Otherwise there is no way to even guess that some problem occured, and unobserved task exception event is the function that should catch situation like that.\r\n\r\nOf course there is no issue if we replace `Reproduce().Forget()` with `Reproduce.Wait()`:\r\n\r\n```\r\nUnhandled Exception: System.AggregateException: One or more errors occurred. (Object reference not set to an instance of an object.) ---> System.NullReferenceException: Object reference not set to an instance of an object.\r\n   at test.Program.<Reproduce>d__2.MoveNext()\r\n   --- End of inner exception stack trace ---\r\n   at System.Threading.Tasks.Task.ThrowIfExceptional(Boolean includeTaskCanceledExceptions)\r\n   at System.Threading.Tasks.Task.Wait(Int32 millisecondsTimeout, CancellationToken cancellationToken)\r\n   at System.Threading.Tasks.Task.Wait()\r\n   at test.Program.Main()\r\n```\r\n\r\nBut in `Forget()` case, there should still be `TaskScheduler.UnobservedTaskException` being raised.\r\n\r\n```\r\n.NET Command Line Tools (2.0.0-preview1-005825)\r\n\r\nProduct Information:\r\n Version:            2.0.0-preview1-005825\r\n Commit SHA-1 hash:  b4a821109d\r\n\r\nRuntime Environment:\r\n OS Name:     debian\r\n OS Version:  9\r\n OS Platform: Linux\r\n RID:         ubuntu.16.10-x64\r\n Base Path:   /opt/dotnet/sdk/2.0.0-preview1-005825/\r\n\r\nMicrosoft .NET Core Shared Framework Host\r\n\r\n  Version  : 2.0.0-preview1-002028-00\r\n  Build    : 6d0caecf154d3398b9bc0e637089b6af9e250479\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/21269/comments",
+    "author": "JustArchi",
+    "comments": [
+      {
+        "user": "svick",
+        "created_at": "2017-04-22T00:01:25Z",
+        "body": "I don't see any issue here, or any change between 1.x and 2.0.\r\n\r\n`UnobservedTaskException` is raised when a `Task` with an unobserved exception is *finalized*. Since you don't trigger GC after the `Task` is forgotten, it doesn't get finalized and so `UnobservedTaskException` is never raised. This has been the behavior since .Net 4.0.\r\n\r\nIf you manually trigger GC by adding `GC.Collect();` after `Reproduce().Forget();` and before `ShutdownEvent.Wait();`, you will see `UnobservedTaskException` being raised.\r\n\r\n<s>The only thing I can think of that could fix this would be if the CLR triggered GC periodically, even when no allocations are happening. That would be a really bad idea in production code (because it would hurt performance just to help debugging), but maybe it could make sense in debug mode? Though it would make debug mode different from release mode, which might be unwanted.</s> I realized this wouldn't be worth it.\r\n\r\nTLDR: I don't think there is any bug or compatibility issue here. <s>But maybe there is a chance to improve the debugging experience.</s>"
+      },
+      {
+        "user": "JustArchi",
+        "created_at": "2017-04-22T14:38:12Z",
+        "body": "In this case I'm wondering if there is any chance to do something in such case, as if there are no allocations, GC won't kick in and won't handle the exception. Usually this is not a problem as there are more things going on, but in this specific case there is no way to know what happened, as even during debugging it might not be obvious where is the issue, ```GetNullTask()``` could be far more complex function that does return null somewhere. Personally in real-world scenario I triggered it by `await someObject.DoAsync()`, where `someObject` was `null`. This is far more common scenario, the above one was only for reproducing the problem.\r\n\r\nAs this is not a bug, I'm fine with closing the issue, but I'd be happy if maybe we could in some way improve it, as the only thing possible to do right now is launching another task that will periodically call `GC.Collect();`, and as you noticed this is not really the best way to debug the issue, and I believe that there should be some improvement over current situation.\r\n\r\nWouldn't it be possible to add some extra code that would handle faulty tasks and propagate exception immediately instead of handling responsibility to the GC? This is only an idea, I'm sure you could think of something better that would improve programming experience in such case."
+      },
+      {
+        "user": "svick",
+        "created_at": "2017-04-22T14:54:24Z",
+        "body": "> Wouldn't it be possible to add some extra code that would handle faulty tasks and propagate exception immediately instead of handling responsibility to the GC?\r\n\r\nHow would that code know whether the exception is unobserved? Or do you want a way to get notified of *all* faulting `Task`s?\r\n\r\n---\r\n\r\nAbout debugging your specific scenario: wouldn't enabling \"break when exception is thrown\" help you? Especially since that experience got some nice improvements in VS 2017."
+      },
+      {
+        "user": "JustArchi",
+        "created_at": "2017-04-22T14:57:52Z",
+        "body": "> How would that code know whether the exception is unobserved?\r\n\r\nI thought about some middle-man that would await all tasks that are being forgotten, and immediately after they finish, propagate the exception, instead of waiting for GC to collect them.\r\n\r\n> Or do you want a way to get notified of all faulting Tasks?\r\n\r\nEither is fine, I just want to have a way of detecting such case without waiting for GC to do the job. I'm pretty sure it'd be useful for far more people, as such things might be unobserved otherwise (like in my case, I had to spend some time debugging to find out where is the issue, if I had notification I'd know right away that I have NRE somewhere there instead of believing my app is simply waiting for task to be finished)."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-07-18T22:56:25Z",
+        "body": "Everything here is behaving by design.  Tasks need to be able to propagate exceptions to wherever that Task is later awaited, which means the exceptions must be caught and stored, and then it's only when we can be sure that the Task will never have its exception observed that we can raise the unobserved event... and the only way we can know that is when the object becomes collectible from the GC's perspective."
+      }
+    ]
+  },
+  {
+    "number": 20833,
+    "title": "Problems building library with Novell.Directory.Ldap.NETStandard for Core 1.1",
+    "created_at": "2017-03-31T00:02:57Z",
+    "closed_at": "2020-01-31T14:44:57Z",
+    "labels": [
+      "question",
+      "area-Infrastructure-libraries"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/20833",
+    "body": "I have a library I am building for Core 1.0, and it builds fine:\r\n```json\r\n{\r\n  \"version\": \"1.0.0-*\",\r\n\r\n  \"dependencies\": {\r\n    \"Microsoft.AspNet.WebApi.Client\": \"5.2.3\",\r\n    \"Microsoft.AspNetCore.Mvc.ViewFeatures\": \"1.0.0\",\r\n    \"Microsoft.AspNetCore.Razor.Runtime\": \"1.0.0\",\r\n    \"NETStandard.Library\": \"1.6.0\",\r\n    \"Novell.Directory.Ldap.NETStandard\":  \"2.3.6\" \r\n  },\r\n\r\n  \"frameworks\": {\r\n    \"netstandard1.6\": {\r\n      \"imports\": [ \"dnxcore50\", \"portable-net451+win8\" ]\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nTo update to Core 1.1, the project.json is updated:\r\n```json\r\n{\r\n  \"version\": \"1.0.0-*\",\r\n\r\n  \"dependencies\": {\r\n    \"Microsoft.AspNet.WebApi.Client\": \"5.2.3\",\r\n    \"Microsoft.AspNetCore.Mvc.ViewFeatures\": \"1.1.1\",\r\n    \"Microsoft.AspNetCore.Razor.Runtime\": \"1.1.0\",\r\n    \"NETStandard.Library\": \"1.6.1\",\r\n    \"Novell.Directory.Ldap.NETStandard\": \"2.3.6\"\r\n  },\r\n\r\n  \"frameworks\": {\r\n    \"netstandard1.6\": {\r\n      \"imports\": [ \"portable-net462+win8\" ]\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nIt builds fine in Visual Studio 2015 on my local machine, but when it gets built via my TFS build process,, it errors on dotnet restore:\r\n```\r\n2017-03-29T17:08:59.6868965Z dotnet restore e:\\tfs_work\\11\\s\\CcpWebClient\\Trunk\\CcpWebClient\r\n2017-03-29T17:08:59.6868965Z Error message highlight pattern: \r\n2017-03-29T17:08:59.6868965Z Warning message highlight pattern: \r\n2017-03-29T17:08:59.9364981Z log  : Restoring packages for e:\\tfs_work\\11\\s\\CcpWebClient\\Trunk\\CcpWebClient\\src\\CcpWebClient.Common\\project.json...\r\n2017-03-29T17:09:00.8725041Z log  : Restoring packages for e:\\tfs_work\\11\\s\\CcpWebClient\\Trunk\\CcpWebClient\\src\\CcpWebClient.Web\\project.json...\r\n2017-03-29T17:09:02.0581117Z error: Package System.Net.WebSockets 4.3.0 is not compatible with netstandard1.6 (.NETStandard,Version=v1.6). Package System.Net.WebSockets 4.3.0 supports:\r\n2017-03-29T17:09:02.0581117Z error:   - monoandroid10 (MonoAndroid,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - monotouch10 (MonoTouch,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - netstandard1.3 (.NETStandard,Version=v1.3)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinios10 (Xamarin.iOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinmac20 (Xamarin.Mac,Version=v2.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarintvos10 (Xamarin.TVOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinwatchos10 (Xamarin.WatchOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error: Package System.Collections.Specialized 4.3.0 is not compatible with netstandard1.6 (.NETStandard,Version=v1.6). Package System.Collections.Specialized 4.3.0 supports:\r\n2017-03-29T17:09:02.0737118Z error:   - monoandroid10 (MonoAndroid,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - monotouch10 (MonoTouch,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - netstandard1.3 (.NETStandard,Version=v1.3)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinios10 (Xamarin.iOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinmac20 (Xamarin.Mac,Version=v2.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarintvos10 (Xamarin.TVOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error:   - xamarinwatchos10 (Xamarin.WatchOS,Version=v1.0)\r\n2017-03-29T17:09:02.0737118Z error: One or more packages are incompatible with .NETStandard,Version=v1.6.\r\n```\r\n\r\nThe WebSockets package is a dependency for Novell.Directory.Ldap.NETStandard.\r\n\r\nI don't understand why these packages are suddenly complaining about compatibility with .NETStandard,Version=v1.6 when they were building fine before.\r\n\r\nAny ideas?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/20833/comments",
+    "author": "ksatokcc",
+    "comments": [
+      {
+        "user": "karelz",
+        "created_at": "2017-03-31T02:54:58Z",
+        "body": "@weshaggard @ericstj do you have any troubleshooting advice?"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2017-03-31T16:52:25Z",
+        "body": "Perhaps @ericstj or @emgarten understand what might be happening here as I've never seen this error. The funny part is that it lists that it supports netstandard1.3 which is what should be chosen when restoring for netstandard1.6."
+      },
+      {
+        "user": "ericstj",
+        "created_at": "2017-03-31T16:56:50Z",
+        "body": "Seems funny.  Your project works for me.  Try deleting your nuget packages cache (or rename it for forensic purposes).  I suspect a corrupt package folder."
+      },
+      {
+        "user": "ksatokcc",
+        "created_at": "2017-04-03T21:14:52Z",
+        "body": "Thank you @ericstj! Deleting the nuget package cache did the trick!"
+      }
+    ]
+  },
+  {
+    "number": 2596,
+    "title": "Programatically Getting the path to the directory containing the framework?",
+    "created_at": "2017-02-10T19:35:58Z",
+    "closed_at": "2020-01-30T20:36:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/2596",
+    "body": "Ok, I have a reaaaaly strange question now.\r\n\r\nWe have app that generates c# code. \r\n\r\nWe have unit tests that use the generator to generate c# code, then compiles the code using Roslyn, and then loads the generated assembly and  uses reflection to inspect the code to check that things went right.\r\n\r\nWhen we were running on desktop clr, we used `AppDomain.GetAssemblies()` to get the assemblies that were loaded and added them to the Roslyn compiler as references.\r\n\r\nSince we're now on `netcoreapp1.0` we don't have that. \r\n\r\nFor some assemblies, I was able to cheat a bit and use stuff like `typeof(RestException).GetAssembly().Location,`\r\n\r\nBut in the end I needed to get a handful of assemblies from the current runtime folder.\r\n\r\nI can hardcode them like this:\r\n\r\n``` csharp\r\n        protected static readonly string[] _assemblies = new[] {\r\n            \r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Runtime.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Net.Http.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\mscorlib.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Threading.Tasks.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Net.Primitives.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Collections.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Text.Encoding.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.Text.RegularExpressions.dll\",\r\n            @\"C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\System.IO.dll\",\r\n        ]\r\n```\r\n\r\nAnd it works.\r\n\r\nThis only works because I know the `C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\1.0.3\\` part of the path.\r\n\r\nIs there *any means* to find out that path for the currently executing `netcoreapp1.0` program, so I can locate these programatically?",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/2596/comments",
+    "author": "fearthecowboy",
+    "comments": [
+      {
+        "user": "Petermarcu",
+        "created_at": "2017-02-10T19:38:11Z",
+        "body": "@gkhanna79 , @weshaggard , can you guys give @fearthecowboy guidance here?"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2017-02-10T19:49:38Z",
+        "body": "One approach that may work is to do `typeof(object).GetAssembly().Location` and then traverse for `*.dll` in that directory which will give you all the assemblies next to the core assembly. That will give you all the potential references not necessary what is loaded at runtime so depending on your scenario that might be enough. \n\n---\n\nActually thinking about that a little more that would also pick-up native dlls which you don't want to pass to the compiler but you can probably do a little further filtering to things that start with \"System\" or \"Microsoft\". "
+      },
+      {
+        "user": "fearthecowboy",
+        "created_at": "2017-02-10T19:53:17Z",
+        "body": "I've been trying that. \r\n\r\nI can't seem to get one in the framework folder. They are all showing up as the ones in the `nuget` packages folder.\r\n\r\nHave an idea of a type that's in `mscorlib` (but doesn't come from a pkg elsewhere?)\r\n\r\n\r\n\n\n---\n\nThe closest I've come so far is :\r\n\r\n``` csharp\r\n        protected static string DOTNET = System.IO.Path.GetDirectoryName( System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);\r\n        protected static string FRAMEWORK= Path.Combine( DOTNET, \"shared\", \"Microsoft.NETCore.App\", \"1.0.3\" );\r\n\r\n        protected static readonly string[] _assemblies = new[] {\r\n            \r\n            Path.Combine(FRAMEWORK, \"System.Runtime.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Net.Http.dll\"),\r\n            Path.Combine(FRAMEWORK, \"mscorlib.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Threading.Tasks.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Net.Primitives.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Collections.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Text.Encoding.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.Text.RegularExpressions.dll\"),\r\n            Path.Combine(FRAMEWORK, \"System.IO.dll\"),\r\n        ]\r\n```\r\n\r\nBut I'd hate to hard-code the '1.0.3' part of that ..."
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2017-02-10T19:54:43Z",
+        "body": "How are you running? If you are doing \"dotnet run\" it does do a hybrid of loading assemblies from packages instead of the shared framework. If you do \"dotnet <yourapp>\" I think the approach I used would work.\r\n\r\nI'm not sure what a great way to do that is for \"dotnet run\" scenario. \r\n\r\nUnfortunately we don't expose the shared framework version anywhere, especially not in \"dotnet run\" scenarios because it doesn't run on the shared framework. "
+      },
+      {
+        "user": "fearthecowboy",
+        "created_at": "2017-02-10T20:02:02Z",
+        "body": "It's unit tests, so it's run with `dotnet test`\r\n\r\n"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2017-02-10T20:19:34Z",
+        "body": "Yeah I guess there isn't any great solution right now. Good news is that AppDomain.GetAssemblies() will be back in .NET Core 2.0.\r\n\r\nFor now in 1.0 you try another hack like getting the FX deps file location that the host sets up via `AppContext.GetData(\"FX_DEPS_FILE\")` and getting the directory from that. I believe that might get you what you want for your scenarios right now. "
+      },
+      {
+        "user": "gkhanna79",
+        "created_at": "2017-02-17T01:18:44Z",
+        "body": "@fearthecowboy Does the above answer your question?\n\n---\n\n@fearthecowboy Let us know if the above answers your question."
+      },
+      {
+        "user": "fearthecowboy",
+        "created_at": "2017-02-23T18:47:28Z",
+        "body": "Yes, I'm doing pretty good with this approach."
+      }
+    ]
+  },
+  {
+    "number": 17755,
+    "title": "Assigning VectorX right to VectorX left",
+    "created_at": "2016-07-02T05:50:03Z",
+    "closed_at": "2020-01-31T11:46:52Z",
+    "labels": [
+      "question",
+      "area-System.Numerics"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/17755",
+    "body": "CopyTo allows copying of value to arrays but not another Vector of the same length.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/17755/comments",
+    "author": "lampuiho",
+    "comments": [
+      {
+        "user": "benaadams",
+        "created_at": "2016-07-02T06:13:07Z",
+        "body": "Vector is a value type so you just need to use assignment to do a copy.\n\ne.g. `var vectorB = vectorA;`\n"
+      },
+      {
+        "user": "mellinoe",
+        "created_at": "2016-07-04T06:20:25Z",
+        "body": "Yep, @benaadams pretty much covered it. Anything else for clarification, @lampuiho ?\n"
+      },
+      {
+        "user": "lampuiho",
+        "created_at": "2016-07-04T07:22:34Z",
+        "body": "No, that's all. Thank you. I do have a question about Vector < double >  though. How do I assign values directly to it? I am actually trying to do matrix multiplication here. Currently I am using a locally allocated \"fixed size\" array with unrolled dot product to do the multiplication with a vector. But the extra code to initialise the array and wrapping it into a vector is quite costly (and I have to wrap it each time the multiplication is done with values allocated to the array). Is there any faster way to do it without initialising the array at all and directly perform the multiplication on the locally initialised vector.\n\nVector4 only supports float*\n"
+      },
+      {
+        "user": "mellinoe",
+        "created_at": "2016-07-05T17:42:49Z",
+        "body": "`Vector<T>` is designed to be immutable once created, so the individual elements of a vector cannot be modified after it is constructed. There's a few main ways to initialize a `Vector<T>`:\n- Store all of your data upfront in a large array, create vectors from it, using different contiguous parts of the array\n- Store your data in a small, local array, perhaps re-using the array for several constructions, and modifying the values in-between. This sounds like what you're doing already.\n- Store your data on the stack (using `float* ptr = stackalloc float[Vector<float>.Count]`) and then using `Unsafe.Read<Vector<float>>(ptr)`. You can avoid the temporary allocation here, but you have to be careful about the unsafe code and boundary checks.\n\n> Vector4 only supports float*\n\nIs this related to the above question? I'm not sure what you're referring to.\n"
+      },
+      {
+        "user": "karelz",
+        "created_at": "2016-09-26T21:52:53Z",
+        "body": "Original question seems to be answered. Feel free to open a new issue if needed ...\n"
+      }
+    ]
+  },
+  {
+    "number": 17594,
+    "title": "Hello. Is it possible to install CoreFX to a custom folder?",
+    "created_at": "2016-06-13T09:54:05Z",
+    "closed_at": "2020-01-31T11:39:17Z",
+    "labels": [
+      "question",
+      "area-Infrastructure-libraries",
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/17594",
+    "body": "Is it possible to install CoreFX to a custom folder after the building from sources?\n\nCommand to build:\n`./build.sh x64 debug`\n\nBut in this case CoreFX installs to a current folder. What command I must enter to onfigure sources and instal to a custom folder?\nPS: OS Ubuntu 16.04 LTS. Problem with building are missing.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/17594/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-13T16:11:35Z",
+        "body": "Hi @zenitfan219 thanks for posting your question. There is no easy way of selecting the drop folder of the build output. However, corefx itself doesn't install in that directory, only the output is dropped there. If you want to use the corefx that you just built in a different project, you can do this by referencing the packages that get produced in `<corefxRepoPath>/bin/packages` from your project.\n\nPlease let me know if this answers your question.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-13T21:24:24Z",
+        "body": "Okay, thank You for yor answer. Then next question.\n\nCan I use built packages in <corefxRepoPath>/bin/packages without source code? I want to delete source code without <corefxRepoPath>/bin directory. Does it work?\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-13T21:47:40Z",
+        "body": "I'm not 100% sure I get your question, but if what you want to know is if the built packages are self-contained meaning that they don't depend on source code being in your machine, then that is correct. You only need the source code to build the packages, but once they are built, you can delete all of the repo code entirely from your machine, and just reference the packages that were produced.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-13T22:45:07Z",
+        "body": "Thank you, @joperezr.\n\nAnd the last question. Can I build CoreFX not in repo folder?\n"
+      },
+      {
+        "user": "mellinoe",
+        "created_at": "2016-06-13T23:16:06Z",
+        "body": "Do you mean if you do not have corefx in a git repository? Right now, it does not work, but that's something we should fix, in my opinion. We have some build steps that add assembly metadata based on  some git information. We should be able to skip that step if there is no git repository.\n\nFor now, you'll need to be in a git repo to build.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-14T08:46:37Z",
+        "body": "No.\nI mean if I clonned CoreFX repo to my PC to folder `/home/<username>/MS_GIT/corefx` and wanted to build in folder `/home/<username>/MS_BINARIES/corefx/bin`. Is it possible?\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-14T16:31:30Z",
+        "body": "No. There is no easy way to have the output of the build be a folder different than the `<repoRoot>/bin`. That said, you could easily just wait for the build to finish and then either manually or by a script copy the outputs (all of the bin directory) to a different folder in your machine, and then use that. The reason why there is no easy way to do this is because every time you run build.sh, we basically build two phases of the repo, first the native assets and then the managed ones so it's not super straight forward to change outputs from both phases into a different folder.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-14T22:09:06Z",
+        "body": "Thank you for your answers!\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-14T23:11:22Z",
+        "body": "sure no problem! happy to help :smile: \n"
+      }
+    ]
+  },
+  {
+    "number": 5463,
+    "title": "How to print exception message and type from IL_Throw?",
+    "created_at": "2016-03-30T03:56:31Z",
+    "closed_at": "2020-01-30T23:29:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/5463",
+    "body": "Is there an easy way to print the exception object from gdb when we are in DispatchManagedException? I cannot do lldb as I'm on arm where it is not working.'\n\nThanks!\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/5463/comments",
+    "author": "manu-st",
+    "comments": [
+      {
+        "user": "jkotas",
+        "created_at": "2016-03-31T03:56:55Z",
+        "body": "@janvorli Do you have set of tricks for this?\n"
+      },
+      {
+        "user": "janvorli",
+        "created_at": "2016-03-31T13:29:17Z",
+        "body": "@manu-silicon sorry for not responding earlier, I am on a sick leave at the moment and so I monitor my emails only once a day.\nAt the DispatchManagedException, you'd need to go up the stack to IL_Throw to access the exception object and then use `p *((ExceptionObject*)obj)->_message.m_asString->m_Characters`  to get the exception message. \nYou can also set a breakpoint at RaiseTheExceptionInternalOnly and then \ndo `p *((ExceptionObject*)throwable)->_message.m_asString->m_Characters`, which works for the case when the DispatchManagedException was called from IL_Rethrow too.\n\nThere is a also a way to turn on exception processing logging where you can see various details on how the managed frames are being processed (including method names for each frame), which clauses are being considered, etc. Use the following settings (the LogFacility value picks the EH logs):\n\n```\nexport COMPlus_LogEnable=1\nexport COMPlus_LogToConsole=1\nexport COMPlus_LogFacility=4000\nexport COMPlus_LogLevel=6\n```\n"
+      },
+      {
+        "user": "manu-st",
+        "created_at": "2016-04-01T01:31:09Z",
+        "body": "@janvorli Not a problem. I was able to get the message from the exception and this was very helpful. I also enabled the logging but it does not print the message part.\n"
+      }
+    ]
+  },
+  {
+    "number": 4084,
+    "title": "How to get GC logs?",
+    "created_at": "2015-03-27T19:27:31Z",
+    "closed_at": "2020-01-30T22:15:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/4084",
+    "body": "GC has some useful lines for logging. Examples:\n\n`coreclr\\src\\gc\\gc.cpp`\n\n```\nvoid GCStatistics::DisplayAndUpdate()\n{\n    LIMITED_METHOD_CONTRACT;\n\n    if (logFileName == NULL || logFile == NULL)\n        return;\n\n    {\n        if (cntDisplay == 0)\n            fprintf(logFile, \"\\nGCMix **** Initialize *****\\n\\n\");\n\n        fprintf(logFile, \"GCMix **** Summary ***** %d\\n\", cntDisplay);\n\n        // NGC summary (total, timing info)\n        ngc.DisplayAndUpdate(logFile, \"NGC \", &g_LastGCStatistics.ngc, cntNGC, g_LastGCStatistics.cntNGC, msec);\n\n        // FGC summary (total, timing info)\n        fgc.DisplayAndUpdate(logFile, \"FGC \", &g_LastGCStatistics.fgc, cntFGC, g_LastGCStatistics.cntFGC, msec);\n\n        // BGC summary\n        bgc.DisplayAndUpdate(logFile, \"BGC \", &g_LastGCStatistics.bgc, cntBGC, g_LastGCStatistics.cntBGC, msec);\n```\n\n`coreclr\\src\\gc\\handletable.cpp`\n\n```\nvoid DEBUG_PostGCScanHandler(HandleTable *pTable, const UINT *types, UINT typeCount, UINT condemned, UINT maxgen, ScanCallbackInfo *info)\n{\n    LIMITED_METHOD_CONTRACT;\n\n    // looks like the GC supports more generations than we expected\n    _ASSERTE(condemned < MAXSTATGEN);\n\n    // remember the highest generation we've seen\n    if (pTable->_DEBUG_iMaxGen < (int)condemned)\n        pTable->_DEBUG_iMaxGen = (int)condemned;\n\n    // update the statistics\n    pTable->_DEBUG_TotalBlocksScanned                [condemned] += info->DEBUG_BlocksScanned;\n    pTable->_DEBUG_TotalBlocksScannedNonTrivially    [condemned] += info->DEBUG_BlocksScannedNonTrivially;\n    pTable->_DEBUG_TotalHandleSlotsScanned           [condemned] += info->DEBUG_HandleSlotsScanned;\n    pTable->_DEBUG_TotalHandlesActuallyScanned       [condemned] += info->DEBUG_HandlesActuallyScanned;\n\n    // if this is an ephemeral GC then dump ephemeral stats for this scan right now\n    if (condemned < maxgen)\n    {\n        // dump a header for the stats with the condemned generation number\n        LOG((LF_GC, LL_INFO1000, \"--------------------------------------------------------------\\n\"));\n        LOG((LF_GC, LL_INFO1000, \"Ephemeral Handle Scan Summary:\\n\"));\n        LOG((LF_GC, LL_INFO1000, \"    Generation            = %u\\n\", condemned));\n\n        // dump the handle types we were asked to scan\n        LOG((LF_GC, LL_INFO1000, \"    Handle Type(s)        = %u\", *types));\n        for (UINT u = 1; u < typeCount; u++)\n            LOG((LF_GC, LL_INFO1000, \",%u\", types[u]));\n        LOG((LF_GC, LL_INFO1000,  \"\\n\"));\n\n        // dump the number of blocks and slots we scanned\n        ULONG32 blockHandles = info->DEBUG_BlocksScanned * HANDLE_HANDLES_PER_BLOCK;\n        LOG((LF_GC, LL_INFO1000, \"    Blocks Scanned        = %u (%u slots)\\n\", info->DEBUG_BlocksScanned, blockHandles));\n```\n\nWhat the best way to get the debug GC logs?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/4084/comments",
+    "author": "AndreyAkinshin",
+    "comments": [
+      {
+        "user": "brianrob",
+        "created_at": "2015-03-27T21:39:25Z",
+        "body": "To capture LOG() statements, you'll need a debug build.  Then, you can use the following environment variables control logging:\n\nEnable:\nset COMPLUS_LogEnable=1\n\nControl verbosity:  (Look at inc\\log.h for log levels).\nset COMPLUS_LOGLEVEL=6\n\nDecide where to send the logs:  (See utilcode\\log.cpp InitLogging() for options)\nFor example:\nset COMPLUS_LogToFile=1\nset COMPLUS_LogFile=out.txt\n\nYou can also control which LOG() statements make it into the logs via COMPLUS_LOGFACILITY.  See inc\\loglf.h for the values (e.g. LF_GC).\n"
+      },
+      {
+        "user": "AndreyAkinshin",
+        "created_at": "2015-03-28T05:06:35Z",
+        "body": "@brianrob, thanks!\n"
+      },
+      {
+        "user": "devinvisible",
+        "created_at": "2017-12-06T22:01:02Z",
+        "body": "Any way to enable logging via these environment variables with a non-debug version of .net core?"
+      }
+    ]
+  },
+  {
+    "number": 14080,
+    "title": "Why having System.Console.dll?",
+    "created_at": "2015-02-07T15:56:28Z",
+    "closed_at": "2020-01-31T08:50:09Z",
+    "labels": [
+      "question",
+      "area-System.Console"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/14080",
+    "body": "Why having a new DLL called `System.Console.dll`?\n`System.Console` class is already in `mscorlib.dll` since .NET Framework 1.0\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/14080/comments",
+    "author": "linquize",
+    "comments": [
+      {
+        "user": "ellismg",
+        "created_at": "2015-02-08T00:40:39Z",
+        "body": "One of the design goals of .NET Core was to re-factor the framework surface are into a collection of smaller assemblies, each focused on particular thing.  We wanted to remove monolithic assemblies like mscorlib which contain unrelated components that evolve at different rates.\n\nFor example, in .NET Core, there is no mscorlib.  Instead, the base types are in in System.Runtime.dll, collections are split across multiple assemblies (System.Collections.dll, System.Collections.Nongeneric.dll, etc), Console is in System.Consoel.dll, and so on.\n\nTo implement some of these contracts, we use facades, which are assemblies that contain type-forwarders to another assembly.  So the implementation of System.Runtime.dll when running on the .NET Framework is simply an assembly that says: \"System.Object is in mscorlib.dll\".\n\nHowever, when possible we want to provide implementations that are not tied to a specific runtime (e.g. The full .NET Framework, CoreCLR, .NET Native) but instead can be used across all of them.  For that reason, we took the time to pull the implementation of System.Console.dll into it's own assembly which can work across any runtime, instead of using facades to point at mscorlib.dll\n\nHopefully this explains the rationale behind the move.\n"
+      },
+      {
+        "user": "linquize",
+        "created_at": "2015-02-08T04:07:09Z",
+        "body": "There is `mscorlib.dll` in coreclr. And it has types like `System.Object` and `System.Console`. Is it for backward compatibility so the binaries built from VS2010 can be run?\n"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2015-02-08T05:44:51Z",
+        "body": "@linquize what are you expecting it to be backwards compatible with? It certainly isn't compatible with mscorlib that ships on the full .NET framework as it is much smaller. It is compatible with the mscorlib that ships for Windows Phone which also runs on CoreCLR. However for .NET Core we don't expect anyone to ever compile directly against mscorlib and instead compile against System.Runtime, etc, as @ellismg points out. So essentially mscorlib is an implementation detail on CoreCLR and for .NET Core we reserve the right to put the implementation into other factored assemblies like System.Console.dll.\n\nThis abstraction layer (i.e. compiling against System.Runtime instead of mscorlib) also helps us support things like .NET Native which doesn't have an mscorlib at all but it does support all the APIs that System.Runtime provides. \n"
+      },
+      {
+        "user": "linquize",
+        "created_at": "2015-02-08T05:50:04Z",
+        "body": "If I compile my program with `System.Runtime.dll` which works in CoreCLR, does it also work in Full .NET Framework?\n"
+      },
+      {
+        "user": "weshaggard",
+        "created_at": "2015-02-08T05:56:39Z",
+        "body": "@linquize Yes it will work on the full .NET Framework as well.\n"
+      },
+      {
+        "user": "linquize",
+        "created_at": "2015-02-08T06:02:05Z",
+        "body": "thanks for your detailed explanation!\n"
+      }
+    ]
+  },
+  {
+    "number": 30345,
+    "title": "Enable disabled xunit warnings",
+    "created_at": "2019-07-23T15:23:08Z",
+    "closed_at": "2020-02-01T03:32:35Z",
+    "labels": [
+      "test-enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/30345",
+    "body": "- [x] xUnit1019\tMemberData must reference a member providing a valid data type\r\n- [x] xUnit1026\tTheory methods should use all of their parameters\r\n- [x] xUnit2017\tDo not use Contains() to check if a value exists in a collection",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/30345/comments",
+    "author": "stephentoub",
+    "comments": [
+      {
+        "user": "danmoseley",
+        "created_at": "2019-07-23T16:20:39Z",
+        "body": "Community folks, as indicated by the labels, this is a great first issue."
+      },
+      {
+        "user": "ViktorHofer",
+        "created_at": "2019-07-23T17:57:17Z",
+        "body": "You are fast Mr Toub. Meanwhile I'm at an .NET Event giving a talk and watching your PRs coming in. I feel like a PM."
+      },
+      {
+        "user": "Gnbrkm41",
+        "created_at": "2019-08-02T16:47:29Z",
+        "body": "working on 2000.\n\n---\n\na couple of the xUnit2003 errors from src/Common/tests/System/Security/Cryptography/AlgorithmImplementations/ECDsa/ECDsaTests.netcoreapp.cs slipped out somehow, after dotnet/corefx#39696: L193/L216\r\n\r\nmaybe I'll just do it whilst I'm doing this.\n\n---\n\n....actually.... turns out that there's even more (well, 10). I started to wonder if the build sequence is somewhat flaky and misses some of the analyzers? I've had it happen a few times, where I had 500+ errors and building it again with some edits made all of them to disappear, despite the fact that I've fixed none. `build -clean` then rebuilding did fix the issue though.\n\n---\n\nAttempting to grab 1026, if noone's working on it."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-08-06T16:15:48Z",
+        "body": "@Gnbrkm41, are you working on 1026?  I started to and then noticed your comment.  If you're actively working on it, I'll stop, otherwise I'll finish it up."
+      },
+      {
+        "user": "Gnbrkm41",
+        "created_at": "2019-08-06T16:18:28Z",
+        "body": "@stephentoub, feel free to finish up; there's still quite a lot left to finish, and I probably won't have time to finish it up for now. Thanks!"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-08-21T13:26:54Z",
+        "body": "All rules we plan to enable have been enabled.  Thanks!"
+      },
+      {
+        "user": "Gnbrkm41",
+        "created_at": "2019-08-21T13:39:57Z",
+        "body": "Pretty amazing to see all of them enabled, Thanks everyone!"
+      }
+    ]
+  },
+  {
+    "number": 18767,
+    "title": "Improve test suite for System.CodeDom",
+    "created_at": "2016-09-29T01:22:33Z",
+    "closed_at": "2020-01-31T12:41:17Z",
+    "labels": [
+      "area-System.CodeDom",
+      "test-enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/18767",
+    "body": "Code coverage could be increased significantly.  And we'd ideally avoid some of the existing duplication between the C# and VB generator tests (which represent the bulk of the current testing).\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/18767/comments",
+    "author": "stephentoub",
+    "comments": [
+      {
+        "user": "Priya91",
+        "created_at": "2016-12-07T08:03:12Z",
+        "body": "@hughbe @stephentoub Is this fixed in the linked merged PRs, should we close this or is there some work left?"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2016-12-07T12:24:32Z",
+        "body": "@hughbe did a good job adding a bunch of tests.  There's still more that can be done, but the coverage level is high enough that I don't think we need an issue tracking it anymore."
+      }
+    ]
+  },
+  {
+    "number": 14551,
+    "title": "Named pipes and array segment",
+    "created_at": "2015-05-07T00:55:56Z",
+    "closed_at": "2020-01-31T09:11:25Z",
+    "labels": [
+      "enhancement",
+      "area-System.IO",
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/14551",
+    "body": "Hello. was thinking why the named pipe api doesn't provide the possibility to use array segments as the socket api to be able to use buffer pooling to reduce the impact of pinning for arrays that are not big enough to make it to LOH. is a common technique with socket to avoid possible out of memory exception due to fragmentation. I am having nightmares because a new app we are building is doing a lot of io via named pipes and now OOM exceptions are all over the place. Any plan about this kind of features?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/14551/comments",
+    "author": "colombod",
+    "comments": [
+      {
+        "user": "terrajobst",
+        "created_at": "2015-09-29T17:39:10Z",
+        "body": "@KrzysztofCwalina, seems related to `System.Buffers`.\n"
+      },
+      {
+        "user": "colombod",
+        "created_at": "2015-09-30T06:01:51Z",
+        "body": "Related but not quite the same.\n"
+      },
+      {
+        "user": "AlexGhiondea",
+        "created_at": "2016-11-24T00:06:24Z",
+        "body": "@colombod we currently do not have a specific feature in mind for this. This is a fairly complex area and I suspect it will be a lot of work/thinking to get this right.\r\n\r\nIs this something you are interested in prototyping and seeing what a surface area / implementation / challenges would look like? "
+      },
+      {
+        "user": "colombod",
+        "created_at": "2016-11-24T06:02:45Z",
+        "body": "Could give it a try!\r\n\r\n\r\n"
+      },
+      {
+        "user": "AlexGhiondea",
+        "created_at": "2016-11-24T06:04:57Z",
+        "body": "Awesome! :)\r\n\r\nLet us know how we can help out! :)"
+      },
+      {
+        "user": "colombod",
+        "created_at": "2016-11-25T21:26:03Z",
+        "body": "Will get some proposal across, the idea is to mirror the signature of the api for async IO on socket using segments, the idea is to reduce the need for contiguous buffers at least when reading, as you point out will need quite few thinking on it. "
+      },
+      {
+        "user": "JeremyKuhne",
+        "created_at": "2017-10-09T18:27:27Z",
+        "body": "@KrzysztofCwalina, @stephentoub  I presume this would be answered by Span<T> APIs?"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2017-10-09T18:39:19Z",
+        "body": "> I presume this would be answered by Span APIs?\r\n\r\nI'm unclear on the suggestion. @colombod, can you clarify?  I'm unclear how `ArraySegment<byte>` APIs would actually enable something that's not possible today; you can certainly pool buffers and pass them into Read/Write/ReadAsync/WriteAsync methods.  `ArraySegment<byte>` is just a struct that wraps the `byte[]` with the offset and count ints, and if you have an `ArraySegment<byte>`, you can just pass its Array, Offset, and Count into the corresponding arguments. If the request is purely to be able to have other Read/Write/ReadAsync/WriteAsync overloads that work with some kind of \"segment\"-like type that encompasses a `byte[]` along with an offset and a count, then yeah, that should be covered by the new `{ReadOnly}Memory<byte>` and `{ReadOnly}Span<byte>`-based overloads already added to Stream for 2.1."
+      },
+      {
+        "user": "colombod",
+        "created_at": "2017-10-11T12:50:21Z",
+        "body": "Array segment is good and can be used on the socket api, but is not generally available on other io apis like on named pipes for example. The new span and memory api seem to hit the spot! They totally map the problem space I was hitting with the conventional stream api"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2017-10-11T12:53:36Z",
+        "body": "> is not generally available on other io apis like on named pipes for example\r\n\r\nNot built in, but you can easily add them yourself via extensions, e.g.\r\n```C#\r\npublic static int Read(this Stream s, ArraySegment<byte> buffer) =>\r\n    s.Read(buffer.Array, buffer.Offset, buffer.Count);\r\n\r\npublic static void Write(this Stream s, ArraySegment<byte> buffer) =>\r\n    s.Write(buffer.Array, buffer.Offset, buffer.Count);\r\n```"
+      },
+      {
+        "user": "colombod",
+        "created_at": "2017-10-11T12:56:56Z",
+        "body": "The only thing I was doing on top of spans was to see them as a memory buffer and then be able to represent a required X amount of memory as a set of spans. The extension is interesting but the interesting part would be to be able to pass the Memory object all the way down to native call instead of keep on doing pinvoke for each span. Time to deep-dive in the span and memory api, looks gorgeous"
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2017-10-18T23:22:20Z",
+        "body": "Ok, thanks.  Sounds like this can be closed then."
+      }
+    ]
+  },
+  {
+    "number": 14245,
+    "title": "Improve code coverage for System.Resources.ResourceWriter",
+    "created_at": "2015-02-19T13:56:23Z",
+    "closed_at": "2020-01-31T08:56:49Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/14245",
+    "body": "According to the current code coverage report, this library is only at 56%.  Our general goal is closer to 90%, though this will depend on the library.  We should investigate to see whether the current coverage level is appropriate, and if not, improve our test suites to provide better coverage.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/14245/comments",
+    "author": "stephentoub",
+    "comments": [
+      {
+        "user": "ramarag",
+        "created_at": "2015-04-10T23:43:34Z",
+        "body": "With the change 67da6227c3 System.Resources.ResourceWriter has become System.Resources.ReaderWriter and has the following coverage details with aggregate to 80 %, the product coverage is 86% and 95%. To improve upon net coverage is only possible by a thorough testing of the spec line by line\n\n@stephentoub :I am closing this issue for now. Do reopen it if you think higher coverage is needed !!\n\n| Name | Covered | Uncovered | Coverable | Total | Coverage |\n| --- | --- | --- | --- | --- | --- |\n| System.Resources.ReaderWriter | 357 | 89 | 446 | 1016 | 80% |\n| **Core Product** : |  |  |  |  |  |\n| System.Resources.ResourceReader | 223 | 36 | 259 | 487 | 86.1% |\n| System.Resources.ResourceWriter | 103 | 5 | 108 | 272 | 95.3% |\n| **Helper Code** : |  |  |  |  |  |\n| System.Resources.FastResourceComparer | 10 | 6 | 16 | 49 | 62.5% |\n| System.SR | 21 | 42 | 63 | 208 | 33.3% |\n"
+      }
+    ]
+  }
+]

@@ -1,0 +1,205 @@
+[
+  {
+    "number": 88,
+    "title": "Missing wheels on pypi",
+    "created_at": "2025-02-17T10:04:41Z",
+    "closed_at": "2025-02-18T05:22:09Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/issues/88",
+    "body": "Hi,\n\nI noticed you recently added pre-built wheels for Python versions other than 3.10, but these are missing on pypi - I can install the wheels in the github release just fine, but having them on pypi would be nice.",
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/88/comments",
+    "author": "falkaer",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-02-17T10:51:39Z",
+        "body": "@falkaer Thanks for your report, sorry for the trouble."
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-02-18T05:21:58Z",
+        "body": "@falkaer uploaded :)"
+      },
+      {
+        "user": "falkaer",
+        "created_at": "2025-02-18T07:32:48Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 44,
+    "title": "[CI][Test] Add test cases for tilelang transform PipelinePlanning",
+    "created_at": "2025-01-24T16:59:18Z",
+    "closed_at": "2025-01-24T17:30:32Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/pull/44",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/44/comments",
+    "author": "Cunxiao2002",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-24T17:30:16Z",
+        "body": "LGTM, thanks @Cunxiao2002 "
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "Layout infer error when intermediate buffers are only assigned value",
+    "created_at": "2025-01-24T11:01:52Z",
+    "closed_at": "2025-01-25T17:19:12Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/issues/40",
+    "body": "When assign value for `acc_o`, `logsum` or `scores_max` (Any buffer created)\n                \nwill get error:\n>  File \"/root/TileLang/src/transform/layout_inference.cc\", line 274\nInternalError: Check failed: layout_map.count(buffer) != 0 (0 vs. 0) : The layout for fragment scores_max can not be inferred correctly.\n\nThe problem occurs when doing:\n```\nmod = tl.transform.LayoutInference()(mod)\n```\n\nHowever, if we uncomment the code below the value assignment, where the buffer will be used, it can infer correctly.\n\nCode:\n```\n# type: ignore\n\nimport torch\nimport torch.nn.functional as F\nimport tilelang\nfrom tilelang import Profiler\nfrom tilelang.autotuner import *\nimport tilelang.language as T\nimport itertools\nimport argparse\nfrom functools import partial\n\ndef flashdecoding(batch, heads, seqlen_q, seqlen_kv, dim, is_casual, num_split, tune=False):\n    scale = (1.0 / dim) ** 0.5 * 1.44269504  # log2(e)\n    shape_q    = [batch, seqlen_q, heads, dim]\n    shape_kv   = [batch, seqlen_kv, heads, dim]\n    part_shape = [batch, seqlen_q, heads, num_split, dim]\n    dtype      = \"float16\"\n    accum_dtype = \"float\"\n\n    def kernel_func(block_M, block_N):\n        \n        @T.macro\n        def MMA0(\n            K: T.Buffer(shape_kv, dtype),\n            Q_shared: T.Buffer([block_M, dim], dtype),\n            K_shared: T.Buffer([block_N, dim], dtype),\n            acc_s: T.Buffer([block_M, block_N], accum_dtype),\n            k: T.int32,\n            bx: T.int32,\n            by: T.int32,\n            bz: T.int32,\n        ):\n            T.copy(K[bz, k * block_N:(k + 1) * block_N, by, :], K_shared)\n            if is_casual:\n                for i, j in T.Parallel(block_M, block_N):\n                    acc_s[i, j] = T.if_then_else(bx * block_M + i >= k * block_N + j, 0,\n                                                 -T.infinity(acc_s.dtype))\n            else:\n                T.clear(acc_s)\n            T.gemm(Q_shared, K_shared, acc_s, transpose_B=True, policy=T.GemmWarpPolicy.FullRow)\n\n        @T.macro\n        def MMA1(\n                V: T.Buffer(shape_kv, dtype),\n                V_shared: T.Buffer([block_M, dim], dtype),\n                acc_s_cast: T.Buffer([block_M, block_N], dtype),\n                acc_o: T.Buffer([block_M, dim], accum_dtype),\n                k: T.int32,\n                by: T.int32,\n                bz: T.int32,\n        ):\n            T.copy(V[bz, k * block_N:(k + 1) * block_N, by, :], V_shared)\n            T.gemm(acc_s_cast, V_shared, acc_o, policy=T.GemmWarpPolicy.FullRow)\n\n        @T.macro\n        def Softmax(\n                acc_s: T.Buffer([block_M, block_N], accum_dtype),\n                acc_s_cast: T.Buffer([block_M, block_N], dtype),\n                scores_max: T.Buffer([block_M], accum_dtype),\n                scores_max_prev: T.Buffer([block_M], accum_dtype),\n                scores_scale: T.Buffer([block_M], accum_dtype),\n                scores_sum: T.Buffer([block_M], accum_dtype),\n                logsum: T.Buffer([block_M], accum_dtype),\n        ):\n            T.copy(scores_max, scores_max_prev)\n            T.fill(scores_max, -T.infinity(accum_dtype))\n            T.reduce_max(acc_s, scores_max, dim=1, clear=False)\n\n            for i in T.Parallel(block_M):\n                scores_scale[i] = T.exp2(scores_max_prev[i] * scale - scores_max[i] * scale)\n            for i, j in T.Parallel(block_M, block_N):\n                acc_s[i, j] = T.exp2(acc_s[i, j] * scale - scores_max[i] * scale)\n                \n            T.reduce_sum(acc_s, scores_sum, dim=1)\n            for i in T.Parallel(block_M):\n                logsum[i] = logsum[i] * scores_scale[i] + scores_sum[i]\n            T.copy(acc_s, acc_s_cast)\n\n        @T.macro\n        def Rescale(\n                acc_o: T.Buffer([block_M, dim], accum_dtype),\n                scores_scale: T.Buffer([block_M], accum_dtype),\n        ):\n            for i, j in T.Parallel(block_M, dim):\n                acc_o[i, j] *= scores_scale[i]\n\n        @T.macro\n        def flash_attn_split(\n            Q: T.Buffer(shape_q, dtype),\n            K: T.Buffer(shape_kv, dtype),\n            V: T.Buffer(shape_kv, dtype),\n            Output: T.Buffer(shape_q, dtype),\n        ):\n            with T.Kernel(T.ceildiv(seqlen_q, block_M), heads * batch, num_split, threads=128 * 2) as (bx, by, bz):\n                Q_shared = T.alloc_shared([block_M, dim], dtype)\n                K_shared = T.alloc_shared([block_N, dim], dtype)\n                V_shared = T.alloc_shared([block_N, dim], dtype)\n                O_shared = T.alloc_shared([block_M, dim], dtype)\n                acc_s = T.alloc_fragment([block_M, block_N], accum_dtype)\n                acc_s_cast = T.alloc_fragment([block_M, block_N], dtype)\n                acc_o = T.alloc_fragment([block_M, dim], accum_dtype)\n                scores_max = T.alloc_fragment([block_M], accum_dtype)\n                scores_max_prev = T.alloc_fragment([block_M], accum_dtype)\n                scores_scale = T.alloc_fragment([block_M], accum_dtype)\n                scores_sum = T.alloc_fragment([block_M], accum_dtype)\n                logsum = T.alloc_fragment([block_M], accum_dtype)\n                \n                mid = bx\n                hid = by % heads\n                bid = by // heads\n                sid = bz\n\n                T.annotate_layout({Q_shared: tl.layout.make_swizzled_layout(Q_shared)})\n                T.copy(Q[bid, 0, hid, :], Q_shared[0, :])\n                T.fill(acc_o, 0)\n                T.fill(logsum, 0)\n                T.fill(scores_max, -T.infinity(accum_dtype))\n\n                # loop_range = (\n                #     T.min(T.ceildiv(seqlen_kv, block_N), T.ceildiv((mid + 1) * block_M, block_N)) \n                #     if is_casual else T.ceildiv((seqlen_kv // num_split), block_N)\n                # )\n\n                # for k in T.Pipelined(loop_range, num_stages=2):\n                #     MMA0(K, Q_shared, K_shared, acc_s, k, bx, by, bz)\n                #     Softmax(acc_s, acc_s_cast, scores_max, scores_max_prev, scores_scale,\n                #             scores_sum, logsum)\n                #     Rescale(acc_o, scores_scale)\n                #     MMA1(V, V_shared, acc_s_cast, acc_o, k, by, bz)\n                # for i, j in T.Parallel(block_M, dim):\n                #     acc_o[i, j] /= logsum[i]\n                # T.copy(acc_o, O_shared)\n                # T.copy(O_shared, Output[bz, bx * block_M:(bx + 1) * block_M, by, :])\n\n        @T.prim_func\n        def main(\n                Q: T.Buffer(shape_q, dtype),\n                K: T.Buffer(shape_kv, dtype),\n                V: T.Buffer(shape_kv, dtype),\n                Output: T.Buffer(shape_q, dtype),\n        ):\n            flash_attn_split(Q, K, V, Output)\n\n        return main\n\n    def kernel(block_M, block_N):\n        return kernel_func(block_M, block_N)\n\n    return kernel\n\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument('--batch', type=int, default=1, help='batch size')\n    parser.add_argument('--heads', type=int, default=32, help='heads')\n    parser.add_argument('--seqlen_kv', type=int, default=4096, help='sequence length')\n    parser.add_argument('--dim', type=int, default=128, help='dim')\n    parser.add_argument('--is_casual', action='store_true', help='causal')\n    parser.add_argument('--tune', action='store_true', help='tune configs')\n    args = parser.parse_args()\n\n    batch, heads, seqlen_kv, dim, is_casual = args.batch, args.heads, args.seqlen_kv, args.dim, args.is_casual\n    seqlen_q   = 1\n    num_splits = 4\n\n    program = flashdecoding(\n                batch, heads, seqlen_q, seqlen_kv, dim, is_casual, num_splits, tune=args.tune)(\n                block_M=128, block_N=128)\n    jit_kernel = tilelang.JITKernel(program, out_idx=[3], target=\"cuda\")\n\n    q = torch.randn(batch, seqlen_q, heads, dim, dtype=torch.float16, device='cuda')\n    k = torch.randn(batch, seqlen_kv, heads, dim, dtype=torch.float16, device='cuda')\n    v = torch.randn(batch, seqlen_kv, heads, dim, dtype=torch.float16, device='cuda')\n\n    out_flash = jit_kernel(q, k, v)\n\n```\n\n",
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/40/comments",
+    "author": "DD-DuDa",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-25T12:11:27Z",
+        "body": "cc @chengyupku "
+      },
+      {
+        "user": "chengyupku",
+        "created_at": "2025-01-25T15:17:45Z",
+        "body": "Hi Dayou, during the lowering process of tilelang, it is necessary to know how each fragment is assigned to all threads (thread binding). Therefore, if a fragment is only declared but not used, it is impossible to determine the binding. In such cases, you can manually add the thread binding using the `T.annotate_layout` primitive. \nFor example: \n```\nT.annotate_layout({scores_max: T.Fragment(scores_max.shape, forward_thread_fn=lambda i: i)})\n```"
+      },
+      {
+        "user": "DD-DuDa",
+        "created_at": "2025-01-25T15:19:37Z",
+        "body": "I see! Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "title": "Copy issue when tensor dim is 1",
+    "created_at": "2025-01-23T15:30:32Z",
+    "closed_at": "2025-01-26T05:36:20Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/tile-ai/tilelang/issues/35",
+    "body": "Assume we have Q tensor shape with [bs, 1, head, dim].\nAnd we allocate a shared memory Q_shared [block_M, dim].\n\nhow to copy Q_shared[0, :] = Q[bid, 0, hid, :]?\n\n```\n# type: ignore\n\nimport torch\nimport torch.nn.functional as F\nimport tilelang\nfrom tilelang import Profiler\nfrom tilelang.autotuner import *\nimport tilelang.language as T\nimport itertools\nimport argparse\nfrom functools import partial\n\ndef flashdecoding(batch, heads, seqlen_q, seqlen_kv, dim, is_casual, num_split, tune=False):\n    scale = (1.0 / dim) ** 0.5 * 1.44269504  # log2(e)\n    shape_q = [batch, seqlen_q, heads, dim]\n    shape_kv = [batch, seqlen_kv, heads, dim]\n    part_shape = [batch, seqlen_q, heads, num_split, dim]\n    dtype = \"float16\"\n    accum_dtype = \"float\"\n\n    def kernel_func(block_M, block_N):\n        \n        @T.macro\n        def flash_attn_split(\n            Q: T.Buffer(shape_q, dtype),\n            K: T.Buffer(shape_kv, dtype),\n            V: T.Buffer(shape_kv, dtype),\n            glse: T.Buffer([batch, heads, num_split, seqlen_q], dtype),\n            Output_partial: T.Buffer(part_shape, dtype),\n        ):\n            print(\"flash_attn_split\")\n            with T.Kernel(T.ceildiv(seqlen_q, block_M), heads * batch, num_split, threads=128 * 2) as (bx, by, bz):\n                Q_shared = T.alloc_shared([block_M, dim], dtype)\n                K_shared = T.alloc_shared([block_N, dim], dtype)\n                V_shared = T.alloc_shared([block_N, dim], dtype)\n                O_shared = T.alloc_shared([block_M, dim], dtype)\n                acc_s = T.alloc_fragment([block_M, block_N], accum_dtype)\n                acc_s_cast = T.alloc_fragment([block_M, block_N], dtype)\n                acc_o = T.alloc_fragment([block_M, dim], accum_dtype)\n                scores_max = T.alloc_fragment([block_M], accum_dtype)\n                scores_max_prev = T.alloc_fragment([block_M], accum_dtype)\n                scores_scale = T.alloc_fragment([block_M], accum_dtype)\n                scores_sum = T.alloc_fragment([block_M], accum_dtype)\n                logsum = T.alloc_fragment([block_M], accum_dtype)\n\n                mid = bx\n                hid = by % heads\n                bid = by // heads\n                sid = bz\n\n                # T.annotate_layout({Q_shared: tl.layout.make_swizzled_layout(Q_shared)})\n                T.copy(Q[bid, 0, hid, :], Q_shared[0, :])\n                # T.fill(acc_o, 0)\n                # T.fill(logsum, 0)\n                # T.fill(scores_max, -T.infinity(accum_dtype))\n\n                # loop_range = (\n                #     T.min(T.ceildiv(seqlen_kv, block_N), T.ceildiv((mid + 1) * block_M, block_N)) \n                #     if is_casual else T.ceildiv((seqlen_kv // num_split), block_N)\n                # )\n\n                # for k in T.Pipelined(loop_range, num_stages=2):\n                #     MMA0(K, Q_shared, K_shared, acc_s, k, mid, hid, bid, sid)\n        \n        @T.prim_func\n        def main(\n                Q: T.Buffer(shape_q, dtype),\n                K: T.Buffer(shape_kv, dtype),\n                V: T.Buffer(shape_kv, dtype),\n                glse: T.Buffer([batch, heads, num_split, seqlen_q], dtype),\n                Output_partial: T.Buffer(part_shape, dtype), # [batch, seqlen_q, heads, num_split, dim]\n                Output: T.Buffer(shape_q, dtype),\n        ):\n            print(\"hello\")\n            flash_attn_split(Q, K, V, glse, Output_partial)\n\n        return main\n\n    def kernel(block_M, block_N):\n        return kernel_func(block_M, block_N)\n\n    return kernel\n\ndef ref_program(Q, K, V, casual):\n    assert casual is False\n    dim = Q.size(-1)\n    scores = torch.einsum('bqhd,bkhd->bhqk', Q, K)\n    scores = scores / torch.sqrt(torch.tensor(dim, dtype=scores.dtype))\n    attention_weights = F.softmax(scores, dim=-1)\n    output = torch.einsum('bhqk,bkhd->bqhd', attention_weights, V)\n    return output\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument('--batch', type=int, default=1, help='batch size')\n    parser.add_argument('--heads', type=int, default=32, help='heads')\n    parser.add_argument('--seqlen_kv', type=int, default=4096, help='sequence length')\n    parser.add_argument('--dim', type=int, default=128, help='dim')\n    parser.add_argument('--is_casual', action='store_true', help='causal')\n    parser.add_argument('--tune', action='store_true', help='tune configs')\n    args = parser.parse_args()\n\n    batch, heads, seqlen_kv, dim, is_casual = args.batch, args.heads, args.seqlen_kv, args.dim, args.is_casual\n    seqlen_q   = 1\n    num_splits = 4\n\n    program = flashdecoding(\n                batch, heads, seqlen_q, seqlen_kv, dim, is_casual, num_splits, tune=args.tune)(\n                block_M=128, block_N=128)\n    jit_kernel = tilelang.JITKernel(program, out_idx=[5], target=\"cuda\")\n\n    q = torch.randn(batch, seqlen_q, heads, dim, dtype=torch.float16, device='cuda')\n    k = torch.randn(batch, seqlen_kv, heads, dim, dtype=torch.float16, device='cuda')\n    v = torch.randn(batch, seqlen_kv, heads, dim, dtype=torch.float16, device='cuda')\n    glse = torch.empty(batch, heads, num_splits, seqlen_q, dtype=torch.float16, device='cuda')\n    output_partial = torch.empty(batch, seqlen_q, heads, num_splits, dim, dtype=torch.float16, device='cuda')\n\n    out_ref = ref_program(q, k, v, is_casual)\n    out_flash = jit_kernel(q, k, v, glse, output_partial)\n\n    print(f\"out_ref vs out_flash: {(out_ref - out_flash).abs().mean().item()}\")\n\n```\n\nI got error:\n> Traceback (most recent call last):\n  File \"/home/shijiecao/Projects/BitAttn/tilelang/mha_kvcache.py\", line 187, in <module>\n    jit_kernel = tilelang.JITKernel(program, out_idx=[5], target=\"cuda\")\n  File \"/home/shijiecao/miniconda3/envs/bit/lib/python3.10/site-packages/tilelang/jit/kernel.py\", line 75, in __init__\n    adapter = self._compile_and_create_adapter(func)\n  File \"/home/shijiecao/miniconda3/envs/bit/lib/python3.10/site-packages/tilelang/jit/kernel.py\", line 120, in _compile_and_create_adapter\n    rt_mod, params = tilelang.lower(tilelang_func, target=target)\n  File \"/home/shijiecao/miniconda3/envs/bit/lib/python3.10/site-packages/tilelang/engine/lower.py\", line 223, in lower\n    device_mod = tvm._ffi.get_global_func(\"target.build.tilelang_cuda\")(device_mod, target)\n  File \"/home/shijiecao/miniconda3/envs/bit/lib/python3.10/site-packages/tilelang/3rdparty/tvm/python/tvm/_ffi/_ctypes/packed_func.py\", line 239, in __call__\n    raise_last_ffi_error()\n  File \"/home/shijiecao/miniconda3/envs/bit/lib/python3.10/site-packages/tilelang/3rdparty/tvm/python/tvm/_ffi/base.py\", line 481, in raise_last_ffi_error\n    raise py_err\nValueError: Traceback (most recent call last):\n  31: tvm::runtime::PackedFuncObj::Extractor<tvm::runtime::PackedFuncSubObj<tvm::runtime::TypedPackedFunc<tvm::runtime::Module (tvm::IRModule, tvm::Target)>::AssignTypedLambda<tvm::runtime::Module (*)(tvm::IRModule, tvm::Target)>(tvm::runtime::Module (*)(tvm::IRModule, tvm::Target), std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)::{lambda(tvm::runtime::TVMArgs const&, tvm::runtime::TVMRetValue*)#1}> >::Call(tvm::runtime::PackedFuncObj const*, tvm::runtime::TVMArgs, tvm::runtime::TVMRetValue*)\n  30: tvm::codegen::BuildTileLangCUDA(tvm::IRModule, tvm::Target)\n  29: tvm::codegen::CodeGenTileLangCUDA::AddFunction(tvm::tir::PrimFunc const&)\n  28: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  27: non-virtual thunk to tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::DeclBufferNode const*)\n  26: non-virtual thunk to tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::DeclBufferNode const*)\n  25: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  24: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  23: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  22: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AllocateNode const*)\n  21: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  20: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  19: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  18: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  17: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  16: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  15: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  14: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  13: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  12: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  11: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  10: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  9: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  8: tvm::codegen::CodeGenTileLangCUDA::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  7: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::AttrStmtNode const*)\n  6: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  5: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::IfThenElseNode const*)\n  4: tvm::tir::StmtFunctor<void (tvm::tir::Stmt const&)>::VisitStmt(tvm::tir::Stmt const&)\n  3: tvm::codegen::CodeGenC::VisitStmt_(tvm::tir::BufferStoreNode const*)\n  2: tvm::codegen::CodeGenC::PrintExpr[abi:cxx11](tvm::PrimExpr const&)\n  1: tvm::codegen::CodeGenC::PrintExpr(tvm::PrimExpr const&, std::ostream&)\n  0: tvm::codegen::CodeGenTileLangCUDA::VisitExpr_(tvm::tir::RampNode const*, std::ostream&)\n  File \"/root/TileLang/src/target/codegen_cuda.cc\", line 1257\nValueError: Check failed: lanes <= 4 (8 vs. 4) : Ramp of more than 4 lanes is not allowed.",
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/35/comments",
+    "author": "DD-DuDa",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T15:32:26Z",
+        "body": "@DD-DuDa Thanks for your reporting, would you mind provide the entire scripts to help us reproduce?"
+      },
+      {
+        "user": "DD-DuDa",
+        "created_at": "2025-01-23T15:44:02Z",
+        "body": "Yeah, I've edited and provided the whole code."
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T15:54:36Z",
+        "body": "likely due to some bugs of liveness, for example, consider the following simplified program you provide:\n\n```python\n@T.prim_func\ndef main(\n        Q: T.Buffer(shape_q, dtype),\n        K: T.Buffer(shape_kv, dtype),\n        V: T.Buffer(shape_kv, dtype),\n        glse: T.Buffer([batch, heads, num_split, seqlen_q], dtype),\n        Output_partial: T.Buffer(part_shape, dtype), # [batch, seqlen_q, heads, num_split, dim]\n        Output: T.Buffer(shape_q, dtype),\n):\n    with T.Kernel(T.ceildiv(seqlen_q, block_M), heads * batch, num_split, threads=128 * 2) as (bx, by, bz):\n        Q_shared = T.alloc_shared([block_M, dim], dtype)\n\n        hid = by % heads\n        bid = by // heads\n\n        T.copy(Q[bid, 0, hid, :], Q_shared[0, :])\n        for d in T.serial(dim):\n            Q_shared[0, d] = Q[bid, 0, hid, d]\n```\n\nWhen you generate the kernel code using `print(jit_kernel.get_kernel_source())`, the output is as follows:\n```python\nextern \"C\" __global__ void __launch_bounds__(256) main_kernel(half_t* __restrict__ Q) {\n  extern __shared__ __align__(1024) half_t Q_shared[];\n  if (((int)threadIdx.x) < 16) {\n    *(uint4*)(Q_shared + (((int)threadIdx.x) * 8)) = *(uint4*)(Q + ((((int)blockIdx.y) * 128) + (((int)threadIdx.x) * 8)));\n  }\n  for (int d = 1; d < 128; ++d) {\n    Q_shared[d] = Q[((((int)blockIdx.y) * 128) + d)];\n  }\n}\n```\n\nIn this generated code, the first copy block behaves as expected and aligns with the intended functionality.\nSo, it’s possible that the issue may resolve itself if you uncomment certain parts of the program."
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T15:55:34Z",
+        "body": "but it's also important for us to discover where the bug locates"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T15:59:32Z",
+        "body": "One debug trick is that we can insert debug print at `tilelang/engine/lower.py` to see the lowered ir module: \n\n```python\ndevice_mod = tir.transform.Filter(is_device_call)(mod)\ndevice_mod = tir.transform.LowerDeviceStorageAccessInfo()(device_mod)\ndevice_mod = tir.transform.LowerIntrin()(device_mod)\ndevice_mod = tir.transform.Simplify()(device_mod)\nprint(device_mod)\nif target.kind.name == \"cuda\":\n    # Debug comments to get the code\n    # code = tvm._ffi.get_global_func(\"target.build.tl_debug_codegen\")(device_mod, target)\n    device_mod = tvm._ffi.get_global_func(\"target.build.tilelang_cuda\")(device_mod, target)\n```\n\n\nfor the frist program:\n```python\n@I.ir_module\nclass Module:\n    @T.prim_func\n    def main_kernel(Q: T.handle(\"float16\", \"global\")):\n        Q_1 = T.decl_buffer((16777216,), \"float16\", data=Q)\n        Q_shared = T.handle(\"float16\", \"shared.dyn\")\n        Q_shared_1 = T.decl_buffer((131072,), \"float16\", data=Q_shared, scope=\"shared.dyn\")\n        bx = T.launch_thread(\"blockIdx.x\", 32)\n        Q_shared = T.allocate([131072], \"float16\", \"shared.dyn\")\n        by = T.launch_thread(\"blockIdx.y\", 32)\n        bz = T.launch_thread(\"blockIdx.z\", 4)\n        v = T.launch_thread(\"threadIdx.x\", 256)\n        v_1 = T.launch_thread(\"threadIdx.y\", 1)\n        v_2 = T.launch_thread(\"threadIdx.z\", 1)\n        if v < 16:\n            Q_shared_1[v * 64:v * 64 + 72:9] = Q_1[by * 128 + v * 8:by * 128 + v * 8 + 8]\n```\n\nfor the last program:\n```python\n@I.ir_module\nclass Module:\n    @T.prim_func\n    def main_kernel(Q: T.handle(\"float16\", \"global\")):\n        Q_1 = T.decl_buffer((16777216,), \"float16\", data=Q)\n        Q_shared = T.handle(\"float16\", \"shared.dyn\")\n        Q_shared_1 = T.decl_buffer((16384,), \"float16\", data=Q_shared, scope=\"shared.dyn\")\n        bx = T.launch_thread(\"blockIdx.x\", 32)\n        Q_shared = T.allocate([16384], \"float16\", \"shared.dyn\")\n        by = T.launch_thread(\"blockIdx.y\", 32)\n        bz = T.launch_thread(\"blockIdx.z\", 4)\n        v = T.launch_thread(\"threadIdx.x\", 256)\n        v_1 = T.launch_thread(\"threadIdx.y\", 1)\n        v_2 = T.launch_thread(\"threadIdx.z\", 1)\n        if v < 16:\n            Q_shared_1[v * 8:v * 8 + 8] = Q_1[by * 128 + v * 8:by * 128 + v * 8 + 8]\n        for d in range(128):\n            Q_shared_1[d] = Q_1[by * 128 + d]\n```"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T16:09:44Z",
+        "body": "The problem behinds `tir.transform.VectorizeLoop`.\n\n```python\nprint(\"Before vectorize loop \\n\", mod)\nmod = tir.transform.VectorizeLoop()(mod)\nprint(\"After vectorize loop \\n\", mod)\n```\n\n```python\n@I.ir_module\nclass Module:\n    @T.prim_func\n    def main(Q: T.Buffer((1, 4096, 32, 128), \"float16\"), K: T.Buffer((1, 4096, 32, 128), \"float16\"), V: T.Buffer((1, 4096, 32, 128), \"float16\"), glse: T.Buffer((1, 32, 4, 4096), \"float16\"), Output_partial: T.Buffer((1, 4096, 32, 4, 128), \"float16\"), Output: T.Buffer((1, 4096, 32, 128), \"float16\")):\n        if v < 16:\n            i = T.int32()\n            T.attr(i, \"pragma_unroll_explicit\", T.bool(False))\n            for i in T.vectorized(8):\n                Q_shared = T.allocate([16384], \"float16\", \"shared.dyn\")\n                Q_shared_1 = T.Buffer((16384,), \"float16\", data=Q_shared, scope=\"shared.dyn\")\n                Q_1 = T.Buffer((16777216,), \"float16\", data=Q.data)\n                Q_shared_1[v * 8 + i] = Q_1[by * 128 + v * 8 + i]\n\nAfter vectorize loop \n # from tvm.script import ir as I\n# from tvm.script import tir as T\n\n@I.ir_module\nclass Module:\n    @T.prim_func\n    def main(Q: T.Buffer((1, 4096, 32, 128), \"float16\"), K: T.Buffer((1, 4096, 32, 128), \"float16\"), V: T.Buffer((1, 4096, 32, 128), \"float16\"), glse: T.Buffer((1, 32, 4, 4096), \"float16\"), Output_partial: T.Buffer((1, 4096, 32, 4, 128), \"float16\"), Output: T.Buffer((1, 4096, 32, 128), \"float16\")):\n        if v < 16:\n            i = T.int32()\n            T.attr(i, \"pragma_unroll_explicit\", T.bool(False))\n            Q_shared = T.allocate([131072], \"float16\", \"shared.dyn\")\n            Q_shared_1 = T.Buffer((131072,), \"float16\", data=Q_shared, scope=\"shared.dyn\")\n            Q_1 = T.Buffer((16777216,), \"float16\", data=Q.data)\n            Q_shared_1[v * 64:v * 64 + 72:9] = Q_1[by * 128 + v * 8:by * 128 + v * 8 + 8]\n```"
+      },
+      {
+        "user": "DD-DuDa",
+        "created_at": "2025-01-23T22:26:35Z",
+        "body": "Got it! I learned a lot for that. Thank you!"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-25T12:09:22Z",
+        "body": "closed as has been resolved :)"
+      }
+    ]
+  },
+  {
+    "number": 28,
+    "title": "[Doc] Create a workflow to host docs using GitHub Pages.",
+    "created_at": "2025-01-22T11:03:18Z",
+    "closed_at": "2025-01-23T02:25:33Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/pull/28",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/28/comments",
+    "author": "xwhzz",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-22T12:18:21Z",
+        "body": "thanks @xwhzz for the workflow, but I think the deprecated docs should be removed as content in those docs are legacy"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-23T02:25:37Z",
+        "body": "Merged, thanks @xwhzz "
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "[Doc] update installation.md and readme",
+    "created_at": "2025-01-21T17:39:01Z",
+    "closed_at": "2025-01-21T18:34:46Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/pull/22",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/22/comments",
+    "author": "Cunxiao2002",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-21T17:41:12Z",
+        "body": "Thanks @Cunxiao2002 , please resolve the conflict :)"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-21T17:58:07Z",
+        "body": "likely due to pr #21 "
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-21T18:34:42Z",
+        "body": "LGTM, Merged :)"
+      }
+    ]
+  },
+  {
+    "number": 21,
+    "title": "[Doc] Use sphinx to generate docs.",
+    "created_at": "2025-01-21T15:16:49Z",
+    "closed_at": "2025-01-21T16:29:23Z",
+    "labels": [],
+    "url": "https://github.com/tile-ai/tilelang/pull/21",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/tile-ai/tilelang/issues/21/comments",
+    "author": "xwhzz",
+    "comments": [
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-21T16:13:08Z",
+        "body": "Looks good to me @xwhzz , thanks for your contribution, but there exist some linting issues, would you mind run `format.sh` to fix those lints?"
+      },
+      {
+        "user": "LeiWang1999",
+        "created_at": "2025-01-21T16:29:20Z",
+        "body": "Merged :)"
+      }
+    ]
+  }
+]

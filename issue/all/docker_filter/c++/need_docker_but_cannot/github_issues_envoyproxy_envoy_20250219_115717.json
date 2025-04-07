@@ -1,0 +1,269 @@
+[
+  {
+    "number": 22372,
+    "title": "How to get SSL socket file descriptor from eBPF uprobes on SSL_{read,write}",
+    "created_at": "2022-07-22T21:13:46Z",
+    "closed_at": "2022-09-02T04:31:01Z",
+    "labels": [
+      "question",
+      "area/tls",
+      "stale"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/22372",
+    "body": "*Title*: *How to get SSL socket file descriptor from eBPF uprobes on SSL_{read,write}*\r\n\r\n*Description*:\r\n\r\nPixie uses eBPF to capture network traffic. When tracing Envoy, Pixie uses eBPF uprobes on SSL_{read,write} functions to trace the clear-text network traffic. Envoy uses SSL_{read,write} in a way that does not set file descriptor of the socket connection in the SSL struct. Where is the file descriptor get set and how to access them?\r\n\r\n[optional *Relevant Links*:]\r\npx.dev is the Pixie project website.\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/22372/comments",
+    "author": "yzhao1012",
+    "comments": [
+      {
+        "user": "zuercher",
+        "created_at": "2022-07-26T22:25:23Z",
+        "body": "Take this with a grain of salt, since I've not puzzled all this out before, but as I understand the code:\r\n\r\nEnvoy is passing a boringssl `SSL*` to SSL_read/write and that struct is actually a `struct ssl_st*`. That `SSL*` contains `rbio` and `wbio` of type `bssl::UniquePtr<BIO>` which are used for reading and writing.\r\n\r\nEnvoy constructs the `BIO` struct (a `bio_st`) with a `ptr` initialized to an `Envoy::Newtork::IoHandle`, and `method` configured to use Envoy-provided functions for reading and writing (see `source/extensions/transport_sockets/tls/io_handle_bio.cc`).\r\n\r\nNormally, the `IoHandle` is an `Envoy::Network::IoHandleSocketHandeImpl` (`source/common/network/io_socket_handle_impl.h`) which holds the socket's file descriptor and provides methods to operate on it.\r\n"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-09-02T04:31:00Z",
+        "body": "This issue has been automatically marked as stale because it has not had activity in the last 30 days. It will be closed in the next 7 days unless it is tagged \"help wanted\" or \"no stalebot\" or other activity occurs. Thank you for your contributions.\n\n---\n\nThis issue has been automatically closed because it has not had activity in the last 37 days. If this issue is still valid, please ping a maintainer and ask them to label it as \"help wanted\" or \"no stalebot\". Thank you for your contributions."
+      },
+      {
+        "user": "yzhao1012",
+        "created_at": "2022-09-16T22:18:14Z",
+        "body": "> Take this with a grain of salt, since I've not puzzled all this out before, but as I understand the code:\r\n> \r\n> Envoy is passing a boringssl `SSL*` to SSL_read/write and that struct is actually a `struct ssl_st*`. That `SSL*` contains `rbio` and `wbio` of type `bssl::UniquePtr<BIO>` which are used for reading and writing.\r\n> \r\n> Envoy constructs the `BIO` struct (a `bio_st`) with a `ptr` initialized to an `Envoy::Newtork::IoHandle`, and `method` configured to use Envoy-provided functions for reading and writing (see `source/extensions/transport_sockets/tls/io_handle_bio.cc`).\r\n> \r\n> Normally, the `IoHandle` is an `Envoy::Network::IoHandleSocketHandeImpl` (`source/common/network/io_socket_handle_impl.h`) which holds the socket's file descriptor and provides methods to operate on it.\r\n\r\nThis has been what we found as well. Thanks! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to trace from SSL struct to Envoy's IoHandle implementation",
+      "Identification of the connection path between SSL operations and underlying socket descriptors",
+      "Method to access socket descriptor through Envoy's BIO abstraction layer",
+      "Clarification of Envoy-specific SSL implementation details"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:26:10"
+    }
+  },
+  {
+    "number": 14060,
+    "title": "NACK RDS rejections for a cluster that seems available in CDS",
+    "created_at": "2020-11-17T04:29:17Z",
+    "closed_at": "2020-11-18T00:07:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/14060",
+    "body": "*Title*: Seeing NACK RDS rejections for a cluster that seems available in CDS\r\n\r\n*Description*:\r\nUsing `envoyproxy/envoy-alpine:v1.15.0`\r\nWe are seeing NACK rejections from RDS in certain circumstances when populating both CDS and RDS to reach a remote cluster, with error looking like `route: unknown weighted cluster '<server/server>'`, from the client cluster, uwing `validate_clusters` in RDS config. \r\nIt seems, from envoy logging, that envoy does properly recognize the added/updated cluster, however the following RDS update using that cluster as a weighted cluster gives us back an error.\r\n\r\nAdditionally, when retried with the exact (diff-compared) same config, the RDS config is accepted. We are wondering if this can be a timing issue of sorts.\r\n\r\n```\r\n[2020-11-16 22:40:40.247][1][info][upstream] [source/common/upstream/cds_api_impl.cc:80] cds: add/update cluster 'server/server'\r\n[2020-11-16 22:40:40.249][1][info][upstream] [source/common/upstream/cds_api_impl.cc:80] cds: add/update cluster 'client0/client0-local'\r\n[2020-11-16 22:40:40.255][1][info][upstream] [source/server/lds_api.cc:74] lds: add/update listener 'outbound_listener'\r\n[2020-11-16 22:40:40.256][1][warning][config] [source/common/config/grpc_subscription_impl.cc:100] gRPC config for type.googleapis.com/envoy.config.route.v3.RouteConfiguration rejected: route: unknown weighted cluster 'server/server'\r\n```\r\n\r\n*Config*:\r\nAdding only relevant CDS and RDS to avoid clutter. \r\nCDS\r\n```\r\nresources:{[type.googleapis.com/envoy.config.cluster.v3.Cluster]:{name:\\\"server/server\\\" type:EDS eds_cluster_config:{eds_config:{ads:{} resource_api_version:V3}} connect_timeout:{seconds:1} http2_protocol_options:{} transport_socket:{name:\\\"envoy.transport_sockets.tls\\\" typed_config:{[type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext]:{common_tls_context:{tls_params:{tls_minimum_protocol_version:TLSv1_2 tls_maximum_protocol_version:TLSv1_3} tls_certificate_sds_secret_configs:{name:\\\"service-cert:client0/client0\\\" sds_config:{ads:{} resource_api_version:V3}} validation_context_sds_secret_config:{name:\\\"root-cert-for-mtls-outbound:server/server\\\" sds_config:{ads:{} resource_api_version:V3}} alpn_protocols:\\\"osm\\\"} sni:\\\"server.server.svc.cluster.local\\\"}}} protocol_selection:USE_DOWNSTREAM_PROTOCOL}}\r\n```\r\nRDS\r\n```\r\nresources:{[type.googleapis.com/envoy.config.route.v3.RouteConfiguration]:{name:\\\"RDS_Outbound\\\" virtual_hosts:{name:\\\"outbound_virtualHost|server\\\" domains:\\\"server.server.svc.cluster\\\" domains:\\\"server.server.svc.cluster.local\\\" domains:\\\"server.server:80\\\" domains:\\\"server.server.svc:80\\\" domains:\\\"server.server.svc.cluster:80\\\" domains:\\\"server.server.svc.cluster.local:80\\\" domains:\\\"server.server\\\" domains:\\\"server.server.svc\\\" routes:{match:{safe_regex:{google_re2:{} regex:\\\".*\\\"} headers:{name:\\\":method\\\" safe_regex_match:{google_re2:{} regex:\\\".*\\\"}}} route:{weighted_clusters:{clusters:{name:\\\"server/server\\\" weight:{value:100}} total_weight:{value:100}}}}} validate_clusters:{value:true}}}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/14060/comments",
+    "author": "eduser25",
+    "comments": [
+      {
+        "user": "lambdai",
+        "created_at": "2020-11-17T20:08:12Z",
+        "body": "> Additionally, when retried with the exact (diff-compared) same config, the RDS config is accepted. We are wondering if this can be a timing issue of sorts.\r\n\r\nThe target cluster 'server/server' can be found by RDS only if the cluster is warmed up.\r\nIf you can enable debug log, you can probably see the validation passed after \"warming cluster server/server complete\" shows up."
+      },
+      {
+        "user": "eduser25",
+        "created_at": "2020-11-18T00:07:03Z",
+        "body": "Confirmed that's the case. Thanks lambdai."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of cluster warm-up dependency for RDS validation",
+      "Clarification of timing requirements between CDS and RDS updates",
+      "Diagnostic guidance for cluster availability verification",
+      "Explanation of validate_clusters behavior in dynamic configurations"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:28:09"
+    }
+  },
+  {
+    "number": 10952,
+    "title": "examples/jaeger-tracing and examples/zipkin-tracing protobuf Bootstrap has unknown fields",
+    "created_at": "2020-04-25T23:05:16Z",
+    "closed_at": "2020-04-28T16:01:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/10952",
+    "body": "```\r\n$ cd examples/jaeger-tracing\r\n\r\n$ docker-compose pull\r\n\r\n$ docker-compose build -d\r\n...\r\nfront-envoy_1  | [2020-04-25 23:00:48.737][6][critical][main] [source/server/server.cc:94] error initializing configuration '/etc/front-envoy.yaml': Protobuf message (type envoy.config.bootstrap.v3.Bootstrap reason INVALID_ARGUMENT:(tracing) provider: Cannot find field.) has unknown fields\r\nfront-envoy_1  | [2020-04-25 23:00:48.737][6][info][main] [source/server/server.cc:602] exiting\r\nfront-envoy_1  | Protobuf message (type envoy.config.bootstrap.v3.Bootstrap reason INVALID_ARGUMENT:(tracing) provider: Cannot find field.) has unknown fields\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/10952/comments",
+    "author": "chadm-sq",
+    "comments": [
+      {
+        "user": "chadm-sq",
+        "created_at": "2020-04-25T23:18:12Z",
+        "body": "Same for \"jaeger-native-tracing\" example.\r\n\r\n```\r\nfront-envoy_1  | [2020-04-25 23:17:06.614][10][critical][main] [source/server/server.cc:94] error initializing configuration '/etc/front-envoy.yaml': Protobuf message (type envoy.config.bootstrap.v3.Bootstrap reason INVALID_ARGUMENT:(tracing) provider: Cannot find field.) has unknown fields\r\nfront-envoy_1  | [2020-04-25 23:17:06.614][10][info][main] [source/server/server.cc:602] exiting\r\nfront-envoy_1  | Protobuf message (type envoy.config.bootstrap.v3.Bootstrap reason INVALID_ARGUMENT:(tracing) provider: Cannot find field.) has unknown fields\r\njaeger-native-tracing_front-envoy_1 exited with code 1\r\n```"
+      },
+      {
+        "user": "mk46",
+        "created_at": "2020-04-27T13:29:33Z",
+        "body": "@cmiller-sq I have tested Jaeger-tracing and Zipkin-tracing. it's working for me. Here,  you need to remove all previous pulled images regarding envoy. "
+      },
+      {
+        "user": "chadm-sq",
+        "created_at": "2020-04-28T16:00:59Z",
+        "body": "Well, I can' reproduce it now. Sorry for noise."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve Protobuf schema compatibility issues in Envoy configuration",
+      "Ensure version compatibility between Envoy and tracing configuration",
+      "Validate configuration against target Envoy API version"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:29:33"
+    }
+  },
+  {
+    "number": 9904,
+    "title": "help(build): ./ci/do_ci.sh: Permission denied",
+    "created_at": "2020-02-01T13:34:44Z",
+    "closed_at": "2020-02-05T05:28:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/9904",
+    "body": "when I try to build a dev version, I got this error:\r\n\r\n```shell\r\n[root@instance-1 envoy-1.13.0]# pwd\r\n/root/envoy-1.13.0\r\n[root@instance-1 envoy-1.13.0]# ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.dev'\r\nbash: ./ci/do_ci.sh: Permission denied\r\n[root@instance-1 envoy-1.13.0]# ll ./ci/do_ci.sh\r\n-rwxrwxrwx. 1 root root 14138 Jan 20 22:06 ./ci/do_ci.sh\r\n\r\n[root@instance-1 envoy-1.13.0]# uname -r\r\n3.10.0-1062.9.1.el7.x86_64\r\n[root@instance-1 envoy-1.13.0]# cat /etc/redhat-release\r\nCentOS Linux release 7.7.1908 (Core)\r\n\r\n[root@instance-1 envoy-1.13.0]# docker version\r\nClient:\r\n Version:         1.13.1\r\n API version:     1.26\r\n Package version: docker-1.13.1-108.git4ef4b30.el7.centos.x86_64\r\n Go version:      go1.10.3\r\n Git commit:      4ef4b30/1.13.1\r\n Built:           Tue Jan 21 17:16:25 2020\r\n OS/Arch:         linux/amd64\r\n\r\nServer:\r\n Version:         1.13.1\r\n API version:     1.26 (minimum version 1.12)\r\n Package version: docker-1.13.1-108.git4ef4b30.el7.centos.x86_64\r\n Go version:      go1.10.3\r\n Git commit:      4ef4b30/1.13.1\r\n Built:           Tue Jan 21 17:16:25 2020\r\n OS/Arch:         linux/amd64\r\n Experimental:    false\r\n```",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/9904/comments",
+    "author": "membphis",
+    "comments": [
+      {
+        "user": "kylebevans",
+        "created_at": "2020-02-01T17:46:47Z",
+        "body": "Try this and then build again:\r\n\r\n`mount -o remount,exec /tmp`\r\n\r\nThe run_envoy_docker.sh creates a build dir in /tmp and I bet CentOS mounts tmp with the noexec flag to disallow executing from /tmp for security reasons."
+      },
+      {
+        "user": "membphis",
+        "created_at": "2020-02-03T01:27:52Z",
+        "body": "It works fine under Ubuntu OS  18.04 :(\r\n\r\nIt seems I have to change my working OS. "
+      },
+      {
+        "user": "kylebevans",
+        "created_at": "2020-02-04T15:14:11Z",
+        "body": "@membphis glad you got it working. Do you want to close the issue?"
+      },
+      {
+        "user": "membphis",
+        "created_at": "2020-02-05T05:28:49Z",
+        "body": "many thx"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve execution permission issues related to the environment where scripts are run",
+      "Ensure compatibility with security restrictions of the host operating system",
+      "Provide a method to execute build scripts from temporary directories"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:29:52"
+    }
+  },
+  {
+    "number": 7309,
+    "title": "Compilation stalls when building Envoy in a container",
+    "created_at": "2019-06-18T00:59:00Z",
+    "closed_at": "2019-06-19T14:37:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/7309",
+    "body": "*Title*: Build progress stalls in the *envoyproxy/envoy-build-ubuntu* container.\r\n\r\n*Description*:\r\n\r\nI checked out the latest master and followed the instructions in `ci` directory - `./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.dev` - to build envoy from source inside the ubuntu container. My host OS is a macOS 10.14.5 with docker desktop installed.\r\n\r\nAfter triggering the above command the container is successfully launched but the compilation stalled at:\r\n\r\n```\r\n[2,182 / 2,334] 151 actions, 2 running\r\n    Compiling source/extensions/filters/http/jwt_authn/extractor.cc; 22s local\r\n    Compiling source/common/router/header_formatter.cc; 17s local\r\n    [Analy] Compiling external/io_opencensus_cpp/opencensus/exporters/trace/stackdriver/internal/stackdriver_exporter.cc; 1828s\r\n    [Analy] Compiling source/common/http/context_impl.cc; 1778s\r\n    [Analy] Compiling source/extensions/tracers/common/ot/opentracing_driver_impl.cc; 1778s\r\n    [Analy] Compiling source/common/router/header_parser.cc; 1778s\r\n    [Analy] Compiling source/extensions/filters/http/buffer/buffer_filter.cc; 1778s\r\n    [Analy] Compiling source/extensions/filters/http/lua/wrappers.cc; 1778s ...\r\n``` \r\n\r\nIf I send Ctrl-C on the terminal, it seems Bazel complained as:\r\n\r\n```\r\n^C\r\nSession terminated, terminating shell...\r\nBazel caught interrupt signal; shutting down.\r\n\r\n\r\nCould not interrupt server (Deadline Exceeded)\r\n```\r\nAnd if I use `docker stop [envoy-build-container-id]`, it doesn't work as well.\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/7309/comments",
+    "author": "InfoHunter",
+    "comments": [
+      {
+        "user": "snowp",
+        "created_at": "2019-06-18T15:06:33Z",
+        "body": "I suspect your docker VM doesn't have enough memory, causing compilation to grind to a halt. Maybe try increasing the resources given to the VM?"
+      },
+      {
+        "user": "InfoHunter",
+        "created_at": "2019-06-19T14:37:04Z",
+        "body": "Yes, you are right. After I increased the memory from 2GB to 8GB, the problem was gone. Thanks for the help!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies resource allocation constraints as a potential root cause for build stalls",
+      "Provides guidance on configuring adequate compute resources for containerized builds",
+      "Offers methods to diagnose resource starvation during compilation",
+      "Includes verification mechanism for resource-related fixes"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:32:06"
+    }
+  },
+  {
+    "number": 6412,
+    "title": "envoy  proxy Segmentation fault",
+    "created_at": "2019-03-28T08:42:50Z",
+    "closed_at": "2019-03-29T02:18:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/6412",
+    "body": "*Title*:  envoy proxy Segmentation fault when I learn examples/redis\r\n\r\n*Description*:\r\n>this is  log\r\n\r\nproxy_1  | [2019-03-28 08:30:11.919][12][debug][redis] [source/extensions/filters/network/redis_proxy/command_splitter_impl.cc:403] redis: splitting '[\"set\", \"name\", \"envoy\"]'\r\nproxy_1  | [2019-03-28 08:30:11.919][12][debug][connection] [source/common/network/connection_impl.cc:644] [C4] connecting to 172.20.0.2:6379\r\nproxy_1  | [2019-03-28 08:30:11.921][12][debug][connection] [source/common/network/connection_impl.cc:653] [C4] connection in progress\r\nproxy_1  | [2019-03-28 08:30:11.921][12][debug][connection] [source/common/network/connection_impl.cc:517] [C4] connected\r\nproxy_1  | [2019-03-28 08:30:11.923][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:81] Caught Segmentation fault, suspect faulting address 0xa\r\nproxy_1  | [2019-03-28 08:30:11.923][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:69] Backtrace (use tools/stack_decode.py to get line numbers):\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:73] #0: __restore_rt [0x7f78d87f7390]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #1: [0x88058f]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #2: [0x889b3b]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #3: [0x88b8ee]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #4: [0x88be9f]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #5: [0x8897a9]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #6: [0x88985d]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #7: [0xaa5b4c]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #8: [0xaa23ba]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #9: [0xaa2aca]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #10: [0xa9c78a]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #11: [0xde74c9]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #12: [0xde79ff]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #13: [0xde9608]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #14: [0xa9bdfd]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #15: [0xa96c9e]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:75] #16: [0xfc7575]\r\nproxy_1  | [2019-03-28 08:30:11.924][12][critical][backtrace] [bazel-out/k8-opt/bin/source/server/_virtual_includes/backtrace_lib/server/backtrace.h:73] #17: start_thread [0x7f78d87ed6ba]\r\nproxy_1  | Segmentation fault (core dumped)\r\nredis_proxy_1 exited with code 139\r\n\r\nthis is my test steps:\r\n[root@localhost ~]# redis-cli -p 1999\r\n127.0.0.1:1999> set name envoy\r\n(error) no upstream host\r\n127.0.0.1:1999>\r\n\r\nwhat's trouble, I  not charge config  and  follow the examples/redis steps to operate \u3002\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/6412/comments",
+    "author": "skywli",
+    "comments": [
+      {
+        "user": "mattklein123",
+        "created_at": "2019-03-28T16:42:34Z",
+        "body": "Please try current master the bug here was reverted."
+      },
+      {
+        "user": "skywli",
+        "created_at": "2019-03-29T02:17:26Z",
+        "body": "@mattklein123 thank your help,the new image is ok."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of the segmentation fault in the Redis proxy example",
+      "Provides a working version/build of Envoy that resolves the crash",
+      "Confirms compatibility between the Redis example configuration and the Envoy version used"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:33:50"
+    }
+  },
+  {
+    "number": 5410,
+    "title": "Building envoy on OS X",
+    "created_at": "2018-12-24T15:16:55Z",
+    "closed_at": "2018-12-25T09:52:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/5410",
+    "body": "I'm trying to build envoy on OS X mojave `10.14.2 (18C54)` without success.\r\n\r\nHere is the executed command :\r\n`bazel build --incompatible_package_name_is_a_function=false --action_env=PATH=/usr/local/bin:/opt/local/bin:/usr/bin:/bin //source/exe:envoy-static`\r\n\r\nHere is the result: \r\n```shell\r\nINFO: Invocation ID: 9d5adc00-d36e-4957-b2c0-3f984d6cdc44\r\n/private/var/tmp/_bazel_nicolassterchele/19b5387e66de067346e6f0614dfa8b23/external/envoy_deps/./repositories.sh: line 8: md5: command not found\r\nExternal dependency cache directory /private/var/tmp/_bazel_nicolassterchele/19b5387e66de067346e6f0614dfa8b23/external/envoy_deps_cache_\r\n./build_and_install_deps.sh: line 12: sysctl: command not found\r\nmake: the `-j' option requires a positive integral argument\r\n```\r\nI guess that there is specifics commands for linux that is not available on darwin... Am I right ?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/5410/comments",
+    "author": "sterchelen",
+    "comments": [
+      {
+        "user": "moderation",
+        "created_at": "2018-12-24T16:34:14Z",
+        "body": "@sterchelen What version of Bazel are your running? You should upgrade to 0.21.0 if you are on something earlier. There were some recent changes for MacOS using that build that work. I build with `bazel build -c opt //source/exe:envoy-static.stripped` and `.bazelrc` is:\r\n```\r\nimport %workspace%/tools/bazel.rc\r\nbuild --announce_rc\r\nbuild --define google_grpc=disabled\r\nbuild --define signal_trace=disabled\r\nbuild --action_env=PATH=/bin:/opt/local/bin:/usr/bin:/usr/local/bin\r\n```"
+      },
+      {
+        "user": "snowp",
+        "created_at": "2018-12-24T18:24:48Z",
+        "body": "This: \r\n\r\n```\r\n./build_and_install_deps.sh: line 12: sysctl: command not found\r\n```\r\n\r\nshould have been fixed on latest master to use the full path, can you try to pull latest?"
+      },
+      {
+        "user": "sterchelen",
+        "created_at": "2018-12-25T09:52:47Z",
+        "body": "In fact, getting last version of master resolved it. Thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve macOS-specific command compatibility issues in the build process",
+      "Ensure build scripts handle macOS path/environment differences"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:34:24"
+    }
+  }
+]

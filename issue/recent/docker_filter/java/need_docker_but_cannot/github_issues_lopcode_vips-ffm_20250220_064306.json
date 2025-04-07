@@ -1,0 +1,37 @@
+[
+  {
+    "number": 62,
+    "title": "WIndows JVM crash",
+    "created_at": "2024-09-21T18:02:56Z",
+    "closed_at": "2024-09-23T08:53:09Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/lopcode/vips-ffm/issues/62",
+    "body": "```\r\nv  ~RuntimeStub::nep_invoker_blob 0x0000013af8451508\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac09400.invoke(Ljava/lang/Object;JJ)J+10 java.base@22.0.2\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac0ac00.invokeExact_MT(Ljava/lang/Object;JJLjava/lang/Object;)J+21 java.base@22.0.2\r\nj  jdk.internal.foreign.abi.DowncallStub+0x0000013a9ac09800.invoke(Ljava/lang/foreign/SegmentAllocator;Ljava/lang/foreign/MemorySegment;Ljava/lang/foreign/MemorySegment;)Ljava/lang/foreign/MemorySegment;+80 java.base@22.0.2\r\nj  java.lang.invoke.DirectMethodHandle$Holder.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+14 java.base@22.0.2\r\nj  java.lang.invoke.LambdaForm$MH+0x0000013a9ac0a800.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+44 java.base@22.0.2\r\nj  java.lang.invoke.Invokers$Holder.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+19 java.base@22.0.2\r\nj  app.photofox.vipsffm.jextract.VipsRaw.g_object_ref(Ljava/lang/foreign/MemorySegment;)Ljava/lang/foreign/MemorySegment;+26\r\nj  app.photofox.vipsffm.VipsInvoker.lambda$invokeOperation$3(Ljava/lang/foreign/Arena;Ljava/lang/foreign/MemorySegment;Lapp/photofox/vipsffm/VipsOption;)V+390\r\nj  app.photofox.vipsffm.VipsInvoker$$Lambda+0x0000013a9ac1c470.accept(Ljava/lang/Object;)V+12\r\nj  java.util.stream.ForEachOps$ForEachOp$OfRef.accept(Ljava/lang/Object;)V+5 java.base@22.0.2\r\nj  java.util.stream.ReferencePipeline$2$1.accept(Ljava/lang/Object;)V+21 java.base@22.0.2\r\nj  java.util.ArrayList$ArrayListSpliterator.forEachRemaining(Ljava/util/function/Consumer;)V+95 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.copyInto(Ljava/util/stream/Sink;Ljava/util/Spliterator;)V+32 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.wrapAndCopyInto(Ljava/util/stream/Sink;Ljava/util/Spliterator;)Ljava/util/stream/Sink;+13 java.base@22.0.2\r\nj  java.util.stream.ForEachOps$ForEachOp.evaluateSequential(Ljava/util/stream/PipelineHelper;Ljava/util/Spliterator;)Ljava/lang/Void;+3 java.base@22.0.2\r\nj  java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(Ljava/util/stream/PipelineHelper;Ljava/util/Spliterator;)Ljava/lang/Object;+3 java.base@22.0.2\r\nj  java.util.stream.AbstractPipeline.evaluate(Ljava/util/stream/TerminalOp;)Ljava/lang/Object;+88 java.base@22.0.2\r\nj  java.util.stream.ReferencePipeline.forEach(Ljava/util/function/Consumer;)V+6 java.base@22.0.2\r\nj  app.photofox.vipsffm.VipsInvoker.invokeOperation(Ljava/lang/foreign/Arena;Ljava/lang/String;Ljava/util/List;)V+146\r\nj  app.photofox.vipsffm.VImage.autorot([Lapp/photofox/vipsffm/VipsOption;)Lapp/photofox/vipsffm/VImage;+48\r\n```\r\n\r\nThis is the relevant part of the stacktrace. Unfortunately there's no error or anything else, and the issue is reproducible.\r\n\r\nIn case it helps, here's the code of the method calling autorot:\r\n\r\n```\r\n\tpublic VImage rotateByExif(File file) {\r\n\t\tVImage image = VImage.newFromFile(currentArena, file.getPath());\r\n\t\treturn image.autorot();\r\n\t}\r\n```\r\n\r\nThe issue happens inside a JUnit test, though it doesn't look like that should matter?",
+    "comments_url": "https://api.github.com/repos/lopcode/vips-ffm/issues/62/comments",
+    "author": "JohannesBeranek",
+    "comments": [
+      {
+        "user": "lopcode",
+        "created_at": "2024-09-23T01:05:08Z",
+        "body": "There's definitely something wrong with operation caching that I'm looking in to - I'm wondering if setting `VipsHelper.cache_set_max(0);` helps, or if it's something else.\n\n---\n\nOk, I've published `0.5.3` with a few fixes/improvements:\r\n* A fix for a crash caused by using the wrong pointer to read output options, which only showed up for cached operations\r\n* Defensive code to avoid segfaults when reffing output options, by validating them and throwing a Java exception if invalid for whatever reason - and this way we can also get a stack trace to figure out the problem\r\n* Added a sample to validate the improvements above, and included usage of `autorot()` to validate it on Windows\r\n\r\nShould be up on Maven Central shortly, if you could give it a try please \ud83d\ude42 "
+      },
+      {
+        "user": "JohannesBeranek",
+        "created_at": "2024-09-23T08:53:09Z",
+        "body": "Works! No more crashing now."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves the JVM crash during execution of the autorot() method",
+      "Handles invalid memory operations or pointer management in native interactions",
+      "Provides proper error handling for invalid memory segments",
+      "Ensures stability when using operation caching mechanisms"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:46:43"
+    }
+  }
+]

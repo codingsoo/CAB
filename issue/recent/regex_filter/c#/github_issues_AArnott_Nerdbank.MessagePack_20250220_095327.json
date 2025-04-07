@@ -1,0 +1,365 @@
+[
+  {
+    "number": 242,
+    "title": "InvalidOperationException from DeserializeEnumerableAsync on empty sequence (and other cases)",
+    "created_at": "2025-02-01T16:31:02Z",
+    "closed_at": "2025-02-01T23:37:39Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/242",
+    "body": "Thanks for adding `DeserializeEnumerableAsync`. This is exactly what I needed for my project (merge K sorted lists). \n\n`DeserializeEnumerableAsync` throws an invalid operation exception on an empty sequence (empty stream). Since there is no envelope is it not possible to detect an array count of 0. With a seekable stream a workaround would be trying to read data and then skipping the `DeserializeEnumerableAsync` call if there is no data. But I think this goes against the purpose of `DeserializeEnumerableAsync` which is streaming deserialization (when a seekable stream may not be available). When 1 or more records are available it works great.\n\nPackage version (from AzDO CI feed): 0.3.135-beta\n\nRepro:\n```csharp\nusing Nerdbank.MessagePack;\nusing PolyType;\n\nvar serializer = new MessagePackSerializer();\n\nvar stream = new MemoryStream();\n\nvar recordCount = 0;\nvar records = Enumerable.Range(0, recordCount).Select(i => new Person($\"Person {i}\", i)).ToList();\n\nforeach (var record in records)\n{\n    serializer.Serialize(stream, record);\n}\n\nstream.Position = 0;\n\nawait foreach (var record in serializer.DeserializeEnumerableAsync<Person>(stream))\n{\n    Console.WriteLine(record);\n}\n\n[GenerateShape]\npublic partial record Person(string Name, int Age) : IShapeable<Person>;\n```\n\nException:\n```\nUnhandled exception. System.InvalidOperationException: A reader was not returned before disposing this object.\n   at Nerdbank.MessagePack.MessagePackAsyncReader.Dispose()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](PipeReader reader, ITypeShapeProvider provider, MessagePackConverter`1 converter, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](PipeReader reader, ITypeShapeProvider provider, MessagePackConverter`1 converter, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Program.<Main>$(String[] args) in C:\\z\\Trash\\2025-02-01\\ConsoleApp1\\Program.cs:line 18\n   at Program.<Main>$(String[] args) in C:\\z\\Trash\\2025-02-01\\ConsoleApp1\\Program.cs:line 18\n   at Program.<Main>(String[] args)\n```",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/242/comments",
+    "author": "joelverhagen",
+    "comments": [
+      {
+        "user": "joelverhagen",
+        "created_at": "2025-02-01T17:12:28Z",
+        "body": "It seems like there may be something else going. If I modify the repro above, the exception also is thrown when I transition from the 3rd to 4th buffer (or something like that). On my production code I get several more buffers in (file offset 20480). So maybe it has to do with the record bound w.r.t. to the buffer bound.\n\n`var recordCount = 2000` to repro.\n\n```csharp\nusing Nerdbank.MessagePack;\nusing PolyType;\n\nvar serializer = new MessagePackSerializer();\n\nvar stream = new MemoryStream();\n\nvar recordCount = 2000;\nvar records = Enumerable.Range(0, recordCount).Select(i => new Person($\"Person {i}\", i)).ToList();\n\nforeach (var record in records)\n{\n    serializer.Serialize(stream, record);\n}\n\nstream.Position = 0;\nConsole.WriteLine(\"Bytes: \" + stream.Length);\n\nawait foreach (var record in serializer.DeserializeEnumerableAsync<Person>(stream))\n{\n    Console.WriteLine(\"Position \" + stream.Position + \" \" + record);\n}\n\n[GenerateShape]\npublic partial record Person(string Name, int Age) : IShapeable<Person>;\n```\n\nOutput:\n```\nBytes: 48506\nPosition 4096 Person { Name = Person 0, Age = 0 }\nPosition 4096 Person { Name = Person 1, Age = 1 }\n<truncated>\nPosition 8192 Person { Name = Person 359, Age = 359 }\nPosition 8192 Person { Name = Person 360, Age = 360 }\nUnhandled exception. System.InvalidOperationException: A reader was not returned before disposing this object.\n   at Nerdbank.MessagePack.MessagePackAsyncReader.Dispose()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](PipeReader reader, ITypeShapeProvider provider, MessagePackConverter`1 converter, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](PipeReader reader, ITypeShapeProvider provider, MessagePackConverter`1 converter, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+MoveNext()\n   at Nerdbank.MessagePack.MessagePackSerializer.DeserializeEnumerableAsync[T](Stream stream, ITypeShape`1 shape, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Program.<Main>$(String[] args) in C:\\z\\Trash\\2025-02-01\\ConsoleApp1\\Program.cs:line 19\n   at Program.<Main>$(String[] args) in C:\\z\\Trash\\2025-02-01\\ConsoleApp1\\Program.cs:line 19\n   at Program.<Main>(String[] args)\n```"
+      },
+      {
+        "user": "joelverhagen",
+        "created_at": "2025-02-01T17:28:48Z",
+        "body": "I can't seem to reproduce it when using the array serialization format. But that might be a coincidence.\n```csharp\n[GenerateShape]\npublic partial record Person([property: Key(0)]string Name, [property: Key(1)] int Age) : IShapeable<Person>;\n```"
+      },
+      {
+        "user": "joelverhagen",
+        "created_at": "2025-02-01T17:41:29Z",
+        "body": "It does not repro when using a marshaller.\n```csharp\n\ninternal record struct MarshaledPerson(string Name, int Age);\n\n[TypeShape(Marshaller = typeof(PersonMarshaller))]\npartial record Person\n{\n    internal class PersonMarshaller : IMarshaller<Person, MarshaledPerson?>\n    {\n        public MarshaledPerson? ToSurrogate(Person? value)\n        {\n            return value is null ? null : new(value!.Name, value!.Age);\n        }\n\n        public Person? FromSurrogate(MarshaledPerson? surrogate)\n        {\n            return surrogate.HasValue ? new(surrogate.Value.Name, surrogate.Value.Age) : null;\n        }\n    }\n}\n```"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-02-01T18:46:51Z",
+        "body": "Hey, I'm delighted that you're using the library and this new feature. I'm wrapping up work on the next evolution of the feature, which adds support for envelopes. I'll take a look at your report right away."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-02-01T22:27:20Z",
+        "body": "Regarding your repro:\n\n```cs\n[GenerateShape]\npublic partial record Person(string Name, int Age) : IShapeable<Person>;\n```\n\nThe interface is not necessary to write out yourself. The attribute will implement the interface. All you need to do is:\n\n```cs\n[GenerateShape]\npublic partial record Person(string Name, int Age);\n```"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-02-01T22:39:59Z",
+        "body": "I have a fix for the empty buffer. And your repro with 2000 Persons throws as you expect, so I'm studying that."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-02-01T23:06:52Z",
+        "body": "Ok, you found an issue in how we asynchronously deserialize objects when the buffer boundary happens to be between a property name and its value when the value prefers to be deserialized synchronously. (yes, it's a very particular condition). A legit bug, and not actually related to the new async enumeration API, though that's the entrypoint you found it from. Excellent find. Thank you."
+      }
+    ]
+  },
+  {
+    "number": 221,
+    "title": "Add test for class with indexer",
+    "created_at": "2025-01-16T03:08:52Z",
+    "closed_at": "2025-01-16T03:13:40Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/pull/221",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/221/comments",
+    "author": "AArnott",
+    "comments": [
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2025-01-16T08:56:54Z",
+        "body": "Was this missing from the PolyType test cases?"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-01-16T16:30:01Z",
+        "body": "@eiriktsarpalis  I don't know. I just saw that MessagePack-CSharp had a bug in its AOT source generation related to indexers and that my repo had no test case for it, so I added one. If it's redundant with yours, I guess I didn't need to add it.\r\nAlthough it's good for documenting behavior (that the indexer is ignored)."
+      }
+    ]
+  },
+  {
+    "number": 210,
+    "title": "Feature Request: Register a converter that can intercept private subtypes",
+    "created_at": "2025-01-01T01:16:07Z",
+    "closed_at": "2025-01-24T15:37:52Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/210",
+    "body": "Scenario:\r\n\r\nThe default PipeReader is Pipe+DefaultPipeReader. Pipe+DefaultPipeReader extends the abstract PipeReader, but it is private so cannot be registered as a known subtype.\r\n\r\nIn StreamJsonRpc, we have a PipeReaderConverter : MessagePackConverter<PipeReader>. When serializing Pipe+DefaultPipeReader, the PipeReaderConverter is not chosen. I had to use the overload of JsonRpc::InvokeWithCancellationAsync that accepts an array of argument types and set the argument type to `PipeReader` so that the PipeReaderConverter is used.\r\n\r\nIt would be helpful if we could somehow register a converter that could intercept the private subtype Pipe+DefaultPipeReader. Otherwise, consumers must explicitly declare the correct type, or StreamJsonRpc needs to check all types being serialized to see if they extend the public abstract PipeReader.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/210/comments",
+    "author": "trippwill",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2025-01-01T03:02:22Z",
+        "body": "> Otherwise, consumers must explicitly declare the correct type\r\n\r\nDon't they already? Or is this for the untyped `JsonRpc.InvokeAsync(string, object[])` case?"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-01-01T03:04:06Z",
+        "body": "The only thing I can think of at the moment is to offer a way to users to say \"I want to convert this type and all derived types except derived types that are specifically otherwise registered.\" "
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2025-01-01T03:14:09Z",
+        "body": "The tests in StreamJsonRpc currently tend to use the object[] overload. In my PR I updated many of those tests to declare the types as well, so that pipe reader would get converted correctly. But this seems like either a take-back, or an additional restriction for the NB.MP formatter we'll need to document."
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2025-01-01T16:42:03Z",
+        "body": "This is my current workaround in StreamJsonRpc. I inject a custom ITypeShapeProvider into both the rpc and user data configurations. This allows the tests to pass as they were, without using the overload that requires an array of types.\r\n\r\n```csharp\r\n   private class ExoticTypeShapeProvider : ITypeShapeProvider\r\n   {\r\n       internal static readonly ExoticTypeShapeProvider Instance = new();\r\n\r\n       public ITypeShape? GetShape(Type type)\r\n       {\r\n           if (typeof(PipeReader).IsAssignableFrom(type))\r\n           {\r\n               return new SourceGenObjectTypeShape<PipeReader>()\r\n               {\r\n                   IsRecordType = false,\r\n                   IsTupleType = false,\r\n                   Provider = this,\r\n               };\r\n           }\r\n\r\n           if (typeof(PipeWriter).IsAssignableFrom(type))\r\n           {\r\n               return new SourceGenObjectTypeShape<PipeWriter>()\r\n               {\r\n                   IsRecordType = false,\r\n                   IsTupleType = false,\r\n                   Provider = this,\r\n               };\r\n           }\r\n\r\n           if (typeof(Stream).IsAssignableFrom(type))\r\n           {\r\n               return new SourceGenObjectTypeShape<Stream>()\r\n               {\r\n                   IsRecordType = false,\r\n                   IsTupleType = false,\r\n                   Provider = this,\r\n               };\r\n           }\r\n\r\n           if (typeof(IDuplexPipe).IsAssignableFrom(type))\r\n           {\r\n               return new SourceGenObjectTypeShape<IDuplexPipe>()\r\n               {\r\n                   IsRecordType = false,\r\n                   IsTupleType = false,\r\n                   Provider = this,\r\n               };\r\n           }\r\n\r\n           return null;\r\n       }\r\n   }\r\n```"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-01-01T18:32:28Z",
+        "body": "That's a creative solution. I suppose the lack of thorough emulating of the shapes (no properties, constructors, etc.) is fine because you are providing a custom converter for these types anyway?"
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2025-01-01T18:40:57Z",
+        "body": "Exactly. This is only to ensure that MessagePackserializer matches the correct custom converter when serializing a special type, instead of allowing the default shape visitor to do the serialization.\r\n\r\nAlso has the side effect of preventing fallback to the Reflection shape provider for any type that matches here.\r\n\r\nThere might be other scenarios where it would be useful to be able to circumvent the type shape system and resolve converters purely on runtime type."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2025-01-02T22:19:16Z",
+        "body": "Thinking more about this, I wonder if the problem should really be solved at your layer instead, but perhaps not the way you've done it already.\n\nThe MessagePackSerializer class has no 'typeless' mode. Every object is serialized or deserialized with an explicit type argument. `PipeReader` may be the type argument while an object is provided to be serialized that derives from that type, which sounds like what you need.\n\nIt sounds like the issue comes from the fact that StreamJsonRpc is less typed, in that it offers some overloads that do not require explicitly typed arguments. To make up for this, StreamJsonRpc will reflect over the `object[]` args array and turn each type into a ... a _what_ exactly? Are you using reflection to invoke a generic method after calling `MakeGenericMethod` with a `System.Type` object? If so, we should talk about ways to improve that. \nBut aside from that, I'm thinking your `object[]` -> `Type[]` transformation should have the `typeof(PipeReader).IsAssignableFrom(type))` check and wherever `object` is assignable to `PipeReader`, just return `PipeReader` as the type rather than allow for derived types to be provided.\n\nWould that work?"
+      }
+    ]
+  },
+  {
+    "number": 208,
+    "title": "Duplicate Key Exception when serializing struct with PropertyShape attributes",
+    "created_at": "2024-12-28T21:43:42Z",
+    "closed_at": "2024-12-29T22:31:11Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/208",
+    "body": "Version: CI 0.3.76-beta\r\n\r\nI haven't found time to reduce the repro, but I thought I should go ahead and report what I saw.\r\n\r\nFor this struct:\r\n```csharp\r\n    [DataContract]\r\n    internal struct MarshalToken\r\n    {\r\n        [MessagePack.SerializationConstructor]\r\n#pragma warning disable SA1313 // Parameter names should begin with lower-case letter\r\n        public MarshalToken(int __jsonrpc_marshaled, long handle, string? lifetime, int[]? optionalInterfaces)\r\n#pragma warning restore SA1313 // Parameter names should begin with lower-case letter\r\n        {\r\n            this.Marshaled = __jsonrpc_marshaled;\r\n            this.Handle = handle;\r\n            this.Lifetime = lifetime;\r\n            this.OptionalInterfacesCodes = optionalInterfaces;\r\n        }\r\n\r\n        [DataMember(Name = \"__jsonrpc_marshaled\", IsRequired = true)]\r\n        [STJ.JsonPropertyName(\"__jsonrpc_marshaled\"), STJ.JsonRequired]\r\n        public int Marshaled { get; set; }\r\n\r\n        [DataMember(Name = \"handle\", IsRequired = true)]\r\n        [STJ.JsonPropertyName(\"handle\"), STJ.JsonRequired]\r\n        public long Handle { get; set; }\r\n\r\n        [DataMember(Name = \"lifetime\", EmitDefaultValue = false)]\r\n        [STJ.JsonPropertyName(\"lifetime\"), STJ.JsonIgnore(Condition = STJ.JsonIgnoreCondition.WhenWritingNull)]\r\n        public string? Lifetime { get; set; }\r\n\r\n        [DataMember(Name = \"optionalInterfaces\", EmitDefaultValue = false)]\r\n        [STJ.JsonPropertyName(\"optionalInterfaces\"), STJ.JsonIgnore(Condition = STJ.JsonIgnoreCondition.WhenWritingNull)]\r\n        public int[]? OptionalInterfacesCodes { get; set; }\r\n    }\r\n```\r\n\r\nI tried applying the PropertyShape attribute to each property, using the same names as the other serialization attributes. Theses name match the ctor argument names.\r\n\r\nI also applied the GenerateShape attribute, and made the struct partial.\r\n\r\nWhen serializing using NBMP, I would get a duplicate key exception. I traced the source to NB.MP GetOrCreateConverter, on a line that produced a dictionary from the type shape's constructor params. \r\n\r\nThe solution was to remove the PolyType attributes from the struct, and use a witness type for the struct's shape.",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/208/comments",
+    "author": "trippwill",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-28T23:14:04Z",
+        "body": "Thanks for the report. This is something of a known issue, but not one I had a bug on or test for, so thanks for reporting.\r\n\r\nI believe you can workaround this by renaming your constructor parameters to match the names of the properties. \r\n\r\n```diff\r\n-public MarshalToken(int __jsonrpc_marshaled, long handle, string? lifetime, int[]? optionalInterfaces)\r\n+public MarshalToken(int marshaled, long handle, string? lifetime, int[]? optionalInterfacesCodes )\r\n```\r\n\r\nEven after I fix the bug, I believe it'll just turn the exception type and message into another one that leads you to this same change."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-29T01:40:40Z",
+        "body": "Given this type:\r\n\r\n```cs\r\n[GenerateShape]\r\ninternal partial record TypeWithConstructorParameterMatchingSerializedPropertyName\r\n{\r\n\tpublic TypeWithConstructorParameterMatchingSerializedPropertyName(int otherName)\r\n\t\t=> this.Marshaled = otherName;\r\n\r\n\t[PropertyShape(Name = \"otherName\")]\r\n\tpublic int Marshaled { get; set; }\r\n}\r\n```\r\n\r\nThe constructor claims that there are *two* parameters by the same name:\r\n\r\n```cs\r\nprivate global::PolyType.Abstractions.IConstructorParameterShape[] __CreateConstructorParameters_TypeWithConstructorParameterMatchingSerializedPropertyName() => new global::PolyType.Abstractions.IConstructorParameterShape[]\r\n{\r\n    new global::PolyType.SourceGenModel.SourceGenConstructorParameterShape<(int, int, byte Flags), int>\r\n    {\r\n        Position = 0,\r\n        Name = \"otherName\",\r\n        ParameterType = Int32,\r\n        Kind = global::PolyType.Abstractions.ConstructorParameterKind.ConstructorParameter,\r\n        IsRequired = true,\r\n        IsNonNullable = true,\r\n        IsPublic = true,\r\n        HasDefaultValue = false,\r\n        DefaultValue = default,\r\n        Setter = static (ref (int, int, byte Flags) state, int value) => state.Item1 = value,\r\n        AttributeProviderFunc = static () => typeof(global::MessagePackSerializerTests.TypeWithConstructorParameterMatchingSerializedPropertyName).GetConstructor(__BindingFlags_Instance_All, null, [typeof(int)], null)?.GetParameters()[0],\r\n    },\r\n\r\n    new global::PolyType.SourceGenModel.SourceGenConstructorParameterShape<(int, int, byte Flags), int>\r\n    {\r\n        Position = 1,\r\n        Name = \"otherName\",\r\n        ParameterType = Int32,\r\n        Kind = global::PolyType.Abstractions.ConstructorParameterKind.MemberInitializer,\r\n        IsRequired = false,\r\n        IsNonNullable = true,\r\n        IsPublic = true,\r\n        HasDefaultValue = false,\r\n        DefaultValue = default,\r\n        Setter = static (ref (int, int, byte Flags) state, int value) => { state.Item2 = value; state.Flags |= 1; },\r\n        AttributeProviderFunc = static () => typeof(global::MessagePackSerializerTests.TypeWithConstructorParameterMatchingSerializedPropertyName).GetProperty(\"Marshaled\", __BindingFlags_Instance_All, null, typeof(int), [], null),\r\n    },\r\n};\r\n```\r\n\r\nIt is this `Name` collision that's causing my library to throw an exception.\r\n\r\nIf I just change the constructor parameter name to the (expected) name `marshaled`, the two parameters collapse to just one:\r\n\r\n```cs\r\nprivate global::PolyType.Abstractions.IConstructorParameterShape[] __CreateConstructorParameters_TypeWithConstructorParameterMatchingSerializedPropertyName() => new global::PolyType.Abstractions.IConstructorParameterShape[]\r\n{\r\n    new global::PolyType.SourceGenModel.SourceGenConstructorParameterShape<int, int>\r\n    {\r\n        Position = 0,\r\n        Name = \"otherName\",\r\n        ParameterType = Int32,\r\n        Kind = global::PolyType.Abstractions.ConstructorParameterKind.ConstructorParameter,\r\n        IsRequired = true,\r\n        IsNonNullable = true,\r\n        IsPublic = true,\r\n        HasDefaultValue = false,\r\n        DefaultValue = default,\r\n        Setter = static (ref int state, int value) => state = value,\r\n        AttributeProviderFunc = static () => typeof(global::MessagePackSerializerTests.TypeWithConstructorParameterMatchingSerializedPropertyName).GetConstructor(__BindingFlags_Instance_All, null, [typeof(int)], null)?.GetParameters()[0],\r\n    },\r\n};\r\n```\r\n\r\nIt looks like the extra parameter shape is provided for any parameter that isn't recognized as matching a property shape. And the fact that the unrecognized parameter name happens to match the `PropertyShapeAttribute.Name` value is what causes the dictionary key collision.\r\n\r\nI'll keep studying with this insight to find a good solution."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-29T01:48:05Z",
+        "body": "@eiriktsarpalis  Do you have any suggestions?\r\n\r\nFor context, the dictionary I'm building up that's keyed based on these colliding names is used to look up from VisitProperty:\r\n\r\n1. _Whether_ a property has a matching constructor parameter\r\n2. What the default value for that property is, based on that constructor parameter if it exists."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-29T01:55:52Z",
+        "body": "I think for purposes of capturing the default value (if specified), on collisions I'll just prefer the `Kind = ConstructorParameterKind.ConstructorParameter` parameter shape."
+      },
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2024-12-29T08:55:54Z",
+        "body": "> If I just change the constructor parameter name to the (expected) name `marshaled`, the two parameters collapse to just one:\r\n\r\nThis is just following STJ semantics where parameters are joined to properties by their IL names only and not any potential custom names. This is to allow parameters automatically inherit custom names set by their corresponding properties, i.e. have the following class roundtrip with the expected contract.\r\n```c#\r\npublic class MyPoco(int value)\r\n{\r\n    [JsonPropertyName(\"customName\")]\r\n    public int Value { get; } = value;\r\n}\r\n```\r\nAssuming we changed the logic so that parameters are joined to properties by their final contract names, then the above would stop working. If we were to consider an alternative algorithm then it should at least try to preserve the above scenario but without being too unintuitive to the user about how it works."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-29T22:12:34Z",
+        "body": "Yes, I like your default behavior as it presently is. Best for the .NET APIs (property names and parameter names) to agree and for the serialized rename to be an orthogonal thing. \r\nI'm just trying to figure out how to deal with the case where the constructor parameter follows a different naming convention so it doesn't throw. My PR at present turns out to allow either convention in the ctor parameter names."
+      },
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2024-12-30T07:00:26Z",
+        "body": "> My PR at present turns out to allow either convention in the ctor parameter names.\r\n\r\nI didn't take a look at it. Is it something that could be incorporated in PolyType proper?"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-30T13:51:24Z",
+        "body": "That's an interesting idea. It _does_ introduce cases that we may want test cases for to at least document and lock in behavior (whether broken or working). For example, classes with constructors that have _both_ a parameter with the C# property name and a parameter with the propertyshape name."
+      }
+    ]
+  },
+  {
+    "number": 199,
+    "title": "Add friendlier `MessagePackWriter.Write(MessagePackString)` method",
+    "created_at": "2024-12-24T23:03:46Z",
+    "closed_at": "2024-12-25T01:51:52Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/pull/199",
+    "body": "Hopefully reduce the need for the analyzer requested in #198.",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/199/comments",
+    "author": "AArnott",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-24T23:03:55Z",
+        "body": "FYI @trippwill"
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2024-12-25T20:26:48Z",
+        "body": "I think this is a good alternative to #198 "
+      }
+    ]
+  },
+  {
+    "number": 198,
+    "title": "Add analyzer for writing MessagePackString",
+    "created_at": "2024-12-24T01:21:11Z",
+    "closed_at": "2024-12-25T23:58:28Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/198",
+    "body": "I missed a few cases where I wasn't calling writer.WriteRaw(MyMPString.MsgPack.Span) correctly. An analyzer that would flag these could be useful and save time debugging.",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/198/comments",
+    "author": "trippwill",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-24T03:56:19Z",
+        "body": "When you say you weren't calling it correctly, what were you doing instead (that the analyzer would look for)?"
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2024-12-24T11:31:34Z",
+        "body": "There are many call patterns that continue to work but may not be the best way, such as Write(MyMPString.Value), or the more experimental Write(MyMPString.Utf8.Span), WriteRaw(MyMPString.Utf8.Span).\r\n\r\nI actually haven't got the round trip working yet using TryRead.\r\n\r\nOne suggestion for the writer API, maybe Write() could take a MessagePackString directly?"
+      }
+    ]
+  },
+  {
+    "number": 181,
+    "title": "Add non-generic methods for serializing/deserializing",
+    "created_at": "2024-12-19T19:31:24Z",
+    "closed_at": "2024-12-19T21:26:21Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/pull/181",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/181/comments",
+    "author": "AArnott",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-19T20:05:00Z",
+        "body": "> I'm actually looking to use non-generics inside a custom converter. According to the analyzers, I should prefer calling context.GetConverter. Is that supportable?\r\n\r\nAh yes, that's a different use case to be sure. And I'm glad the analyzers stopped you from making the top-level call. Let me look more into it."
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2024-12-19T20:10:41Z",
+        "body": "For the vs-streamjsonrpc formatter, I'm considering an alternative: making two MessagePackSerializer instances, one for the message envelopes, and one for user data. Would it make more sense for the user to provide a shape provider (my current thinking) that gets passed to call to Serialize and GetConverter; a single custom converter I can register in the user data serializer; or zero or more converters to register in the user data serializer?"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-19T20:17:58Z",
+        "body": "> I'm considering an alternative: making two MessagePackSerializer instances, one for the message envelopes, and one for user data\r\n\r\nThat makes a lot of sense. It's the closest analogy to the distinct `MessagePackSerializationOptions` it did for MessagePack-CSharp. \r\nAnd just like for that case, you'd still need to inject a few custom converters into the user data instance to handle the exotic types.\r\n\r\n> Would it make more sense for the user to provide a shape provider (my current thinking) that gets passed to call to Serialize and GetConverter; a single custom converter I can register in the user data serializer; or zero or more converters to register in the user data serializer?\r\n\r\nThe user _should_ be able to register their own converters (because that provides more customizeability than just providing a type shape). And I suppose there is likely a need for them to provide their own `ITypeShapeProvider` that we would then use when we make the direct serialization calls. "
+      }
+    ]
+  },
+  {
+    "number": 180,
+    "title": "Make a start at adding non-generic serialize overloads",
+    "created_at": "2024-12-19T18:26:54Z",
+    "closed_at": "2024-12-19T19:53:58Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/pull/180",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/180/comments",
+    "author": "trippwill",
+    "comments": [
+      {
+        "user": "trippwill",
+        "created_at": "2024-12-19T18:27:56Z",
+        "body": "@AArnott - tried making a start on adding non-generic, Type accepting overloads."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-19T19:49:42Z",
+        "body": "Oh, I just noticed this after creating #181. \r\nI see you added more overloads than I did. Which ones would you directly use? We already have a _lot_ of serialize/deserialize overloads so I'm looking to keep this hopefully rare case cornered off to just a few overloads even if they're a little harder to use."
+      },
+      {
+        "user": "trippwill",
+        "created_at": "2024-12-19T19:53:58Z",
+        "body": "Looks like the primary synchronous overloads which take a shape provider and a Type instance would be the ones I would use for vs-streamjsonrpc.\r\n\r\nI'll close this PR."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-19T20:01:12Z",
+        "body": "> take a shape provider and a Type instance\r\n\r\nWould taking an `ITypeShape` instead (which encompasses both the Type and the shape provider) suffice?"
+      }
+    ]
+  },
+  {
+    "number": 170,
+    "title": "Test on .NET 9 and test `OrderedDictionary<K, V>`",
+    "created_at": "2024-12-15T22:17:31Z",
+    "closed_at": "2024-12-15T22:20:56Z",
+    "labels": [],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/pull/170",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/170/comments",
+    "author": "AArnott",
+    "comments": [
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2024-12-16T08:57:25Z",
+        "body": "Which makes me think I should probably also test the new collection in PolyType proper. Good to see it's working OOTB though."
+      }
+    ]
+  },
+  {
+    "number": 168,
+    "title": "Incorrect deserialization of System.Drawing.Color property",
+    "created_at": "2024-12-15T16:17:07Z",
+    "closed_at": "2024-12-15T22:02:41Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/168",
+    "body": "**Bug description**\r\nWhen serializing an object containing a property of type System.Drawing.Color and then deserializing that object, the value of the Color property becomes [Empty]. It is not clear whether the problem is related to the serialization or deserialization process.\r\n\r\n**Repro steps**\r\nC# code to reproduce, the first test fails, but the second passes (even though Point is also a struct and from the same namespace)\r\n\r\n```C#\r\n[GenerateShape]\r\npublic partial record Person(string Name, System.Drawing.Color ShirtColor);\r\n\r\n[GenerateShape]\r\npublic partial record PersonWithPosition(string Name, System.Drawing.Point Position);\r\n\r\npublic class SerializerTest\r\n{\r\n    [Fact]\r\n    public void SerializeAndDeserializeObjectWithColorAsProperty_ShouldPersistDataCorrectly()\r\n    {\r\n        // Arrange\r\n        var serializer = new MessagePackSerializer();\r\n        var person = new Person(\"John\", System.Drawing.Color.MediumPurple);\r\n\r\n        // Act\r\n        var data = serializer.Serialize(person);\r\n        var deserialized = serializer.Deserialize<Person>(data);\r\n\r\n        // Assert\r\n        Assert.Equal(person.ShirtColor, deserialized.ShirtColor);\r\n    }\r\n\r\n    [Fact]\r\n    public void SerializeAndDeserializeObjectWithPointAsProperty_ShouldPersistDataCorrectly()\r\n    {\r\n        // Arrange\r\n        var serializer = new MessagePackSerializer();\r\n        var person = new PersonWithPosition(\"John\", new System.Drawing.Point(1,1));\r\n\r\n        // Act\r\n        var data = serializer.Serialize(person);\r\n        var deserialized = serializer.Deserialize<PersonWithPosition>(data);\r\n\r\n        // Assert\r\n        Assert.Equal(person.Position, deserialized.Position);\r\n    }\r\n}\r\n```\r\n\r\n**Expected behavior**\r\nThe value of the Color property should be the same after deserialization as it was before serialization.\r\n\r\n**Actual behavior**\r\nThe value of the Color property becomes [Empty] after deserialization.\r\n\r\n- Version: 0.3.38-beta\r\n- Target Framework: .NET 8.0\r\n- System: Windows 10\r\n\r\n**Additional context**\r\nMessage from first test:\r\nAssert.Equal() Failure: Values differ\r\nExpected: Color [MediumPurple]\r\nActual:   Color [Empty]\r\n",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/168/comments",
+    "author": "fralorange",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-12-15T21:44:44Z",
+        "body": "Thanks for trying out and reporting what you found.\r\nIt looks like `Color` doesn't expose a public property with a setter, nor a getter with a value that can be passed to the constructor, so nothing ends up getting serialized. It's an easy fix on a case-by-base basis though, and as this is in the core BCL it seems worthwhile to make work as built-in behavior."
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "title": "Offer camelCase property name serialization",
+    "created_at": "2024-11-06T04:24:39Z",
+    "closed_at": "2024-11-07T04:47:26Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/AArnott/Nerdbank.MessagePack/issues/35",
+    "body": "We should offer an option on individual types or on the whole serialization job to default to converting PascalCase property names to camelCase.",
+    "comments_url": "https://api.github.com/repos/AArnott/Nerdbank.MessagePack/issues/35/comments",
+    "author": "AArnott",
+    "comments": [
+      {
+        "user": "AArnott",
+        "created_at": "2024-11-07T01:26:38Z",
+        "body": "@eiriktsarpalis In coding this up, I realize that `IPropertyShape.Name` doesn't allow me to distinguish between explicitly set properties via the `PropertyShapeAttribute.Name` vs. names that are inferred from the C# declared property name.\r\nI'd like the policy to apply to all properties' *default* names, but not override explicitly set names. \r\n\r\nDo you agree with this policy? If so, how would you suggest I implement it? If not, why not?"
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-11-07T04:32:58Z",
+        "body": "I'm just going with the AttributeProvider you expose to retrieve the attribute to see if `Name` has been explicitly set. Not a huge fan of bringing Reflection into this for every single property, but it gets me unblocked anyway."
+      },
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2024-11-07T11:23:20Z",
+        "body": "> I'm just going with the AttributeProvider you expose to retrieve the attribute to see if `Name` has been explicitly set. Not a huge fan of bringing Reflection into this for every single property, but it gets me unblocked anyway.\r\n\r\nThe `AttributeProvider` is always `MemberInfo` for the case of the built-in providers, so perhaps it's as simple as checking `propertyShape.Name == (propertyShape.AttributeProvider as MemberInfo)?.Name`.\r\n\r\nI'm thinking that the concept of applying a naming policy is something that transfers to shapes in general, so perhaps it makes sense to lift that to being a feature in the core library."
+      },
+      {
+        "user": "AArnott",
+        "created_at": "2024-11-07T13:50:39Z",
+        "body": "> I'm thinking that the concept of applying a naming policy is something that transfers to shapes in general, so perhaps it makes sense to lift that to being a feature in the core library.\r\n\r\nI was thinking the same thing. \r\n\r\n> The AttributeProvider is always MemberInfo for the case of the built-in providers, so perhaps it's as simple as checking propertyShape.Name == (propertyShape.AttributeProvider as MemberInfo)?.Name.\r\n\r\nThat avoids some of the reflection cost, so that's something to like. However it wouldn't allow someone to disable the policy for one member by explicitly setting the name to its original value. For this use case, I think explicitly setting it to anything, even its original value, can be useful."
+      },
+      {
+        "user": "eiriktsarpalis",
+        "created_at": "2024-11-07T14:18:24Z",
+        "body": "> I was thinking the same thing.\r\n\r\nCould you create an issue please?"
+      }
+    ]
+  }
+]

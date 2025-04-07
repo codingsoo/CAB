@@ -1,0 +1,719 @@
+[
+  {
+    "number": 451,
+    "title": "SIGPIPE",
+    "created_at": "2020-07-14T01:07:32Z",
+    "closed_at": "2020-09-02T15:55:05Z",
+    "labels": [
+      "help wanted",
+      "question",
+      "discussion"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/451",
+    "body": "I've noticed that when a program encounters the SIGPIPE signal, afl++ doesn't detect it as a crash. I've tested this by just writing a program that raises SIGPIPE. Is this intended behaviour? Is there some documentation in the repo of what constitutes as a \"crash\"?",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/451/comments",
+    "author": "wmmc88",
+    "comments": [
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-07-15T13:01:47Z",
+        "body": "Which instrumentation are you using? In which mode? I cannot guess your configuration"
+      },
+      {
+        "user": "wmmc88",
+        "created_at": "2020-07-15T17:02:25Z",
+        "body": "I've tested with no instrumentation(-n), afl-clang++, afl-gcc-fast. Instrumentation doesn't seem to affect anything, they all have same behaviour. This was my test program:\r\n\r\n```\r\nint main() {\r\n  int signal;\r\n  std::cin >> signal;\r\n  std::cout << \"Signal #\" << signal << std::endl;\r\n  std::raise(signal);\r\n\r\n  return 0;\r\n}\r\n```\r\nAFL doesn't detect any crash when the following signals are raised:\r\n13, 17, 18, 20, 21, 22, 23, 28\r\n"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-07-16T10:48:17Z",
+        "body": "the reason for this is that in afl-fuzz-init.c:\r\n```\r\n  /* Things we don't care about. */\r\n\r\n  sa.sa_handler = SIG_IGN;\r\n  sigaction(SIGTSTP, &sa, NULL);\r\n  sigaction(SIGPIPE, &sa, NULL);\r\n```\r\nand this in inherited to the subprocesses spawned.\r\n\r\nthis is from original afl and the reason is I think twofold:\r\n1. it would otherwise create a core when afl-fuzz is killed hard\r\n2. a pipe error in the target means not that the target was successfully fuzzed but a processed crashed that it was talking to.\r\n\r\nthe goal of afl is to find any type of memory corruption vulnerabilities in a target. not bugs in other processes beyong that target. so IMHO this is a valid setup.\r\n@andreafioraldi  / @domenukk  / @hexcoder-  what do you think?"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-07-16T10:53:16Z",
+        "body": "Hmm should we reset the signal handler before exec? \r\nAn afl-introduced sigpipe in the child should only occur if AFL is dead - and then we do not care anymore, really.\r\nAnd if it's a valid crash of the target we would catch it that way  "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-07-16T12:36:18Z",
+        "body": "I am not sure a SIGPIPE would be a valid crash in a target. thats why I ask.\r\nEDIT: Because it means that in the target everything is fine, a remote item however is gone."
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-09-01T17:02:32Z",
+        "body": "We should close this issue and add sigpipe as a valid crash, in the end, the user, if not interested, can simply delete all the testcases under crashes/ with sig:13 in the name"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-09-02T15:55:05Z",
+        "body": "done.\r\n"
+      },
+      {
+        "user": "wmmc88",
+        "created_at": "2020-09-02T16:38:12Z",
+        "body": "I think I'm misunderstanding something.\n\nYou are now saying that SIGPIPE is a valid crash and should be detected by afl++, but I created this issue because I found that SIGPIPEs are NOT detected by afl++.\n\nWas there a pr where a change in this behaviour was introduced?"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-09-02T16:45:28Z",
+        "body": "sigpipe was never ever detected as a crash in any afl (because the target was configured to ignore pipe errors, on purpose).\r\n\r\nandrea thinks it can be beneficial if we let the target crash instead and let afl-fuzz pick that up. I dont mind, so I changed that now.\r\n"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-09-02T16:47:08Z",
+        "body": "Commit is in dev: 08f6e1d66aef1d005e85d6a7871358230a52f65d"
+      }
+    ]
+  },
+  {
+    "number": 184,
+    "title": "Unnecessary feature to be deleted?",
+    "created_at": "2020-02-03T10:06:18Z",
+    "closed_at": "2020-09-09T08:17:46Z",
+    "labels": [
+      "help wanted",
+      "question",
+      "discussion"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/184",
+    "body": "Are there any features that just bloat and are not needed anymore?\r\nif so we should remove them.\r\n\r\nAre there any? This issue is for discussing this.",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/184/comments",
+    "author": "vanhauser-thc",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-02-24T15:22:40Z",
+        "body": "We could delete the standard afl-llvm-pass and use (fixed) Instrim - or make Instrim standard"
+      },
+      {
+        "user": "Mindavi",
+        "created_at": "2020-05-02T19:56:58Z",
+        "body": "Maybe the symlinking of afl-clang to afl-clang-fast (or afl-gcc, it's 'conditional' I think) could be removed. Doesn't add anything as far as I can tell, and may be confusing."
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-05-02T19:58:56Z",
+        "body": "> Maybe the symlinking of afl-clang to afl-clang-fast (or afl-gcc, it's 'conditional' I think) could be removed. Doesn't add anything as far as I can tell, and may be confusing.\r\n\r\nmmm no. afl-gcc can instruments handwritten assembly, LLVM can't."
+      },
+      {
+        "user": "Mindavi",
+        "created_at": "2020-05-02T20:03:06Z",
+        "body": "I didn't mean afl-gcc, but the symlinking of afl-clang to afl-clang-fast.\r\n\r\nI remember something about it sometimes linking to afl-clang-fast and sometimes to afl-gcc. It didn't feel very logical to me."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-05-02T21:13:49Z",
+        "body": "I agree. Maybe even only have `afl-gcc` and `afl-clang`, with different flags for lto and the other insns we want to support "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-03T12:16:30Z",
+        "body": "I would rather want to remove afl-clang and keep afl-gcc and afl-clang-fast.\r\nafl-gcc is well known and removing it would break things, same as for afl-clang-fast.\r\nnote that we also have afl-gcc-fast which is neither of both.\r\nremoving afl-clang-lto is an option, however I would currently want to keep it to encourage usage of it."
+      },
+      {
+        "user": "Mindavi",
+        "created_at": "2020-05-03T12:33:02Z",
+        "body": "That sounds like a good solution. I think domenukk meant that too, but (I think) the idea there was to remove the `fast` postfix and only keep `afl-clang`? Anyhow, either way is fine, it just doesn't feel very useful to keep `afl-clang` around if it's just a symlink to `afl-clang-fast`.\r\n\r\nI understand you don't want to remove afl-clang-lto right now, because I think it's very nice :smile:."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-05-03T13:05:54Z",
+        "body": "Obviously we'll have to depreciate each first, so why not depreciate `afl-clang-*` and `afl-gcc-*` and move everything to flags or env variables inside `afl-clang`/gcc? "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-04T08:11:11Z",
+        "body": "I would rather have more symlink and less environment variables to be honest. environment variables can be forgotten that they are set with export (or thought to be set), so more error prone.\r\nthe afl-clang basically serves no purpose so removing this is IMHO good. having more environment variables just to get rid of symlinks make things worse not better"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-05-04T08:24:17Z",
+        "body": "Why not make it proper arguments then?\r\nMake lto default, and then the user may `-fafl=fast`"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-04T09:06:58Z",
+        "body": "we can not get rid of afl-gcc, afl-gcc-fast and afl-clang-fast (or whatever their names will be) as these are totally different binaries. removing afl-clang is good. removing afl-clang-lto is an option.\r\n\r\nFor options we could do argument, but it also means that setting it up requires CFLAGS and/or CPPFLAGS (and knowing which to set to which project) and targets to honor this (I have seen cmake projects where they do not honor CFLAGS and getting that in there is a PITA).\r\nThinking about this, on some targets this would could even need LDFLAGS, which when set on other targets would fail building, hmmm\r\n\r\n(and btw - we cannot make LTO the default as it requires llvm 11. which is still in development)\r\n"
+      },
+      {
+        "user": "Mindavi",
+        "created_at": "2020-05-04T18:56:42Z",
+        "body": "I think using the symlinks is fine. There are 2 more point I have to discuss:\r\n\r\n1. I've seen that `afl-gcc.c` has references to `gcj`, but according to wikipedia it's not supported anymore. I'm also unsure if anyone ever tested if it still works. That might be a good candidate for deletion.\r\n2. The `afl-gcc.c` source also mentions `afl-clang`, but if you compile llvm_mode the symlink seems to be overwritten by the symlink to `afl-clang-fast`. Maybe that `afl-clang` should be deprecated? Or what's the idea/goal of that one? Does it support instructing assembly as well? Maybe we want to keep it and instead remove the linking to `afl-clang-fast`?\r\n\r\nFYI: about point 2, I think `afl-clang` that's symlinked to `afl-clang-fast` doesn't work anymore because of the recent PR (#331) I did, because I wasn't aware that `afl-clang` could sometimes be linked to `afl-clang-fast`. So one way or another, something has to happen there. The old behaviour wasn't ok either, because it would always go to the `else` case, acting as a c compiler (even when it was called as `afl-clang++`.\r\n\r\nAbout gcj (according wikipedia):\r\n\r\n> It was part of the GNU Compiler Collection for over ten years but as of 2017 it is no longer maintained and will not be part of future releases."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-07T07:56:24Z",
+        "body": "@Mindavi we still support old platforms like Ubuntu 14.04. And there gcj is still present.\r\n\r\nfor afl-clang/++ - we should just remove the symlink. nobody is using this. and it is pointless."
+      },
+      {
+        "user": "hexcoder-",
+        "created_at": "2020-05-07T08:17:36Z",
+        "body": "@vanhauser-thc: For removing afl-clang/afl-clang++ symlinks, I disagree. \r\nThe behavior of afl-clang is different from afl-gcc in that a different underlying compiler is used.\r\nThis is needed on platforms where no gcc is present IIRC.\r\nSee `test.sh` where the right afl-\\<compiler\\> is selected for variable AFL_CC."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-07T09:53:49Z",
+        "body": "but if there is clang then shouldnt we force people to use afl-clang-fast?\r\nas @Mindavi pointed out, our current code would not work when called with afl-clang"
+      },
+      {
+        "user": "Mindavi",
+        "created_at": "2020-05-08T05:46:25Z",
+        "body": "Yeah it's kinda confusing, because the afl-clang symlink can either point to the afl-gcc binary or to the afl-clang-fast binary. It depends on if you build llvm_mode."
+      },
+      {
+        "user": "hexcoder-",
+        "created_at": "2020-05-09T18:45:59Z",
+        "body": "ok, i agree that afl-clang-fast should be preferred over afl-clang, but when there is no LLVM and no gcc, afl-clang will be the only choice."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-09T19:10:12Z",
+        "body": "In which situation would there be afl-clang only and not afl-gcc or afl-clang-fast? To be honest - if people don’t invest their time for a minimal efficient fuzzing environment I don’t care if they can’t run it. They don’t deserve it\n"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-05-13T16:40:39Z",
+        "body": "post library support should be removed, custom mutators used instead"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-09-09T08:17:46Z",
+        "body": "We have identified half of the power schedules can be removed and potentially also instrim.\r\nI dont think we need this issue anymore. we can open a new one if required."
+      }
+    ]
+  },
+  {
+    "number": 30,
+    "title": "AFL server and client model",
+    "created_at": "2019-07-26T00:23:02Z",
+    "closed_at": "2020-04-30T10:30:26Z",
+    "labels": [
+      "enhancement",
+      "question"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/30",
+    "body": "There is a AFL project for linux kernel named syzkaller (github.com/google/syzkaller) which uses client/server model, that is:\r\n- A manager running on host machine to 1. init connection to target device; 2. receive coverage data from target device; 3. display status on web\r\n- A fuzzer running on target device to 1. run exectutor; 2. to send coverage data back to manager\r\n\r\nSo I want to know if AFL can change to this kind of model\r\n- AFL-manager (receive corpus and show status on web)\r\n- Multiple AFL-fuzzer and executors ( do what afl-fuzz do but also send the coverage back to manager)\r\n\r\nWhy:\r\nWe are running afl-fuzz on target device which will easily crash, and then we have to restart the device and rerun the afl-fuzz from beginning. But syzkaller like model can bear the device crash and resume where it crashes or hangs.\r\nAnd we don't know what paths are covered on target machine too.",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/30/comments",
+    "author": "JoeyJiao",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2019-07-26T08:59:05Z",
+        "body": "To have this option might be a good thing, but this should not be the default behavior as this would slow down the fuzzing significantly.\r\n\r\nfor your specific problem: I have fuzzed in such situations as well. what helps is performing the fuzzing from an external harddisk via usb, and using AFL_TMPDIR pointing to a ramdisk location for speed.\r\nimportant when mounting the harddisk is the sync option so to not loose information if the system crashs.\r\n\r\nthe external harddisk + sync makes the fuzzing slower, but faster than your idea with a network manager, plus you can easily continue with afl (you know you can resume aborted session?  just replace the directory you pass with -i  with a dash \"-\".) where the system crashed (not at the same point, you loose up to 5 minutes I think, but you could tune that if afl-fuzz if you need a lower value)\r\n\r\n\r\n"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2019-08-08T09:20:27Z",
+        "body": "actually all that you need are two extra programs, e.g. afl-proxy-client which pretends to be the target to fuzz, but in reality is connected to the target platform to afl-proxy-server which is doing the forkserver.\r\n\r\nthat would be two additional programs, afl-proxy-client and afl-proxy-server. your proposal needs the server tool anyway, using a client tool would mean 0 changes needed in afl-fuzz (which is a beast in code size already).\r\n\r\nactually I know that several people already implemented this, not sure so if they are public.\r\n\r\nstill, the usb+sync solution should be faster."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-04-29T01:02:18Z",
+        "body": "@JoeyJiao \r\nI just added examples/afl-proxy/ which is afl-proxy-client in my previous description. in that you can just forward the data wherever you want, wait for coverage data, put it to the map and thats it.\r\n\r\nthe server part you would need to be implemented, basically reusing src/afl-forkserver.c.\r\n\r\nin case you implemented something yourself - I think a PR would be appreciated by people"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-04-30T10:30:26Z",
+        "body": "client/server over the network is now implemented in the `dev` branch in `examples/afl_network_proxy`.\r\n\r\nobviously I was bored ... ;)"
+      }
+    ]
+  },
+  {
+    "number": 1730,
+    "title": "`afl-clang-lto` doesn't parse response files properly",
+    "created_at": "2023-05-08T09:24:46Z",
+    "closed_at": "2023-06-08T11:01:49Z",
+    "labels": [
+      "enhancement",
+      "help wanted",
+      "good first issue"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/1730",
+    "body": "**Describe the bug**\r\nWhen `afl-clang-lto` is invoked with a response file, it fails with a misleading error message.\r\n\r\n**To Reproduce**\r\n`test.rsp`:\r\n```\r\n-x\r\nc\r\n-c\r\ntest.c\r\n-o\r\ntest.o\r\n```\r\n\r\nInvoke it with `afl-clang-lto @test.rsp`.\r\n\r\n**Expected behavior**\r\n`afl-clang-lto` should compile `test.c` and produce `test.o` without any problem, but it fails with:\r\n\r\n```\r\nafl-cc++4.07a by Michal Zalewski, Laszlo Szekeres, Marc Heuse - mode: LLVM-LTO-PCGUARD\r\nclang: error: cannot specify -o when generating multiple output files\r\n```\r\n\r\nThe same response file can be handled by `clang` without any problem, and `afl-clang-lto -x c -c test.c -o test.o` also succeeds.\r\n\r\n**Additional context**\r\nAdd any other context about the problem here.\r\n",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/1730/comments",
+    "author": "TerrorJack",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2023-05-08T13:47:41Z",
+        "body": "we do not support @file so far. I have actually never seen this before.\r\nwe have to parse the command line and modify it.\r\nwill have to think about this one"
+      },
+      {
+        "user": "TerrorJack",
+        "created_at": "2023-05-08T19:21:10Z",
+        "body": "If response files are unsupported, it would be nice to panic explicitly with an error message that says so."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2023-05-12T18:12:00Z",
+        "body": "I added the support for this in the dev branch, please test"
+      }
+    ]
+  },
+  {
+    "number": 1660,
+    "title": "Custom Mutator Version Check",
+    "created_at": "2023-02-28T19:58:18Z",
+    "closed_at": "2023-03-03T07:47:42Z",
+    "labels": [
+      "enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/1660",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nI recently came across this situation where a custom mutator built using AFLplusplus-4.00c source code will crash when loaded by afl-fuzz in the latest docker image (a newer version of at least AFLplusplus-4.05c). It took me a while to discover that the layout of `afl_state_t` changed across these two versions, so the struct member accesses in the custom mutator code became incorrect. \r\n\r\nI rebuilt the mutator using the same version that afl-fuzz uses and fixed the crash. IMHO, although it's the custom mutator dev's job to use the correct source, there could be checks on the afl-fuzz side to prevent loading a custom mutator built from incompatible afl++ source versions. Since sometimes a prebuilt mutator could be distributed to containers/hosts running a different version of afl-fuzz.\r\n\r\n**Describe the solution you'd like**\r\n\r\nI need help to think of a neat solution to this. To verify the version of the custom mutator, the version information must be embedded into the mutator binary. But for now, the way afl++ distinguishes versions is to use a constant string `VERSION`, which is in the form of a `#define` directive in config.h. Even though the mutator needs afl-fuzz.h to build, which includes config.h, the version info gets abandoned since by default `VERSION` will be used in nowhere.\r\n\r\nA solution could be to export the version info as a symbol (in `config.h`) which could be accessed during runtime by `dlsym`, but this is not neat for sure and I don't know if that's really necessary.\r\n\r\n**Additional context**\r\n\r\nI'm bringing up this situation that I encountered to (1) provide the solution if anyone makes the same mistake again and (2) to see if we could brainstorm something to help make this part better.\r\n\r\nMany thanks.\r\n",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/1660/comments",
+    "author": "yype",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2023-03-02T13:15:45Z",
+        "body": "I would never have the expectation that a shared library module will work across different versions :)\r\n\r\nThis is not something that can easily be done as it would force implementation onto the custom mutator developers.\r\nFeel free to propose a solution (how this would work in code, it is more than just to include afl-fuzz.h - which is actually optional. (if you do not work with the afl parameters then it is not necessary to include it - none of our examples do)).\r\n\r\nwhen you/we come up with a good solution then we happily accept a PR."
+      },
+      {
+        "user": "yype",
+        "created_at": "2023-03-02T14:37:09Z",
+        "body": "> I would never have the expectation that a shared library module will work across different versions :)\r\n> \r\n> This is not something that can easily be done as it would force implementation onto the custom mutator developers. Feel free to propose a solution (how this would work in code, it is more than just to include afl-fuzz.h - which is actually optional. (if you do not work with the afl parameters then it is not necessary to include it - none of our examples do)).\r\n> \r\n> when you/we come up with a good solution then we happily accept a PR.\r\n\r\nOh, I agree with what you said. This problem seems to only arise when we reference structures in the headers, which is optional and thus not always worthy of checking. \r\n\r\nHow about allowing the mutator to define one more function:\r\n\r\n```cpp\r\n// returns a VERSION string that the mutator expects\r\nconst char* afl_enforce_version();\r\n```\r\n\r\nThen we can optionally check the returned string with VERSION when loading the custom mutator in `src/afl-fuzz-mutators.c:load_custom_mutator`, and bail out when a mismatch is detected."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2023-03-02T15:02:40Z",
+        "body": "that would be possible, but I doubt anybody would go that extra mile ;-) but it can't hurt to have.\r\n(also I would call it  `afl_custom_check_version()`)."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2023-03-02T18:10:39Z",
+        "body": "> I would never have the expectation that a shared library module will work across different versions :)\r\n> \r\n> This is not something that can easily be done as it would force implementation onto the custom mutator developers. Feel free to propose a solution (how this would work in code, it is more than just to include afl-fuzz.h - which is actually optional. (if you do not work with the afl parameters then it is not necessary to include it - none of our examples do)).\r\n> \r\n> when you/we come up with a good solution then we happily accept a PR.\r\n\r\nI think the issue is that custom mutators access the AFL struct directly (that changes over time and should be considered private then), since we don't have APIs for everything."
+      },
+      {
+        "user": "yype",
+        "created_at": "2023-03-02T19:30:56Z",
+        "body": "Thank you @vanhauser-thc and @domenukk. I agree with what you said. More specifically, I was using the pointer passed to the following function to initialize the mutator before fuzzing, therefore the internal AFL structs get used.\r\n\r\n```\r\nvoid *afl_custom_init(afl_state_t *afl, unsigned int seed);\r\n```\r\n\r\nBack to the topic, do you still think such a feature is necessary? If so I can make a PR for it sometime."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2023-03-03T07:31:43Z",
+        "body": "the pointer you used is how it is designed to be used.\r\nideally it would not be necessary to use this struct (but without knowledge how a fuzz run is going a mutator cannot be very intelligent) - or an API would be present to give access to specific information (like afl_api_get_number_of_queue_items()) etc. - but this is absolute overkill. so the struct pointer is the easiest way.\r\n\r\nbut then there are problems when you want to use the module (compiled) with a different version, or you want to compile it for an older version (and something you want to access in the struct does not exist there.\r\n\r\nbut anyone who writes a custom mutator must be a tinker at heart so ...\r\n\r\noverall I do not think it is necessary to have a version check, although it would not hurt to have that feature. (but I doubt anyone would use it honestly.)\r\n"
+      },
+      {
+        "user": "yype",
+        "created_at": "2023-03-03T07:47:42Z",
+        "body": "> the pointer you used is how it is designed to be used. ideally it would not be necessary to use this struct (but without knowledge how a fuzz run is going a mutator cannot be very intelligent) - or an API would be present to give access to specific information (like afl_api_get_number_of_queue_items()) etc. - but this is absolute overkill. so the struct pointer is the easiest way.\r\n> \r\n> but then there are problems when you want to use the module (compiled) with a different version, or you want to compile it for an older version (and something you want to access in the struct does not exist there.\r\n> \r\n> but anyone who writes a custom mutator must be a tinker at heart so ...\r\n> \r\n> overall I do not think it is necessary to have a version check, although it would not hurt to have that feature. (but I doubt anyone would use it honestly.)\r\n\r\nSounds good. I'm gonna close this issue."
+      }
+    ]
+  },
+  {
+    "number": 1250,
+    "title": "Add configuration file support besides existing command-line/env options",
+    "created_at": "2022-01-11T16:16:40Z",
+    "closed_at": "2022-05-09T10:43:53Z",
+    "labels": [
+      "enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/1250",
+    "body": "Tools in AFL++ make heavy use of argv&envp. I think as the project evolves, it gradually becomes a bad idea. Settings scatter everywhere and not in a uniform way\r\nSomewhat similar to Syzkaller, how about write all the configurations in a single config file (maybe in the JSON format?) and pass the file to tools? \r\nI think that might also facilitate communication, since people can then share their settings by simply publishing a single file.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/1250/comments",
+    "author": "c2hpxq",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2022-01-11T16:51:15Z",
+        "body": "Personally I want to start a fuzz instance and not open an editor first. This would also makes scripting and automation much harder.\r\nnormally you have several instances running in sync, removing one after some time and replacing with something else. with a config file this is extra work.\r\n\r\nI do see the complication with many command line options and many more environment variables, where a config could potentially make this easier. \r\n\r\nSo I myself would not put effort into this.\r\nBut I would accept a PR making this optionally available (e.g. `afl-fuzz -J config.json`).\r\n\r\ndunno what the other in the team think about this."
+      },
+      {
+        "user": "c2hpxq",
+        "created_at": "2022-01-12T01:33:34Z",
+        "body": "Yes, I agree with you. Backward compatibility does matter and I think it's important to keep the 'out-of-the-box' merit of AFL.\r\nFor a tool as popular, good as AFL++ ,this must be optional at first and any further decision should be based on the feedback of fuzzing community."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2022-01-12T17:54:52Z",
+        "body": "I agree that this could be an add-on /alternative to the current way to set up a run.\r\n\r\nHowever, I'm not sure this needs to be part of the core tool.\r\nBasically, you can already have a wrapper script (python?) that sets all of the appropriate configs variables and then calls the `afl-fuzz` binary with the given parameters. \r\nBut maybe I'm just too used to the way things are...\r\n\r\n(Speaking of the way things are, are you aware that afl-fuzz stores the env variables and command line in the output folder, and you can also share these?)\r\n\r\nFrom an implementation point of view, incorporating this into the core `afl-fuzz` means we would need some sort of json/toml/ini parser in the project, which we do not have at the moment (unless we call out to python, if it's linked)\r\nThen there are all of the surrounding tools like afl-cmin, tmin, showmap, that would also need to, either, understand this config file, or take their own configs.\r\n\r\nTL;DR this is going to be some work, but might be fun to have if it's done right"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2022-05-09T10:43:53Z",
+        "body": "Feel free to provide a PR if you're still interested in this issue. Closing for now"
+      }
+    ]
+  },
+  {
+    "number": 1241,
+    "title": "Make afl-fuzz not include the time computer was suspended in its statistics",
+    "created_at": "2022-01-06T12:01:27Z",
+    "closed_at": "2024-04-06T06:48:30Z",
+    "labels": [
+      "help wanted",
+      "good first issue"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/1241",
+    "body": "When the computer is suspended during a fuzzing session, the time spent in suspended state is counted as a \"run time\" on a statistics screen. In case fuzzing was running for several hours and then the computer was suspended for several more hours, on one hand I would prefer not restarting the session, on the other hand, now it may be harder to tell how well a harness performs (corpus count vs. run time). _(I expect some problems are also possible if wall-clock jumps backwards for some reason but I have never experienced this myself)_\r\n\r\nAs an example, if I...\r\n* start afl-fuzz, keep it working for 1 hour\r\n* then suspend the computer for 1 hour\r\n* then resume my computer\r\n\r\n... I expect the status screen to show run time of ~1h instead of ~2h.\r\n\r\nAs a rather simple fix, it may be worth using `clock_gettime(CLOCK_MONOTONIC, ...)`  instead of `gettimeofday`, if available. Replacing `gettimeofday` in `get_cur_time()` and `get_cur_time_ns()` with `clock_gettime` seems to fix this issue for me, though I'm not very familiar with AFL++ codebase (which functions should return consistent times? are any functions expected to execute as efficiently as possible due to vDSO? etc.).\r\n\r\nAnother possible use case could be temporarily suspending the container with fuzzers, but I expect that case to require much more complicated heuristics instead of simply asking the kernel for the right clock.",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/1241/comments",
+    "author": "atrosinenko",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2022-01-06T13:22:42Z",
+        "body": "if you want you can send a PR, something like\r\n```\r\n#ifdef CLOCK_MONOTONIC\r\n   ...\r\n#else \r\n  ...\r\n```"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2022-01-06T13:30:20Z",
+        "body": "We could even consider `CLOCK_MONOTONIC_COARSE` which is (supposedly) faster"
+      },
+      {
+        "user": "MdSahil-oss",
+        "created_at": "2022-01-18T18:48:20Z",
+        "body": "/assign"
+      },
+      {
+        "user": "kritgpt",
+        "created_at": "2022-10-14T07:27:29Z",
+        "body": "Hey! I am trying to work on this issue. `CLOCK_MONOTONIC_COARSE` is Linux-specific and has been included since Linux 2.6.32, which would affect portability. It is also less precise than `CLOCK_MONOTONIC` but _does_ update once per tick.  Which one do you suggest I use?"
+      },
+      {
+        "user": "kritgpt",
+        "created_at": "2022-10-14T07:30:59Z",
+        "body": "Could we try to use `CLOCK_MONOTONIC_COARSE` when supported and `CLOCK_MONOTONIC` otherwise? "
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2022-10-14T08:48:14Z",
+        "body": "That sounds best, yes. We can assume it'll be supported on all Linux systems since the kernel is old enough "
+      },
+      {
+        "user": "kritgpt",
+        "created_at": "2022-10-18T20:58:14Z",
+        "body": "I am done with the code, how should I test this?"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2022-10-18T22:03:56Z",
+        "body": "Run it for a bit, suspend your computer, see if the time is correct (?)"
+      },
+      {
+        "user": "ligurio",
+        "created_at": "2024-03-31T08:13:00Z",
+        "body": "I faced the same problem.\r\nThe steps to reproduce are as follows:\r\n\r\n- Create a file with name `main.c` with content below\r\n\r\n<details>\r\n  <summary>C code</summary>\r\n  \r\n```c\r\n#include <stdio.h>\r\n#include <string.h>\r\n#include <stdlib.h>\r\n#include <assert.h>\r\n\r\nchar *remove_white_space(char *s)\r\n{\r\n    while (s && *s++)\r\n        if (*s == ' ')\r\n            return \"moish\";\r\n    return s;\r\n}\r\n\r\nint main(int argc, char **argv)\r\n{\r\n    char buffer[256]={0};\r\n    FILE *fl = fopen(argv[1],\"rt\");\r\n    if (fl == NULL) return 0;\r\n\r\n    assert(fscanf(fl,\"%s\",buffer) > 0);\r\n    char *res = remove_white_space(buffer);\r\n    if (strcmp(res,\"a b c d\") == 0)\r\n    {\r\n        assert(0);\r\n    }\r\n\r\n    fclose(fl);\r\n    return 0;\r\n}\r\n```\r\n  \r\n</details>\r\n\r\n- Build sample program: `afl-gcc main.c -o main`\r\n- `mkdir INPUTS OUTPUTS; echo 1 > INPUTS/sample`\r\n- Execute AFL++: `afl-fuzz -i INPUTS/ -o OUTPUTS ./main @@` on laptop\r\n- Remember a value in the field **run time** in the section **process timing**\r\n- Suspend laptop\r\n- Resume laptop and take a look on a value in *run time*\r\n- Time is going when process is not running\r\n\r\n(`kill -SIGSTOP <pid>` and `kill -SIGCONT <pid>` can replace suspend and resume on laptop)\r\n\r\n```\r\n           american fuzzy lop ++4.10c {default} (./sample) [explore]\r\n┌─ process timing ────────────────────────────────────┬─ overall results ────┐\r\n│        run time : 0 days, 0 hrs, 1 min, 13 sec      │  cycles done : 131   │\r\n│   last new find : 0 days, 0 hrs, 1 min, 13 sec      │ corpus count : 8     │\r\n│last saved crash : 0 days, 0 hrs, 1 min, 9 sec       │saved crashes : 2     │\r\n│ last saved hang : none seen yet                     │  saved hangs : 0     │\r\n\r\n```"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2024-04-06T06:48:30Z",
+        "body": "fix is in dev"
+      }
+    ]
+  },
+  {
+    "number": 618,
+    "title": "New hook for custom mutator to modify the generated crashing filename",
+    "created_at": "2020-12-03T14:29:57Z",
+    "closed_at": "2020-12-04T13:53:35Z",
+    "labels": [
+      "enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/618",
+    "body": "For example `char *afl_custom_describe()`  where, if defined, the returned string pointer that will be used for the crash filename",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/618/comments",
+    "author": "wizche",
+    "comments": [
+      {
+        "user": "domenukk",
+        "created_at": "2020-12-03T18:24:54Z",
+        "body": "Can you try if b63a56ee36f52003824f5d8d988c8e13e31023ae works for you? Don't have the time to write a test mutator at the moment, and gotta run. :)"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-12-04T13:53:35Z",
+        "body": "Merged to dev"
+      }
+    ]
+  },
+  {
+    "number": 274,
+    "title": "[ideas] Dashboard, exit confirmation, better resuming",
+    "created_at": "2020-03-26T10:33:45Z",
+    "closed_at": "2021-02-15T17:18:39Z",
+    "labels": [
+      "enhancement",
+      "help wanted",
+      "good first issue"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/274",
+    "body": "Just lost my status screens with few billions of execs :(\r\nSo, my ideas:\r\n1. Can we store all the fuzzer stats as shown in status screen, and then restore it when resuming (with both AFL_AUTORESUME and '-i' option) ? If it somehow affects or depends on inner state of AFL++ instance, can we restore this inner state too?\r\n2. Can we prevent random Ctrl+C presses for example, by asking to confirm? You know, there may be lots of opened windows, tty multiplexer sessions and so on, anything can happen.\r\n3. What if AFL++ had some sort of dashboard / control center available via web interface? It could mimic afl-whatsup and afl-plot in some ways. It could be used for much better monitoring of current fuzzing job (and maybe also show some analysis of previous runs too). It could also be used for showing separate status screens, restarting instances with provided command lines, changing input test cases, etc .. Most importantly, it would provide a way to access all the stats from any device capable of web surfing, so that you could monitor & control your fuzzing jobs while walking your dog :D",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/274/comments",
+    "author": "fuzzah",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-26T11:46:19Z",
+        "body": "well the fuzzer_stats could be loaded on resume and variables set accordingly. This is however nothing important. you lost something that looked cool, but you lost nothing of real value :)\r\nIf you would like to have that in, send a PR, I think everybody else has something with higher priority on their plate"
+      },
+      {
+        "user": "tushargoyl123",
+        "created_at": "2021-01-02T16:45:44Z",
+        "body": "Hi this is Tushar , I want to work on this issue , I am new to open source Can u guide me through??\r\n\r\n"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2021-01-04T17:03:32Z",
+        "body": "@tushargoyl123 do have you a strong experience in coding C/C++?"
+      },
+      {
+        "user": "tushargoyl123",
+        "created_at": "2021-01-04T17:43:38Z",
+        "body": "> @tushargoyl123 do have you a strong experience in coding C/C++?\r\n\r\nYes I know it very well... "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2021-01-04T17:59:21Z",
+        "body": "@tushargoyl123 the only relevant feature request for this repo is the first one IMHO (2 is undesired, 3 is out of scope and rather an own project):\r\n\r\n```\r\nCan we store all the fuzzer stats as shown in status screen, and then restore it when resuming (with both AFL_AUTORESUME and '-i' option) ? If it somehow affects or depends on inner state of AFL++ instance, can we restore this inner state too?\r\n```\r\n\r\nbasically what has to be done is that if `afl-fuzz` is started in resume mode, then the existing \"$out_dir/fuzzer_stats\" file has to be loaded, the values read in and assigned to the internal variables. pretty easy and fast to do - if you know what you are doing.\r\n\r\nbut the hard part is to understand how afl++ works. I recommend reading the README.md fully, then try out some of the tutorials that are mentioned there. after that take a look at `src/afl-fuzz-stats.c` - which should then be familiar what is happening there. If you have questions then, just write them here."
+      },
+      {
+        "user": "tushargoyl123",
+        "created_at": "2021-01-04T18:18:35Z",
+        "body": "@vanhauser-thc  ok once I go through all the things I will let you know..."
+      },
+      {
+        "user": "NishantPuri99",
+        "created_at": "2021-01-10T07:48:20Z",
+        "body": "Hi! Can I try this issue? I'm good with C/C++ and have a very basic knowledge of Fuzzing."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2021-01-10T13:28:40Z",
+        "body": "@NishantPuri99 I am not sure if @tushargoyl123 is working on this already.\r\n\r\nAnother open issue is that afl++ compiles and works on Android - if that is something one of you are interested in doing."
+      },
+      {
+        "user": "NishantPuri99",
+        "created_at": "2021-01-10T13:31:35Z",
+        "body": "Hi again, I'll work on that then, could you please guide me regarding it?"
+      },
+      {
+        "user": "tushargoyl123",
+        "created_at": "2021-01-10T13:38:15Z",
+        "body": "@vanhauser-thc hi i am so sorry my practical exams were going on in my college I have set up the chapel environment, have run some basic commands now coming on the issue I need to learn a little bit from you like i can't understand the meaning of status screen(here) Also tell me how would you approach to solve this issue Would be a great help... Will be back with this issue solved very soon :) "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2021-01-11T09:57:39Z",
+        "body": "@tushargoyl123 all your questions on status screen, basic command, etc. are answered in the documentation, e.g, the main README.md and docs/status_screen.md\r\n"
+      },
+      {
+        "user": "mykter",
+        "created_at": "2021-02-15T17:09:38Z",
+        "body": "Looks like this can probably be closed now that #728 is merged?"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2021-02-15T17:18:39Z",
+        "body": "Right, this and statsd (#684 & #702) should do the trick"
+      }
+    ]
+  },
+  {
+    "number": 244,
+    "title": "fixing \"no globals\"",
+    "created_at": "2020-03-09T18:44:10Z",
+    "closed_at": "2020-03-15T21:51:48Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/244",
+    "body": "@domenukk I am out of time for today for fixing.\r\n\r\nafl-tmin and afl-showmap do not work if the input is sent via stdin (but fine in file/@@ mode).\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/244/comments",
+    "author": "vanhauser-thc",
+    "comments": [
+      {
+        "user": "domenukk",
+        "created_at": "2020-03-09T20:35:23Z",
+        "body": "Worked on it with commit 1136e88.\r\nKeeping this issue open until travis finishes \r\n"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-03-09T20:53:17Z",
+        "body": "Leaks are gone, however afl-cmin and afl-tmin still seem broken. \r\nI sadly don't have the time to fix it right now."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-10T05:58:39Z",
+        "body": "The issue was that neither afl-tmin nor afl-showmap were initializing their fsrv structure like afl_init() is doing in afl-fuzz.\r\nSo what I implemented is that in afl-forkserver.c fsrv_init() checks if use_stdin is 1 (which is the default), and if not then set the necessary defaults.\r\n\r\nafl-tmin and afl-showmap work now and test.sh runs through clean with ASAN enabled\r\n\r\nI think we should keep the issue open until we are sure there are no other bugs."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-10T07:09:57Z",
+        "body": "I did a speed comparison and it might be a little bit slower, but it is so minimal (maybe < 0.5%) it is not important IMHO.\r\n\r\nWhat is however a big issue is that the results are not uniform.\r\n\r\nWhat I mean is: with \"old\" afl-fuzz if we set a fixed random number initialization (e.g. `-s 123`) then the results would be uniform meaning the path discovered etc would happen at the exact same step and are repeatable.\r\nWith \"no globals\" afl-fuzz this is not the case. The results are all over the place although all instances are set with the same -s value.\r\n\r\nThis can either be a small issue that the rng is not initialized as it should - or an indicator that there is a big bug somewhere hidden fucking up the mutation.\r\n\r\nI will check later if I can find out what the issue is, @andreafioraldi you know the mutation part better than me now I think so if you could have a look as well that would be great"
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-03-10T08:30:14Z",
+        "body": "`fsrv_init() checks if use_stdin is 1` this is a dirty hack, I'll find a better solution in the next days (maybe this evening).\r\n\r\nRegards the mutation yes this is a problem, but the bug can be in any part of the code that calls UR not only in fuzz_one. I'll give a look."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-03-10T09:34:34Z",
+        "body": "Why not always initialize?\r\nInit is called at the very beginning anyway, the variables will be overwritten afterwards. "
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-10T10:37:36Z",
+        "body": "there are 3 clients to the forkserver -> tmin, showmap and fuzz. fuzz performs its own init and the adding to the list function, tmin and showmap call fsrv_init which did nothing else than calling the adding to the list function.\r\n\r\nhence I think we can remove the if() check there and hard code the initialization.\r\n\r\nthat was before I checked who is doing what."
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-03-10T10:54:16Z",
+        "body": "In the long run we should probably initialize the forkserver inside the forkserver method, with all consumers passing in the variables.\r\nthat way other tools can use the forkserver more easily and we can swap it out against different implementations"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-10T11:32:57Z",
+        "body": "I checked the random init - it is still the same and all var assignments etc. look good.\r\nAs with the same -s value the \"non global\" afl-fuzz produces different results it seems like there is a bug in the mutator"
+      },
+      {
+        "user": "domenukk",
+        "created_at": "2020-03-10T21:55:43Z",
+        "body": "Do you run MOpt-based mutators? These were the largest change I had to make.\r\nApart from that, either one variable now that was supposed to be local now uses `afl_state_t` by accidents, or the different results are simply cause by more allocations that may also call random()?"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-10T22:23:30Z",
+        "body": "No, not MOpt ... \"classic\" ... also no radamsa or custom"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-15T11:09:42Z",
+        "body": "@domenukk @andreafioraldi @hexcoder- we really need to find this issue. I have a longer train ride today where I will try to dig deeper into it ... please help out and have a look too if you have the time"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-15T16:28:30Z",
+        "body": "OK, one step forward:\r\n\r\nthere is no bug in the mutation. The mutations are exactly the same if the `-s` option is used - I verified this with afl-fuzz-document (`make document`).\r\n\r\nHowever: post-\"no globals\" reports 77 paths on a given test case, whereas pre-\"no globals\" reports 75 paths. Same instrumented binary, same mutations being performed. and different post-\"no-globals\" runs can result in different paths for the same test setup (e.g. the 2nd run showed 76 paths ...)\r\n\r\nOn the other hand the queue entries are exactly the same, same number of entries with the same contents. \r\n\r\nSo it seems to be that the paths variable is not initialized? \r\n\r\nat least its not critical and a minor thing. removing the \"important\" flag, but still needs to be fixed before we do the next release"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-15T17:15:17Z",
+        "body": "the two variables that become wrong are: afl->pending_not_fuzzed and afl->queued_paths. They are between +0 to +2 higher in my tests than the real value they should be.\r\n"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-15T19:32:31Z",
+        "body": "I think I found the issue.\r\nthe UI is rendered at different times when stop_soon is reached, hence a different state is displayed in the end. I will fix this by rendering it one last time before the exit print screen message is written"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-03-15T21:51:48Z",
+        "body": "fixed with 61ba214\r\n"
+      }
+    ]
+  },
+  {
+    "number": 187,
+    "title": "Map Size as ENV Var?",
+    "created_at": "2020-02-03T17:04:41Z",
+    "closed_at": "2020-04-18T13:28:48Z",
+    "labels": [
+      "enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/187",
+    "body": "Right now, the map size is set at compile time.\r\nIf it were possible to alter the map size of a binary at run time, we could, for example, have better precision in use cases like `afl-showmap` or even run single afl-fuzz passes with higher precision.\r\nOn the other hand this may have a non-negligible impact on instrumentation performance, what do you think?",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/187/comments",
+    "author": "domenukk",
+    "comments": [
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-02-03T17:37:14Z",
+        "body": "Test it, on x86 the performance impact should be almost 0 I guess. On some processors, decoding an immediate is slower than loading from L1 cache so I'll not surprised to see a performance gain on some CPUs. "
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2020-02-03T17:38:29Z",
+        "body": "Maybe align it in a way that map_size, afl_area_ptr and afl_prev_loc will be on the same cache line."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-02-03T18:22:09Z",
+        "body": "I thought about the same thing yesterday :)\r\n\r\ninstrumented targets could communicate via the forkserver what the compiled map size was (and afl could exit if it differes and report what the right value would be)"
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-04-17T08:23:56Z",
+        "body": "this is now implemented. if anyone wants to test.\r\nnot in afl-gcc, afl-gcc-fast and non LTO afl-clang-fast.\r\nmight do it for afl-clang-fast (afl-llvm-pass.so) in a next release though."
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "QEMU 5",
+    "created_at": "2019-06-05T09:58:50Z",
+    "closed_at": "2020-09-01T15:41:19Z",
+    "labels": [
+      "enhancement",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/2",
+    "body": "I had some trouble porting to QEMU 4. It works but the exec/sec decrease drammatically.\r\nFor example, on tcpdump exec/sec are dropped from ~1650 to ~60.\r\nI can't figure out why this happens and if someone will find why please tag me.\r\n\r\nAs a note for the future, I didn' use the QEMU helpers cause a patched version of `tcg_gen_callN` (`tcg_gen_afl_maybe_log_call`) that only generates calls to `afl_maybe_log` is faster. It avoids an hashtable lookup for flags and sizemask (I hardcoded them) and many operations related to arguments preparation will be simplified by the compiler.",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/2/comments",
+    "author": "andreafioraldi",
+    "comments": [
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2019-08-08T07:10:03Z",
+        "body": "referencing PR #39 I accepted ... might influence this (at least for a decision :) )"
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2019-08-17T17:46:23Z",
+        "body": "Yeah i see now the PR #39 , the fix is included in QEMU 4.1.0 (the release of 2 days ago) and so I think that the fix fro afl++ will be the transition to this version."
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2019-08-21T11:13:29Z",
+        "body": "QEMU 4.1.0 seems to ignore the cached blocks in the parent.\r\nIf I disable parent caching in QEMU 3.1.0 I get the same bad performance.\r\nThe code that handle blocks translation is very similar between the two versions of QEMU and I can't figure out why this happens."
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2019-08-21T11:36:32Z",
+        "body": "tb_htable_lookup always returns NULL in the parent, even if called just after tb_gen_code.\r\nE.g.\r\n```c\r\n        mmap_lock();\r\n        tb = tb_gen_code(cpu, t.tb.pc, t.tb.cs_base, t.tb.flags, t.tb.cf_mask);\r\n        fprintf(stderr, \" GEN CODE %d  %p : %lx %lx %lx %lx \\n\", getpid(), tb, t.tb.pc, t.tb.cs_base, t.tb.flags, t.tb.cf_mask);\r\n        tb = tb_htable_lookup(cpu, t.tb.pc, t.tb.cs_base, t.tb.flags, 0);\r\n        fprintf(stderr, \" LOOKUP %p : %lx %lx %lx %lx \\n\", tb, t.tb.pc, t.tb.cs_base, t.tb.flags, t.tb.cf_mask);\r\n        mmap_unlock();\r\n```\r\n\r\nGives:\r\n```\r\n GEN CODE 25779  0x555555cd1740 : 400000c728 0 40c0b3 0 \r\n LOOKUP (nil) : 400000c728 0 40c0b3 0 \r\n```"
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2019-08-21T12:07:09Z",
+        "body": "Porting the 3.1.0 tb_gen_code() routine to 4.1.0 seems to solve this issue and now the speed is double (160 exec/s vs. 80 exec/s) but not already comparable with 3.1.0 speed (1000 exec/s).\r\nSeems that QEMU 4.1.0 instroduced shitty code to handle buffer overflows during translation."
+      },
+      {
+        "user": "andreafioraldi",
+        "created_at": "2019-08-21T12:13:30Z",
+        "body": "This is going to be an hell..."
+      },
+      {
+        "user": "vanhauser-thc",
+        "created_at": "2020-04-30T10:29:32Z",
+        "body": "qemu 5 is out now, maybe the performance is better now?"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "LLVM compile errors",
+    "created_at": "2019-06-02T15:20:48Z",
+    "closed_at": "2019-06-03T21:44:17Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/AFLplusplus/AFLplusplus/issues/1",
+    "body": "Currently only llvm 3.9, 4.0 and 8 compile successfully, 5.0 and 6.0 with a workaround.\r\n\r\nVersions 3.7 and 7 fail, workaround is being investigates\r\nAnd for 5.0 and 6.0 it is to be seen if the g++ workaround can be getting rid of.\r\n\r\n To clarify: this is also in the original afl 2.52b. This is not because of any code additions.",
+    "comments_url": "https://api.github.com/repos/AFLplusplus/AFLplusplus/issues/1/comments",
+    "author": "vanhauser-thc",
+    "comments": [
+      {
+        "user": "hexcoder-",
+        "created_at": "2019-06-03T21:44:17Z",
+        "body": "A fix has been found. Closing."
+      }
+    ]
+  }
+]

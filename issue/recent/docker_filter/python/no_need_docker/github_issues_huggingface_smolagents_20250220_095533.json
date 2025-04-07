@@ -1,0 +1,123 @@
+[
+  {
+    "number": 454,
+    "title": "fix: support o1",
+    "created_at": "2025-01-31T14:48:39Z",
+    "closed_at": "2025-02-05T10:44:42Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/smolagents/pull/454",
+    "body": "Remove `max_tokens` for `o1` models",
+    "comments_url": "https://api.github.com/repos/huggingface/smolagents/issues/454/comments",
+    "author": "ricklamers",
+    "comments": [
+      {
+        "user": "ricklamers",
+        "created_at": "2025-01-31T14:49:06Z",
+        "body": "I couldn't get it working without these changes. Maybe this needs to be changed, but this is working for me."
+      },
+      {
+        "user": "aymeric-roucher",
+        "created_at": "2025-02-05T10:44:42Z",
+        "body": "This fix is not needed anymore! Now that we've removed the default parameter `max_tokens`, the model works out of the box for me. Tell us if you still have errors and we'll reopen!"
+      },
+      {
+        "user": "ricklamers",
+        "created_at": "2025-02-05T13:39:50Z",
+        "body": "Nice!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure `o1` models work without requiring explicit `max_tokens` parameter configuration",
+      "Resolve compatibility issues between model configuration and parameter defaults"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:04:34"
+    }
+  },
+  {
+    "number": 108,
+    "title": "Always getting the error: \"AssertionError exception: no description\" ",
+    "created_at": "2025-01-07T21:09:23Z",
+    "closed_at": "2025-01-20T16:21:39Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/smolagents/issues/108",
+    "body": "No matter what I do to modify the docstring I always get the same error as mentioned in the title.\r\n\r\nHere is a tool that I have created.\r\n\r\nI would like to know what within my docstrings is causing this.\r\n\r\n```python\r\n\r\ncg = CoinGeckoAPI(demo_api_key=os.getenv('coingecko_api_key'))\r\n\r\n@tool\r\ndef get_coins_list(currency: str) -> list:\r\n    \"\"\"\r\n    This tool makes a query to the CoinGecko API to get a response of ALL of the supported coins with their price, market cap, volume and related market data in USD.\r\n\r\n    Args:\r\n        currency: The dollar value which the coin should be represented into\r\n    \"\"\"\r\n    return cg.get_coins_markets(vs_currency=currency)\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/huggingface/smolagents/issues/108/comments",
+    "author": "jondoescoding",
+    "comments": [
+      {
+        "user": "whoahaow",
+        "created_at": "2025-01-07T21:34:16Z",
+        "body": "does it fix it?\r\n\r\n```python\r\ncg = CoinGeckoAPI(api_key=os.getenv('coingecko_api_key'))\r\n\r\nclass GetCoinsListTool(Tool):\r\n    name = \"get_coins_list\"\r\n    description = \"\"\"\r\n    This tool makes a query to the CoinGecko API to get a response of ALL of the supported coins with their price, market cap, volume and related market data in USD.\r\n    \"\"\"\r\n    inputs = {\r\n        \"currency\": {\r\n            \"type\": \"string\",\r\n            \"description\": \"The currency in which the coin data should be represented (e.g., 'usd', 'eur').\"\r\n        }\r\n    }\r\n    output_type = \"list\"\r\n\r\n    def forward(self, currency: str) -> list:\r\n        return cg.get_coins_markets(vs_currency=currency)\r\n```"
+      },
+      {
+        "user": "jondoescoding",
+        "created_at": "2025-01-07T21:45:48Z",
+        "body": "Got the same error.\r\n\r\n```python\r\nException has occurred: AssertionError\r\nexception: no description\r\n\r\nException has occurred: AssertionError\r\nexception: no description\r\n  File \"...\\coingecko_agent\\agent.py\", line 7, in <module>\r\n    coin_list_tool = GetCoinsListTool()\r\n                     ^^^^^^^^^^^^^^^^^^\r\nAssertionError: \r\n\r\n```"
+      },
+      {
+        "user": "whoahaow",
+        "created_at": "2025-01-07T22:25:44Z",
+        "body": "I don't know if this is suitable for you, but here's what I did:\r\n```python\r\nfrom smolagents import CodeAgent, HfApiModel, Tool\r\nimport os\r\nfrom pycoingecko import CoinGeckoAPI\r\nimport json\r\n\r\n# Initialize CoinGecko API client\r\ncg = CoinGeckoAPI(api_key=os.getenv('coingecko_api_key'))\r\n\r\n# Define the GetCoinsListTool class\r\nclass GetCoinsListTool(Tool):\r\n    name = \"get_coins_list\"\r\n    description = \"\"\"\r\n    This tool makes a query to the CoinGecko API to get a response of ALL of the supported coins with their price, market cap, volume and related market data in USD.\r\n    You need to import json. The output is a JSON string. You should use the `json` module to parse this string into a Python list.\r\n    \"\"\"\r\n    inputs = {\r\n        \"currency\": {\r\n            \"type\": \"string\",\r\n            \"description\": \"The currency in which the coin data should be represented (e.g., 'usd', 'eur').\"\r\n        }\r\n    }\r\n    output_type = \"string\"  # Change to 'string'\r\n\r\n    def forward(self, currency: str) -> str:\r\n        coins_data = cg.get_coins_markets(vs_currency=currency)\r\n        return json.dumps(coins_data)  # Convert the list to a JSON string\r\n\r\n# Initialize the model\r\nmodel = HfApiModel(model_id=\"Qwen/Qwen2.5-Coder-32B-Instruct\")\r\n\r\n# Initialize the agent with the tool\r\nagent = CodeAgent(\r\n    tools=[GetCoinsListTool()],\r\n    model=model,\r\n    add_base_tools=True,\r\n    additional_authorized_imports=[\"json\"]  # Authorize the json module\r\n)\r\n\r\n# Run the agent with a task\r\ntask = \"Get the list of coins in USD and print the first 5 entries. Then present it as usual text.\"\r\nresult = agent.run(task)\r\n\r\n# Print the result\r\nprint(\"Agent Output:\")\r\nprint(result)\r\n```"
+      },
+      {
+        "user": "jondoescoding",
+        "created_at": "2025-01-07T23:24:32Z",
+        "body": "Works like a charm. Thanks! But why does the the @tool decorator not work?"
+      },
+      {
+        "user": "aymeric-roucher",
+        "created_at": "2025-01-09T10:24:13Z",
+        "body": "@jondoescoding could you provide your full error trace and package versions? I tried to reproduce but for me your code snippet works"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the @tool decorator approach fails to provide required metadata",
+      "Clear documentation of required description format for tool definitions",
+      "Compatibility with the framework's expected output type handling",
+      "Framework-specific requirements for tool class definitions"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:04:41"
+    }
+  },
+  {
+    "number": 101,
+    "title": "Code Agent -> max_iterations",
+    "created_at": "2025-01-07T10:20:29Z",
+    "closed_at": "2025-01-07T14:53:36Z",
+    "labels": [],
+    "url": "https://github.com/huggingface/smolagents/issues/101",
+    "body": "CodeAgent stops after 5 iterations. Any way to explicitely increase this limit ?",
+    "comments_url": "https://api.github.com/repos/huggingface/smolagents/issues/101/comments",
+    "author": "flaming-potato",
+    "comments": [
+      {
+        "user": "paulmartrencharpro",
+        "created_at": "2025-01-07T10:32:15Z",
+        "body": "Yes, the CodeAgent class' parent MultiStepAgent has a max_steps parameter that you can change.\r\n\r\n`agent = CodeAgent(tools=[DuckDuckGoSearchTool(), PythonInterpreterTool()], model=HfApiModel(), max_steps=20)`"
+      },
+      {
+        "user": "aymeric-roucher",
+        "created_at": "2025-01-07T14:53:36Z",
+        "body": "Closing this since @paulmartrencharpro explained the resolution very well! \ud83d\ude04 "
+      },
+      {
+        "user": "flaming-potato",
+        "created_at": "2025-01-07T15:46:06Z",
+        "body": "Thanks a lot :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the configuration parameter that controls iteration limits in the class hierarchy",
+      "Demonstrates how to configure the agent during initialization",
+      "References the parent class's capabilities without requiring subclassing"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:04:49"
+    }
+  }
+]

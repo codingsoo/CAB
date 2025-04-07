@@ -1,0 +1,87 @@
+[
+  {
+    "number": 101,
+    "title": "does sft training  need  consider   vae.config.invert_scale_latents       1.5 I2V",
+    "created_at": "2024-11-28T06:31:26Z",
+    "closed_at": "2025-01-02T14:30:54Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/101",
+    "body": "### System Info / \u7cfb\u7d71\u4fe1\u606f\r\n\r\ndiffusers                 0.32.0.dev0  \r\n\r\n### Information / \u95ee\u9898\u4fe1\u606f\r\n\r\n- [ ] The official example scripts / \u5b98\u65b9\u7684\u793a\u4f8b\u811a\u672c\r\n- [X] My own modified scripts / \u6211\u81ea\u5df1\u4fee\u6539\u7684\u811a\u672c\u548c\u4efb\u52a1\r\n\r\n### Reproduction / \u590d\u73b0\u8fc7\u7a0b\r\n\r\n(1)When testing, the determination of whether to multiply or divide by the vae_scaling_factor_image is based on the vae.config.invert_scale_latents parameter. \r\n        if not self.vae.config.invert_scale_latents:\r\n            image_latents = self.vae_scaling_factor_image * image_latents\r\n        else:\r\n            # This is awkward but required because the CogVideoX team forgot to multiply the\r\n            # scaling factor during training :)\r\n            image_latents = 1 / self.vae_scaling_factor_image * image_latents\r\n\r\nwhy is it that when invert_scaling_latents is set to true, it divides by the VAE scaling factor instead of not multiplying? The latent representations of the images differ by a square when this parameter is true versus false.?\r\n\r\n(2) In my case\uff0cthe SFT training process did not handle this parameter, resulting in darker test outputs. \r\nThe impact of the first frame image is becoming increasingly insignificant.\r\n\r\n### Expected behavior / \u671f\u5f85\u8868\u73b0\r\n\r\nNormal brightness\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/101/comments",
+    "author": "zy0406",
+    "comments": [
+      {
+        "user": "sayakpaul",
+        "created_at": "2024-11-29T12:29:18Z",
+        "body": "Cc: @zRzRzRzRzRzRzR @a-r-r-o-w "
+      },
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-12-01T18:35:35Z",
+        "body": "As the comment explains, the scaling factor was not multiplied during training, and I believe it was divided instead. This is what causes the squared difference, but I will let @zRzRzRzRzRzRzR, from the CogVideoX team, comment further. I don't think the scripts in this repo take this into account yet. I will run some finetuning tests and report my results"
+      },
+      {
+        "user": "zRzRzRzRzRzRzR",
+        "created_at": "2024-12-05T07:19:58Z",
+        "body": "Thank you for your help @a-r-r-o-w.\r\nWhen CogVideoX 1.5 was trained, the image condition was not multiplied, so during inference, the image condition cannot be multiplied, but before the final decode, it still needs to be divided by the scale factor.\n\n---\n\nTherefore, during training, an image condition is needed, and during reasoning, when using the decoder, it is necessary to divide by the scale factor"
+      },
+      {
+        "user": "zy0406",
+        "created_at": "2024-12-05T07:32:27Z",
+        "body": "> Therefore, during training, an image condition is needed, and during reasoning, when using the decoder, it is necessary to divide by the scale factor\r\n\r\nThank you for your reply. I have indeed tried training using the method described below, and the generated videos are relatively normal.\r\n\r\n\r\n```\r\n                if not vae.config.invert_scale_latents:\r\n                    image_latents = image_latent_dist.sample() * VAE_SCALING_FACTOR\r\n                else:\r\n                     image_latents =  image_latent_dist.sample()\r\n                image_latents = image_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]\r\n                image_latents = image_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype) \r\n                video_latents = latent_dist.sample() * VAE_SCALING_FACTOR\r\n```"
+      },
+      {
+        "user": "sayakpaul",
+        "created_at": "2025-01-02T14:30:54Z",
+        "body": "Closing the issue then. Feel free to reopen."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify the relationship between invert_scale_latents configuration and VAE scaling factor application during training vs inference",
+      "Explain how latent space scaling discrepancies affect output quality (specifically brightness)",
+      "Define the correct scaling factor handling protocol for SFT training compatibility",
+      "Address the squared difference phenomenon in latent representations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:58:39"
+    }
+  },
+  {
+    "number": 40,
+    "title": "How to load the fine-tuned I2V model's LoRA module",
+    "created_at": "2024-10-16T17:25:21Z",
+    "closed_at": "2024-10-16T18:07:54Z",
+    "labels": [],
+    "url": "https://github.com/a-r-r-o-w/finetrainers/issues/40",
+    "body": "I have successfully fine-tuned an I2V model (locally, without pushing to HF) and would like to load it for inference. I use the following code suggested in the readme\r\n\r\n```\r\nmodel_name = \"THUDM/CogVideoX-5b-I2V\" \r\npipe = CogVideoXImageToVideoPipeline.from_pretrained(\r\n    model_name, torch_dtype=torch.bfloat16\r\n).to(\"cuda\")\r\n\r\npipe.load_lora_weights(\"MyLocalLoRAPath\", adapter_name=[\"cogvideox-lora\"])\r\npipe.set_adapters([\"cogvideox-lora\"], [1.0])\r\n```\r\n\r\nHowever I encounter the error \r\n\r\n```\r\nFile ~/anaconda3/envs/cogvideox-i2v/lib/python3.11/site-packages/diffusers/loaders/lora_pipeline.py:2451, in CogVideoXLoraLoaderMixin.load_lora_into_transformer(cls, state_dict, transformer, adapter_name, _pipeline):\r\n\r\nif adapter_name in getattr(transformer, \"peft_config\", {}):\r\naise ValueError(\r\n   f\"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name.\"    )\r\n\r\nTypeError: unhashable type: 'list'\r\n```\r\n\r\nNote: in the trained LoRA folders, there is only a `pytorch_lora_weights.safetensors`",
+    "comments_url": "https://api.github.com/repos/a-r-r-o-w/finetrainers/issues/40/comments",
+    "author": "Yuancheng-Xu",
+    "comments": [
+      {
+        "user": "a-r-r-o-w",
+        "created_at": "2024-10-16T17:48:29Z",
+        "body": "In pipe.load_lora_weights, please pass just the string for adapter_name and not a list. Just saw that the README has a mistake. Will fix asap"
+      },
+      {
+        "user": "Yuancheng-Xu",
+        "created_at": "2024-10-16T18:07:54Z",
+        "body": "Yep it works Thank you!"
+      },
+      {
+        "user": "euminds",
+        "created_at": "2024-12-03T03:01:22Z",
+        "body": "> I have successfully fine-tuned an I2V model (locally, without pushing to HF) and would like to load it for inference. I use the following code suggested in the readme\r\n> \r\n> ```\r\n> model_name = \"THUDM/CogVideoX-5b-I2V\" \r\n> pipe = CogVideoXImageToVideoPipeline.from_pretrained(\r\n>     model_name, torch_dtype=torch.bfloat16\r\n> ).to(\"cuda\")\r\n> \r\n> pipe.load_lora_weights(\"MyLocalLoRAPath\", adapter_name=[\"cogvideox-lora\"])\r\n> pipe.set_adapters([\"cogvideox-lora\"], [1.0])\r\n> ```\r\n> \r\n> However I encounter the error\r\n> \r\n> ```\r\n> File ~/anaconda3/envs/cogvideox-i2v/lib/python3.11/site-packages/diffusers/loaders/lora_pipeline.py:2451, in CogVideoXLoraLoaderMixin.load_lora_into_transformer(cls, state_dict, transformer, adapter_name, _pipeline):\r\n> \r\n> if adapter_name in getattr(transformer, \"peft_config\", {}):\r\n> aise ValueError(\r\n>    f\"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name.\"    )\r\n> \r\n> TypeError: unhashable type: 'list'\r\n> ```\r\n> \r\n> Note: in the trained LoRA folders, there is only a `pytorch_lora_weights.safetensors`\r\n\r\n\r\nIs your device a 4090 24GB or H100 or A100?\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "The solution must resolve the TypeError caused by passing a list instead of a string for the adapter_name parameter",
+      "The solution must enable successful loading of locally stored LoRA weights without requiring Hugging Face hub integration",
+      "The solution must maintain compatibility with the existing pipeline's LoRA integration pattern"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:58:47"
+    }
+  }
+]

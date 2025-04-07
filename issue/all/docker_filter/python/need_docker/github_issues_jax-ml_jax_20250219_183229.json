@@ -1,0 +1,232 @@
+[
+  {
+    "number": 15997,
+    "title": "sparse-sparse matrix multiply creates unnecessary zero entries",
+    "created_at": "2023-05-13T21:02:05Z",
+    "closed_at": "2023-05-16T12:28:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/15997",
+    "body": "### Description\r\n\r\nWhen multiplying two sparse BCOO matrices it seems the result always stores explicit zero-entries even when the corresponding row/column of `a` and `b` are all zero:\r\n```python\r\nimport jax\r\nimport numpy as np\r\na = jax.experimental.sparse.BCOO.fromdense(np.diag([1., 2.]))\r\nb = jax.experimental.sparse.BCOO.fromdense(np.diag([3., 4.]))\r\n(a @ b).data, (a @ b).indices\r\n>>> (Array([3., 0., 0., 8.], dtype=float64),\r\n     Array([[0, 0],\r\n            [0, 1],\r\n            [1, 0],\r\n            [1, 1]], dtype=int32))\r\n```\r\nExpected output:\r\n```python\r\n>>> (Array([3., 8.], dtype=float64),\r\n     Array([[0, 0],\r\n            [1, 1]], dtype=int32))\r\n```\r\n\r\n\r\n### What jax/jaxlib version are you using?\r\n\r\n0.4.8\r\n\r\n### Which accelerator(s) are you using?\r\n\r\nGPU\r\n\r\n### Additional system info\r\n\r\n_No response_\r\n\r\n### NVIDIA GPU info\r\n\r\n_No response_",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/15997/comments",
+    "author": "Linusnie",
+    "comments": [
+      {
+        "user": "jakevdp",
+        "created_at": "2023-05-13T21:44:51Z",
+        "body": "Hi - thanks for the report! This is working as intended. You're correct that sparse-sparse matmul often results in more stored elements than are strictly required, but those extra stored arguments are necessary due to the constraints of JAX's compilation model, which requires array shapes (and in this case the size of the sparse matrix buffers) to be known at compile time.\r\n\r\nThe issue is that the sparse matrix indices are only known at runtime, so the output buffers must be able to handle the worst case. When multiplying two matrices with number of specified elements `a.nse` and `b.nse`, the worst case is an output with `out.nse = a.nse * b.nse` (an easy way to imagine this is if the first matrix has all entries in a single column, and the second matrices has all elements in a single row). In anything but this worst case, the result will be padded with zeros.\r\n\r\nTo handle this, you have two options:\r\n\r\n1) Call `out.sum_duplicates()` on the result of the matmul, outside JIT, in order to sum and remove duplicated entries. It might look like this:\r\n```python\r\nout = (a @ b).sum_duplicates()\r\nprint(out.data)\r\n# [3. 8.]\r\nprint(out.indices)\r\n# [[0 0]\r\n#  [1 1]]\r\n```\r\n\r\n2) If appropriate, you can use a structured sparse representation (e.g. with `n_batch=1` on the leftmost input) such that the output *nse* will be more constrained.\r\n\r\nHope that helps!"
+      },
+      {
+        "user": "Linusnie",
+        "created_at": "2023-05-14T10:51:21Z",
+        "body": "ah I see, that makes sense! Would it somehow be possible to manually set the number of specified elements for the output? eg in this case I'm computing `Bi = S.T @ Ai @ S` for a bunch of very sparse matrices that are too large to store densely on the gpu but I know `Bi.nse == Ai.nse`."
+      },
+      {
+        "user": "jakevdp",
+        "created_at": "2023-05-14T13:43:07Z",
+        "body": "How do you *know* that the output has the same nse as the input? Could you encode that knowledge by using structured sparsity for the `S` matrix (i.e. option 2 in my answer above)?"
+      },
+      {
+        "user": "Linusnie",
+        "created_at": "2023-05-16T12:28:18Z",
+        "body": "The `Ai`s are non-zero only on sub-blocks (different for every i) and `S = [[D, b], [0, 1]]` where `D` is diagonal\r\n\r\nI ended up getting around the issue by simply rescaling the elements of `Ai` before constructing the sparse matrix, so no need for matrix-matrix multiplies :smile: \r\n\r\nIn case it's useful here's a basic example to illustrate, goes OOM on my 12GB GPU:\r\n```python\r\nimport numpy as np\r\nimport jax.numpy as jnp\r\nfrom jax.experimental import sparse\r\n\r\ndef get_inds(n, block_size):\r\n    block_inds = np.random.choice(n - 1, block_size - 1, replace=False)\r\n    block_inds = np.hstack([np.sort(block_inds), n - 1])\r\n    return block_inds[np.array(list(np.ndindex(block_size, block_size)))]\r\n\r\nn = 48\r\nn_batch = 3000\r\nblock_size = 5\r\nA = sparse.bcoo_concatenate([\r\n    sparse.BCOO(\r\n        (\r\n            np.random.randn(block_size * block_size),\r\n            get_inds(n, block_size)\r\n        ),\r\n        shape=(n, n),\r\n    )[None]\r\n    for _ in range(n_batch)\r\n], dimension=0)\r\n\r\nS = sparse.BCOO.fromdense(np.block([\r\n    [np.diag(np.random.randn(n - 1)), np.random.randn(n - 1)[:, None]],\r\n    [np.zeros((1, n - 1)), 1.]\r\n]))\r\n\r\nA_scaled = (A @ S).transpose((0, 2, 1)) @ S\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Avoids unnecessary zero entries in sparse matrix multiplication results",
+      "Handles known sparsity patterns without requiring dense representations",
+      "Works within JAX's compilation constraints for GPU execution",
+      "Supports structured sparsity patterns efficiently"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:17:02"
+    }
+  },
+  {
+    "number": 10815,
+    "title": "Incorrect cholesky jacobians?",
+    "created_at": "2022-05-24T21:39:44Z",
+    "closed_at": "2022-05-24T23:54:04Z",
+    "labels": [
+      "question",
+      "useful read"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/10815",
+    "body": "I'm computing jacobians of the following equation with respect to B,\r\na = B<sup>-1</sup>c,\r\nwhere a, c &in; R<sup> n</sup> and B &in; R<sup> n x n</sup> is SPD.\r\n\r\nThe jacobian should be,\r\nda/dvec(B) = -(a^{T} &otimes; B <sup>-1</sup>),\r\nwhere &otimes; indicates the Kronecker product. \r\n\r\nIf I compute a = jnp.dot(inv(B), c) and then compute the jacobian with respect to B, I get what I would expect. If I compute a = cho_solve(cho_factor(B),c) and then compute the jacobian I get something different.\r\n\r\nI've included a short snippet below highlighting the potential issue. \r\n\r\n\r\n```python\r\nimport jax\r\nimport jax.numpy as jnp\r\nfrom jax import random, jacfwd\r\nfrom jax.scipy.linalg import cho_solve, cho_factor, inv\r\nfrom functools import partial\r\n\r\njax.config.update(\"jax_enable_x64\", True)\r\njax.config.update(\"jax_platform_name\", \"cpu\")\r\n\r\n\r\nrng = random.PRNGKey(2022)\r\nd = 2\r\n\r\n\r\ndef init_spd(d, rng):\r\n    tril_ind = jnp.tril_indices(d)\r\n    Q = jnp.zeros((d, d))\r\n    Q = Q.at[tril_ind[0], tril_ind[1]].set(random.normal(rng, (d * (d + 1) // 2,)))\r\n    Q = jnp.dot(Q, Q.T) + jnp.eye(d) * 1e-6\r\n    return Q\r\n\r\n\r\nrng, subkey = random.split(rng)\r\nB = init_spd(d, subkey)\r\nrng, subkey = random.split(rng)\r\nc = random.normal(subkey, (d,))\r\n\r\n\r\ndef a(mode, B):\r\n    if mode == \"chol\":\r\n        a = cho_solve(cho_factor(B), c)\r\n    elif mode == \"inv\":\r\n        a = jnp.dot(inv(B), c)\r\n    else:\r\n        raise ValueError(\"No recognized mode\")\r\n    return a\r\n\r\n\r\n# computing a with chol & inv gives the same result\r\nprint(\"a using chol\")\r\nprint(a(\"chol\", B))\r\nprint(\"a using inv\")\r\nprint(a(\"inv\", B))\r\n\r\n# computing jacobians with chol & inv gives different results\r\nprint(\"da/dvec(B) with chol\")\r\nprint(jacfwd(partial(a, \"chol\"))(B).transpose(0, 2, 1).reshape(d, d ** 2))\r\nprint(\"da/dvec(B) with inv\")\r\nprint(jacfwd(partial(a, \"inv\"))(B).transpose(0, 2, 1).reshape(d, d ** 2))\r\nprint(\"da/dvec(B) manual\")\r\nprint(-jnp.kron(a(\"chol\", B).reshape(1, -1), inv(B)))\r\n```",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/10815/comments",
+    "author": "coursekevin",
+    "comments": [
+      {
+        "user": "mattjj",
+        "created_at": "2022-05-24T23:06:33Z",
+        "body": "Thanks for raising this!\r\n\r\nI wouldn't quite call this a bug, but rather a subtle issue in writing a Python function which corresponds to the mathematical function we want. Indeed there are multiple reasonable mathematical functions we might want here!\r\n\r\nThe mathematical question has to do with whether we want to consider asymmetric perturbations to the input matrix. Is the input tangent space the space of all nxn matrices, or just all _symmetric_ nxn matrices? That is, is the domain of the mathematical function we have in mind all invertible matrices, or just symmetric (and positive definite) ones?\r\n\r\nTo make the `chol` and `inv` paths agree, we can add a call to `symmetrize = lambda X: (X + X.T) / 2.` like this:\r\n\r\n```python\r\ndef a(mode, B):\r\n    if mode == \"chol\":\r\n      a = cho_solve(cho_factor(symmetrize(B)), c)  # note symmetrize(B)\r\n    elif mode == \"inv\":\r\n        a = jnp.dot(inv(symmetrize(B)), c)  # note symmetrize(B)\r\n    else:\r\n        raise ValueError(\"No recognized mode\")\r\n    return a\r\n```\r\n\r\n```\r\nda/dvec(B) with chol\r\n[[-449.75533508  -45.56447342  -45.56447342   -3.94970749]\r\n [ -62.87687425  -16.29812641  -16.29812641   -1.79947677]]\r\nda/dvec(B) with inv\r\n[[-449.75533508  -45.56447342  -45.56447342   -3.94970749]\r\n [ -62.87687425  -16.29812641  -16.29812641   -1.79947677]]\r\n```\r\n\r\nBy adding these calls to `symmetrize` we're effectively projecting the input perturbations onto the vector subspace of symmetric matrices. These calls don't affect the primal part of the function (since it's being evaluated at a symmetric matrix input anyway).\r\n\r\nWithout the call to `symmetrize`, the `inv` version of the function represents a mathematical function on all invertible matrices (not just symmetric ones) and so naturally the tangent space is all nxn matrices.\r\n\r\nThe `chol` version without the call to `symmetrize`, on the other hand, actually represents a mathematical function on the lower triangle of its input, and the space of perturbations is projected to the same. (That's because the `cho_factor` function only reads the lower triangle of its input, and the strict upper triangle is ignored.)\r\n\r\nBy having calls to `symmetrize` on both paths, we are (by composition) making them both functions on the symmetric part only of their input.\r\n\r\nWhat do you think?\n\n---\n\nBy the way, to get the symmetric \"manual\" version, just write this:\r\n\r\n```python\r\nprint((-jnp.kron(a(\"chol\", B).reshape(1, -1), inv(B))\r\n       - jnp.kron(inv(B), a(\"chol\", B).reshape(1, -1))) / 2.)\r\n```"
+      },
+      {
+        "user": "coursekevin",
+        "created_at": "2022-05-24T23:54:04Z",
+        "body": "Thanks for your very thoughtful response, this was really helpful! Your explanation makes total sense.  Definitely not a bug, this was my mistake. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why different differentiation results occur between Cholesky-based and explicit inverse methods",
+      "Clarification about tangent space assumptions for symmetric matrices",
+      "Demonstration of how to enforce symmetric input treatment",
+      "Connection between mathematical function domains and automatic differentiation behavior",
+      "Guidance on handling symmetric matrix derivatives in JAX"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:17:14"
+    }
+  },
+  {
+    "number": 9347,
+    "title": "JIT trace+compile without running function",
+    "created_at": "2022-01-27T01:10:05Z",
+    "closed_at": "2022-01-27T01:16:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/9347",
+    "body": "It'd be nice to be able to trace and compile a function -- including all the optimisation done by the XLA compiler, i.e. more than just than is provided by `jax.xla_computation` -- without actually running the function afterwards. In particular this would be useful when benchmarking and optimising compile times.\r\n\r\nI think this is already actually doable via `jax.lib.xla_bridge.get_backend().compile`, so this is really just a request to expose this functionality publicly.",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/9347/comments",
+    "author": "patrick-kidger",
+    "comments": [
+      {
+        "user": "mattjj",
+        "created_at": "2022-01-27T01:16:19Z",
+        "body": "You are in luck my friend! Try this out:\r\n\r\n```python\r\nimport jax\r\n\r\ncompiled = jax.jit(lambda x: x + 2).lower(3).compile()\r\n```\r\n\r\nThe `3` above is used as an example argument. Instead of a concrete example value, you can also pass any arguments with `shape` and `dtype` attributes.\r\n\r\nYou can also run e.g. `compiled(4)`, but you'll get a dtype error if you try `compiled(4.)`.\r\n\r\nWhat do you think?\n\n---\n\nSee #7733. I'm not sure if there are docs yet, but all staging decorators (`jit`, `pjit`, `pmap`, `xmap`) should have roughly the same API here, or will soon."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a way to trigger XLA compilation with optimizations without executing the function",
+      "Exposes compilation functionality through public API methods",
+      "Supports abstract input specifications (shapes/dtypes) in addition to concrete values",
+      "Works across JAX's staging decorators (jit, pjit, pmap, xmap)"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:17:29"
+    }
+  },
+  {
+    "number": 4853,
+    "title": "Jax saves forward-pass intermediate values under lax.stop_gradient",
+    "created_at": "2020-11-10T08:48:04Z",
+    "closed_at": "2020-11-11T05:51:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/4853",
+    "body": "The following code illustrates the problem:\r\n\r\n```\r\nimport jax\r\nimport jax.numpy as jnp\r\nfrom jax import jit, grad\r\n\r\nnum_iters = 10_000\r\ndim = 1_000\r\n\r\ndef long_scan(X):\r\n  def scan_inner(carry, _):\r\n    return carry @ X, None\r\n  \r\n  carry, _ = jax.lax.scan(scan_inner, X, None, length=num_iters)\r\n  return carry\r\n\r\n@jit\r\ndef outer(x):\r\n  scan_out = long_scan(x)\r\n  scan_out = jax.lax.stop_gradient(scan_out)\r\n  return jnp.sum(x @ scan_out)\r\n\r\ninput_matrix = jax.random.normal(jax.random.PRNGKey(0), shape=(dim, dim))\r\nouter(input_matrix).block_until_ready()\r\nprint('Does forward pass OK')\r\ngrad(outer)(input_matrix).block_until_ready()\r\n```\r\n\r\nWhen run on the colab GPU we get `RuntimeError: Resource exhausted: Out of memory while trying to allocate 40004000128 bytes.` More generally, the memory usage scales with the length of the scan. As far as I understand, normally that makes sense--the intermediate values have to be saved for the reverse pass of the grad. But here, those intermediate values are never used because of the `stop gradient`. \r\n\r\nI think we can avoid the memory growth by using `remat(scan_inner)` instead of `scan_inner` inside the scan (like in #3186), but it would be great if jax could automatically do this, since we should never need the intermediate values. \r\n\r\nThe actual use-case is adversarial training, where the `long_scan` computes adversarial inputs for a model but we don't take the gradient wrt the model parameters through the process of computing those inputs. ",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/4853/comments",
+    "author": "C-J-Cundy",
+    "comments": [
+      {
+        "user": "shoyer",
+        "created_at": "2020-11-10T17:00:39Z",
+        "body": "Have you tried `long_scan(stop_gradient(x))` instead?\r\n\r\n`stop_gradient()` actually get applied during the JVP calculation from the forward pass"
+      },
+      {
+        "user": "C-J-Cundy",
+        "created_at": "2020-11-10T17:46:16Z",
+        "body": "~`long_scan(stop_gradient(x))` also runs out of memory.~ (not true, see below)\r\nI can get it to not save intermediate values by using a version of `long_scan` with `scan_inner` stopping the gradient in each iteration:\r\n\r\n```\r\ndef long_scan_stopped(X):\r\n  def scan_inner(carry, _):\r\n    return jax.lax.stop_gradient(carry @ X), jax.lax.stop_gradient(None)\r\n  \r\n  carry, _ = jax.lax.scan(scan_inner, X, None, length=num_iters)\r\n  return carry\r\n```\r\n\r\nIt would be nice if jax could do this automatically though, since it seems like a bug if it's storing intermediate values that we know are never used. "
+      },
+      {
+        "user": "mattjj",
+        "created_at": "2020-11-10T21:59:17Z",
+        "body": "Are you willing to put a `jit` on the outside, as in `jit(grad(outer))(input_matrix)`? That way XLA will do the memory pruning for you.\n\n---\n\nIt's really surprising to me that @shoyer's suggestion didn't work!\r\n\r\nHere's a look at the forward and backward passes of the original code as jaxprs (I tweaked the jaxpr pretty-printing to show us shapes of jaxpr invars and outvars):\r\n\r\n```python\r\nimport jax\r\nimport jax.numpy as jnp\r\nfrom jax import jit, grad\r\n\r\nnum_iters = 10_000\r\ndim = 1_000\r\n\r\ndef long_scan(X):\r\n  def scan_inner(carry, _):\r\n    return carry @ X, None\r\n  \r\n  carry, _ = jax.lax.scan(scan_inner, X, None, length=num_iters)\r\n  return carry\r\n\r\n@jit\r\ndef outer(x):\r\n  scan_out = long_scan(x)\r\n  scan_out = jax.lax.stop_gradient(scan_out)\r\n  return jnp.sum(x @ scan_out)\r\n\r\ninput_matrix = jax.random.normal(jax.random.PRNGKey(0), shape=(dim, dim))\r\nouter(input_matrix).block_until_ready()\r\nprint('Does forward pass OK')\r\ngrad(outer)(input_matrix).block_until_ready()\r\n```\r\n\r\n```\r\n=== forward pass ===\r\n{ lambda  ; a:float32[1000,1000].\r\n  let b _ c = xla_call[ backend=None\r\n                        call_jaxpr={ lambda  ; a:float32[1000,1000] b:*.\r\n                                     let c _ _ _ =\r\n                                           scan[ jaxpr={ lambda  ; e:float32[1000,1000] a:* b:* c:float32[1000,1000] d:*.\r\n                                                         let f = dot_general[ dimension_numbers=(((1,), (0,)), ((), ()))\r\n                                                                              precision=None ] c e\r\n                                                         in (f:float32[1000,1000] *:* *:* c:float32[1000,1000]) }\r\n                                                 length=10000\r\n                                                 linear=(False, True, True, False, True)\r\n                                                 num_carry=2\r\n                                                 num_consts=3\r\n                                                 reverse=False\r\n                                                 unroll=1 ] a * * a *\r\n                                         d = stop_gradient c\r\n                                         e = dot_general[ dimension_numbers=(((1,), (0,)), ((), ()))\r\n                                                          precision=None ] a d\r\n                                         f = reduce_sum[ axes=(0, 1) ] e\r\n                                     in (f:float32[] *:* d:float32[1000,1000]) }\r\n                        device=None\r\n                        donated_invars=(False, False)\r\n                        name=jvp(outer) ] a *\r\n  in (b:float32[] c:float32[1000,1000]) }\r\n\r\n=== backward pass ===\r\n{ lambda a ; b:float32[].\r\n  let c = xla_call[ backend=None\r\n                    call_jaxpr={ lambda  ; a:float32[1000,1000] b:float32[].\r\n                                 let c = broadcast_in_dim[ broadcast_dimensions=(  )\r\n                                                           shape=(1000, 1000) ] b\r\n                                     d = dot_general[ dimension_numbers=(((1,), (1,)), ((), ()))\r\n                                                      precision=None ] c a\r\n                                 in (d:float32[1000,1000]) }\r\n                    device=None\r\n                    donated_invars=(False, False)\r\n                    name=transpose(jvp(outer)) ] a b\r\n  in (c:float32[1000,1000]) }\r\n```\r\n\r\nIt's a bit subtle to read, but the fourth `scan` output is going to be of shape `(10000, 1000, 1000)` here. It's unused in the outer jaxpr (which is why it is assigned to an underscore) but it'll still be computed in the forward pass.\r\n\r\nApplying @shoyer's suggestion:\r\n\r\n```python\r\nimport jax\r\nimport jax.numpy as jnp\r\nfrom jax import jit, grad\r\n\r\nnum_iters = 10_000\r\ndim = 1_000\r\n\r\ndef long_scan(X):\r\n  def scan_inner(carry, _):\r\n    return carry @ X, None\r\n\r\n  carry, _ = jax.lax.scan(scan_inner, X, None, length=num_iters)\r\n  return carry\r\n\r\n@jit\r\ndef outer(x):\r\n  scan_out = long_scan(jax.lax.stop_gradient(x))\r\n  return jnp.sum(x @ scan_out)\r\n\r\ninput_matrix = jax.random.normal(jax.random.PRNGKey(0), shape=(dim, dim))\r\n\r\nfwd_jaxpr = jax.make_jaxpr(lambda x: jax.vjp(outer, x))(input_matrix)\r\nprint('=== forward pass ===')\r\nprint(fwd_jaxpr)\r\n\r\noutput, outer_vjp = jax.vjp(outer, input_matrix)\r\nbwd_jaxpr = jax.make_jaxpr(outer_vjp)(output)\r\nprint('=== backward pass ===')\r\nprint(bwd_jaxpr)\r\n```\r\n\r\n```\r\n=== forward pass ===\r\n{ lambda  ; a:float32[1000,1000].\r\n  let b _ c = xla_call[ backend=None\r\n                        call_jaxpr={ lambda  ; a:float32[1000,1000] b:*.\r\n                                     let c = stop_gradient a\r\n                                         d = scan[ jaxpr={ lambda  ; a:float32[1000,1000] b:float32[1000,1000].\r\n                                                           let c = dot_general[ dimension_numbers=(((1,), (0,)), ((), ()))\r\n                                                                                precision=None ] b a\r\n                                                           in (c:float32[1000,1000]) }\r\n                                                   length=10000\r\n                                                   linear=(False, False)\r\n                                                   num_carry=1\r\n                                                   num_consts=1\r\n                                                   reverse=False\r\n                                                   unroll=1 ] c c\r\n                                         e = dot_general[ dimension_numbers=(((1,), (0,)), ((), ()))\r\n                                                          precision=None ] a d\r\n                                         f = reduce_sum[ axes=(0, 1) ] e\r\n                                     in (f:float32[] *:* d:float32[1000,1000]) }\r\n                        device=None\r\n                        donated_invars=(False, False)\r\n                        name=jvp(outer) ] a *\r\n  in (b:float32[] c:float32[1000,1000]) }\r\n\r\n=== backward pass ===\r\n{ lambda a ; b:float32[].\r\n  let c = xla_call[ backend=None\r\n                    call_jaxpr={ lambda  ; a:float32[1000,1000] b:float32[].\r\n                                 let c = broadcast_in_dim[ broadcast_dimensions=(  )\r\n                                                           shape=(1000, 1000) ] b\r\n                                     d = dot_general[ dimension_numbers=(((1,), (1,)), ((), ()))\r\n                                                      precision=None ] c a\r\n                                 in (d:float32[1000,1000]) }\r\n                    device=None\r\n                    donated_invars=(False, False)\r\n                    name=transpose(jvp(outer)) ] a b\r\n  in (c:float32[1000,1000]) }\r\n```\r\n\r\nIt sure looks to me like the issue is gone: the scan has no scanned-over outputs whatsoever now, and only outputs the final value of the carry.\r\n\r\n@C-J-Cundy maybe the OOM issue with `long_scan(stop_gradient(x))` has some other cause, rather than this scan? Is it worth double-checking?"
+      },
+      {
+        "user": "C-J-Cundy",
+        "created_at": "2020-11-10T22:39:27Z",
+        "body": "@mattjj, you're completely right, @shoyer's suggestion did work. \r\nI misread the suggestion as ` scan_out = jax.lax.stop_gradient(long_scan(x))` (which didn't work) instead of \r\n`long_scan(jax.lax.stop_gradient(x))`. My mistake! \ud83e\udd26\u200d\u2640\ufe0f\r\n\r\nInterestingly, it seems like the memory pruning doesn't get done at the XLA level with jit-of-grad.\r\nIf I take the initial example and change the last line to \r\n`jit(grad(outer))(input_matrix).block_until_ready()` (and remove the @jit on outer) then I still get an OOM error. \r\n\r\n"
+      },
+      {
+        "user": "mattjj",
+        "created_at": "2020-11-11T05:51:28Z",
+        "body": "Hrm interesting, I wonder if somehow XLA is missing the optimization.\r\n\r\nGlad to hear that putting stop_gradient earlier fixes things! I think that's the best solution; to notice this optimization automatically is tricky in the grad-of-jit situation, basically because grad thinks it's operating eagerly (i.e. it lives in a \"dynamic graph\" world and doesn't do any compiler-y optimizations). When doing jit-of-grad (or jit-of-grad-of-jit) I'd expect XLA to take care of this optimization for us, but it sounds like it's missing it, at least on the backend you're using.\r\n\r\nIn general it seems it's a good idea to put stop_gradient as early as possible.\r\n\r\nIf it's alright with you, I'll close this issue, but let me know if we should reopen it, and don't hesitate to open new issues!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent memory exhaustion caused by saving unnecessary intermediate values during gradient computation when using stop_gradient",
+      "Explain the relationship between stop_gradient placement and XLA's memory optimization behavior",
+      "Provide a reliable method to avoid saving scan intermediates when gradients are not required through the scan path",
+      "Clarify when JAX/XLA can automatically prune unnecessary intermediate values versus requiring manual intervention"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:18:16"
+    }
+  },
+  {
+    "number": 4474,
+    "title": "Cross multiplication on JAX is faster in CPU compared to GPU",
+    "created_at": "2020-10-07T13:59:03Z",
+    "closed_at": "2020-10-10T03:23:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/4474",
+    "body": "I tried taking the cross product of two (10,000 * 10,000) matrics on NumPy, TensorFlow and Jax to compare the time it takes to complete the operation.\r\nOn CPU:\r\nNumpy took **58.32** seconds\r\nTensorFlow took **64.802** seconds\r\nJax took **0.034** seconds\r\n\r\nOn GPU:\r\nNumpy took **59.04** seconds (understandable because NumPy doesn't use GPU or TPU acceleration)\r\nTensorFlow took **0.197** seconds\r\nJax took **2.02** seconds\r\n\r\nWhy is Jax slower on GPU(2.02 seconds) as compared to CPU(0.034 seconds)?",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/4474/comments",
+    "author": "CleanPegasus",
+    "comments": [
+      {
+        "user": "clemisch",
+        "created_at": "2020-10-07T14:36:32Z",
+        "body": "From the large difference on CPU I suspect you did not use `.block_until_ready()` on the result array when measuring the time? JAX normally computes asynchronously, which means that the function call returns immediately even though the actual numerical computation is not finished. \r\n\r\nSo, instead of \r\n\r\n```python\r\n%timeit fun(arr)\r\n```\r\n\r\nfor `fun` returning an array, rather use \r\n\r\n```python\r\n%timeit fun(arr).block_until_ready()\r\n```"
+      },
+      {
+        "user": "CleanPegasus",
+        "created_at": "2020-10-10T03:23:03Z",
+        "body": "It works. Thank you"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explains why JAX's asynchronous execution affects timing measurements",
+      "Identifies proper synchronization mechanisms for GPU operations",
+      "Clarifies measurement methodology differences between frameworks",
+      "Addresses performance paradoxes in GPU vs CPU execution"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:18:35"
+    }
+  },
+  {
+    "number": 4164,
+    "title": "How to create a device array for flax.jax_utils.prefetch_to_device?",
+    "created_at": "2020-08-28T03:33:40Z",
+    "closed_at": "2020-08-28T03:56:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jax-ml/jax/issues/4164",
+    "body": "I was trying to call the function in a line like this:\r\n```\r\ntarget_iter = jax_utils.prefetch_to_device(iter(target_data), 2, devices=[1])\r\n```\r\nBut the \"devices\" parameter wants a jaxlib.xla_extension.Device array. I wonder how to make one. Specifically, I want to place the iterator on my GPU:1. ",
+    "comments_url": "https://api.github.com/repos/jax-ml/jax/issues/4164/comments",
+    "author": "BoyuanJackChen",
+    "comments": [
+      {
+        "user": "mattjj",
+        "created_at": "2020-08-28T03:53:19Z",
+        "body": "In general Flax questions are better on the Flax issue tracker, but this one is easy enough to answer here! You can use `jax.devices()` or `jax.local_devices()` to get lists of available devices."
+      },
+      {
+        "user": "BoyuanJackChen",
+        "created_at": "2020-08-28T03:56:53Z",
+        "body": "@mattjj Thank you! It worked! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to retrieve available JAX devices programmatically",
+      "Method to select specific GPU devices from available ones"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:18:59"
+    }
+  }
+]

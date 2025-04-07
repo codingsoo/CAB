@@ -1,0 +1,53 @@
+[
+  {
+    "number": 11,
+    "title": "fintuning DPLM results in worse generation",
+    "created_at": "2024-10-08T14:14:52Z",
+    "closed_at": "2024-11-22T20:28:55Z",
+    "labels": [],
+    "url": "https://github.com/bytedance/dplm/issues/11",
+    "body": "Hi,\r\n\r\nI simply loaded the pretrain weight and fine-tuned it on the same dataset, and got the ckpt that generates more repetitive sequences then I thought. This is quite bizarre to me. Is there something wrong with the current training code or the released ckpts are too good?\r\n\r\n\r\ncc @zhengzx-nlp @wxy-nlp @leiyu-bytedance @lark ",
+    "comments_url": "https://api.github.com/repos/bytedance/dplm/issues/11/comments",
+    "author": "pengzhangzhi",
+    "comments": [
+      {
+        "user": "wxy-nlp",
+        "created_at": "2024-10-10T09:07:17Z",
+        "body": "hello @pengzhangzhi ,\r\n\r\ncould you provide the generation results and the way you load the checkpoint?\r\n\r\nBy the way, if you use the config yaml in `config/experiment/lm` and continue train from the pretrained weight, the learning rate is large, which may result in the large change of pretrained weight and lead to a bad performance. So if you want to continue train, the learning rate starts from the ending rate, i.e., 1e-5, may be better."
+      },
+      {
+        "user": "pengzhangzhi",
+        "created_at": "2024-10-10T15:56:46Z",
+        "body": "Hi @wxy-nlp ,\r\n\r\nThanks!! \r\nI load the ckpt from the path:\r\n```\r\nc=dplm/byprot-checkpoints/dplm_150m_finetune_lr_1e-8/checkpoints/last.ckpt\r\npython generate.py --model_name \"airkingbd/${model_name}\"         --seq_lens 100 --saveto ${output_dir} --num_seqs 100\r\n```\r\n\r\n\r\nI tried to set a smaller LR even 1e-8, but the fine-tuning would gradually degrade the pLDDT. Below is the comparison between the base DPLM-150M and the fine-tuned DPLM-150M with LR 1e-8:\r\n```\r\npLDDT:\r\nBase \r\n 69.44743\r\nfinetune\r\n 66.5991\r\n\r\n```\r\nIf I use LR 1e-5 or something larger than 1e-8, the generation is completely broken... : (\r\nIf you want to verify, you can simply set the LR to be 1e-5, load the ckpt, and fine-tune the mode for a couple thousand steps. \r\n\r\nAlso, could you please share the configs for DPLM-150M with us? I remember in the paper, you employ a two-stage training, I wonder the hyper-params for the two stages and the training steps. Would love to reproduce your training.\r\n\r\n"
+      },
+      {
+        "user": "OrangeCat7777777",
+        "created_at": "2024-12-25T13:00:18Z",
+        "body": "I encounted the same problem with a degraded plddt after finetuning with lr 1e-5. The validation loss and ppl are both decreasing during the finetuning process, so this is not reasonable for me. @pengzhangzhi have you figured out anything?"
+      },
+      {
+        "user": "pengzhangzhi",
+        "created_at": "2024-12-25T16:53:54Z",
+        "body": "i wasnt loading the ckpt properly. "
+      },
+      {
+        "user": "wxy-nlp",
+        "created_at": "2024-12-26T10:21:35Z",
+        "body": "> I encounted the same problem with a degraded plddt after finetuning with lr 1e-5. The validation loss and ppl are both decreasing during the finetuning process, so this is not reasonable for me. @pengzhangzhi have you figured out anything?\r\n\r\nHi @OrangeCat7777777, \r\n\r\nCould you please provide your script of training and inference? I tried to continue finetuning on the pretrained 150M DPLM with lr=1e-5 and lr_end=5e-6, and the pLDDT is about 72 in length 100 and 85 in length 200~500, which seems normal. There is a possible reason that the model is incorrectly loaded during inference."
+      },
+      {
+        "user": "pengzhangzhi",
+        "created_at": "2024-12-26T15:41:28Z",
+        "body": "Can attest to @wxy-nlp . It works; u just have to load the ckpt properly in ur finetuning."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly load checkpoints during fine-tuning and inference",
+      "Verification that model degradation isn't caused by inference setup errors"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:47:46"
+    }
+  }
+]

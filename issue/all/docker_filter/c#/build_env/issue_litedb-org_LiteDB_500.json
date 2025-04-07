@@ -1,0 +1,49 @@
+{
+  "number": 500,
+  "title": "DateTime.Kind property is not preserved",
+  "created_at": "2017-02-23T03:38:34Z",
+  "closed_at": "2017-03-11T22:09:03Z",
+  "labels": [
+    "question"
+  ],
+  "url": "https://github.com/litedb-org/LiteDB/issues/500",
+  "body": "```\r\npublic class Ax {\r\n    [BsonIndex] public DateTime Time { get; set; }\r\n}\r\n\r\nusing (var db = new LiteDatabase(\"temp.db\")) {     \r\n    LiteCollection<Ax> col = db.GetCollection<Ax>(\"Ax\");\r\n    DateTime now = DateTime.UtcNow;\r\n    Console.WriteLine(now.Kind);//\r\n    col.Insert(new Ax {Time = DateTime.UtcNow});\r\n    Console.WriteLine(col.FindOne(x => true).Time.Kind);\r\n}\r\n```\r\n\r\nThis gives output: \r\n`Utc`\r\n`Local`\r\n\r\nWhich is not correct. \r\n\r\nAny thoughts?",
+  "comments_url": "https://api.github.com/repos/litedb-org/LiteDB/issues/500/comments",
+  "author": "aviadmini",
+  "comments": [
+    {
+      "user": "mbdavid",
+      "created_at": "2017-02-24T12:26:32Z",
+      "body": "Hi @aviadmini, BSON specs has no information about how date was storage and always convert to UTC.\r\n\r\n```\r\npublic static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);\r\n\r\n// serialize\r\nvar date = (DateTime)value.RawValue;\r\n// do not convert to UTC min/max date values - #19\r\nvar utc = (date == DateTime.MinValue || date == DateTime.MaxValue) ? date : date.ToUniversalTime();\r\nvar ts = utc - BsonValue.UnixEpoch;\r\nwriter.Write(Convert.ToInt64(ts.TotalMilliseconds));\r\n\r\n// deserialize\r\nvar ts = reader.ReadInt64();\r\n\r\n// catch specific values for MaxValue / MinValue #19\r\nif (ts == 253402300800000) return DateTime.MaxValue;\r\nif (ts == -62135596800000) return DateTime.MinValue;\r\n\r\nreturn BsonValue.UnixEpoch.AddMilliseconds(ts).ToLocalTime();\r\n```\r\n\r\nSo, deserialization always convert to you date to LocalTime to be more common. If you works wih UTC you must use ToUniversalTime()."
+    },
+    {
+      "user": "aviadmini",
+      "created_at": "2017-02-24T14:42:16Z",
+      "body": "Ok @mbdavid that makes sense"
+    }
+  ],
+  "satisfaction_conditions": [
+    "Explanation of why DateTime.Kind is not preserved during serialization/deserialization",
+    "Method to maintain UTC time consistency when working with the database",
+    "Clarification of the library's datetime handling behavior"
+  ],
+  "_classification": {
+    "category": "Can be dockerized without any issue",
+    "timestamp": "2025-04-05 00:32:41"
+  },
+  "git_commit_info": {
+    "sha": "71ff9c93810f2edbe6c04e08f32ab9f491959923",
+    "date": "2015-07-26T22:51:55Z",
+    "message": "Merge pull request #47 from rdstevens/master\n\nAdded DropCollection unit test.",
+    "author": "Mauricio David"
+  },
+  "repository_info": {},
+  "llm_calls_before_build": 10,
+  "dockerfile_attempt_1": 1,
+  "dockerfile": "FROM mono:6.12.0\n\n# Install required dependencies including git for cloning repository\nRUN apt-get update && apt-get install -y git ca-certificates\n\n# Set working directory for source code\nWORKDIR /src\n\n# Clone repository and checkout specific commit with fix verification\nRUN git clone https://github.com/litedb-org/LiteDB.git . && \\\n    git checkout 71ff9c93810f2edbe6c04e08f32ab9f491959923\n\n# Restore NuGet packages for solution\nRUN nuget restore LiteDB.sln\n\n# Build main library and shell project in Release configuration\nRUN msbuild LiteDB/LiteDB.csproj /p:Configuration=Release && \\\n    msbuild LiteDB.Shell/LiteDB.Shell.csproj /p:Configuration=Release",
+  "dockerfile_build_success": true,
+  "successful_candidate_index": 1,
+  "successful_candidate_attempt": 1,
+  "successful_candidate_improvement_attempt": 0,
+  "llm_calls_total": 15
+}

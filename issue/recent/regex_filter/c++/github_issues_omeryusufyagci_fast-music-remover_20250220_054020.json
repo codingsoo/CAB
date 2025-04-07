@@ -1,0 +1,767 @@
+[
+  {
+    "number": 91,
+    "title": "Bug: Fix audio file with cover image treated as video file ",
+    "created_at": "2024-12-23T19:09:02Z",
+    "closed_at": "2025-01-15T19:11:56Z",
+    "labels": [
+      "bug",
+      "iteration",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/91",
+    "body": "fixes the bug raised in #90 \r\n\r\nThe `ffprobe` tool is used to check if any stream contains codec_name as mjpeg.\r\n\r\nIf mjpeg is present, the media is treated as Audio, other media is treated as Video",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/91/comments",
+    "author": "Rushi1109",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-12-24T09:49:44Z",
+        "body": "Hey @Rushi1109, thanks for the PR. Frankly, I wasn't familiar with the full output set of `ffprobe`, but from what I see they provide `disposition.attached_pic` as a field in itself. Could you please get the json output which should give you a list of streams, with each stream providing you this field. From what I briefly checked, that should literally be what we're looking for. \r\n\r\nThanks for checking! "
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2024-12-24T14:43:25Z",
+        "body": "Hey @omeryusufyagci,\r\n\r\nWhen looking at the raw data of the media I see `DISPOSITION:attached_pic = 1` for stream index `2` which is the video stream.\r\n\r\nBut, When I tried to get the information about `disposition.attached_pic` from `ffprobe` tool, I am not able to get it's value. I tried extracting from json but still it's not showing attached_pic for that file. Do you have any idea about why it's getting filtered out, by ffmpeg?"
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2024-12-24T14:46:57Z",
+        "body": "Moreover @omeryusufyagci,\r\n\r\nI have researched a bit and got to know that If the video stream contains a static image, the average frame rate for that stream will be `0/0`. My current implementation is using the avg_frame_rate from video stream and decides the media type.\r\n\r\nDo you see any issue with this approach?"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-12-25T13:25:20Z",
+        "body": "> Hey @omeryusufyagci,\r\n> \r\n> When looking at the raw data of the media I see `DISPOSITION:attached_pic = 1` for stream index `2` which is the video stream.\r\n> \r\n> But, When I tried to get the information about `disposition.attached_pic` from `ffprobe` tool, I am not able to get it's value. I tried extracting from json but still it's not showing attached_pic for that file. Do you have any idea about why it's getting filtered out, by ffmpeg?\r\n\r\nPlease make sure you include `disposition` after the `-show_entries` flag, e.g. `-show_entries stream=index,<other_stuff>,disposition`. \r\n\r\nCould you try like that, and if there's still an issue please provide the command you used and the output you received. \r\n\r\n> I have researched a bit and got to know that If the video stream contains a static image, the average frame rate for that stream will be 0/0. My current implementation is using the avg_frame_rate from video stream and decides the media type.\r\n\r\n> Do you see any issue with this approach?\r\n\r\nThanks for figuring this out! Good to know that'd be a valid fix. The `disposition.attached_image` would be a more robust solution, as it explicitly identifies cover images and aligns better with the intent of filtering out such streams.\r\n\r\nCould you please verify this and let me know if it resolves the issue? Thank you!"
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2024-12-25T16:57:03Z",
+        "body": "> Please make sure you include `disposition` after the `-show_entries` flag, e.g. `-show_entries stream=index,<other_stuff>,disposition`\r\n\r\nYes I included `disposition`. I am using the same command of `ffprobe` but instead of avg_frame_rate, I added disposition and removed that awk command. But, I am not seeing any output for disposition.\r\n\r\nCan you check it on your side? Do you see disposition in output?"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-12-29T12:11:09Z",
+        "body": "> > Please make sure you include `disposition` after the `-show_entries` flag, e.g. `-show_entries stream=index,<other_stuff>,disposition`\r\n> \r\n> Yes I included `disposition`. I am using the same command of `ffprobe` but instead of avg_frame_rate, I added disposition and removed that awk command. But, I am not seeing any output for disposition.\r\n> \r\n> Can you check it on your side? Do you see disposition in output?\r\n\r\nHI @Rushi1109, you're right. I was able to reproduce the same behavior. It depends on what's bundled with the metadata, and we won't be able to count on the existence of that field. That means we'll have to check for this ourselves. \r\n\r\nYou're also correct, that a cover image is reported as a video stream that has `0/0` avg frame rate. It may also be reported as 'Cover' in a `comment` field, but that again is dependent on the metadata, whereas the 0/0 avg frame rate seems to be always available. \r\n\r\nIn this case, I propose to get the same ffprobe output as json (fyi, we're already using nlohmann/json in the project), parse the avg frame rate into a vector, and check if a given file has only 1 video stream **and** that video stream has 0/0 avg frame rate. Meaning, as soon as we iterate through a second video stream, we should conclude our check to avoid wasting time there. \r\n\r\nCould you update this PR to implement this? Thanks"
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2024-12-30T02:18:28Z",
+        "body": "> HI @Rushi1109, you're right. I was able to reproduce the same behavior. It depends on what's bundled with the metadata, and we won't be able to count on the existence of that field. That means we'll have to check for this ourselves.\r\n> \r\n> You're also correct, that a cover image is reported as a video stream that has `0/0` avg frame rate. It may also be reported as 'Cover' in a `comment` field, but that again is dependent on the metadata, whereas the 0/0 avg frame rate seems to be always available.\r\n> \r\n> In this case, I propose to get the same ffprobe output as json (fyi, we're already using nlohmann/json in the project), parse the avg frame rate into a vector, and check if a given file has only 1 video stream **and** that video stream has 0/0 avg frame rate. Meaning, as soon as we iterate through a second video stream, we should conclude our check to avoid wasting time there.\r\n> \r\n> Could you update this PR to implement this? Thanks\r\n\r\nSure. I'll look into that today.\r\n"
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2024-12-31T06:06:18Z",
+        "body": "Hello @omeryusufyagci, \r\n\r\nI have made required changes. I have tested it manually and it is working as expected. \r\n\r\nCan you test it on your side and let me know if any change is required?"
+      },
+      {
+        "user": "Rushi1109",
+        "created_at": "2025-01-02T16:29:00Z",
+        "body": "Updated the PR."
+      }
+    ]
+  },
+  {
+    "number": 81,
+    "title": "Is it possible to remove laughter?",
+    "created_at": "2024-11-28T08:35:11Z",
+    "closed_at": "2024-12-20T17:03:21Z",
+    "labels": [
+      "feature",
+      "triage"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/81",
+    "body": "Problem is that somebody (my friend in particuar) can't watch sitcoms with background laughter. And I try find how remove background Lauther from soundtracks. As I can imagine that you product can do harder work, so maybe it's possible, or you can upgrade it to remove background laughter too. Could you?",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/81/comments",
+    "author": "VitaliyAT",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-11-28T09:37:24Z",
+        "body": "Hi @VitaliyAT, thanks for bringing up such an interesting question and use case!\r\n\r\nThe underlying filter, i.e. DeepFilterNet, isolates speech from music and noise. While laughter has distinct characteristics, it wouldn't work out of the box with the current model.\r\n\r\nTraining the ML model with additional context for laughter removal could be a solution, but it comes with challenges. Laughter would share similar qualities with speech, especially in conversational tones. This would make it difficult to differentiate between natural speech and laughter effects.\r\n\r\nSo, it's not something trivial to add I'm afraid. However, if you'd be interested in training the model for this purpose, I'd be happy to help out by adding some experimental features to facilitate this use case within Fast Music Remover. "
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "title": "Feature: Add FFmpegControllerBuilder to core (#58)",
+    "created_at": "2024-10-26T17:06:03Z",
+    "closed_at": "2024-10-27T08:07:18Z",
+    "labels": [
+      "feature",
+      "wontfix",
+      "hacktoberfest-accepted",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/59",
+    "body": "This PR closes #58 and makes the following changes:\r\n\r\n1. Removed the input/output file vars from `FFmpegSettingsManager`. Other references to those vars were already removed in #51.\r\n2. Added the header for FFmpegController. The final implementation will come down to how we progress on the current class, however I already hit my 4 for hacktoberfest - no big deal if you want it included with this PR.\r\n3. Added FFmpegControllerBuilder. This new class will accept the settings for FFmpegSettingsManager and return a unique ptr to a FFmpegController. The intent is that ownership of all references will be transferred to the newly built Controller, which I felt was especially important in the case where the builder receives a reference and passes it back.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/59/comments",
+    "author": "andcscott",
+    "comments": [
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-26T22:56:38Z",
+        "body": "> I've realized we have a bit of redundancy in these builders, where we go through the same settings that were already set and validated (to be done) in FFmpegSettingsManager.\r\n\r\nI'm glad you said something, because as I was writing it the whole class felt a little redundant. As it is we can technically do everything we need with the rest of the logic in the actual Controllers methods behind the scenes. I still see why you might want it for the future though, so no worries.\r\n\r\n> To improve this, let’s introduce an applySettings() private member fn that will be invoked during the build stage to handle these settings internally.\r\n\r\nReplied above - I don't think I'm understanding correctly, if the user already defines settings with SettingsManager then what should be applied and where? It probably isn't necessary for this class to take a reference, it could also initialize the SettingsManager and the user would interface only with this class and FFmpegController. That also feels redundant though.\r\n\r\n> I’ve added some notes about const correctness and ownership semantics. Let me know if you have any feedback on those as well.\r\n\r\nAlso replied above - I'm concerned making the var const in ControllerBuilder will negate the purpose of the public methods.\r\n\r\n> Regarding hacktoberfest, I hope I haven’t missed labeling any of your PRs, and I enjoyed working with you. I hope you stick around! We’ll keep the scope of this PR focused on the current implementation. If your availability changes, please let me know. Thank you!\r\n\r\nSounds good! I definitely had fun with this one! At the least I'll stick around to help getting the rest of the controller done, even if we go beyond Hacktoberfest it would bother me to leave something unfinished. I had been looking at #30 too as I have some experience there, although there's a lot to consider with all the different hardware end users can have. "
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-26T23:28:00Z",
+        "body": "Thanks for the feedback. At the beginning I wanted to add this layer to future proof against potentially increased complexity.\n\nHoweverr, as you said, we could very well do all of this within the controller. Only the file I/O feels out of place. We could revert settings manager again to be a config manager..put the I/O there, pass a const ref of the settings to the controller, and provide an updateSettings() public member fn to allow for updates without re-init of the controller. \n\nDon't hesitate to correct me if I went off track here, but unless you think of a reason to keep this class, I'm okay with abandoning it, and directly moving on to the controller. \n\nThe initial version of the controller should cover the use cases we currently have in the AudioProcessor and VideoProcessor classes.  \n\nThanks for your understanding with the back-and-forth on this. "
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-27T08:07:18Z",
+        "body": "After giving it more thought, let's just add more when we need more and not try to anticipate everything at this early stage... I've pushed an update on the dedicated branch for #60 to revert the settings manager back to what it was with some minor improvements on file path handling. \r\n\r\nI also provided there the existing uses of ffmpeg. Covering these will be sufficient for your controller PR. I'll close this PR and the underlying issue and you can submit a PR directly for the controller. \r\n\r\nThanks!"
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-27T13:44:38Z",
+        "body": "All good, and sorry I wasn't able to get back to you yesterday. Thanks for being receptive to feedback and detailing the use cases! I'll go ahead with the #60 branch."
+      }
+    ]
+  },
+  {
+    "number": 54,
+    "title": "Reorganize be v1.0",
+    "created_at": "2024-10-23T17:52:19Z",
+    "closed_at": "2025-01-08T22:02:51Z",
+    "labels": [
+      "feature",
+      "backend",
+      "iteration"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/54",
+    "body": "Hello @omeryusufyagci \r\n\r\nThis PR addresses #34. \r\nPlease see if the current work is satisfactory\r\n\r\nPossible issues:\r\n- I have changed the `config.json`\r\n- Changed some names\r\n- Changed Logs\r\n- JSON message structure\r\n- Added new variable `config_file_path` in MediaHandler `main` to pass the `config.json` file directory. \r\n\r\nI have not removed the original app.py. Not updated the README. Have not updated the requiremets.pip, some minor work is pending.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/54/comments",
+    "author": "prakash-2002-ramanathan",
+    "comments": [
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-10-23T19:05:46Z",
+        "body": "@omeryusufyagci, The file path in python is relative to the python file. But since the MediaHandler is outside the backend directory. We are going to the previous directory where the Mediahandler is present. This seemed like a simple fix"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-28T20:24:20Z",
+        "body": "Hi @prakash-2002-ramanathan, I wanted to check with you how you're progressing.\r\n\r\nAlthough I appreciate the effort directly on the core, #34 mainly addresses the backend, where additions like the response handler will be ready in place, pending an update of the core for full integration. \r\n\r\nYou can still tackle the update of the core, but I'd propose to do it on a separate PR, and focus here fully on the backend improvements. The backend should function the same as it does right now, while the necessary handlers implemented and ready for the integration. \r\n\r\nTests are a big part of this PR, and would be quite impactful as we get ready to make larger changes. \r\n\r\nPlease let me know if this sounds good to you. Thanks!"
+      },
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-10-29T14:39:32Z",
+        "body": "Hi @omeryusufyagci \r\nYeah, that sounds good. I have already implemented changes in the core. \r\nIs that fine, just over 50 lines. \r\nI have written communication handlers for the core, but not used them\r\nI have written communication handlers for the BE, and have used them. Except for the communication with the core"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-29T19:37:52Z",
+        "body": "Hi @prakash-2002-ramanathan, that's great to hear! \r\n\r\nI would still like you to submit your work on the core as a separate PR though. Let's evaluate the work you've done on the backend, finalize, merge and then take a look at your work on the core separately. This is also to expedite the addition of backend tests in preparation of our first release. \r\n\r\nFinally, could you please target this PR to the dedicated branch opened under #34? Thanks!\r\n\r\nLooking forward to see the changes! "
+      },
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-10-31T19:01:10Z",
+        "body": "Hi @omeryusufyagci ,  have stashed all the changes made in the core, only the changes in backend have been pushed.\r\n The CLI nature of the core and backend communication is currently preserved. \r\n Fixed the imports and removed the old `app.py`\r\n\r\nYou can run the new app by going to the backend directory and then running app.py."
+      },
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-11-08T16:54:25Z",
+        "body": "Hi @omeryusufyagci , fixed all your requested changes. Please have a look"
+      },
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-11-14T16:28:04Z",
+        "body": "Hey @omeryusufyagci , could you explain how do you want this \r\n`download_media` function to be tested. Is it ok for you if I mock the ` yt_dlp.YoutubeDL() ` function? I tried to download the youtube video and check it with a previously downloaded video. But sometimes the byte by byte comparison causes problem., since the content on youtube is dynamic and changes everytime when it's downloaded "
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-11-16T22:18:53Z",
+        "body": "> Hey @omeryusufyagci , could you explain how do you want this `download_media` function to be tested. Is it ok for you if I mock the `yt_dlp.YoutubeDL()` function? I tried to download the youtube video and check it with a previously downloaded video. But sometimes the byte by byte comparison causes problem., since the content on youtube is dynamic and changes everytime when it's downloaded\r\n\r\nHey @prakash-2002-ramanathan, you could try to test via the extracted metadata instead of the video itself to test if yt-dlp works fine. If we can get the metadata, we should likely be OK. You could, however, mock it as well. Byte-by-byte is not the best, I know... I'll open an issue about that. Thanks! "
+      },
+      {
+        "user": "prakash-2002-ramanathan",
+        "created_at": "2024-11-17T20:16:04Z",
+        "body": "Hello @omeryusufyagci, I have addressed all your requested changes. Please have a look"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-11-22T19:18:16Z",
+        "body": "@prakash-2002-ramanathan please note the update on the branch you're targeting that was required to add urgent functionalities. Please ensure the added functionality is kept in this PR. Thank you! "
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "title": "Feature: Add DeepFilterCommandBuilder to MediaProcessor",
+    "created_at": "2024-10-14T23:59:45Z",
+    "closed_at": "2024-10-22T21:43:16Z",
+    "labels": [
+      "feature",
+      "hacktoberfest-accepted",
+      "iteration",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/42",
+    "body": "This is my first time working in the code base (and with anything related to deep filtering), hope this will address the new feature implementation in issue #32! Let me know what needs to be adjusted, or if there is anything else I should add! ",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/42/comments",
+    "author": "georgeolson92",
+    "comments": [
+      {
+        "user": "georgeolson92",
+        "created_at": "2024-10-18T20:17:38Z",
+        "body": "Made updates based on recommendations from review, let me know how everything looks! Thank you for all of the helpful feedback!"
+      },
+      {
+        "user": "georgeolson92",
+        "created_at": "2024-10-22T02:01:18Z",
+        "body": "Thanks for the review, made requested updates and ran clang-format, let me know how it's looking!"
+      },
+      {
+        "user": "georgeolson92",
+        "created_at": "2024-11-01T17:51:13Z",
+        "body": "Hi @omeryusufyagci, I can certainly continue working on the Deep Filter classes, if you have any issues open feel free to assign me and I can create a new branch for that!"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-11-02T11:04:03Z",
+        "body": "Hi @georgeolson92, fantastic to hear! : ) We have #65, and #52 that are DeepFilter specific. I am not able to assign you directly -for some reason can't find you on the list. If you could leave a comment on these I can assign them to you. \r\n\r\nAs usual, I am happy to clarify anything that may come as we progress. \r\n\r\nThanks a lot! "
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "Improvement: Backend Improvements for Typing, Tests, Modularity and Pathlib",
+    "created_at": "2024-10-08T21:09:03Z",
+    "closed_at": "2024-10-10T16:08:16Z",
+    "labels": [
+      "wontfix"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/39",
+    "body": "added all the functionality you can check it \r\nTyping: Add type hints throughout the backend\r\nUnit Tests: Develop unit tests for all utility and processing functions.\r\nResponse Handling: Add a ResponseHandler class in backend/response_handler.py to handle all communication bwn BE-FE, BE-core using consistent JSON responses.\r\nReplace os with pathlib\r\nReorganize the code under backend/:\r\nMove Utils to backend/utils.py\r\nMove MediaHandler to backend/media_handler.py\r\nKeep app.py for route definitions and Flask app initialization.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/39/comments",
+    "author": "wenayy",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-10T16:08:16Z",
+        "body": "Thanks for your second PR to this project, but unfortunately, it does not meet the project requirements. The current code is not functional, and there are commits outside the scope of this PR. Additionally, the unit tests were either minimal or not tests at all, but rather the class itself.\r\n\r\nThank you for your understanding, and I hope to see improved contributions in the future."
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "Add validation and error handling for YouTube URL in Fast Music Remover",
+    "created_at": "2024-10-08T16:46:16Z",
+    "closed_at": "2024-10-08T18:53:21Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/38",
+    "body": "Details of Changes:\r\n\r\nAdded validation to ensure that only valid YouTube URLs can be submitted.\r\nImplemented detailed error handling for failed requests and displayed error messages to users.\r\nIncluded a loading spinner that is shown while the video is being processed.\r\nThe video player is now hidden by default and only displayed once a valid video is ready.\r\nAdded accessibility improvements with aria-label to make the form more usable for screen readers.\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/38/comments",
+    "author": "wenayy",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-08T18:53:21Z",
+        "body": "Thanks for your interest in this project. This PR has peculiarly high similarities with #17 -an almost one-to-one match in fact. \r\nHave you seen my comment in #16 about these suggested changes? As your PR is almost the same as #17, please take a moment to go over the feedback given there.\r\n\r\nWe definitely need frontend improvements, but this PR doesn't satisfy the requirements outlined in #16.\r\n\r\nI am happy to review it again once you address the mentioned comments, until then I am closing this as duplicate. "
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "Improvement: userExperience,Clearner UI in index.html",
+    "created_at": "2024-10-08T16:30:28Z",
+    "closed_at": "2024-10-08T18:54:45Z",
+    "labels": [
+      "duplicate",
+      "wontfix"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/37",
+    "body": "Current Behavior:\r\nCurrently, the \"Fast Music Remover\" interface allows users to input a YouTube URL to process a video, but lacks proper error handling for invalid URLs, does not provide feedback during the processing phase (such as a loading spinner), and displays the video player by default, even if no video has been processed. Accessibility features such as aria-label for form elements are also not in place, which could hinder users with disabilities.\r\n\r\nSuggested Improvement:\r\n\r\nAdd validation to ensure the input URL is a valid YouTube link before submitting the form.\r\nImplement a loading indicator (spinner or text) while the video is being processed.\r\nHide the video player until the processing is complete and a valid video is available.\r\nImprove error handling to display more specific error messages, including server-side error details.\r\nAdd accessibility features, such as aria-label for form inputs, to improve the experience for users with screen readers.\r\nBenefits:\r\n\r\nImproved User Experience: Users will have clear feedback during the video processing (via a loading indicator) and more detailed error messages if something goes wrong.\r\nBetter Accessibility: Adding accessibility labels will ensure the app is usable for a wider audience, including those using assistive technologies.\r\nCleaner UI: Hiding the video player until the video is available prevents confusion, leading to a more intuitive user experience.\r\nValidation: By validating URLs before submission, users are informed upfront if they enter an invalid YouTube URL, saving time and avoiding unnecessary server requests.\r\nPotential Challenges:\r\n\r\nMinor challenges could arise in handling all possible edge cases for YouTube URLs, particularly shortened URLs or region-restricted content.\r\nEnsuring the error-handling mechanism works smoothly across various devices and browsers could require additional testing.\r\nAdditional Context:\r\nThese improvements also ensure the web app meets modern accessibility and usability standards, which are especially important for open-source projects aimed at a diverse range of users.\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/37/comments",
+    "author": "wenayy",
+    "comments": [
+      {
+        "user": "wenayy",
+        "created_at": "2024-10-08T16:46:56Z",
+        "body": "i have made a pr you can check it \r\n"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-08T18:54:45Z",
+        "body": "As explained in #38, closed as a duplicate. Kindly check my comments there. Thank you"
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "Testing: Add Unit Tests for MediaProcessor using Google Test #8",
+    "created_at": "2024-10-08T14:41:04Z",
+    "closed_at": "2024-10-20T20:55:30Z",
+    "labels": [
+      "testing",
+      "hacktoberfest-accepted",
+      "iteration",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/36",
+    "body": "#8 \r\n\r\n## Summary\r\nThis PR introduces the Google Test (gtest) framework, a `ConfigManagerTester.cpp` test suite, and restructures the project with separate `CMakeLists.txt` files for source, tests, and the main project.\r\n\r\n## Changes\r\n\r\n1. **Modular CMakeLists Structure**\r\n   - Created three separate `CMakeLists.txt` files for better project organization:\r\n     - `src/CMakeLists.txt`: Handles the build configuration for the source code.\r\n     - `tests/CMakeLists.txt`: Configures the build for test-related files, including the integration of `gtest`.\r\n     - `CMakeLists.txt`: The main CMake file, fetch content and control the two other files.\r\n\r\n2. **Add gtest Framework**\r\n   - Integrated `gtest` into the `tests/CMakeLists.txt` for unit testing.\r\n   \r\n3. **Add ConfigManagerTester**\r\n   - Introduced a `ConfigManagerTester.cpp` in the `tests` directory.\r\n   - Currently check for proper reading of config.json file by ConfigManager.cpp\r\n\r\n4. **Add ConfigFileCreator**\r\n   - Make a class TempConfigFile responsible for creating temporary config file to be used by tests\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/36/comments",
+    "author": "nikhiljangra264",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-10T16:23:03Z",
+        "body": "Hey @nikhiljangra264 can you target this to `8-testing-add-unit-tests-for-mediaprocessor-using-google-test`, thanks!"
+      },
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-11T13:24:38Z",
+        "body": "Done!"
+      },
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-13T13:08:52Z",
+        "body": "I added most of the test suits. Please tell me if any remains"
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "title": "Feature: Add `DeepFilterCommandBuilder` to `MediaProcessor`",
+    "created_at": "2024-10-07T20:55:51Z",
+    "closed_at": "2024-11-02T10:51:51Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "hacktoberfest",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/32",
+    "body": "Implement a `DeepFilterCommandBuilder` class to establish a high-level API for constructing `DeepFilterNet` commands, extending the CommandBuilder base class. Methods such as `setInputAudio()` and `setNoiseReductionLevel()` should abstract the command details.\r\n\r\nThis will make the filtering process more maintainable and user-friendly, eliminating the need for users to understand command-level specifics. Will be needed by the frontend for v1.0.s\r\n\r\n```cpp\r\nDeepFilterCommandBuilder cmd;\r\ncmd.setInputAudio(inputAudioPath);\r\ncmd.setOutputAudio(outputAudioPath);\r\ncmd.setNoiseReductionLevel(0.5);\r\n// ...\r\n```\r\nSee discussion in #4 for more context.\r\n\r\nA good first issue as it's a direct extension of an existing class, requiring minimal understanding of the full project.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/32/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "georgeolson92",
+        "created_at": "2024-10-09T01:49:42Z",
+        "body": "Hey there! I wanted to see if you need some help getting this implemented. Would be happy to help!"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-09T07:20:29Z",
+        "body": "Hi @georgeolson92, it would be great, thanks a lot! Feel free to reach out if you have questions/feedback along the way."
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-11-02T10:51:51Z",
+        "body": "This was closed by #42 "
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "title": "Feature: Implement `FFmpegCommandBuilder` to `MediaProcessor`",
+    "created_at": "2024-10-07T20:48:56Z",
+    "closed_at": "2024-10-26T16:12:09Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "hacktoberfest",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/31",
+    "body": "Implement an `FFmpegCommandBuilder` class to extend the existing `CommandBuilder`, to establish a high-level API, with methods like overwriteOutput(), setInput(), and for other settings. \r\n\r\nThis will simplify `FFmpegController` usage by improving readability and reducing direct flag usage in the codebase. It will also make the implementation more user-friendly, removing the need to know FFmpeg command details.\r\n\r\n```cpp\r\nFFmpegCommandBuilder cmd;\r\ncmd.overwriteOutput();\r\ncmd.setInput(inputVideoPath);\r\ncmd.setSampleRate(m_audioConfig.sampleRate);\r\n// ...\r\n```\r\nFor more context, see the discussion in #4.\r\n\r\nA good first issue as it's a direct extension of an existing class and requires minimal understanding of the full project.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/31/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-08T13:35:45Z",
+        "body": "Hi @omeryusufyagci, I should have time to take a look at this issue too sometime this week if you'd like to assign to me\r\n\r\nI figure I'm familiar enough and it will allow us to coordinate on #4 but I'll obviously leave it up to you ;)"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-08T18:22:09Z",
+        "body": "hey @andcscott, that'd be great, indeed you already have the context. I couldn't get to that PR just yet, looks good but want to take a closer look. Been busy with some new features. You can use the branch I opened via this issue. Thanks for taking this on as well! "
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-09T14:54:42Z",
+        "body": "No problem about the PR, there was no rush. Plus it looks like the project is getting some more attention so that's always good. Thanks for trusting me another issue! I'll be working on this in tandem with #4  this week."
+      }
+    ]
+  },
+  {
+    "number": 28,
+    "title": "Added FFmpegController class",
+    "created_at": "2024-10-06T23:07:26Z",
+    "closed_at": "2024-10-10T21:01:11Z",
+    "labels": [
+      "feature",
+      "iteration",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/28",
+    "body": "Closes #4 \r\n\r\nI suspect there might be some back and forth on this so we can get it exactly how you want, however a summary of changes is below. Note that I haven't added anything for ffprobe, since it might be more appropriate for the `FFmpegCommandBuilder` class?\r\n\r\nSummary:\r\n- Added `FFmpegController` class\r\n- Class uses three structs to manage the FFmpeg configuration, each is a private member: `FFmpegGlobalConfig`, `FFmpegAudioConfig`, and `FFmpegVideoConfig`\r\n- Added getters and setters for each variable held by the structs\r\n- Added two constructors: a default to initialize the structs with the values currently used by `AudioProcessor` and `VideoProcessor` as well as an additional constructor that accepts the 3 structs as parameters",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/28/comments",
+    "author": "andcscott",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-08T20:10:05Z",
+        "body": "Hi @andcscott, thanks for this good start! \r\n\r\nAfter thinking about this more, I think the best solution is to add an `FFmpegControllerBuilder` (I know, another builder!) that would allow for something like:\r\n\r\n```cpp\r\nFFmpegController controller;\r\ncontroller.setFFmpegPath(\"/path/to/ffmpeg\")\r\n         .setAudioCodec(\"aac\")\r\n         // ...\r\n```\r\nThis would offload a lot of work from this class and help with maintenance down the road, especially if we need to do frequent changes.\r\n\r\nThe main point missing in the current PR is that the controller isn’t orchestrating the actions as expected. The user shoould interface with `FFmpegController` and not directly with the `FFmpegCommandBuilder`. So, the intended usage would look something like:\r\n\r\n```cpp\r\n// set the settings on controller and then\r\ncontroller.extractAudio(inputVideoPath, outputAudioPath);\r\n```\r\n\r\nThen you'd have a method `FFmpegController::extractAudio()` that would invoke the builder with the class members. \r\n\r\nI was also kind of thinking that the user may pass 3 structs in the ctor, and we make the structs public, but we can come back this again, as it ties with the point above.\r\n\r\nOtherwise thanks a lot for the good start, and please let me know if anything is unclear and if you have any feedback! \r\n"
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-09T14:47:38Z",
+        "body": "> After thinking about this more, I think the best solution is to add an `FFmpegControllerBuilder`\r\n\r\nSure, it makes sense to make it modular from the start. Is this builder the same as #31 or are you thinking of a new class altogether?\r\n\r\n> The main point missing in the current PR is that the controller isn’t orchestrating the actions as expected. The user shoould interface with FFmpegController and not directly with the FFmpegCommandBuilder. \r\n\r\nSorry, I guess I had the backwards. I had thought the user would interface with `FFmpegCommandBuilder` which would in turn call `FFmpegController` but I see the direction you're moving now.\r\n\r\n> I was also kind of thinking that the user may pass 3 structs in the ctor, and we make the structs public, but we can come back this again, as it ties with the point above.\r\n\r\nThe declaration of the structs is in the `MediaProcessor` namespace so you should be able to create them from anywhere in the project, it's only the instances held by a `FFmpegController` that are private. So in this case it's still possible to pass the structs to the constructor, however are you saying you might prefer that to be the default? Another option would be to make the structs protected rather than private, and make the builder a friend. In either case it wouldn't be a difficult change, just thinking out loud and looking to clarify - although I understand if you want to think on it."
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-10T14:37:43Z",
+        "body": "Hi @andcscott\r\n\r\nYes, this would be a new builder specifically for constructing the `FFmpegController` more cleanly. The idea is that the user interfaces with `FFmpegController` directly for actions e.g. `extractAudio()`, while the builder handles the configuration. This should separate well the config of our ffmpeg controller with the user interface, which is the `FFmpegController` class. \r\n\r\nLet's revisit the rest after you introduce this change, which should make it easier to assess how we want to move forward. Thanks a lot!"
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-10T22:35:27Z",
+        "body": "Heya @omeryusufyagci , so I was working through this today and I'm a little paranoid that it won't adhere to the goals. Well paranoid is maybe too strong, but anyway here's what I have planned so far:\r\n\r\n1. Split the existing `FFmpegController` from this PR into `FFmpegCommandBuilder`, adding or removing methods where relevant and open a PR for the issue specifc branch.\r\n2. Implement a new `FFmpegController` with methods to offload the work being done by `VideoProcessor` and `AudioProcessor`, and open a new PR (on the issue branch if desired). For example:\r\n```\r\nbool extractAudio(const fs::path &inputVideoPath, const fs::path &outputAudioPath);\r\n\r\nbool chunkAudio(const double startTime, const double duration, const fs::path &outputAudioPath,\r\n                    const fs::path &chunkPath);\r\n\r\nbool filterChunks(const fs::path &deepFilterPath, const fs::path &processedChunksDir,\r\n                      const fs::path &chunkPath);\r\n\r\nbool mergeChunks();\r\n\r\ndouble getAudioDuration(const fs::path &audioPath);\r\n```\r\n3. User will interface with `FFmpegController`, which in turn calls `FFmpegCommandBuilder`\r\n\r\nIf that all looks OK I can proceed, however I'm still not sure about `FFmpegControllerBuilder`. If that class manages the configuration for the controller then the user will also have to interface with it to 'set' options that `FFmpegController` later 'gets.' To me that suggests the `FFmpegControllerBuilder` class should hold the structs I implemented?\r\n\r\nSorry for the brain dump, I realize that's a lot of info so no hurry getting back to me. I mainly want to be sure I'm going in the right direction. Thanks!"
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-11T17:18:19Z",
+        "body": "Just FYI @omeryusufyagci I didn't mean to close this, synced my fork without thinking yesterday, sorry for any confusion... future PRs will be on a dev branch"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-11T19:24:20Z",
+        "body": "Hi @andcscott, thanks for the update and no worries on the PR! \r\n\r\nYou're right, the user will deal with `FFmpegControllerBuilder` to set options like `audioCodec`, `ffmpegPath`, etc. \r\nThe idea is that the builder handles the configuration, and once that’s done, the user will work with `FFmpegController` for actions like `extractAudio()`. \r\n\r\nSo yes, the builder is for setup, and the controller is for executing commands. This decouples the setup of ffmpeg from using it.\r\n\r\nJust a remark on the `filterChunks()` you put in the snippet: since this is filter-specific, this will eventually go under the `FilterController` class - that'll be the same arch for filters, which reminds me an interface for controllers would be needed!  \r\n\r\nUsing the issue branch would be ideal indeed. \r\n\r\nDoes this help? I'm happy to go over it again. "
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-11T20:05:27Z",
+        "body": "Hi @omeryusufyagci yes that helps, thank you. The separate class for `FilterController` will also make this a little cleaner I think. I appreciate you taking the time to reiterate all of that. I should be OK now but I'll let you know if anything else comes up. Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 26,
+    "title": "Feature: Add CommandBuilder interface for core",
+    "created_at": "2024-10-05T20:54:26Z",
+    "closed_at": "2024-10-05T20:58:11Z",
+    "labels": [
+      "feature",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/26",
+    "body": "Add `CommandBuilder` interface and base class to core. \r\nMinor refactors around core for clarity",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/26/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-05T20:57:30Z",
+        "body": "@andcscott it'd be great if you could base your utils off of these changes. Thank you"
+      },
+      {
+        "user": "andcscott",
+        "created_at": "2024-10-05T21:06:14Z",
+        "body": "No problem! I had been keeping an eye on #18 and this will hopefully simplify things a bit"
+      }
+    ]
+  },
+  {
+    "number": 24,
+    "title": "Improvement: Configurable Overlap Duration",
+    "created_at": "2024-10-05T15:43:09Z",
+    "closed_at": "2024-10-05T18:37:34Z",
+    "labels": [
+      "improvement"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/24",
+    "body": "**Current Behavior**:\r\nCurrently Overlap duration is constant 0.5\r\n\r\n**Suggested Improvement**:\r\nWe can give user's to change it using config.json file\r\nuser's can set the value in % like 50%\r\nwhich means if chunk duration is 4s the overlap duration will be 2s.\r\n\r\n**Benefits**:\r\n- Short Overlap (e.g., 10-20% of chunk size):\r\nFaster but less quality\r\n\r\n- Long Overlap (e.g., 50% or more of chunk size):\r\n slower but high quality\r\n\r\n**Potential Challenges**:\r\nNo comment\r\n\r\n**Additional Context**:\r\nNo comment",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/24/comments",
+    "author": "nikhiljangra264",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-05T18:37:34Z",
+        "body": "Hi @nikhiljangra264, thaks for the suggestion. This is similar to #20, could you add your suggestion as a comment there, and we'll track it under the same issue? Thanks"
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "feat: add windows support (MIDWAY)",
+    "created_at": "2024-10-04T15:21:41Z",
+    "closed_at": "2024-10-07T15:41:58Z",
+    "labels": [
+      "iteration",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/22",
+    "body": "This is just a pull request to see why this error occurs when processing the video on Windows. #18 \r\n\r\n```\r\nError: Failed to process chunk with DeepFilterNet: C:\\Users\\acer\\Desktop\\Issues\\fast-music-remover\\uploads\\chunks\\chunk_4.wav\r\nCommand failed with return code 1:\r\n'MediaProcessor' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n```",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/22/comments",
+    "author": "IbrahimHamshari",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-04T22:24:27Z",
+        "body": "Thanks for the start on this! I took a look and was able to reproduce the problem you shared in #18, but it turned out to be a config issue. The `MediaProcessor` didn't compile for me as is, I had to adjust the `CMakeLists` to include a fetch for the json library, and handle `pthreads` for unix only. After these the filtering worked fine. \r\n\r\nThen I ran into an issue with the `mergeChunks()`. It's a Windows-specific problem related to the quotes on the command itself causing it to not get parsed correctly. The same seems to work from the terminal.\r\n\r\nI also ended up refactoring the entire core to eliminate strings for file paths, and strictly use `std::filesystem::path` everywhere. \r\n\r\nWhat I propose to do is to limit the scope of this PR to the work you've done for the `ConfigManager`, including the corrected `config.json` and cleaned version of the `app.py`. Let's merge that and I'll push my refactor along with the CMakeChanges and the `CommandBuilder` I wanted to add. Then, you can then tackle the remaining issues if you're up for it.\r\n\r\nFor this to work though, it can't break the Unix/Linux version. So please test there, and only add non-breaking changes. How does this sound? "
+      },
+      {
+        "user": "IbrahimHamshari",
+        "created_at": "2024-10-05T08:30:25Z",
+        "body": "So for some reason, it works now on both Linux (using docker) and Windows right now.\r\nHere are the steps that worked for me, \r\nFirst I installed  GCC using MSYS2 with this command:\r\n\r\n`pacman -S mingw-w64-x86_64-toolchain base-devel`\r\n\r\nThen installed Cmake using this command :\r\n\r\n`pacman -S mingw-w64-x86_64-cmake`\r\n\r\nThen Installed the nlohmann/json.hpp by using this command:\r\n\r\n`pacman -S mingw-w64-x86_64-nlohmann-json`\r\n\r\nif the ffmpeg is properly installed in the `C:\\ffmpeg\\bin` it should work. "
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-05T08:32:58Z",
+        "body": "> So for some reason, it works now on both Linux (using docker) and Windows right now. Here are the steps that worked for me, First I installed GCC using MSYS2 with this command:\r\n> \r\n> `pacman -S mingw-w64-x86_64-toolchain base-devel`\r\n> \r\n> Then installed Cmake using this command :\r\n> \r\n> `pacman -S mingw-w64-x86_64-cmake`\r\n> \r\n> Then Installed the nlohmann/json.hpp by using this command:\r\n> \r\n> `pacman -S mingw-w64-x86_64-nlohmann-json`\r\n> \r\n> if the ffmpeg is properly installed in the `C:\\ffmpeg\\bin` it should work.\r\n\r\nThe video playback works on the UI? I had an issue with the ffmpeg command for mergeChunks yesterday. I'll take a look"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-06T10:07:05Z",
+        "body": "Hi @IbrahimHamshari, I refactored the core to strictly use `std::filesystem::path` everywhere, and introduced a command building interface. It was painful to work with the hardcoded, in-place commands. \r\n\r\nCould you please update this to conform to these changes as well as to target the PR for the new branch `windows-support`?\r\n\r\nThanks a lot! "
+      },
+      {
+        "user": "IbrahimHamshari",
+        "created_at": "2024-10-07T15:45:23Z",
+        "body": "I'll close this pull request and then open another one which has the complete thing. "
+      }
+    ]
+  },
+  {
+    "number": 21,
+    "title": "Improvement: Add Auto-Configuration for Thread Usage in MediaProcessor #5",
+    "created_at": "2024-10-03T18:11:13Z",
+    "closed_at": "2024-10-07T19:35:31Z",
+    "labels": [
+      "feature",
+      "hacktoberfest-accepted",
+      "core"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/21",
+    "body": "#5 \r\n\r\n### Updates and Enhancements\r\n- **Added `determineNumChunks()` function**  \r\n  A new function in the `AudioProcessor` class is responsible for dynamically determining the number of chunks (threads) based on system hardware or configuration.\r\n1. use number of chunks given in the config file if within range i.e. [1, total_threads].\r\n1. else use total_threads - 2 if total_threads > 2 else use single thread\r\n1. else use Deafult number of chunks if can't determine number of threads.\r\n\r\n- **Updated `AudioProcessor` constructor**  \r\n  The constructor calls the `determineNumChunks()` funtion to determine the dynamic number of chunks.\r\n\r\n- **Modified `ConfigManager`**  \r\n  The `ConfigManager` class now supports the configuration of `num_chunks` in the configuration file.\r\n\r\n- **Updated the configuration file**  \r\n  The configuration file has been updated to include the `num_chunks` setting, allowing users to adjust the number of chunks (threads) for processing.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/21/comments",
+    "author": "nikhiljangra264",
+    "comments": [
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-06T08:20:22Z",
+        "body": "I have make the changes requested. Please check"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-06T10:30:58Z",
+        "body": "> I have make the changes requested. Please check\r\n\r\n@nikhiljangra264 I needed to push an update on main to unblock a few things. Could you please make sure your PR conforms? Details available in #27. Thanks a lot!"
+      },
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-06T12:09:35Z",
+        "body": "@omeryusufyagci  I have made Changes. Please look"
+      }
+    ]
+  },
+  {
+    "number": 19,
+    "title": "Improvement: Refactor Flask Backend for Maintainability (Edited by maintainer)",
+    "created_at": "2024-10-02T09:39:20Z",
+    "closed_at": "2024-10-05T06:46:30Z",
+    "labels": [
+      "improvement",
+      "backend",
+      "hacktoberfest-accepted"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/19",
+    "body": "Changes Made:\r\n\r\n- Added a VideoProcessor class to encapsulate video download and processing logic.\r\n- Moved methods like download_youtube_video() (renamed to download_media()) and process_video_with_cpp() into VideoProcessor.\r\n- Encapsulated file path sanitization and cleanup operations into the Utils class.\r\n- Implemented static methods in the class, this provides a clear and concise way to handle utility operations without requiring an instance of the class.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/19/comments",
+    "author": "VarunParab",
+    "comments": [
+      {
+        "user": "VarunParab",
+        "created_at": "2024-10-03T17:29:58Z",
+        "body": "@omeryusufyagci I’ve made the changes you requested. Please have a look, and let me know if there’s anything else you’d like me to change."
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-04T07:35:59Z",
+        "body": "@VarunParab looks good at a glance! but let me take a closer look over the weekend please. Thanks a lot!"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "Update index.html (Edited by maintainer)",
+    "created_at": "2024-10-01T17:14:57Z",
+    "closed_at": "2024-10-08T18:57:06Z",
+    "labels": [
+      "frontend",
+      "iteration",
+      "stale"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/pull/17",
+    "body": "Added Features:\r\n\r\n- URL Validation: Before sending the request, the YouTube URL is validated using a regular expression. \r\n- Loading Spinner: A loader animation is shown while the video is being processed. \r\n- Button Disable: The submit button is disabled during processing to prevent multiple submissions. \r\n- Video Display: The video player is hidden until the video is ready to be displayed after processing. \r\n- Improved Error Handling: Clear error messages are shown to the user for invalid URLs and processing errors.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/17/comments",
+    "author": "Soyvor",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-01T19:27:10Z",
+        "body": "Hi @Soyvor,\r\n\r\nPlease refer to my comments on #16. Let's revisit this PR after you've made the suggested updates.\r\n\r\nThanks!"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-05T15:53:21Z",
+        "body": "Hi @Soyvor, are you still interested in this PR? Thanks for your feedback"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-08T18:57:07Z",
+        "body": "Dear @Soyvor, I am closing this PR as it has become stale. I am happy to review again a PR on this if you address the requested changes, and the corresponding issue is still open.\r\n\r\nThank you for the interest you've shown in this project."
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "Feature: Addition of features (Edited by maintainer)",
+    "created_at": "2024-10-01T17:13:26Z",
+    "closed_at": "2024-10-01T19:19:06Z",
+    "labels": [
+      "wontfix"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/16",
+    "body": "**Description**:\r\nLoading Indicator:\r\n\r\nAdd a spinner or loader to indicate that the processing is happening (currently, only text is used).\r\nYouTube URL Validation:\r\n\r\nYou can implement client-side validation to check whether the URL is a valid YouTube video link before submitting the form.\r\nProgress Bar:\r\n\r\nIf the backend provides some progress updates during video processing, you can display a progress bar.\r\nAudio Preview:\r\n\r\nOptionally add an audio player alongside the video player to allow users to listen to the audio without music (assuming this is the app’s purpose).\r\nMultiple Input Types:\r\n\r\nAdd functionality to support both YouTube URLs and direct video file uploads, providing more flexibility for users.\r\nSuccess Message and Video Details:\r\n\r\nDisplay a success message with more details about the processed video (such as title, duration) after processing is completed.\r\nStyling and Accessibility:\r\n\r\nImprove the styling of the page to enhance user experience and add better accessibility features (e.g., labels and ARIA roles for elements).\r\nMobile Responsiveness:\r\n\r\nMake sure the design adapts properly to smaller screen sizes by improving the mobile responsiveness (such as hiding the video player on small screens until processing is complete).\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/16/comments",
+    "author": "Soyvor",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-01T19:19:06Z",
+        "body": "Hi @Soyvor, thanks for your contributions and for taking the time to address the issues you found. I appreciate your effort and recognize that you've identified valid points for improvement, particularly regarding the frontend, which indeed hasn't received much attention so far.\r\n\r\n**Feedback on (#15)**:\r\n> The current error handling is minimal, only showing \"An error occurred!\". It could be enhanced to give more specific feedback to the user (e.g., network issues, incorrect URL format).\r\n\r\nYou mentioned the error handling is minimal, and I agree it could be improved. The change you made to indicate \"during processing\" is a good start, but it's somewhat limited. Did you intend to expand this further?\r\n\r\n> The url field does not validate if the input is a valid YouTube URL. You should add basic validation to ensure the URL is well-formed before sending it to the server.\r\n\r\nI understand the need for validating URLs. Currently, we're using YouTube because it speaks to a wide audience, but as we prepare for live stream support, we plan to accept URLs from other domains as well. If you want to add validation, it would be great to consider a more generic validator that's extensible, rather than focusing solely on YouTube URLs.\r\n\r\nVideo display and button disable are good additions\r\n\r\nThe backend already includes basic sanitization, which can definitely be extended. However, I would prefer to focus on this in a dedicated issue.\r\n\r\n**Feedback on this issue (#16)**:\r\nSpinner will be nice, sure!\r\n\r\nYT video validation was covered above.\r\n\r\n**Direct file upload would be very good!** As well as providing a download link for the processed video. These together would make a nice addition!\r\n\r\n> Optionally add an audio player alongside the video player to allow users to listen to the audio without music (assuming this is the app’s purpose).\r\n\r\nThe main purpose of the app is to efficiently filter videos, and while we do generate intermediary products like isolated vocals, adding an audio player doesn’t align with the main goal at this stage.\r\n\r\n> Display a success message with more details about the processed video (such as title, duration) after processing is completed.\r\n\r\nThis, along with the screen reader, and dynamic responsiveness were not addressed in your PR. Did you intend to add them later on?\r\n\r\n**Summary**:\r\nYou've highlighted some important points, and I appreciate your contributions. To proceed, I will close the two issues discussed here and ask that you open a new `Improvement Request` with a well-defined scope, covering the changes you'd like to make.\r\n\r\nOnce you update your PR (#17) to align with this new consolidated issue, I'll be happy to review it and apply the hacktoberfest label if it meets the criteria.\r\n\r\n**A couple of quick notes:**\r\n* Please try to adhere to the existing conventions for issue and PR titles and format. This helps us maintain consistency and makes it easier for everyone to follow along.\r\n* In future contributions, I kindly ask that you refrain from adding requests for specific labels like Hacktoberfest, as we add those based on contribution quality and alignment with project goals.\r\n\r\nThank you again for your effort, and I look forward to seeing the updated version!"
+      },
+      {
+        "user": "Soyvor",
+        "created_at": "2024-10-02T11:31:11Z",
+        "body": "sure\r\n"
+      }
+    ]
+  },
+  {
+    "number": 15,
+    "title": "Improvement: Misc frontend media player improvements (Edited by maintainer)",
+    "created_at": "2024-10-01T17:12:08Z",
+    "closed_at": "2024-10-01T19:22:51Z",
+    "labels": [
+      "wontfix"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/15",
+    "body": "**Describe the bug**\r\nError Handling:\r\n\r\nThe current error handling is minimal, only showing \"An error occurred!\". It could be enhanced to give more specific feedback to the user (e.g., network issues, incorrect URL format).\r\nForm Input Validation:\r\n\r\nThe url field does not validate if the input is a valid YouTube URL. You should add basic validation to ensure the URL is well-formed before sending it to the server.\r\nVideo Display:\r\n\r\nThe video tag is always displayed, even if no video has been processed. You could hide the video player until a valid video URL is returned.\r\nSubmit Button Disabled State:\r\n\r\nThe submit button can still be clicked multiple times during the processing phase. Disable it during the process to avoid duplicate submissions.\r\nPotential Security Risk:\r\n\r\nDirectly using fetch without sanitizing the URL might lead to vulnerabilities. Make sure the backend sanitizes the URL and ensures the security of the system.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/15/comments",
+    "author": "Soyvor",
+    "comments": [
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-01T19:22:51Z",
+        "body": "Hi @Soyvor,\r\n\r\nThank you for your suggestions. As mentioned in my comment on Issue #16, I believe these improvements would be better consolidated into a single, well-defined `Improvement Request`. For detailed feedback and next steps, please refer to my comment there.\r\n\r\nI will close this issue to keep everything organized. Feel free to reach out if you have questions."
+      }
+    ]
+  },
+  {
+    "number": 9,
+    "title": "Improvement: Refactor Flask Backend for Maintainability",
+    "created_at": "2024-09-29T09:04:46Z",
+    "closed_at": "2024-10-05T06:46:31Z",
+    "labels": [
+      "help wanted",
+      "good first issue",
+      "improvement",
+      "refactor",
+      "backend",
+      "urgent",
+      "hacktoberfest"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/9",
+    "body": "The current implementation of the Flask backend has grown large and disorganized while resolving various issues and adding features. To improve maintainability and readability, a comprehensive refactor is necessary. This aims to encapsulate responsibilities into dedicated classes and remove redundant code.\r\n\r\n**Objectives**:\r\n\r\n- Add a `VideoProcessor` class to encapsulate video download and processing logic.\r\n- Move methods like `download_youtube_video()`, and `process_video_with_cpp()` into the new VideoProcessor class. Rename methods for clarity, e.g. `download_youtube_video()` should be `download_media()`.\r\n- Add a `Utils` class to encapsulate repeated operations, for file paths, sanitization, and cleanup.\r\n- Improve overall readability of the Flask application, by moving larger functionality into dedicated modules/classes.\r\n\r\nNote: The primary goal here is to improve maintainability. Feel free to add suggestions or ideas for further modularizing the code if you notice other areas that could benefit from this effort.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/9/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "VarunParab",
+        "created_at": "2024-10-01T16:18:11Z",
+        "body": "Would love to work on this, could you assign it to me?"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-01T17:16:07Z",
+        "body": "Hi @VarunParab, thanks for your interest! \r\n\r\nI've assigned the issue to you. Resolving this will unblock several other issues, so many thanks for taking it on!\r\n\r\nIf you'd like to discuss any details as you work through it, please don't hesitate to reach out."
+      },
+      {
+        "user": "VarunParab",
+        "created_at": "2024-10-02T13:29:31Z",
+        "body": "Hi @omeryusufyagci, I've submitted a pull request addressing the issue. Please let me know if any further changes or clarifications are needed. Looking forward to your feedback!"
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "Testing: Add Unit Tests for `MediaProcessor` using Google Test",
+    "created_at": "2024-09-29T08:49:09Z",
+    "closed_at": "2024-10-20T21:08:54Z",
+    "labels": [
+      "help wanted",
+      "good first issue",
+      "testing",
+      "hacktoberfest"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/8",
+    "body": "To eliminate the need for manual testing and verification of the `MediaProcessor` after every change, unit tests should be added to ensure consistent behavior. Given the nature of the project, this requires appropriate input/output media files to thoroughly test the core functionality of the `MediaProcessor`.\r\n\r\n**Objectives**:\r\n1. Find/Generate suitable test I/O for the `MediaProcessor`: \r\nIdentify or generate media files that can be used for testing. Ideally, these should be short (a few seconds long) clips covering different use cases (e.g., video with background music, video with pure vocals, noisy background).\r\n\r\n2. Implement Tests Using Google Test:\r\nAdd tests for critical operations like audio extraction, filtering, and merging back the processed audio with video.",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/8/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-05T15:23:15Z",
+        "body": "I would Love to work on this. Can you assign me this?"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-05T15:52:40Z",
+        "body": "Hi @nikhiljangra264, would be great, thanks! "
+      }
+    ]
+  },
+  {
+    "number": 5,
+    "title": "Feature: Add Auto-Configuration for Thread Usage in `MediaProcessor`",
+    "created_at": "2024-09-29T07:32:04Z",
+    "closed_at": "2024-10-07T19:35:33Z",
+    "labels": [
+      "help wanted",
+      "good first issue",
+      "improvement",
+      "hacktoberfest"
+    ],
+    "url": "https://github.com/omeryusufyagci/fast-music-remover/issues/5",
+    "body": "Currently, the thread count uses a default value (see `MediaProcessor::AudioProcessor()`). This improvement aims to allow faster processing times for more capable hardware while ensuring stable operation on all target machines by determining an optimal number of threads.\r\n\r\n**Objective:**\r\n- Automatically determine the number of threads based on hardware capabilities using `std::thread::hardware_concurrency()`.\r\n- Allow users to override this value in `config.json` for manual control if needed.\r\n- Update the current implementation to use this dynamic value where applicable.\r\n",
+    "comments_url": "https://api.github.com/repos/omeryusufyagci/fast-music-remover/issues/5/comments",
+    "author": "omeryusufyagci",
+    "comments": [
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-03T10:23:02Z",
+        "body": "I would love to work on this, Could you assign it to me?"
+      },
+      {
+        "user": "omeryusufyagci",
+        "created_at": "2024-10-03T10:42:25Z",
+        "body": "Hi @nikhiljangra264, thanks for your interest! I've assigned the issue to you. "
+      },
+      {
+        "user": "nikhiljangra264",
+        "created_at": "2024-10-03T18:14:56Z",
+        "body": "Hello, I have made a PR regarding this. Please take a look and give me suggestions if any."
+      }
+    ]
+  }
+]

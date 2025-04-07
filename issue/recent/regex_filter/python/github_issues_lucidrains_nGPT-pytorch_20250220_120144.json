@@ -1,0 +1,83 @@
+[
+  {
+    "number": 11,
+    "title": "Boolean mask doe snot work",
+    "created_at": "2024-11-02T16:48:37Z",
+    "closed_at": "2024-11-05T14:22:11Z",
+    "labels": [],
+    "url": "https://github.com/lucidrains/nGPT-pytorch/issues/11",
+    "body": "on A100, using nvidia/pytroch 24.09.py3 container, pasisng a Bollean mask does not work with sdpa. It yields NaN gradients.\r\n\r\nI made it work by multiplying the mask by -10. (-20. works too).\r\n\r\nI tested the fix: \r\n\r\n`mask = mask.float() * -torch.finfo(q.dtype).max`\r\n\r\nAnd this also yields NaN gradients.\r\n\r\nWhat works for me is simply:\r\n\r\n`mask = mask * -10.0`\r\n",
+    "comments_url": "https://api.github.com/repos/lucidrains/nGPT-pytorch/issues/11/comments",
+    "author": "jfpuget",
+    "comments": [
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T16:50:28Z",
+        "body": "i see, `-10` may not be sufficiently large"
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T16:52:11Z",
+        "body": "@jfpuget how about `-1e10` ?"
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T16:52:48Z",
+        "body": "@jfpuget are you sure the entire row is not masked out by accident? run a `assert mask.any(dim = -1).all()`"
+      },
+      {
+        "user": "jfpuget",
+        "created_at": "2024-11-02T17:00:41Z",
+        "body": "The mask is added to attention score before softmax, i.e. before exponentiation. e**-10 is already quite small. \r\n\r\n-100 works too.\r\n\r\n-1e-10 yields Nan gradients.\r\n"
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T17:03:26Z",
+        "body": "@jfpuget yes, but the query key similarity score (if not qk normed) could have a wide range"
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T17:03:57Z",
+        "body": "@jfpuget definitely double check to make sure the row isn't completely masked out"
+      },
+      {
+        "user": "jfpuget",
+        "created_at": "2024-11-02T18:17:42Z",
+        "body": "You were right. I use a 2D mask, and in some cases a row or column is fully masked. But in that case the loss is also masked for the same row or column. I don't get why there was an issue. \r\n\r\nanyway, I found a way to avoid fully masked rows or columns, and no longer have NaN when using a Boolean mask. Fp16 works fine too.\r\n\r\nI'll double check tomorrow.\r\n"
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-02T18:26:04Z",
+        "body": "@jfpuget thank you! I can add a guard for that and just zero out the all masked out rows\r\n\r\nI think future versions of pytorch may have a flag to guard against this edge case too"
+      },
+      {
+        "user": "jfpuget",
+        "created_at": "2024-11-02T18:28:25Z",
+        "body": "I still don't get why attention in a fully masked row impacts attention in other rows. I'll dig."
+      },
+      {
+        "user": "lucidrains",
+        "created_at": "2024-11-05T14:22:11Z",
+        "body": "should be resolved with an extra guard in the latest!"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "What is the difference between nGPT.py and nTransformers.py",
+    "created_at": "2024-10-22T09:59:30Z",
+    "closed_at": "2024-10-22T14:50:13Z",
+    "labels": [],
+    "url": "https://github.com/lucidrains/nGPT-pytorch/issues/6",
+    "body": "What is the difference between nGPT.py and nTransformers.py？ And are they from two different papers? Thank you very much",
+    "comments_url": "https://api.github.com/repos/lucidrains/nGPT-pytorch/issues/6/comments",
+    "author": "ghgmail",
+    "comments": [
+      {
+        "user": "lucidrains",
+        "created_at": "2024-10-22T14:50:12Z",
+        "body": "@ghgmail nTransformer is just nGPT without the embedding and logit projection, a stack of attention and feedforwards"
+      }
+    ]
+  }
+]

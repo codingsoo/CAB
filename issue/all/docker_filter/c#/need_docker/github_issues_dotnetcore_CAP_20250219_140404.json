@@ -1,0 +1,195 @@
+[
+  {
+    "number": 1567,
+    "title": "BUG: NATS throws exceptions when custom consumer configurations are set",
+    "created_at": "2024-07-24T12:36:10Z",
+    "closed_at": "2024-07-29T02:44:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/1567",
+    "body": "# Configuration\r\n\r\nIn my Program.cs, I have CAP configured like so:\r\n\r\n```cs\r\nbuilder.Services.AddCap(o =>\r\n{\r\n    o.UseEntityFramework<NotificationDataContext>(opt => opt.Schema = \"Outbox\");\r\n    o.UseNATS(opt =>\r\n    {\r\n        var natsUrl = builder.Configuration.GetValue<string>(\"NatsSettings:Url\")!;\r\n\r\n        opt.Servers = natsUrl;\r\n        opt.StreamOptions = strOpts =>\r\n        {\r\n            strOpts.WithRetentionPolicy(NATS.Client.JetStream.RetentionPolicy.Limits);\r\n            strOpts.WithStorageType(NATS.Client.JetStream.StorageType.File);\r\n            strOpts.WithDuplicateWindow(NATS.Client.Internals.Duration.OfMinutes(1));\r\n            strOpts.WithDiscardPolicy(NATS.Client.JetStream.DiscardPolicy.Old);\r\n\r\n            strOpts.Build();\r\n        };\r\n\r\n        opt.ConsumerOptions = consOpts =>\r\n        {\r\n            consOpts.WithBackoff(\r\n                NATS.Client.Internals.Duration.OfSeconds(5),\r\n                NATS.Client.Internals.Duration.OfSeconds(30),\r\n                NATS.Client.Internals.Duration.OfMinutes(1),\r\n                NATS.Client.Internals.Duration.OfMinutes(2),\r\n                NATS.Client.Internals.Duration.OfMinutes(5),\r\n                NATS.Client.Internals.Duration.OfMinutes(10)\r\n            );\r\n\r\n            consOpts.WithAckPolicy(NATS.Client.JetStream.AckPolicy.Explicit);\r\n            consOpts.WithDeliverPolicy(NATS.Client.JetStream.DeliverPolicy.All);\r\n            consOpts.WithReplayPolicy(NATS.Client.JetStream.ReplayPolicy.Instant);\r\n        };\r\n    });\r\n});\r\n```\r\n\r\nI have an interface and class:\r\n\r\n**IUserService:**\r\n\r\n```cs\r\npublic interface IUserService\r\n{\r\n    Task HandleEvent(DateTime time);\r\n}\r\n```\r\n\r\n**UserService:**\r\n\r\n```cs\r\npublic class UserService: IUserService\r\n{\r\n    [CapSubscribe(\"test.show.time\")]\r\n    public async Task HandleEvent(DateTime time)\r\n    {\r\n        Console.WriteLine(\"message time is:\" + time);\r\n    }\r\n}\r\n```\r\n\r\nThese are both registered as scoped services.\r\n\r\n```cs\r\nservices.AddScoped<IUserService, UserService>();\r\n```\r\n\r\n# How To Reproduce\r\n\r\n1. Using Docker, start a new nats server:\r\n`docker run -it -p 4222:4222 -p 8222:8222 -p 8080:8080 --name nats -d nats:2.10.14 -js -m 8222`.\r\n\r\n2. Set `natsUrl` in `Program.cs` to `\"nats://localhost:4222\"`.\r\n\r\n3. Start the application. \r\n4. Close the application.\r\n5. Start the application again. This exception should appear in the terminal: \r\n\r\n**Error Log:**\r\n```text  \r\nNATS.Client.NATSJetStreamClientException: [SUB-90016] Existing consumer cannot be modified. [AckWait]\r\n   at NATS.Client.JetStream.JetStream.CreateSubscription(String userSubscribeSubject, PushSubscribeOptions pushSubscribeOptions, PullSubscribeOptions pullSubscribeOptions, String queueName, EventHandler`1 userHandler, Boolean autoAck, PullMessageManager pmmInstance)\r\n   at NATS.Client.JetStream.JetStream.PushSubscribeAsync(String subject, String queue, EventHandler`1 handler, Boolean autoAck, PushSubscribeOptions options)\r\n   at DotNetCore.CAP.NATS.NATSConsumerClient.Subscribe(IEnumerable`1 topics)\r\n```\r\n\r\n# Expected Behaviour\r\n\r\nAn exception should not be thrown here because the consumer configuration is not changing. If I don't provide a custom consumer configuration, no exception is thrown on application restart.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/1567/comments",
+    "author": "henrychris",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2024-07-25T14:29:03Z",
+        "body": "In the NATS Server, the BackOff option overrides the AckWait option, ignoring the AckWait settings. This can cause an inconsistency between the NATS client configuration and the server configuration, leading to exceptions when the application restarts. Since CAP internally provides a default value for AckWait, you need to reset the AckWait option to avoid configuration comparison issues.\r\n\r\n```\r\nconsOpts.WithBackoff(\r\n    NATS.Client.Internals.Duration.OfSeconds(5),\r\n    NATS.Client.Internals.Duration.OfSeconds(30),\r\n    NATS.Client.Internals.Duration.OfMinutes(1),\r\n    NATS.Client.Internals.Duration.OfMinutes(2),\r\n    NATS.Client.Internals.Duration.OfMinutes(5),\r\n    NATS.Client.Internals.Duration.OfMinutes(10)\r\n);\r\nconsOpts.WithAckWait(null);    // add this line !!!!\r\n```"
+      },
+      {
+        "user": "henrychris",
+        "created_at": "2024-07-25T21:48:03Z",
+        "body": "I just tried this out, and it works! Thank you so much! Do I close this myself, or will you do the honours?"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why NATS Server considers the consumer configuration changed between restarts",
+      "Clarification on how Backoff configuration interacts with AckWait settings in NATS",
+      "Resolution that maintains the intended consumer backoff strategy while avoiding server-side configuration conflicts",
+      "Mechanism to ensure consumer configuration parity between client and server during application restarts"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:05:59"
+    }
+  },
+  {
+    "number": 124,
+    "title": "Problems with multiple subscriptions",
+    "created_at": "2018-04-29T08:49:42Z",
+    "closed_at": "2018-04-29T14:48:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/124",
+    "body": "```\r\npublic void ConfigureServices(IServiceCollection services)\r\n{\r\n    ...\r\n    services.AddTransient<ITestMessage, TestMessage>();\r\n    //services.AddTransient<ITestMessage2, TestMessage2>();\r\n    services.AddCap(x => {  });\r\n}\r\n```\r\n\r\nThe above code works well after commenting out one subscription. However,  there is a puzzling problem when I try to open two subscriptions. Publishers can publish successfully, but subscribers can't receive any messages, I'm very confused. Is it the wrong way I use it? \r\nSee the code below\uff1a\r\n```\r\nprivate async Task SendRequest()\r\n{\r\n    using (var trans = context.Database.BeginTransaction())\r\n    {\r\n        await publisher.PublishAsync(\"Test.Message\", \"\");\r\n        ...\r\n        trans.Commit();\r\n    }\r\n}\r\n\r\npublic interface ITestMessage\r\n{\r\n    void TestSubscriber(string text); \r\n}\r\n\r\npublic class TestMessage : ITestMessage, ICapSubscribe\r\n{\r\n    [CapSubscribe(\"Test.Message\")]\r\n    public void TestSubscriber(string text)\r\n    {\r\n    }\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/124/comments",
+    "author": "szlee",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-29T10:30:51Z",
+        "body": "@szlee  Hello,\r\nIf you have multiple subscribers you need to set up different groups like `CapSubscribe(\"Test.Message\", Group = \"test1\")` and `CapSubscribe(\"Test.Message\", Group = \"test2\")` , do you do that?"
+      },
+      {
+        "user": "szlee",
+        "created_at": "2018-04-29T13:09:49Z",
+        "body": "How do I set up the different groups for the subscriptions. Is it in the Cap Option. Can you put a sample code? Thanks"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-29T13:44:20Z",
+        "body": "```\r\npublic interface ITestMessage\r\n{\r\n    void TestSubscriber(string text); \r\n}\r\n\r\npublic class TestMessage : ITestMessage, ICapSubscribe\r\n{\r\n    [CapSubscribe(\"Test.Message\", Group = \"test1\")]\r\n    public void TestSubscriber(string text)\r\n    {\r\n    }\r\n}\r\n```\r\nand \r\n\r\n```\r\npublic interface ITestMessage2\r\n{\r\n    void TestSubscriber(string text); \r\n}\r\n\r\npublic class TestMessage2: ITestMessage2, ICapSubscribe\r\n{\r\n    [CapSubscribe(\"Test.Message\", Group = \"test2\")]\r\n    public void TestSubscriber(string text)\r\n    {\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "szlee",
+        "created_at": "2018-04-29T13:58:32Z",
+        "body": "Thanks for your reply. I tried the above methods, it seems that still can not... But I added the following line of Italic code, which works fine...\r\npublic void ConfigureMotionServices(IServiceCollection services)\r\n{\r\n    services.AddTransient<ITestMessage, TestMessage>();\r\n    services.AddTransient<ITestMessage2, TestMessage2>();\r\n    _services.AddCap(x => { x.DefaultGroup = \"Test\"; });_\r\n}\r\n\r\nI have a question, the above code only uses one group, if I need more than one group, how to set the options? Like this?\r\npublic void ConfigureMotionServices(IServiceCollection services)\r\n{\r\n    services.AddTransient<ITestMessage, TestMessage>();\r\n    services.AddTransient<ITestMessage2, TestMessage2>();\r\n    _services.AddCap(x => { x.DefaultGroup = \"Test\"; });_\r\n    services.AddTransient<ITestMessage3, TestMessage3>();\r\n    services.AddTransient<ITestMessage4, TestMessage4>();\r\n    _services.AddCap(x => { x.DefaultGroup = \"Test2\"; });_\r\n}"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-29T14:09:32Z",
+        "body": "No, You can't configuration like this. The `DefaultGroup ` represents a group in Kafka or a queue in RabbitMQ.\r\n\r\nIf you follow what I'm saying and it not works , please provide your environment and configuration.\r\n"
+      },
+      {
+        "user": "szlee",
+        "created_at": "2018-04-29T14:20:16Z",
+        "body": "```\r\npublic void ConfigureMotionServices(IServiceCollection services)\r\n{\r\n    services.AddMvc();\r\n    services.AddDbContext<McsDbContext>(option => option.UseSqlServer(Configuration.GetConnectionString(\"DefaultConnection\")));\r\n    services.AddCap(x => { x.UseEntityFramework<McsDbContext>(); x.UseRabbitMQ(\"localhost\"); });\r\n    services.AddTransient<ITestMessage, TestMessage>();\r\n    services.AddTransient<ITestMessage2, TestMessage2>();\r\n    services.AddCap(x => { x.DefaultGroup = \"Test\"; });\r\n    services.AddTransient<ITestMessage3, TestMessage3>();\r\n    services.AddTransient<ITestMessage4, TestMessage4>();\r\n    services.AddCap(x => { x.DefaultGroup = \"Test2\"; });\r\n}\r\npublic void Configure(IApplicationBuilder app, IHostingEnvironment env)\r\n{\r\n    if (env.IsDevelopment()) app.UseDeveloperExceptionPage();\r\n    app.UseCap();  \r\n    app.UseMvc();\r\n}\r\n```"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-29T14:27:51Z",
+        "body": "There are too many mistakes in your configuration.\r\n\r\n**Startup.cs**\r\n\r\n```cs\r\npublic void ConfigureMotionServices(IServiceCollection services)\r\n{\r\n    services.AddDbContext<McsDbContext>(option => option.UseSqlServer(Configuration.GetConnectionString(\"DefaultConnection\")));\r\n\r\n    services.AddTransient<ITestMessage, TestMessage>();\r\n    services.AddTransient<ITestMessage2, TestMessage2>();\r\n\r\n    services.AddCap(x => { \r\n        x.UseEntityFramework<McsDbContext>();\r\n        x.UseRabbitMQ(\"localhost\");\r\n    });\r\n\r\n    services.AddMvc();\r\n}\r\n\r\npublic void Configure(IApplicationBuilder app, IHostingEnvironment env)\r\n{\r\n    if (env.IsDevelopment()) \r\n        app.UseDeveloperExceptionPage();\r\n    \r\n    app.UseMvc();\r\n\r\n    app.UseCap(); \r\n}\r\n\r\n```\r\n\r\n**ITestMessage.cs** and **TestMessage.cs**\r\n\r\n```cs\r\npublic interface ITestMessage\r\n{\r\n    void TestSubscriber(string text); \r\n}\r\n\r\npublic class TestMessage : ITestMessage, ICapSubscribe\r\n{\r\n    [CapSubscribe(\"Test.Message\", Group = \"test1\")]\r\n    public void TestSubscriber(string text)\r\n    {\r\n    }\r\n}\r\n```\r\n\r\n\r\n**ITestMessage2.cs** and **TestMessage2.cs**\r\n\r\n```cs\r\npublic interface ITestMessage2\r\n{\r\n    void TestSubscriber(string text); \r\n}\r\n\r\npublic class TestMessage2: ITestMessage2, ICapSubscribe\r\n{\r\n    [CapSubscribe(\"Test.Message\", Group = \"test2\")]\r\n    public void TestSubscriber(string text)\r\n    {\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "szlee",
+        "created_at": "2018-04-29T14:44:36Z",
+        "body": "Yes, the above code can run perfectly. You solved my problem. Thanks a lot\uff01"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to configure multiple subscriber groups in CAP without conflicts",
+      "Clarification on the relationship between DefaultGroup configuration and subscriber group assignments",
+      "Guidance on proper CAP service configuration sequence and singleton pattern"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:07:03"
+    }
+  },
+  {
+    "number": 1299,
+    "title": "Kafka partitioning and consumer Client Id property.",
+    "created_at": "2023-03-22T14:53:01Z",
+    "closed_at": "2023-03-28T04:10:49Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/1299",
+    "body": "Hi,\r\nWe are using this great library heavily in our projects. And our projects require heavy message processing. So we need multi-core processing. It is known that if you need concurrent processing you need to have partitions in kafka. When you set `ConsumerThreadCount` greater than 1 it will have no effect on the concurrency. As the topics will have just 1 partition created by the CAP. This part is manageable you can of course set the partition count manually via kafka command line tools. But when you do this you need to set the `client.id` for each thread that is consuming. Currently, the library only allows for passing config only in the startup stage, and this config is shared by all the consumers. So we need to be able to configure each consumer id individually. If you can provide a callback (it would be better if an async callback) kind of setting which will determine the client id of the consumer it will super useful. \r\nIf anyone has the same issue as us, we are currently using a workaround that requires setting the `ConsumerThreadCount` to 1 and setting the client id at startup. Instead of having multi-threading in a single app, we are using multiple apps to consume concurrently. This is easy to implement in a k8s environment you can easily increase the pod count. But I don't know about self-hosted applications (In IIS you can also increase the worker process count.). Also, I don't know if it is as efficient as having multiple threads.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/1299/comments",
+    "author": "3ldar",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2023-03-24T08:42:09Z",
+        "body": "Hi  @3ldar \r\n\r\nThanks for your feedback, I think this is a feature that can be improved, but I need further clarification from you.\r\n\r\nDo you mean that you manually changed the number of kafka partitions by the following command\r\n```\r\nkafka-topics.sh --bootstrap-server localhost:9092 --alter --topic first_topic --partitions 5\r\n```\r\n\r\nAnd you want to change the consumer thread corresponding to the topic partition at runtime ?\r\n\r\n> But when you do this you need to set the `client.id` for each thread that is consuming\r\n\r\nI know that Kafka specifies consumer thread strategies through `partition.assignment.strategy` configuration. How to specify at runtime by command?  \r\n\r\n\r\n"
+      },
+      {
+        "user": "3ldar",
+        "created_at": "2023-03-25T22:54:08Z",
+        "body": "Hi again,\r\n\r\n\r\n>  kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic first_topic --partitions 5\r\n\r\nThis is the exact command I have used. Setting this according to the consumer thread count (or providing another config, which would be way better if it was per-topic configurable) is nice. But the crucial part is `client.id`. The `partition.assignment.strategy` will determine how the clients in the same group will pick or rotate the partitions (and it is ok to set it once at the application startup) but when all the clients have the same id they will share the same offsets and no efficient concurrency will be applied here. (Concurrency would work for different topics well, but not on the same topic. There are many benchmarks about this for kafka.) `client.id` should be set before the consuming starts and it is not necessary to change it at runtime (maybe it should not it might mess up some offsets). \r\n\r\nA singleton service that implements the below interface would work here I think.\r\n```\r\npublic interface IKafkaClientIdProvider {\r\n    Task<string> GetClientId();\r\n    Task<string> GetClientId(string groupId); //one of them can be pick here\r\n}\r\n```\r\n\r\n A default implementation like the one below would work :\r\n```\r\npublic class DefaultKafkaClientIdProvider {\r\n    int clientIdCounter = 0; // consider this is thread-safe\r\n    Task<string> GetClientId() => Task.FromResult($\"fancyClient_{i++}\");\r\n    Task<string> GetClientId(string groupId) => Task.FromResult($\"{groupId}_client_{i++}\");\r\n}\r\n```\r\nMe personally will use some state store like redis to determine the clientId for the related group. Because I have a distributed environment, and have many instances accros the kubernetes clusters for the same service."
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2023-03-26T13:24:43Z",
+        "body": "Hello,\r\n\r\nI did a test.\r\n\r\nThe `client.id` is not specified and set `ConsumerThreadCount = 3` and set 3 partitions for the test topic, the 3 consumer threads will automatically correspond to the 3 partitions, and the messages will be in concurrent consumption by 3 consumer threads within 3 partitions.\r\n\r\n\r\n```cs\r\n[CapSubscribe(\"sample.kafka.postgrsql\")]\r\npublic void Test2(DateTime value, [FromCap] CapHeader header)\r\n{\r\n    var offset = header[\"my.kafka.offset\"];\r\n    var partition = header[\"my.kafka.partition\"];\r\n    var consumerId = header[\"ConsumerId\"][^2..];\r\n    Console.ForegroundColor = ConsoleColor.Red;\r\n    Console.WriteLine(\"Subscriber output message: \" + value);\r\n    Console.WriteLine(\"ConsumerId: \" + consumerId + \", Offset: \" + offset + \", Partition: \" + partition);\r\n}\r\n```\r\n> header[\"ConsumerId\"]  generated when the `KafkaConsumerClient` created and add to the header when received message.\r\n\r\nThe consumer output:\r\n```\r\nSubscriber output message: 2023/3/26 21:07:20\r\nConsumerId: 92, Offset: 28, Partition: [1]\r\nSubscriber output message: 2023/3/26 21:07:20\r\nConsumerId: 92, Offset: 29, Partition: [1]\r\nSubscriber output message: 2023/3/26 21:07:37\r\nConsumerId: 91, Offset: 22, Partition: [0]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 91, Offset: 23, Partition: [0]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 90, Offset: 14, Partition: [2]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 92, Offset: 30, Partition: [1]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 92, Offset: 31, Partition: [1]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 92, Offset: 32, Partition: [1]\r\nSubscriber output message: 2023/3/26 21:07:38\r\nConsumerId: 91, Offset: 24, Partition: [0]\r\nSubscriber output message: 2023/3/26 21:07:39\r\nConsumerId: 90, Offset: 15, Partition: [2]\r\nSubscriber output message: 2023/3/26 21:07:39\r\nConsumerId: 92, Offset: 33, Partition: [1]\r\n```\r\n\r\n\r\nWhen tha app startup and connect to the kafka server, the kafka server will create a new member id for the new consumer , the new consumer (dynamic member) will auto join the group and the server remove the old consumer.\r\n\r\nBelow is the kafka server log when app connect the the server.\r\n\r\n```\r\n2023-03-26 21:06:12 [2023-03-26 13:06:12,156] INFO [GroupCoordinator 1]: Dynamic member with unknown member id joins group cap.queue.sample.kafka.postgresql.v1 in Stable state. Created a new member id rdkafka-cc98ba5e-bd87-4a17-bd22-5f7df8fbbe6b and request the member to rejoin with this id. (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:12 [2023-03-26 13:06:12,161] INFO [GroupCoordinator 1]: Preparing to rebalance group cap.queue.sample.kafka.postgresql.v1 in state PreparingRebalance with old generation 11 (__consumer_offsets-8) (reason: Adding new member rdkafka-cc98ba5e-bd87-4a17-bd22-5f7df8fbbe6b with group instance id None) (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:12 [2023-03-26 13:06:12,204] INFO [GroupCoordinator 1]: Dynamic member with unknown member id joins group cap.queue.sample.kafka.postgresql.v1 in PreparingRebalance state. Created a new member id rdkafka-a8e28383-146d-4a72-8a22-2ed2b3f87120 and request the member to rejoin with this id. (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:12 [2023-03-26 13:06:12,204] INFO [GroupCoordinator 1]: Dynamic member with unknown member id joins group cap.queue.sample.kafka.postgresql.v1 in PreparingRebalance state. Created a new member id rdkafka-b742d5ad-39cf-492c-949d-31172acbe275 and request the member to rejoin with this id. (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:37 [2023-03-26 13:06:37,223] INFO [GroupCoordinator 1]: Member rdkafka-22d4cb6a-592a-417b-b8e6-132346f96937 in group cap.queue.sample.kafka.postgresql.v1 has failed, removing it from the group (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:37 [2023-03-26 13:06:37,304] INFO [GroupCoordinator 1]: Member rdkafka-49cc36c8-51ce-43bb-b6e4-1c973e3ad508 in group cap.queue.sample.kafka.postgresql.v1 has failed, removing it from the group (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:37 [2023-03-26 13:06:37,304] INFO [GroupCoordinator 1]: Member rdkafka-fdaa4e1b-25f2-421e-b1e0-2bc43e780109 in group cap.queue.sample.kafka.postgresql.v1 has failed, removing it from the group (kafka.coordinator.group.GroupCoordinator)\r\n2023-03-26 21:06:37 [2023-03-26 13:06:37,305] INFO [GroupCoordinator 1]: Stabilized group cap.queue.sample.kafka.postgresql.v1 generation 12 (__consumer_offsets-8) with 3 members (kafka.coordinator.group.GroupCoordinator)\r\n```\r\n\r\nThis seems to be exactly what you want, I don't know why you want to specifying the `client.id` ?\r\n"
+      },
+      {
+        "user": "3ldar",
+        "created_at": "2023-03-26T21:40:16Z",
+        "body": "Thanks for all the effort you have done. The first mistake I made is: it should be `consumer.id` not the `client.id`. For the second one; you are right when you did not set a consumer id, the connector assigns a random consumer id and it solves the \"consumer id must be unique among the group members\". I probably misinterpreted the error I had before and started to overthink it.  The last question remains in my mind and not being so sure. When your consumer which has a randomly generated id is restarted an auto-reset offset situation happens because the new id will be different from the previous depending on the setting your consumer will process all the data again. Like I said I am not so sure about it, I might be messing the `group.id` with the `consumer.id`. If I can have some spare time in the morning I will try to simulate the behavior to prove myself wrong \ud83d\ude03 "
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2023-03-28T04:10:49Z",
+        "body": "#1303 as the subsequent for current issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Support unique consumer identifiers for concurrent processing on the same topic",
+      "Enable per-consumer configuration without manual CLI intervention",
+      "Clarify relationship between consumer identity and partition assignment"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:07:29"
+    }
+  },
+  {
+    "number": 262,
+    "title": "Is there an api to compress content data",
+    "created_at": "2018-12-29T07:03:55Z",
+    "closed_at": "2018-12-29T11:17:59Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/262",
+    "body": "Please answer these questions before submitting your issue.\r\n\r\n- Why do you submit this issue?\r\n- [ ] Question or discussion\r\n- [ ] Bug\r\n- [ x] Requirement\r\n- [ ] Feature or performance improvement\r\n\r\n___\r\n### Requirement or improvement\r\n- whether you can consider adding compressed data API in the transmission of big data, ex: gzip\r\n\u80fd\u5426\u52a0\u5165\u6570\u636e\u538b\u7f29\u7684API\uff0c\u6216\u81ea\u5b9a\u4e49Provider\u7684\u5165\u53e3\uff0c\u5982Gzip",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/262/comments",
+    "author": "Shinetaku",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-12-29T07:45:38Z",
+        "body": "Sorry, I can't catch your point."
+      },
+      {
+        "user": "Shinetaku",
+        "created_at": "2018-12-29T08:04:46Z",
+        "body": "\u4f20\u8f93\u8fc7\u7a0b\u4e2d\u7684\u6570\u636e\u8f83\u5927\uff0c\u80fd\u5426\u542f\u7528\u538b\u7f29\u8fdb\u884c\u6570\u636e\u4f20\u8f93\u3002\u6bd4\u5982\u4f7f\u7528gzip\u534f\u8bae\u3002"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-12-29T08:11:18Z",
+        "body": "Sure, you can customize `IContentSerializer` interface at `DotNetCore.CAP.Abstractions` namespace.\r\n\r\nThen, configure like this:\r\n```\r\nservices.AddCap(x => { }).AddContentSerializer<MyContentSerializer>();\r\n```"
+      },
+      {
+        "user": "Shinetaku",
+        "created_at": "2019-01-01T09:23:57Z",
+        "body": "ok.thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Support for data compression during transmission of large payloads",
+      "Extensibility point for custom data processing",
+      "Maintain compatibility with existing CAP abstractions",
+      "Clear documentation/configuration guidance for compression implementation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:07:41"
+    }
+  }
+]

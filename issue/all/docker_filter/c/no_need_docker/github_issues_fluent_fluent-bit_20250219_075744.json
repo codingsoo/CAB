@@ -1,0 +1,163 @@
+[
+  {
+    "number": 802,
+    "title": "filter_parser: wrong timestamp parsing",
+    "created_at": "2018-09-27T12:20:40Z",
+    "closed_at": "2018-09-30T09:17:17Z",
+    "labels": [
+      "bug",
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/802",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nI use fluent-bit for parsing logs from eventrouter which is allocated in Kubernetes cluster v1.8.13. \r\n\r\n**To Reproduce**\r\n- Input logs looks like this\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"UPDATED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/maintenance/events/fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"uid\\\":\\\"c0814efc-c0c1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"34652239\\\",\\\"creationTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"fluent-bit-nrkd5\\\",\\\"uid\\\":\\\"7485af76-c0ba-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"34626284\\\",\\\"fieldPath\\\":\\\"spec.containers{fluent-bit}\\\"},\\\"reason\\\":\\\"BackOff\\\",\\\"message\\\":\\\"Back-off restarting failed container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-1\\\"},\\\"firstTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-25T14:01:42Z\\\",\\\"count\\\":108,\\\"type\\\":\\\"Warning\\\"},\\\"old_event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/maintenance/events/fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"uid\\\":\\\"c0814efc-c0c1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"34649881\\\",\\\"creationTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"fluent-bit-nrkd5\\\",\\\"uid\\\":\\\"7485af76-c0ba-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"34626284\\\",\\\"fieldPath\\\":\\\"spec.containers{fluent-bit}\\\"},\\\"reason\\\":\\\"BackOff\\\",\\\"message\\\":\\\"Back-off restarting failed container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-1\\\"},\\\"firstTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-25T13:50:09Z\\\",\\\"count\\\":98,\\\"type\\\":\\\"Warning\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-25T14:01:42.888266344Z\"}\r\n```\r\n- Fluent bit config\r\n```\r\n[SERVICE]\r\n    Flush             1\r\n    Log_Level         info\r\n    Daemon            off\r\n    Parsers_File      parsers.conf\r\n\r\n[INPUT]\r\n    Name              exec \r\n    Tag               dummy.*\r\n    Command           cat /fluent-bit/etc/test.log\r\n    Interval_Sec      5\r\n    Parser            json_with_decoder\r\n\r\n[FILTER]\r\n    Name              parser\r\n    Match             dummy.*\r\n    Key_name          log\r\n    Parser            simple_json_with_time\r\n\r\n[FILTER]\r\n    Name              stdout\r\n    Match             *\r\n\r\n[OUTPUT]\r\n    Name              null\r\n    Match             *\r\n\r\n```\r\nParsers\r\n```\r\n[PARSER]\r\n    Name              simple_json_with_time\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S %z\r\n    Decode_Field_As   json       log\r\n[PARSER]\r\n    Name              json_with_decoder\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S %z\r\n    Time_Keep         On\r\n    Decode_Field_As   escaped    log              \r\n```\r\n- Output\r\n```\r\n[0] dummy.*: [1475.705376256, {\"verb\"=>\"UPDATED\", \"event\"=>{\"metadata\"=>{\"name\"=>\"fluent-bit-mw775.15576d223f61d4fc\", \"namespace\"=>\"maintenance\", \"selfLink\"=>\"/api/v1/namespaces/maintenance/events/fluent-bit-mw775.15576d223f61d4fc\", \"uid\"=>\"c189410a-c0c1-11e8-836d-000d3a0c1b95\", \"resourceVersion\"=>\"34652236\", \"creationTimestamp\"=>\"2018-09-25T12:51:44Z\"}, \"involvedObject\"=>{\"kind\"=>\"Pod\", \"namespace\"=>\"maintenance\", \"name\"=>\"fluent-bit-mw775\", \"uid\"=>\"07927047-6f03-11e8-98ad-000d3a0c13e0\", \"apiVersion\"=>\"v1\", \"resourceVersion\"=>\"34453649\"}, \"reason\"=>\"FailedSync\", \"message\"=>\"Error syncing pod\", \"source\"=>{\"component\"=>\"kubelet\", \"host\"=>\"k8s-agentpool-18576138-11\"}, \"firstTimestamp\"=>\"2018-09-24T19:36:31Z\", \"lastTimestamp\"=>\"2018-09-25T14:01:41Z\", \"count\"=>93, \"type\"=>\"Warning\"}, \"old_event\"=>{\"metadata\"=>{\"name\"=>\"fluent-[2018/09/25 18:17:14] [ warn] [parser:json_with_decoder] Invalid time format %Y-%m-%dT%H:%M:%S %z for '2018-09-25T14:01:42.888266344Z'.\r\n```\r\n**Expected behavior**\r\nTrue time parsing\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: fluent/fluent-bit:0.14.3\r\n* Docker version: 18.06.1-ce\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/802/comments",
+    "author": "bat9r",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-27T20:14:50Z",
+        "body": "when running the test case I get the following warning:\r\n\r\n```\r\n[2018/09/27 22:09:25] [ warn] [parser:json_with_decoder] Invalid time format %Y-%m-%dT%H:%M:%SZ for '2018-09-25T14:01:42.888266344Z'.\r\n```\r\n\r\nso the time format is not the proper one for the data, I fixed the problem using the following minor change (.%LZ):\r\n\r\n```\r\n[PARSER]\r\n    Name              json_with_decoder\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S.%LZ\r\n    Time_Keep         On\r\n    Decode_Field_As   escaped    log \r\n```"
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-09-28T07:50:10Z",
+        "body": "@edsiper Thank you a lot for your answer\r\nThis config is working, but nearby in 50% cases and this is really weird..\r\nExample:\r\n- Working recognition time, but working log parsing\r\n\r\nInput ->\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"ADDED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\\\",\\\"namespace\\\":\\\"qa\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\\\",\\\"uid\\\":\\\"2a879e36-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"35418299\\\",\\\"creationTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"qa\\\",\\\"name\\\":\\\"testdctv180927155952-jessica-watcher-1538120160-blvlz\\\",\\\"uid\\\":\\\"29926a8a-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"35418287\\\",\\\"fieldPath\\\":\\\"spec.containers{jessica-watcher}\\\"},\\\"reason\\\":\\\"Pulled\\\",\\\"message\\\":\\\"Successfully pulled image \\\\\\\"docker.granduke.net/jessica_for_test:1.1.124\\\\\\\"\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-14\\\"},\\\"firstTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\",\\\"count\\\":1,\\\"type\\\":\\\"Normal\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-28T07:36:09.137808957Z\"}\r\n```\r\nOutput ->\r\n```\r\n[0] event.var.log.containers.eventrouter-68bb595fd7-cght4_maintenance_kube-eventrouter-223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e.log: [1538120169.137808957, {\"log\"=&gt;\"{\"verb\":\"ADDED\",\"event\":{\"metadata\":{\"name\":\"testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\",\"namespace\":\"qa\",\"selfLink\":\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\",\"uid\":\"2a879e36-c2f1-11e8-b37c-000d3a0c13e0\",\"resourceVersion\":\"35418299\",\"creationTimestamp\":\"2018-09-28T07:36:09Z\"},\"involvedObject\":{\"kind\":\"Pod\",\"namespace\":\"qa\",\"name\":\"testdctv180927155952-jessica-watcher-1538120160-blvlz\",\"uid\":\"29926a8a-c2f1-11e8-b37c-000d3a0c13e0\",\"apiVersion\":\"v1\",\"resourceVersion\":\"35418287\",\"fieldPath\":\"spec.containers{jessica-watcher}\"},\"reason\":\"Pulled\",\"message\":\"Successfully pulled image \"docker.granduke.net/jessica_for_test:1.1.124\"\",\"source\":{\"component\":\"kubelet\",\"host\":\"k8s-agentpool-18576138-14\"},\"firstTimestamp\":\"2018-09-28T07:36:09Z\",\"lastTimestamp\":\"2018-09-28T07:36:09Z\",\"count\":1,\"type\":\"Normal\"}}\r\n\", \"stream\"=&gt;\"stdout\", \"time\"=&gt;\"2018-09-28T07:36:09.137808957Z\", \"kubernetes\"=&gt;{\"pod_name\"=&gt;\"eventrouter-68bb595fd7-cght4\", \"namespace_name\"=&gt;\"maintenance\", \"pod_id\"=&gt;\"b182c307-c02e-11e8-b37c-000d3a0c13e0\", \"labels\"=&gt;{\"app\"=&gt;\"eventrouter\", \"pod-template-hash\"=&gt;\"2466151983\", \"tier\"=&gt;\"control-plane-addons\"}, \"annotations\"=&gt;{\"kubernetes.io/created-by\"=&gt;\"{\\\"kind\\\":\\\"SerializedReference\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"reference\\\":{\\\"kind\\\":\\\"ReplicaSet\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"eventrouter-68bb595fd7\\\",\\\"uid\\\":\\\"2a08e70d-bb7f-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"extensions\\\",\\\"resourceVersion\\\":\\\"34156076\\\"}}\\n\"}, \"host\"=&gt;\"k8s-agentpool-18576138-1\", \"container_name\"=&gt;\"kube-eventrouter\", \"docker_id\"=&gt;\"223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e\"}}]\r\n```\r\n-  Working recognition time, but working log parsing\r\n\r\nInput ->\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"ADDED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\\\",\\\"namespace\\\":\\\"qa\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\\\",\\\"uid\\\":\\\"2b16d0c3-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"35418309\\\",\\\"creationTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"qa\\\",\\\"name\\\":\\\"testdctv180927155952-jessica-feeder-1538120160-vmczk\\\",\\\"uid\\\":\\\"29893adc-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"35418280\\\",\\\"fieldPath\\\":\\\"spec.containers{jessica-feeder}\\\"},\\\"reason\\\":\\\"Created\\\",\\\"message\\\":\\\"Created container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-0\\\"},\\\"firstTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\",\\\"count\\\":1,\\\"type\\\":\\\"Normal\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-28T07:36:10.082098405Z\"}\r\n```\r\nOutput ->\r\n```\r\n[0] event.var.log.containers.eventrouter-68bb595fd7-cght4_maintenance_kube-eventrouter-223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e.log: [0.3565362256, {\"verb\"=&gt;\"ADDED\", \"event\"=&gt;{\"metadata\"=&gt;{\"name\"=&gt;\"testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\", \"namespace\"=&gt;\"qa\", \"selfLink\"=&gt;\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\", \"uid\"=&gt;\"2b16d0c3-c2f1-11e8-b37c-000d3a0c13e0\", \"resourceVersion\"=&gt;\"35418309\", \"creationTimestamp\"=&gt;\"2018-09-28T07:36:10Z\"}, \"involvedObject\"=&gt;{\"kind\"=&gt;\"Pod\", \"namespace\"=&gt;\"qa\", \"name\"=&gt;\"testdctv180927155952-jessica-feeder-1538120160-vmczk\", \"uid\"=&gt;\"29893adc-c2f1-11e8-b37c-000d3a0c13e0\", \"apiVersion\"=&gt;\"v1\", \"resourceVersion\"=&gt;\"35418280\", \"fieldPath\"=&gt;\"spec.containers{jessica-feeder}\"}, \"reason\"=&gt;\"Created\", \"message\"=&gt;\"Created container\", \"source\"=&gt;{\"component\"=&gt;\"kubelet\", \"host\"=&gt;\"k8s-agentpool-18576138-0\"}, \"firstTimestamp\"=&gt;\"2018-09-28T07:36:10Z\", \"lastTimestamp\"=&gt;\"2018-09-28T07:36:10Z\", \"count\"=&gt;1, \"type\"=&gt;\"Normal\"}}]\r\n```"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-28T08:36:21Z",
+        "body": "thanks, there was a problem in filter_parser, the unitialized timestamp value might generate issues if the time parser fails, fixed by e7332512"
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-09-28T10:19:00Z",
+        "body": "Thanks for your fast reply.\r\nWhen I will have free time, I will try to build and start it in Kubernetes, integrate with elasticsearch/kibana and write post here how it works."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-30T09:17:17Z",
+        "body": "thanks. Closing this issue for now."
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-10-03T13:49:12Z",
+        "body": "@edsiper All is works, thank you very much :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Correct handling of timestamp formats with fractional seconds and 'Z' timezone indicator",
+      "Consistent time parsing without silent failures when processing nested JSON structures",
+      "Preservation of original log data when time parsing fails"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-04 23:49:31"
+    }
+  },
+  {
+    "number": 714,
+    "title": "Warning for TimeFormat even though it is correct",
+    "created_at": "2018-08-16T09:55:55Z",
+    "closed_at": "2018-08-24T12:02:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/714",
+    "body": "the log for fluent-bit is full of warning about invalid time format , but checking the date received and format it seems it is correct .\r\n\r\nI could not tell why it is doing so \r\n\r\n```\r\n    [PARSER]\r\n        Name        springboot\r\n        Format      regex\r\n        Regex       /^(?<date>[0-9]+-[0-9]+-[0-9]+\\s+[0-9]+:[0-9]+:[0-9]+.[0-9]+)\\s+\\[(?<user_name>.*)\\]\\s+(?<log_level>[Aa]lert|ALERT|[Tt]race|TRACE|[Dd]ebug|DEBUG|[Nn]otice|NOTICE|[Ii]nfo|INFO|[Ww]arn?(?:ing)?|WARN?(?:ING)?|[Ee]rr?(?:or)?|ERR?(?:OR)?|[Cc]rit?(?:ical)?|CRIT?(?:ICAL)?|[Ff]atal|FATAL|[Ss]evere|SEVERE|EMERG(?:ENCY)?|[Ee]merg(?:ency)?)\\s+(?<pid>[0-9]+)\\s+---\\s+\\[(?<thread>.*)\\]\\s+(?<class_name>.*)\\s+:\\s+(?<message>.*)$/\r\n        Time_Key    date\r\n        Time_Format %Y-%m-%d %H:%M:%S.$L\r\n```\r\n\r\n```\r\n[2018/08/11 15:02:30] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:30.975'.\r\n[2018/08/11 15:02:33] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:33.367'.\r\n[2018/08/11 15:02:34] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:34.535'.\r\n[2018/08/11 15:02:36] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:36.598'.\r\n[2018/08/11 15:02:37] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:37.900'.\r\n[2018/08/11 15:02:39] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:39.347'.\r\n[2018/08/11 15:02:41] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:41.120'.\r\n[2018/08/11 15:02:42] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:42.420'.\r\n[2018/08/11 15:02:42] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:42.617'.\r\n[2018/08/11 15:02:45] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:45.014'.\r\n[2018/08/11 15:02:46] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:46.981'.\r\n[2018/08/11 15:02:47] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:47.722'.\r\n```",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/714/comments",
+    "author": "shahbour",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-08-17T01:53:58Z",
+        "body": "would you please supply a full example of a log line for the case in question ?"
+      },
+      {
+        "user": "shahbour",
+        "created_at": "2018-08-17T07:04:51Z",
+        "body": "Here is a sample of my logs\r\n\r\n```\r\n2018-08-17 06:44:58.865 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:45:21.298 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:46:59.576 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:47:21.699 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:49:00.256 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:49:22.049 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:51:00.932 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:51:23.370 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:53:01.693 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:53:24.678 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n```\r\n\r\nthis is the output of fluentbit\r\n\r\n```\r\n[2018/08/17 06:49:01] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n[2018/08/17 06:49:01] [debug] [dyntag tail.0] 0x7fd0c26ac360 destroy (tag=kube.var.log.containers.email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log, bytes=967)\r\n[2018/08/17 06:49:22] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n[2018/08/17 06:49:22] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-17 06:49:22.049'.\r\n[2018/08/17 06:49:22] [debug] [input tail.0] [mem buf] size = 967\r\n[2018/08/17 06:49:22] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log read=232 lines=1\r\n[2018/08/17 06:49:22] [debug] [task] created task=0x7fd0c265b540 id=0 OK\r\n[2018/08/17 06:49:23] [debug] [out_es] HTTP Status=200\r\n[2018/08/17 06:49:23] [debug] [out_es Elasticsearch response\r\n{\"took\":9,\"errors\":false,\"items\":[{\"index\":{\"_index\":\"logstash-2018.08.17\",\"_type\":\"flb_type\",\"_id\":\"UJilRmUB3KhquhqBTbU6\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":736,\"_primary_term\":1,\"status\":201}}]}\r\n[2018/08/17 06:49:23] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n[2018/08/17 06:49:23] [debug] [dyntag tail.0] 0x7fd0c26ac360 destroy (tag=kube.var.log.containers.email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log, bytes=967)\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n[2018/08/17 06:51:00] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-17 06:51:00.932'.\r\n[2018/08/17 06:51:00] [debug] [input tail.0] [mem buf] size = 967\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log read=232 lines=1\r\n[2018/08/17 06:51:00] [debug] [task] created task=0x7fd0c265b540 id=0 OK\r\n[2018/08/17 06:51:01] [debug] [out_es] HTTP Status=200\r\n[2018/08/17 06:51:01] [debug] [out_es Elasticsearch response\r\n{\"took\":6,\"errors\":false,\"items\":[{\"index\":{\"_index\":\"logstash-2018.08.17\",\"_type\":\"flb_type\",\"_id\":\"0ZimRmUB3KhquhqBzLcL\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":801,\"_primary_term\":1,\"status\":201}}]}\r\n[2018/08/17 06:51:01] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n```\r\n\r\nAs you can see it did complain about `2018-08-17 06:51:00.932` while the other did work, as if it is randomly or on something that I can't catch, it is possible to make fluent-bit log all the message when it is complaining about parsing time instead of just the datetime part\r\n\r\nThe only thing i notice is that it directly come after \r\n```\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n```\r\n\r\nChecking Kibana and ES I see the message above already in database and I am able to view it "
+      },
+      {
+        "user": "nokute78",
+        "created_at": "2018-08-20T11:29:04Z",
+        "body": "Would you try this?\r\n$L -> %L\r\n\r\n```diff\r\n--- old.conf\t2018-08-20 20:27:39.328020968 +0900\r\n+++ new.conf\t2018-08-20 20:27:34.599518399 +0900\r\n@@ -3,4 +3,4 @@\r\n         Format      regex\r\n         Regex       /^(?<date>[0-9]+-[0-9]+-[0-9]+\\s+[0-9]+:[0-9]+:[0-9]+.[0-9]+)\\s+\\[(?<user_name>.*)\\]\\s+(?<log_level>[Aa]lert|ALERT|[Tt]race|TRACE|[Dd]ebug|DEBUG|[Nn]otice|NOTICE|[Ii]nfo|INFO|[Ww]arn?(?:ing)?|WARN?(?:ING)?|[Ee]rr?(?:or)?|ERR?(?:OR)?|[Cc]rit?(?:ical)?|CRIT?(?:ICAL)?|[Ff]atal|FATAL|[Ss]evere|SEVERE|EMERG(?:ENCY)?|[Ee]merg(?:ency)?)\\s+(?<pid>[0-9]+)\\s+---\\s+\\[(?<thread>.*)\\]\\s+(?<class_name>.*)\\s+:\\s+(?<message>.*)$/\r\n         Time_Key    date\r\n-        Time_Format %Y-%m-%d %H:%M:%S.$L\r\n+        Time_Format %Y-%m-%d %H:%M:%S.%L\r\n\r\n```"
+      },
+      {
+        "user": "ProFfeSsoRr",
+        "created_at": "2018-08-20T13:50:11Z",
+        "body": "Same problem for crio parser:\r\nTime_Format %Y-%m-%dT%H:%M:%S.%N%:z in config.\r\nTrying \"date +%Y-%m-%dT%H:%M:%S.%N%:z\" in my shell and see time as is in my logs."
+      },
+      {
+        "user": "shahbour",
+        "created_at": "2018-08-24T12:02:51Z",
+        "body": "Ok, I just changed the configuration to %, I don't recall from where I got the $.\r\n\r\nWill give it some time before confirming if it worked \n\n---\n\nSeems it is working perfectly now, Sorry for that mistake but I don't know from where I did this copy paste."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the time format specification appears correct but fails validation",
+      "Clarification of Fluent Bit's time format syntax requirements",
+      "Resolution of fractional second parsing in timestamps"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-04 23:49:44"
+    }
+  },
+  {
+    "number": 572,
+    "title": "Nanoseconds missing when using forward input",
+    "created_at": "2018-04-24T19:41:21Z",
+    "closed_at": "2018-04-24T21:10:46Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/572",
+    "body": "Hello,\r\n\r\nI have been struggling with a curious situation where Docker container logs miss the nanosecond piece of timestamp when using `in_forward`. \r\n\r\n#### Failling scenario\r\n\r\n##### fluent-bit.conf:\r\n```\r\n[SERVICE]\r\n    Flush 1\r\n    Daemon Off\r\n    Log_Level info\r\n\r\n[INPUT]\r\n    Name forward\r\n    Host 0.0.0.0\r\n    Port 24224\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nWhen running a Docker image with this setup, the nanosecond precision is converted to 0s:\r\n```\r\n[0] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"frame=51\"}]\r\n[1] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"fps=0.0\"}]\r\n[2] e667dc543a03: [1524598344.000000000, {\"log\"=>\"stream_0_0_q=0.0\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\"}]\r\n[3] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"bitrate=   0.2kbits/s\"}]\r\n[4] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"total_size=48\"}]\r\n[5] e667dc543a03: [1524598344.000000000, {\"log\"=>\"out_time_ms=1920000\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\"}]\r\n[6] e667dc543a03: [1524598344.000000000, {\"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"out_time=00:00:01.920000\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\"}]\r\n```\r\n\r\nDuring several tests, I've noticed that if I change `in_forward` to `in_tail` and point the path to the actual container log (i.e. without using `--log-driver fluentd` option) the precision is there:\r\n\r\n#### Working scenario\r\n\r\n##### fluent-bit.conf:\r\n```\r\n[SERVICE]\r\n    Flush 1\r\n    Daemon Off\r\n    Log_Level info\r\n\r\n[INPUT]\r\n    Name tail\r\n    Path /var/lib/docker/containers/<DOCKER_CONTAINER_ID>/*.log\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nWith this config, nanosecond precision is printed as expected:\r\n\r\n```\r\n[0] tail.0: [1524598700.422911026, {\"log\"=>\"{\"log\":\"[mp4 @ 0x7f102d2730a0] Using AVStream.codec to pass codec parameters to muxers is deprecated, use AVStream.codecpar instead.\\n\",\"stream\":\"stderr\",\"time\":\"2018-04-24T19:37:47.267283855Z\"}\"}]\r\n[1] tail.0: [1524598700.422927803, {\"log\"=>\"{\"log\":\"frame=51\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795611724Z\"}\"}]\r\n[2] tail.0: [1524598700.422929512, {\"log\"=>\"{\"log\":\"fps=0.0\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795682825Z\"}\"}]\r\n[3] tail.0: [1524598700.422930957, {\"log\"=>\"{\"log\":\"stream_0_0_q=0.0\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795689101Z\"}\"}]\r\n[4] tail.0: [1524598700.422932435, {\"log\"=>\"{\"log\":\"bitrate=   0.2kbits/s\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795694113Z\"}\"}]\r\n[5] tail.0: [1524598700.422933923, {\"log\"=>\"{\"log\":\"total_size=48\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795698881Z\"}\"}]\r\n[6] tail.0: [1524598700.422935424, {\"log\"=>\"{\"log\":\"out_time_ms=1920000\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795703697Z\"}\"}]\r\n[7] tail.0: [1524598700.422936884, {\"log\"=>\"{\"log\":\"out_time=00:00:01.920000\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795708405Z\"}\"}]\r\n```\r\n\r\nIs there anything I'm missing? I am currently running fluent-bit v0.12.18 in a Docker container.\r\n\r\nThanks in advance!",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/572/comments",
+    "author": "gmsecrieru",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T20:13:59Z",
+        "body": "Hi @gmsecrieru \r\n\r\nNote that this missing subsecond resolution happens because the Fluentd driver in Docker engine is not including it by default, I've found that it needs to be enabled manually:\r\n\r\n```\r\n$ docker run -ti --log-driver=fluentd --log-opt fluentd-sub-second-precision=true busybox echo \"go subsecond!\"\r\n```\r\n\r\nnote that enabling this mode will be only compatible with Fluent Bit >= 0.12 and Fluentd >= 0.14."
+      },
+      {
+        "user": "gmsecrieru",
+        "created_at": "2018-04-24T20:26:25Z",
+        "body": "Hi @edsiper \r\n\r\nThanks a lot for your help! I've tried using `--log-opt fluentd-sub-second-precision=true` but I'm getting the following:\r\n\r\n```\r\n$ docker run -d --log-driver=fluentd --log-opt fluentd-sub-second-precision=true [...]\r\ndocker: Error response from daemon: unknown log opt 'fluentd-sub-second-precision' for fluentd log driver.\r\n```\r\n\r\nDocker version:\r\n```\r\n$ docker --version\r\nDocker version 17.09.1-ce, build 19e2cf6\r\n```\r\n\r\nThanks again!"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T21:10:45Z",
+        "body": "I am using this version:\r\n\r\n```\r\n$ docker --version\r\nDocker version 18.02.0-ce, build fc4de44\r\n```\n\n---\n\nFixed."
+      },
+      {
+        "user": "gmsecrieru",
+        "created_at": "2018-04-24T21:34:42Z",
+        "body": "Thanks @edsiper -- it took me a little extra time to set up my environment but I can confirm that it works with `fluentd-sub-second-precision` flag:\r\n\r\n```\r\n[0] 9ca4e8318660: [1524605606.067591287, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stderr\", \"log\"=>\"[mp4 @ 0x5641e8bc7560] Using AVStream.codec to pass codec parameters to muxers is deprecated, use AVStream.codecpar instead.\"}]\r\n[1] 9ca4e8318660: [1524605606.580875228, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"frame=49\"}]\r\n[2] 9ca4e8318660: [1524605606.581055754, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"fps=0.0\"}]\r\n[3] 9ca4e8318660: [1524605606.581137428, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"stream_0_0_q=29.0\"}]\r\n[4] 9ca4e8318660: [1524605606.581189472, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"bitrate= 205.1kbits/s\"}]\r\n```\r\n\r\nThanks again!"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T21:45:00Z",
+        "body": "you are welcome!"
+      },
+      {
+        "user": "JulieLily",
+        "created_at": "2020-09-16T08:16:17Z",
+        "body": "How to use it in kubernetes? The accuracy of the output timestamp is microseconds."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to preserve nanosecond precision when using Docker's fluentd log driver",
+      "Clarification about Docker log driver requirements for sub-second precision",
+      "Compatibility guidance between Docker versions and Fluent Bit",
+      "Explanation of differences between in_forward and in_tail timestamp handling"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-04 23:49:53"
+    }
+  }
+]

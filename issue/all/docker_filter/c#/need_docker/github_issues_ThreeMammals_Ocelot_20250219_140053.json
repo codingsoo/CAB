@@ -1,0 +1,52 @@
+[
+  {
+    "number": 214,
+    "title": "Problem when routing calls to an API that has no response body.",
+    "created_at": "2018-02-01T14:04:29Z",
+    "closed_at": "2018-02-05T19:16:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/214",
+    "body": "Hi\r\nI try to forward calls to a method in an  Web API method that has a \"void\" return type. What happens is that Ocelot hangs indefinitely. It seems to occur for any verb. Calling the method directly works fine and responds with HTTP/200.\r\n\r\nIs this an issue with my hosting or configuration, or could be a another problem.\r\n\r\nMy Ocelot Gateway Implementation runs under IIS, and calling a method returning a response body works fine.\r\n\r\nThanks\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/214/comments",
+    "author": "janhabelvik",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-01T20:36:54Z",
+        "body": "@janhabelvik I have no idea why this is happening :( I will look into it. I assume you have a controller that returns void? It might be something to do with the fact is doesn't have a response body.\n\n---\n\n@janhabelvik also how are you hosting Ocelot? IIS, Kestrel etc?"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T09:50:47Z",
+        "body": "@TomPallister  I'm hosting in IIS, but the issue seems to happen independent of the hosting environment.\r\n\r\nI downloaded the source and did some debugging, the processing seems to hang on ResponderMiddleware.Invoke on the line:  await _responder.SetResponseOnHttpContext(context, HttpResponseMessage);\r\n\r\nThis code seems to get stuck when the content.Length is 0. I guess the copy step can be skipped if it's the case.\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-02T11:07:45Z",
+        "body": "@janhabelvik thanks for looking into this. If you want you can submit a PR with the change?\r\n\r\nOtherwise I will fix it asap! :D"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T11:48:25Z",
+        "body": "This little fix resolved the issue for me:\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified\r\n                    **&& context.Response.ContentLength != 0**)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-05T19:16:24Z",
+        "body": "fixed in 3.0.2"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Handling of API responses with empty content bodies",
+      "Avoidance of stream processing for empty responses",
+      "Cross-environment compatibility",
+      "Clear identification of root cause"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:10:41"
+    }
+  }
+]

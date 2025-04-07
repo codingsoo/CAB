@@ -1,0 +1,227 @@
+[
+  {
+    "number": 7019,
+    "title": "App Crash when ObserveOn Android main thread",
+    "created_at": "2020-06-28T07:54:41Z",
+    "closed_at": "2020-06-28T08:00:53Z",
+    "labels": [
+      "Question",
+      "Android",
+      "3.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/7019",
+    "body": "**Issue** \r\nI try to implement observeOn **AndroidSchedulers.mainThread()** But it always crash \r\nif I remove this line it working fine \r\n\r\n       myObservable = Observable.fromArray(intArray);\r\n       myObservable.subscribeOn(Schedulers.io())\r\n        .observeOn(AndroidSchedulers.mainThread()).\r\n         subscribeWith(getObserver());\r\n\r\n**Error Log** \r\n\r\n        java.lang.BootstrapMethodError: Exception from call site #1 bootstrap method\r\n        at io.reactivex.rxjava3.android.schedulers.AndroidSchedulers.<clinit>(AndroidSchedulers.java:33)\r\n        at io.reactivex.rxjava3.android.schedulers.AndroidSchedulers.mainThread(AndroidSchedulers.java:44)\r\n        at com.example.rxjavasample.SecondActivity.onCreate(SecondActivity.java:38)\r\n\r\n\r\n**Gradle dependencies** \r\n\r\n\r\n    implementation \"io.reactivex.rxjava3:rxjava:3.0.4\"\r\n    implementation 'io.reactivex.rxjava3:rxandroid:3.0.0' ",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/7019/comments",
+    "author": "RanjithTawari",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2020-06-28T08:00:53Z",
+        "body": "You probably have to set your project to Java 8 mode:\r\n\r\n```groovy\r\ncompileOptions {\r\n    sourceCompatibility JavaVersion.VERSION_1_8\r\n    targetCompatibility JavaVersion.VERSION_1_8\r\n}\r\n```"
+      },
+      {
+        "user": "RanjithTawari",
+        "created_at": "2020-06-29T08:34:36Z",
+        "body": "yes its fixed "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause as Java version incompatibility with RxAndroid/RxJava 3",
+      "Ensures Android project configuration meets library requirements",
+      "Provides guidance for runtime environment alignment with reactive libraries"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:17:59"
+    }
+  },
+  {
+    "number": 6008,
+    "title": "2.x: Single, toObservable and share: sometimes NoSuchElementException",
+    "created_at": "2018-05-16T09:38:23Z",
+    "closed_at": "2018-05-17T02:15:26Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/6008",
+    "body": "Hello. I periodically have a NoSuchElementException. Version 2.1.12.\r\n\r\nCode:\r\n```\r\nSingle<String> single = Single.just(\"12345\")\r\n              .toObservable()\r\n              .share()\r\n              .singleOrError();\r\n      \r\n      for (int i = 0; i < 10; i++) {\r\n         new Thread(() -> {\r\n            single.subscribe((t) -> {\r\n            }, thrw -> {\r\n               if (NoSuchElementException.class.equals(thrw.getClass())) {\r\n                  printStackTrace();\r\n                  return;\r\n               }\r\n            });\r\n         }).start();\r\n\r\n         if (i % 2 != 0) {\r\n            Thread.sleep(4);\r\n         }\r\n      }\r\n\r\n```\r\nStacktrace:\r\n```\r\nat io.reactivex.internal.observers.ConsumerSingleObserver.onError(ConsumerSingleObserver.java:47)\r\n\tat io.reactivex.internal.operators.observable.ObservableSingleSingle$SingleElementObserver.onComplete(ObservableSingleSingle.java:113)\r\n\tat io.reactivex.internal.operators.observable.ObservableRefCount$ConnectionObserver.onComplete(ObservableRefCount.java:145)\r\n\tat io.reactivex.internal.operators.observable.ObservablePublish$PublishObserver.onComplete(ObservablePublish.java:193)\r\n\tat io.reactivex.internal.observers.DeferredScalarDisposable.complete(DeferredScalarDisposable.java:85)\r\n\tat io.reactivex.internal.operators.single.SingleToObservable$SingleToObservableObserver.onSuccess(SingleToObservable.java:73)\r\n\tat io.reactivex.internal.operators.single.SingleJust.subscribeActual(SingleJust.java:30)\r\n\tat io.reactivex.Single.subscribe(Single.java:3220)\r\n\tat io.reactivex.internal.operators.single.SingleToObservable.subscribeActual(SingleToObservable.java:36)\r\n\tat io.reactivex.Observable.subscribe(Observable.java:12005)\r\n\tat io.reactivex.internal.operators.observable.ObservablePublish.connect(ObservablePublish.java:116)\r\n\tat io.reactivex.internal.operators.observable.ObservableRefCount.subscribeActual(ObservableRefCount.java:68)\r\n\tat io.reactivex.Observable.subscribe(Observable.java:12005)\r\n\tat io.reactivex.internal.operators.observable.ObservableSingleSingle.subscribeActual(ObservableSingleSingle.java:35)\r\n\tat io.reactivex.Single.subscribe(Single.java:3220)\r\n\tat io.reactivex.Single.subscribe(Single.java:3206)\r\n```\r\n\r\nIs this a bug or an incorrect code? For cycle is written to demonstrate the problem.",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/6008/comments",
+    "author": "neyron91",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2018-05-16T10:19:27Z",
+        "body": "This is a plausible outcome when using `share`. The underlying `publish` operator emits items to currently subscribed observers only. With that race in your code, some observers may come after the \"12345\" has been emitted but just before `onComplete` is signalled, thus they encounter an empty sequence. \r\n\r\nUse `replay(1).refCount()` to ensure you don't lose that single item."
+      },
+      {
+        "user": "neyron91",
+        "created_at": "2018-05-17T01:45:51Z",
+        "body": "Thanks, it works!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why NoSuchElementException occurs with share() in concurrent subscriptions",
+      "Identification of race condition between subscription timing and emission completion",
+      "Solution ensuring cached emission for late subscribers",
+      "Guidance on operator selection for shared cold-to-hot observable conversion"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:21:28"
+    }
+  },
+  {
+    "number": 5424,
+    "title": "RxJava1.3.0 stackoverflow at android4.4",
+    "created_at": "2017-06-19T07:23:07Z",
+    "closed_at": "2017-06-19T08:35:55Z",
+    "labels": [
+      "Question",
+      "Android",
+      "1.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5424",
+    "body": "version:1.3.0\r\nos:android4.4\r\nMy app is running is very good at other version of android except for android4.4.\r\nThere is the crash log:\r\n```\r\n\r\njava.lang.IllegalStateException: Fatal Exception thrown on Scheduler.Worker thread.\r\n                                                       at rx.internal.schedulers.ScheduledAction.run(ScheduledAction.java:59)\r\n                                                       at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:422)\r\n                                                       at java.util.concurrent.FutureTask.run(FutureTask.java:237)\r\n                                                       at java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.access$201(ScheduledThreadPoolExecutor.java:152)\r\n                                                       at java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:265)\r\n                                                       at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1112)\r\n                                                       at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:587)\r\n                                                       at java.lang.Thread.run(Thread.java:841)\r\n                                                    Caused by: java.lang.StackOverflowError\r\n                                                       at java.util.concurrent.ConcurrentLinkedQueue.isEmpty(ConcurrentLinkedQueue.java:397)\r\n                                                       at rx.internal.schedulers.CachedThreadScheduler$CachedWorkerPool.get(CachedThreadScheduler.java:90)\r\n                                                       at rx.internal.schedulers.CachedThreadScheduler$EventLoopWorker.<init>(CachedThreadScheduler.java:188)\r\n                                                       at rx.internal.schedulers.CachedThreadScheduler.createWorker(CachedThreadScheduler.java:176)\r\n                                                       at rx.internal.operators.OperatorSubscribeOn.call(OperatorSubscribeOn.java:44)\r\n                                                       at rx.internal.operators.OperatorSubscribeOn.call(OperatorSubscribeOn.java:30)\r\n                                                       at rx.Observable.unsafeSubscribe(Observable.java:10256)\r\n                                                       at rx.internal.operators.OnSubscribeDoOnEach.call(OnSubscribeDoOnEach.java:41)\r\n                                                       at rx.internal.operators.OnSubscribeDoOnEach.call(OnSubscribeDoOnEach.java:30)\r\n                                                       at rx.Observable.unsafeSubscribe(Observable.java:10256)\r\n                                                       at rx.internal.operators.CachedObservable$CacheState.connect(CachedObservable.java:183)\r\n                                                       at rx.internal.operators.CachedObservable$CachedSubscribe.call(CachedObservable.java:248)\r\n                                                       at rx.internal.operators.CachedObservable$CachedSubscribe.call(CachedObservable.java:230)\r\n                                                       at rx.Observable.unsafeSubscribe(Observable.java:10256)\r\n                                                       at rx.internal.operators.OperatorZip$Zip.start(OperatorZip.java:202)\r\n                                                       at rx.internal.operators.OperatorZip$ZipSubscriber.onNext(OperatorZip.java:143)\r\n                                                       at rx.internal.operators.OperatorZip$ZipSubscriber.onNext(OperatorZip.java:109)\r\n                                                       at rx.internal.util.ScalarSynchronousObservable$WeakSingleProducer.request(ScalarSynchronousObservable.java:276)\r\n                                                       at rx.Subscriber.setProducer(Subscriber.java:209)\r\n                                                       at rx.internal.util.ScalarSynchronousObservable$JustOnSubscribe.call(ScalarSynchronousObservable.java:138)\r\n                                                       at rx.internal.util.ScalarSynchronousObservable$JustOnSubscribe.call(ScalarSynchronousObservable.java:129)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:48)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:30)\r\n                                                       at rx.Observable.unsafeSubscribe(Observable.java:10256)\r\n                                                       at rx.internal.operators.OnSubscribeMap.call(OnSubscribeMap.java:48)\r\n                                                       at rx.internal.operators.OnSubscribeMap.call(OnSubscribeMap.java:33)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:48)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:30)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:48)\r\n                                                       at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:30)\r\n                                                       at rx.Observable.unsafeSubscribe(Observable.java:10256)\r\n                                                       at rx.internal.operators.OperatorMerge$MergeSubscriber.onNext(OperatorMerge.java:248)\r\n                                                       at rx.internal.operators.OperatorMerge$MergeSubscriber.onNext(OperatorMerge.java:148)\r\n                                                       at rx.internal.operators.OnSubscribeMap$MapSubscriber.onNext(OnSubscribeMap.java:77)\r\n                                                       at rx.internal.producers.SingleDelayedProducer.emit(SingleDelayedProducer.java:102)\r\n                                                       at rx.internal.producers.SingleDelayedProducer.setValue(SingleDelayedProducer.java:85)\r\n                                                       at rx.internal.operators.OperatorAny$1.onNext(OperatorAny.java:62)\r\n                                                       at rx.internal.operators.NotificationLite.accept(NotificationLite.java:135)\r\n                                                       at rx.internal.operators.CachedObservable$ReplayProducer.replay(CachedObservable.java:403)\r\n                                                   \tat rx.internal.operators.CachedObservable$CacheState.dispatch(CachedObservable.j\r\n\r\n\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5424/comments",
+    "author": "yangwuan55",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2017-06-19T07:28:23Z",
+        "body": "Maybe the default stack size on that platform is low. You can break the stack depth at places by introducing `observeOn` or (somehow) specify the minimum thread stack depth for the application."
+      },
+      {
+        "user": "yangwuan55",
+        "created_at": "2017-06-19T08:35:55Z",
+        "body": "@akarnokd Thank you! I do the observeOn is useful."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of RxJava stack overflow specifically on Android 4.4",
+      "Provides a method to reduce call stack depth in RxJava operations",
+      "Offers compatibility with RxJava 1.x architecture",
+      "Addresses thread scheduling limitations in older Android versions",
+      "Maintains application functionality across Android versions"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:25:25"
+    }
+  },
+  {
+    "number": 4869,
+    "title": "RxJava 1.2.1  retryWhen not working on eclipse\uff0cbut working on Android Studio",
+    "created_at": "2016-11-20T13:17:37Z",
+    "closed_at": "2016-11-26T11:57:31Z",
+    "labels": [
+      "Question",
+      "1.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/4869",
+    "body": "The code is as follows:\r\n\r\n```java\r\nstatic int retryCount = 0;\r\n\tprivate static void test5(){\r\n\t\t\r\n\t\tfinal int maxRetries = 3;\r\n\r\n        Observable.create(new Observable.OnSubscribe<Integer>() {\r\n            @Override\r\n            public void call(Subscriber<? super Integer> subscriber) {\r\n                subscriber.onError(new RuntimeException(\"always fails\"));\r\n            }\r\n        })\r\n        .subscribeOn(Schedulers.immediate())\r\n         .retryWhen(new Func1<Observable<? extends Throwable>, Observable<?>>() {\r\n\r\n                    @Override\r\n                    public Observable<?> call(Observable<? extends Throwable> observable) {\r\n                        return observable.flatMap(new Func1<Throwable, Observable<?>>() {\r\n                            @Override\r\n                            public Observable<?> call(Throwable throwable) {\r\n                                if (++retryCount <= maxRetries) {\r\n                                    // When this Observable calls onNext, the original Observable will be retried (i.e. re-subscribed).\r\n                                    System.out.println(\"get error, it will try after \" + 1000 + \" millisecond, retry count \" + retryCount);\r\n                                    return Observable.timer(1000, TimeUnit.MILLISECONDS);\r\n                                }\r\n                                return Observable.error(throwable);\r\n                            }\r\n                        });\r\n                    }\r\n\r\n\r\n                })\r\n                .subscribe(new Subscriber<Integer>() {\r\n\r\n                    @Override\r\n                    public void onCompleted() {\r\n                        System.out.println(\"onCompleted\");\r\n                    }\r\n\r\n                    @Override\r\n                    public void onNext(Integer value) {\r\n                        System.out.println(\"onSuccess value = \" + value);\r\n                    }\r\n\r\n                    @Override\r\n                    public void onError(Throwable error) {\r\n                        System.out.println(\"onError error = \" + error);\r\n                    }\r\n                });\r\n\t\t\r\n\t}\r\n```\r\n\r\n\r\nThank you\uff01",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/4869/comments",
+    "author": "jdsjlzx",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-20T15:01:33Z",
+        "body": "You mean it doesn't compile? It works for me in Eclipse 4.6.1 and when I add `Thread.sleep(10000)`.\n"
+      },
+      {
+        "user": "jdsjlzx",
+        "created_at": "2016-11-21T01:53:34Z",
+        "body": "it can compile,but the code execution results are different"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-21T07:11:51Z",
+        "body": "What results do you get in each case?"
+      },
+      {
+        "user": "jdsjlzx",
+        "created_at": "2016-11-23T16:52:47Z",
+        "body": "the code execution on eclipse\uff08Only one time\uff09\uff1a\r\nget error, it will try after 1000 millisecond, retry count 1\r\n\r\nthe code execution Android Studio\uff1a\r\nget error, it will try after 1000 millisecond, retry count 1\r\nget error, it will try after 1000 millisecond, retry count 2\r\nget error, it will try after 1000 millisecond, retry count 3\r\nonError error = java.lang.RuntimeException: always fails\r\n\r\nI don't know what reason is this\uff0cwaiting for your reply\uff0cthank you\uff01"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-23T16:58:12Z",
+        "body": "Try this:\r\n\r\n```java\r\n```java\r\nstatic int retryCount = 0;\r\nprivate static void test5() throws Exception {\r\n\r\n    final int maxRetries = 3;\r\n    Observable.create(new Observable.OnSubscribe<Integer>() {\r\n            @Override\r\n            public void call(Subscriber<? super Integer> subscriber) {\r\n                subscriber.onError(new RuntimeException(\"always fails\"));\r\n            }\r\n        })\r\n        .subscribeOn(Schedulers.immediate())\r\n         .retryWhen(new Func1<Observable<? extends Throwable>, Observable<?>>() {\r\n\r\n                    @Override\r\n                    public Observable<?> call(Observable<? extends Throwable> observable) {\r\n                        return observable.flatMap(new Func1<Throwable, Observable<?>>() {\r\n                            @Override\r\n                            public Observable<?> call(Throwable throwable) {\r\n                                if (++retryCount <= maxRetries) {\r\n                                    // When this Observable calls onNext, the original Observable will be retried (i.e. re-subscribed).\r\n                                    System.out.println(\"get error, it will try after \" + 1000 + \" millisecond, retry count \" + retryCount);\r\n                                    return Observable.timer(1000, TimeUnit.MILLISECONDS);\r\n                                }\r\n                                return Observable.error(throwable);\r\n                            }\r\n                        });\r\n                    }\r\n\r\n\r\n                })\r\n        .subscribe(new Subscriber<Integer>() {\r\n\r\n            @Override\r\n            public void onCompleted() {\r\n                System.out.println(\"onCompleted\");\r\n            }\r\n\r\n            @Override\r\n            public void onNext(Integer value) {\r\n                System.out.println(\"onSuccess value = \" + value);\r\n            }\r\n\r\n            @Override\r\n            public void onError(Throwable error) {\r\n                System.out.println(\"onError error = \" + error);\r\n            }\r\n        });\r\n\r\n\t\tThread.sleep(10000);  // <--------------------------------------------- let it wait\r\n\t}\r\n```"
+      },
+      {
+        "user": "jdsjlzx",
+        "created_at": "2016-11-24T14:22:30Z",
+        "body": "Thank you for your plan, it worked\uff01"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-26T11:57:31Z",
+        "body": "Great!"
+      },
+      {
+        "user": "flyfire",
+        "created_at": "2018-03-13T10:02:29Z",
+        "body": "Why does it work?Can somebody explain?"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-03-13T10:05:33Z",
+        "body": "@flyfire You have to have the Java main thread sleep a bit, otherwise it quits before the retry can take effect. Standard RxJava schedulers run on daemon threads that are stopped when all other threads, such as the main thread, end."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the main thread termination affects retryWhen behavior in RxJava",
+      "Clarification of daemon thread behavior in RxJava schedulers",
+      "Guidance on ensuring proper execution context for asynchronous operations",
+      "Environment-agnostic solution principles for RxJava retry mechanisms"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:32:26"
+    }
+  },
+  {
+    "number": 4814,
+    "title": "java.io.InterruptedIOException: thread interrupted ",
+    "created_at": "2016-11-06T14:15:01Z",
+    "closed_at": "2016-11-12T18:09:14Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/4814",
+    "body": "when i use retrofit and rxjava download file with progress.\r\n``` java\r\n11-03 22:52:35.048 18649-18699/better.hello W/System.err: java.io.InterruptedIOException: thread interrupted\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.Timeout.throwIfReached(Timeout.java:145)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.Okio$2.read(Okio.java:137)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.AsyncTimeout$2.read(AsyncTimeout.java:238)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.RealBufferedSource.read(RealBufferedSource.java:45)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okhttp3.internal.http.Http1xStream$FixedLengthSource.read(Http1xStream.java:381)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.RealBufferedSource.read(RealBufferedSource.java:45)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.ForwardingSource.read(ForwardingSource.java:35)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at retrofit2.OkHttpCall$ExceptionCatchingRequestBody$1.read(OkHttpCall.java:279)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at okio.RealBufferedSource$1.read(RealBufferedSource.java:386)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at java.io.InputStream.read(InputStream.java:162)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at better.hello.util.FileUtils.writeFile(FileUtils.java:120)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at better.hello.common.UiHelper$1$1.call(UiHelper.java:29)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at better.hello.common.UiHelper$1$1.call(UiHelper.java:26)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at rx.Observable.unsafeSubscribe(Observable.java:10200)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorMerge$MergeSubscriber.onNext(OperatorMerge.java:248)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorMerge$MergeSubscriber.onNext(OperatorMerge.java:148)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at rx.internal.operators.OnSubscribeMap$MapSubscriber.onNext(OnSubscribeMap.java:77)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorSubscribeOn$1$1.onNext(OperatorSubscribeOn.java:53)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at retrofit2.adapter.rxjava.OperatorMapResponseToBodyOrError$1.onNext(OperatorMapResponseToBodyOrError.java:41)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at retrofit2.adapter.rxjava.OperatorMapResponseToBodyOrError$1.onNext(OperatorMapResponseToBodyOrError.java:38)\r\n11-03 22:52:35.049 18649-18699/better.hello W/System.err:     at retrofit2.adapter.rxjava.RxJavaCallAdapterFactory$RequestArbiter.request(RxJavaCallAdapterFactory.java:173)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorSubscribeOn$1$1$1.request(OperatorSubscribeOn.java:80)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.Subscriber.setProducer(Subscriber.java:211)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OnSubscribeMap$MapSubscriber.setProducer(OnSubscribeMap.java:102)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorSubscribeOn$1$1.setProducer(OperatorSubscribeOn.java:76)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.Subscriber.setProducer(Subscriber.java:205)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at retrofit2.adapter.rxjava.RxJavaCallAdapterFactory$CallOnSubscribe.call(RxJavaCallAdapterFactory.java:152)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at retrofit2.adapter.rxjava.RxJavaCallAdapterFactory$CallOnSubscribe.call(RxJavaCallAdapterFactory.java:138)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:48)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OnSubscribeLift.call(OnSubscribeLift.java:30)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.Observable.unsafeSubscribe(Observable.java:10200)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.operators.OperatorSubscribeOn$1.call(OperatorSubscribeOn.java:94)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.schedulers.CachedThreadScheduler$EventLoopWorker$1.call(CachedThreadScheduler.java:228)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at rx.internal.schedulers.ScheduledAction.run(ScheduledAction.java:55)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:422)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.FutureTask.run(FutureTask.java:237)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.access$201(ScheduledThreadPoolExecutor.java:152)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:265)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1112)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:587)\r\n11-03 22:52:35.050 18649-18699/better.hello W/System.err:     at java.lang.Thread.run(Thread.java:818)\r\n```\r\nthere is my snippet:\r\n``` java\r\nHttpUtil.downFile(mp4_url).subscribeOn(Schedulers.io()).flatMap(new Func1<ResponseBody, Observable<DownloadInfo>>() {\r\n            @Override\r\n            public Observable<DownloadInfo> call(final ResponseBody body) {\r\n                return Observable.create(new Observable.OnSubscribe<DownloadInfo>() {\r\n                    @Override\r\n                    public void call(Subscriber<? super DownloadInfo> subscriber) {\r\n                        FileUtils.writeFile(subscriber, body, fileName);\r\n                    }\r\n                });\r\n            }\r\n        }).unsubscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(new Subscriber<DownloadInfo>() {\r\n            @Override\r\n            public void onCompleted() {\r\n                \r\n            }\r\n\r\n            @Override\r\n            public void onError(Throwable e) {\r\n\r\n            }\r\n\r\n            @Override\r\n            public void onNext(DownloadInfo info) {\r\n\r\n            }\r\n        });\r\n```\r\n``` java\r\npublic static void writeFile(Subscriber<? super DownloadInfo> subscriber, ResponseBody body, String fileName) {\r\n        try {\r\n            File file = getFile(fileName);\r\n            long readSize = 0, length = body.contentLength();\r\n            byte buffer[] = new byte[4096];\r\n            FileOutputStream outputStream = new FileOutputStream(file, true);\r\n            InputStream ins = body.byteStream();\r\n            DownloadInfo info = new DownloadInfo(length);\r\n            while (true) {\r\n                int read = ins.read(buffer);\r\n                if (read <= 0) {\r\n                    subscriber.onCompleted();\r\n                    break;\r\n                }\r\n                outputStream.write(buffer, 0, read);\r\n                readSize += read;\r\n                info.setReadFileSize(readSize);\r\n                info.setProgress(readSize / length);\r\n                subscriber.onNext(info);\r\n                Utils.d(\"Better\", \"\u4e0b\u8f7d\u4e86==\" + readSize + \",total=\" + length);\r\n            }\r\n            if (null != outputStream) {\r\n                outputStream.flush();\r\n                outputStream.close();\r\n            }\r\n            if (null != ins) {\r\n                ins.close();\r\n            }\r\n            if (null!=body){\r\n                body.close();\r\n            }\r\n        } catch (Exception e) {\r\n            e.printStackTrace();\r\n            subscriber.onError(e);\r\n        }\r\n    }\r\n```\r\nif i do not call subscriber.onNext(info) in the while circle  ,everything will be ok ,and the file will be download correctly.The place where the error can occur is subscribe.onNext().I just do not known why.\r\nsomeone can help me ?",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/4814/comments",
+    "author": "471448446",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-07T08:12:58Z",
+        "body": "First, this looks like to be an unreliable network issue that times out. \n\nSecond, you are sending a mutable object downstream from that `onNext` which can lead to all sorts of undefined behavior. You should send a fresh object on every turn:\n\n``` java\n                DownloadInfo info = new DownloadInfo(length);\n                info.setReadFileSize(readSize);\n                info.setProgress(readSize / length);\n                subscriber.onNext(info);\n```\n\nThird, don't use `Observable.create` but use `Observable.fromEmitter`.\n"
+      },
+      {
+        "user": "471448446",
+        "created_at": "2016-11-08T14:45:15Z",
+        "body": "@akarnokd Thanks for your reply,according to your advice it did work.This problem troubled me a few days.3Q.\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-11-12T18:09:14Z",
+        "body": "Great!\n"
+      },
+      {
+        "user": "rafaelcheckapp",
+        "created_at": "2018-12-20T00:26:16Z",
+        "body": "Thanks @akarnokd this has been driving me crazy for days, someone left a .create hidden XD"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why mutable objects emitted via onNext() cause concurrency issues in RxJava",
+      "Guidance on proper Observable creation patterns for file download operations with progress updates",
+      "Patterns for safe progress notification without blocking network I/O threads"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:33:21"
+    }
+  }
+]

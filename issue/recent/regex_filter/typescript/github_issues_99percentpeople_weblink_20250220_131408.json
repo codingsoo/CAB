@@ -1,0 +1,111 @@
+[
+  {
+    "number": 9,
+    "title": "Docker构建失败【ENABLE_SSL=true docker-compose up -d】",
+    "created_at": "2024-11-25T10:56:07Z",
+    "closed_at": "2024-11-25T11:32:17Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/99percentpeople/weblink/issues/9",
+    "body": "镜像构建没问题：\r\nroot@docker02:/docker/weblink-public# ENABLE_SSL=true docker-compose up -d\r\nBuilding weblink\r\n[+] Building 120.1s (20/20) FINISHED                                                                                                                                                                   docker:default\r\n => [internal] load build definition from Dockerfile                                                                                                                                                             0.0s\r\n => => transferring dockerfile: 632B                                                                                                                                                                             0.0s\r\n => [internal] load metadata for docker.io/library/nginx:alpine                                                                                                                                                  1.6s\r\n => [internal] load metadata for docker.io/library/node:20-slim                                                                                                                                                  1.5s\r\n => [internal] load .dockerignore                                                                                                                                                                                0.0s\r\n => => transferring context: 196B                                                                                                                                                                                0.0s\r\n => [internal] load build context                                                                                                                                                                                0.1s\r\n => => transferring context: 1.11MB                                                                                                                                                                              0.0s\r\n => CACHED [stage-3 1/5] FROM docker.io/library/nginx:alpine@sha256:74175cf34632e88c6cfe206897cbfe2d2fecf9bf033c40e7f9775a3689e8adc7                                                                             0.0s\r\n => [base 1/3] FROM docker.io/library/node:20-slim@sha256:a0196893dffad1f1a5723a8c817b45681402be549a8f196bf9c93a5bc30628e3                                                                                       0.0s\r\n => CACHED [base 2/3] WORKDIR /app                                                                                                                                                                               0.0s\r\n => CACHED [base 3/3] RUN npm install -g pnpm                                                                                                                                                                    0.0s\r\n => CACHED [install 1/3] RUN mkdir -p /temp/prod                                                                                                                                                                 0.0s\r\n => [install 2/3] COPY package.json pnpm-lock.yaml /temp/prod/                                                                                                                                                   2.2s\r\n => [install 3/3] RUN cd /temp/prod && pnpm install                                                                                                                                                             34.5s\r\n => [build 1/3] COPY --from=install /temp/prod/node_modules node_modules                                                                                                                                        36.5s \r\n => [build 2/3] COPY . .                                                                                                                                                                                         0.4s \r\n => [build 3/3] RUN pnpm build                                                                                                                                                                                  27.4s \r\n => [stage-3 2/5] COPY --from=build /app/dist /usr/share/nginx/html                                                                                                                                              0.2s \r\n => [stage-3 3/5] COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template                                                                                                                                 0.1s \r\n => [stage-3 4/5] COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh                                                                                                                                         0.6s \r\n => [stage-3 5/5] RUN chmod +x /usr/local/bin/entrypoint.sh                                                                                                                                                      0.7s \r\n => exporting to image                                                                                                                                                                                           1.1s \r\n => => exporting layers                                                                                                                                                                                          1.0s \r\n => => writing image sha256:cba25d8b5a86ab18eccae87e19ca8aad3cb346170543eea8a1772c8b7310d27c                                                                                                                     0.0s\r\n => => naming to docker.io/library/weblink-public_weblink                                                                                                                                                        0.0s\r\nWARNING: Image for service weblink was built because it did not already exist. To rebuild this image you must use `docker-compose build` or `docker-compose up --build`.\r\nCreating weblink-public_ws-server_1 ... done\r\nCreating weblink-public_weblink_1   ... done\r\n**但是docker运行有问题**\r\nroot@docker02:/docker/weblink-public# docker ps -a\r\nCONTAINER ID   IMAGE                      COMMAND              CREATED          STATUS                      PORTS                                       NAMES\r\n76b8f41464de   weblink-public_weblink     \"entrypoint.sh\"      35 seconds ago   Exited (1) 34 seconds ago                                               weblink-public_weblink_1\r\n51c37c9ecff1   weblink-public_ws-server   \"bun run index.js\"   36 seconds ago   Up 35 seconds               0.0.0.0:9000->9000/tcp, :::9000->9000/tcp   weblink-public_ws-server_1\r\n**发现抱错在entrypoint.sh的SSL变量**\r\nroot@docker02:/docker/weblink-public# docker logs 76b8f41464de\r\n2024/11/25 10:49:56 [emerg] 10#10: unexpected \"{\" in /etc/nginx/nginx.conf:43\r\nnginx: [emerg] unexpected \"{\" in /etc/nginx/nginx.conf:43\r\n有尝试修改entrypoint.sh和nginx.conf.template，但是因为checksum的问题无法构建。\r\n尝试了使用http构建配合nginx，但是ws的SSL问题无法访问。\r\n希望作者看一下谢谢\r\n",
+    "comments_url": "https://api.github.com/repos/99percentpeople/weblink/issues/9/comments",
+    "author": "hdu12",
+    "comments": [
+      {
+        "user": "hdu12",
+        "created_at": "2024-11-25T11:11:53Z",
+        "body": "大致检查了一下\r\nif [ \"$ENABLE_SSL\" = \"true\" ]; then\r\n    envsubst '${ENABLE_SSL}' </etc/nginx/nginx.conf.template >/etc/nginx/nginx.conf\r\n这段并没有什么用，在true的时候\r\n{% if $ENABLE_SSL == \"true\" %}和{% endif %}\r\n都没有被删除导致nginx都配置报错\r\n"
+      },
+      {
+        "user": "hdu12",
+        "created_at": "2024-11-25T11:21:06Z",
+        "body": "尝试了手动删除{% if $ENABLE_SSL == \"true\" %}和{% endif %}\r\n目前是起来了"
+      },
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-11-25T11:22:09Z",
+        "body": "感谢你发现问题，我会尝试解决这个问题"
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "功能需求",
+    "created_at": "2024-11-13T06:56:55Z",
+    "closed_at": "2025-01-13T07:52:48Z",
+    "labels": [],
+    "url": "https://github.com/99percentpeople/weblink/issues/8",
+    "body": "想要群组\r\n想要语音聊天\r\n想要群组语音聊天\r\n想要语音聊天的降噪\r\n\r\n感谢您！",
+    "comments_url": "https://api.github.com/repos/99percentpeople/weblink/issues/8/comments",
+    "author": "steadyoak",
+    "comments": [
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-11-13T12:23:25Z",
+        "body": "目前我的主要的方向是把文件传输和连接的稳定性做好，视频聊天我会完善一下"
+      },
+      {
+        "user": "GitHub4LP",
+        "created_at": "2024-12-17T02:30:28Z",
+        "body": "同意，需要仅语音，兄弟们开黑，但是好像连不上，不知道怎么办"
+      },
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-12-17T03:41:05Z",
+        "body": "> 同意，需要仅语音，兄弟们开黑，但是好像连不上，不知道怎么办\n\n如果你在非局域网条件下使用需要配置turn服务器进行中转"
+      },
+      {
+        "user": "kukuxx",
+        "created_at": "2024-12-30T19:39:53Z",
+        "body": "@99percentpeople 群组文字聊天有机会实现吗？感谢"
+      },
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-12-31T04:48:35Z",
+        "body": "> @99percentpeople 群组文字聊天有机会实现吗？感谢\n\n可以实现，群组就是给所有人发消息，后面有机会会实现"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "勾选下次自动进入后无法再找回邀请链接",
+    "created_at": "2024-10-28T01:53:46Z",
+    "closed_at": "2024-11-12T09:17:09Z",
+    "labels": [],
+    "url": "https://github.com/99percentpeople/weblink/issues/4",
+    "body": "RT",
+    "comments_url": "https://api.github.com/repos/99percentpeople/weblink/issues/4/comments",
+    "author": "13653216371",
+    "comments": [
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-10-28T03:53:57Z",
+        "body": "@13653216371 可以提供一些演示吗，具体一点"
+      },
+      {
+        "user": "13653216371",
+        "created_at": "2024-10-28T05:02:46Z",
+        "body": "等了好一会儿，右上角才出现二维码，里面有链接"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "一些改进",
+    "created_at": "2024-10-27T04:45:34Z",
+    "closed_at": "2024-12-04T05:52:37Z",
+    "labels": [],
+    "url": "https://github.com/99percentpeople/weblink/issues/1",
+    "body": "windows端发送图片类文件在消息中可以显示小图（像Android端那样）；Android端设置背景后，设置界面滑动变得异常卡顿",
+    "comments_url": "https://api.github.com/repos/99percentpeople/weblink/issues/1/comments",
+    "author": "ApproLight01",
+    "comments": [
+      {
+        "user": "99percentpeople",
+        "created_at": "2024-10-27T04:48:12Z",
+        "body": "@ApproLight01 这个小图我会研究一下，卡顿是因为标题栏高度变化导致的，你试试PWA安装后应该没有这个问题了"
+      }
+    ]
+  }
+]

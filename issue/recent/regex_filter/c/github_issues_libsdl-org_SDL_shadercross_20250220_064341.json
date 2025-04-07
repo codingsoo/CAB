@@ -1,0 +1,529 @@
+[
+  {
+    "number": 96,
+    "title": "Add PropertiesID field to Metadata structs",
+    "created_at": "2025-01-26T23:55:28Z",
+    "closed_at": "2025-01-27T00:47:05Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/96",
+    "body": "Not much to see here, except one detail: The rest of the metadata struct does not have to be initialized since it's _mostly_ an out struct, but the only way Properties will work here is if that one field is initialized first. The idea is that shadercross would check `props` for known metadata extensions, then fill in the properties found when applicable.\r\n\r\nKind of weird but it does work - if we still don't want to do this we can just call this `WONTFIX`.\r\n\r\nFixes #72",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/96/comments",
+    "author": "flibitijibibo",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-27T00:21:22Z",
+        "body": "Maybe we should note on the out structs that the client has to free the properties if they are not 0. "
+      },
+      {
+        "user": "flibitijibibo",
+        "created_at": "2025-01-27T00:24:21Z",
+        "body": "Tweaked the docs accordingly."
+      }
+    ]
+  },
+  {
+    "number": 94,
+    "title": "MSL index generation incorrect when a texture is unused",
+    "created_at": "2025-01-24T12:30:40Z",
+    "closed_at": "2025-01-24T19:15:39Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/94",
+    "body": "Hi, I'm using an HLSL similar to:\n\n```\nTexture2D tex0 : register(t0, space2);\nTexture2D tex1 : register(t1, space2);\nTexture2D tex2 : register(t2, space2);\nTexture2D tex3 : register(t3, space2);\n```\n\nWhen `tex0` is unused (this header is shared among many shaders, not all of them use all textures) the generated MSL has the following indices:\n\n```\ntex1: 0\ntex2: 2\ntex3: 3\n```\n\ni.e. the first generated index is incorrect, but the rest are fine. The generated SPIRV is also fine, it's just the MSL that has issues.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/94/comments",
+    "author": "Arcnor",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-24T16:32:26Z",
+        "body": "I can look into this but in general having unused resources in shader code is a very bad idea. "
+      },
+      {
+        "user": "Arcnor",
+        "created_at": "2025-01-24T16:35:13Z",
+        "body": "Thanks, and I understand that, but reality is that this is bound to happen from time to time, and breaking the game when it does is probably not the right tradeoff, specially when D3D12/Vulkan already work fine with this."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-24T17:04:01Z",
+        "body": "Can you show us the shader source so I can repro?"
+      },
+      {
+        "user": "Arcnor",
+        "created_at": "2025-01-24T17:15:48Z",
+        "body": "Sure:\n\n```hlsl\nTexture2D tex0 : register(t0, space2);\nTexture2D tex1 : register(t1, space2);\nTexture2D tex2 : register(t2, space2);\nTexture2D tex3 : register(t3, space2);\n\nSamplerState sampler0 : register(s0, space2);\n\nstruct PS_OUT {\n\tfloat4 color : SV_Target0;\n};\n\nPS_OUT ps_main() {\n\tPS_OUT output;\n\toutput.color += tex1.Sample(sampler0, float2(0, 1));\n\toutput.color += tex2.Sample(sampler0, float2(0, 1));\n\toutput.color += tex3.Sample(sampler0, float2(0, 1));\n\treturn output;\n}\n```\n\nOutput is:\n```metal\n#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nconstant float4 _21 = {};\n\nstruct ps_main_out\n{\n    float4 out_var_SV_Target0 [[color(0)]];\n};\n\nfragment ps_main_out ps_main(texture2d<float> tex1 [[texture(0)]], texture2d<float> tex2 [[texture(2)]], texture2d<float> tex3 [[texture(3)]], sampler sampler0 [[sampler(0)]])\n{\n    ps_main_out out = {};\n    out.out_var_SV_Target0 = ((_21 + tex1.sample(sampler0, float2(0.0, 1.0))) + tex2.sample(sampler0, float2(0.0, 1.0))) + tex3.sample(sampler0, float2(0.0, 1.0));\n    return out;\n}\n```"
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-24T19:15:39Z",
+        "body": "I do believe I already told you that you MUST have one sampler per texture. \n\nWhat's happening here is that our MSL binding generator assumes that you follow the spec, so it can make assumptions about \"separate images\" being storage textures:\n\n```c\n        // If source is HLSL, storage images might be marked as separate images\n        result = spvc_resources_get_resource_list_for_type(\n            resources,\n            SPVC_RESOURCE_TYPE_SEPARATE_IMAGE,\n            (const spvc_reflected_resource **)&reflected_resources,\n            &num_separate_images);\n        if (result < 0) {\n            SPVC_ERROR(spvc_resources_get_resource_list_for_type);\n            spvc_context_destroy(context);\n            return NULL;\n        }\n\n        // We only want to iterate the images that don't have an associated sampler\n        for (size_t i = num_separate_samplers; i < num_separate_images; i += 1) {\n```\n\nIf I change your shader to actually be spec-conformant:\n```hlsl\nTexture2D tex0 : register(t0, space2);\nTexture2D tex1 : register(t1, space2);\nTexture2D tex2 : register(t2, space2);\nTexture2D tex3 : register(t3, space2);\n\nSamplerState sampler0 : register(s0, space2);\nSamplerState sampler1 : register(s1, space2);\nSamplerState sampler2 : register(s2, space2);\nSamplerState sampler3 : register(s3, space2);\n\nstruct PS_OUT {\n\tfloat4 color : SV_Target0;\n};\n\nPS_OUT ps_main() {\n\tPS_OUT output;\n\toutput.color += tex1.Sample(sampler1, float2(0, 1));\n\toutput.color += tex2.Sample(sampler2, float2(0, 1));\n\toutput.color += tex3.Sample(sampler3, float2(0, 1));\n\treturn output;\n}\n```\n\nEverything works fine. If you are going to violate the spec with jank shader bindings, expect jank to occur."
+      },
+      {
+        "user": "Arcnor",
+        "created_at": "2025-01-24T19:37:49Z",
+        "body": "I thought you meant assigning one per shader (i.e. never using `tex1` with `sampler0` and `sampler1`), not that it had to have a copy of each sampler per texture. That seems really redundant given I already need to specify the pairs when creating the binding, but I'm sure there are reasons for that.\n\nThanks for looking into it, will probably fork and fix for my usecase, no reason to change hundreds of shaders when it works fine for D3D12 and Vulkan already."
+      }
+    ]
+  },
+  {
+    "number": 92,
+    "title": "Refactor MSL resource index calculation",
+    "created_at": "2025-01-19T20:37:24Z",
+    "closed_at": "2025-01-20T16:43:34Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/92",
+    "body": "Resolves #91 \r\n\r\nWe now calculate the index by calculating how many resources are used per set and then adding the binding index of the resource to its set offset. That's a mouthful!",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/92/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "arkiruthis",
+        "created_at": "2025-01-19T21:32:44Z",
+        "body": "Thanks for the quick PR on this. I've checked it out, built and stepped through and it's closer! But sadly indexing from 1 rather than 0 currently for the shader previously mentioned in the associated issue. i.e., the uniform looks to be starting from 1 rather than 0, otherwise I think it would be working fine. \r\n\r\n```c\r\nkernel void main0(\r\n    constant Push& push [[buffer(1)]], \r\n    const device TerrainTopologyData& terrainData [[buffer(2)]], \r\n    // The rest are fine ...\r\n```\r\n\r\nAlas it's getting late here, but I'll step through again tomorrow and see if I can identify anything, thank you!"
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-19T21:37:53Z",
+        "body": "Thanks for checking, must be off by one somewhere..."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-20T01:11:07Z",
+        "body": "@arkiruthis I think I fixed it for real this time..."
+      },
+      {
+        "user": "arkiruthis",
+        "created_at": "2025-01-20T08:12:38Z",
+        "body": "@thatcosmonaut I had chance to do a quick fetch of your changes and rebuild before heading off this morning and it seems to be working perfectly! I had a quick glance at the generated shader in memory as well just to be sure and it all looks good here. Thank you! "
+      }
+    ]
+  },
+  {
+    "number": 88,
+    "title": "Shader compilation fails with SDL_GPU_SHADERFORMAT_DXBC and shader model 5.1.",
+    "created_at": "2025-01-12T20:03:10Z",
+    "closed_at": "2025-01-12T21:50:09Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/88",
+    "body": "I'm compiling a hlsl shader to DXBC. This is the error message:\r\n\r\nD3D11 ERROR: ID3D11Device::CreatePixelShader: Shader must be ps_4_0, ps_4_1, or ps_5_0. Shader version provided: UNRECOGNIZED [ STATE_CREATION ERROR #193: CREATEPIXELSHADER_INVALIDSHADERTYPE]\r\n\r\nI switched the shader model to 5.0 to fix it.\r\n\r\nThese are the functions where I changed it:\r\nSDL_ShaderCross_INTERNAL_CompileFromSPIRV()\r\nSDL_ShaderCross_INTERNAL_CompileDXBCFromHLSL()",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/88/comments",
+    "author": "guitarfreak",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-12T20:14:03Z",
+        "body": "The SDL GPU API doesn't support D3D11, so I don't really think it's worth the effort to have this library support it. What's your use case?"
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-12T20:16:34Z",
+        "body": "Also to clarify, this isn't shader compilation failing. The compilation clearly succeeds but D3D11 can't accept SM 5.1 bytecode. "
+      },
+      {
+        "user": "guitarfreak",
+        "created_at": "2025-01-12T21:08:10Z",
+        "body": "These are the SDL gpu shader formats:\r\n\r\n```c++\r\n#define SDL_GPU_SHADERFORMAT_INVALID  0\r\n#define SDL_GPU_SHADERFORMAT_PRIVATE  (1u << 0) /**< Shaders for NDA'd platforms. */\r\n#define SDL_GPU_SHADERFORMAT_SPIRV    (1u << 1) /**< SPIR-V shaders for Vulkan. */\r\n#define SDL_GPU_SHADERFORMAT_DXBC     (1u << 2) /**< DXBC SM5_0 shaders for D3D11. */\r\n#define SDL_GPU_SHADERFORMAT_DXIL     (1u << 3) /**< DXIL shaders for D3D12. */\r\n#define SDL_GPU_SHADERFORMAT_MSL      (1u << 4) /**< MSL shaders for Metal. */\r\n#define SDL_GPU_SHADERFORMAT_METALLIB (1u << 5) /**< Precompiled metallib shaders for Metal. */\r\n```\r\n\r\nI was testing the compilation of a simple hlsl shader for SPIRV, DXBC, DXIL and MSL.\r\nWhen you give this library DXBC you eventually call SDL_ShaderCross_INTERNAL_CompileDXBC() which calls SDL_D3DCompile() which is loaded from d3dcompiler_47.dll. And that's where it fails for shader model 5.1.\r\n\r\nDo you really think 5.1 is correct for DXBC?"
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-12T21:31:56Z",
+        "body": "You seem to be working with very outdated source, we removed D3D11 support and bumped DXBC to 5.1 a while ago."
+      },
+      {
+        "user": "guitarfreak",
+        "created_at": "2025-01-12T21:50:09Z",
+        "body": "I see, my bad. To be fair though, in terms of official releases this has only changed since 3.1.8 which came out 5 days ago. :)"
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "Allow preserving original variable names when compiling to MSL",
+    "created_at": "2025-01-06T00:05:18Z",
+    "closed_at": "2025-01-12T02:08:10Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/82",
+    "body": "Currently, when compiling from HLSL to MSL (MacOS), local variable names inside functions get obfuscated by compiler, even if shadercross is invoked `-g` flag. Although, for example, constant buffer member names are not changed in that case.\r\n\r\nFor example this part:\r\n\r\n```\r\nfloat4 lightDirection = normalize(u_lightning.lightPosition - input.WorldPosition.xyz);\r\n```\r\ngets transpiled to:\r\n```\r\nfloat4 _511 = float4(UBO.u_lightning.lightPosition) - in.in_var_TEXCOORD1.xyz;\r\n```\r\n\r\nand when debugging (with XCode Metal Debug tool), it becomes harder to follow the compiled shader flow.\r\n\r\nAlso, maybe it's possible, to disable some compiler optimizations when `-g` or other flag is passed, because currently the resulting shader code is optimized, many computations are inlined and functions dropped out (which is cool in production, but harder for debugging)?",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/82/comments",
+    "author": "MrOnlineCoder",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-12T02:08:10Z",
+        "body": "I looked into this today and unfortunately I don't think it's possible to preserve this information even at the SPIR-V level.  SPIRV-Cross doesn't seem to have any mechanism for this. This is one of the downsides of transpilation. "
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "Disable finding and linking to DXC if `SDLSHADERCROSS_DXC` is set to `OFF`",
+    "created_at": "2025-01-01T21:53:48Z",
+    "closed_at": "2025-01-02T19:47:38Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/79",
+    "body": "This pull request makes it so that if `SDLSHADERCROSS_DXC` is set to `OFF`, SDL_Shadercross does not try to find and link to DXC. This is particularly useful on macOS where DXIL support is not necessary and we would otherwise have to build DXC from source (1000+ targets) to compile SDL_shadercross.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/79/comments",
+    "author": "matthew-mccall",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-01T22:19:58Z",
+        "body": "Looks good to me but I want a review from @madebr first."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "Should we have \"easy\" and \"advanced\" entry points?",
+    "created_at": "2024-12-19T21:47:31Z",
+    "closed_at": "2025-01-21T04:28:26Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/73",
+    "body": "For example, SDL has `SDL_CreateWindow` and `SDL_CreateWindowWithProperties`.\r\n\r\nThe downside is that we'd have to almost double our current API surface. I'm not sure that it's worth it.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/73/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "flibitijibibo",
+        "created_at": "2025-01-20T23:51:33Z",
+        "body": "I'm not sure it's possible in this scenario without the client making really nasty assumptions about the shader format and metadata. The API is easy enough once you learn the 1-2 structs you actually need, so I'd be in favor of skipping this."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2025-01-21T04:28:26Z",
+        "body": "Yeah agreed."
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "Should the Metadata structs have a Properties field?",
+    "created_at": "2024-12-19T21:46:22Z",
+    "closed_at": "2025-01-27T00:47:06Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/72",
+    "body": "It's possible that we might extend ShaderCreateInfo in the future, but if we include properties then the client has to make sure to clean up the table.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/72/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "flibitijibibo",
+        "created_at": "2025-01-14T13:30:20Z",
+        "body": "We ended up making good use of this in SDL, so we may as well extend it to shadercross too."
+      },
+      {
+        "user": "flibitijibibo",
+        "created_at": "2025-01-20T23:50:19Z",
+        "body": "Took a fresh look at the header and noticed that while we have access to properties for compilation, we don't have any for reflection as a result of metadata not having its own PropertiesID, so this is probably our only way to do that anyway."
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "title": "Add NULL checks",
+    "created_at": "2024-11-15T04:37:48Z",
+    "closed_at": "2024-11-16T03:55:30Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/61",
+    "body": "This function can return NULL on error, and right now a null de-reference occurs when this happened.\r\n\r\nAll cases where it returns NULL, it also sets the SDL error string, so I don't do that here.\r\n\r\nAlso fixed a similar case when calling D3DCompile. vkd3d logs to the console on its own, but does not set the error blob.\r\n`vkd3d:60115:fixme:hlsl_compile_shader Unknown compilation target \"vs_5_1\".`",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/61/comments",
+    "author": "Beyley",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-15T17:44:26Z",
+        "body": "Looks great aside from my one comment."
+      }
+    ]
+  },
+  {
+    "number": 60,
+    "title": "Export package target similar to SDL3",
+    "created_at": "2024-11-14T02:19:01Z",
+    "closed_at": "2024-11-17T02:52:29Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/60",
+    "body": "It's nice to be able to find_package without having to install first.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/60/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "madebr",
+        "created_at": "2024-11-17T02:52:29Z",
+        "body": "Fixed in c649beba2a2a43b038da69476f63cc80bd07f87f"
+      }
+    ]
+  },
+  {
+    "number": 54,
+    "title": "MinGW build is missing standard libs",
+    "created_at": "2024-11-08T17:38:26Z",
+    "closed_at": "2024-11-12T00:07:33Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/54",
+    "body": "We should statically link libgcc and libstdc++ in MinGW builds.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/54/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-08T17:49:16Z",
+        "body": "To clarify, it's libspirv-cross-c-shared that's specifically missing the libs."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-08T22:28:34Z",
+        "body": "Slight problem... SPIRV-Cross depends on threads, which means that MinGW builds introduce a dependency on libwinpthreads. This is unfortunate. I'm not sure that we can wiggle out of this."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-11T17:54:16Z",
+        "body": "I think we should probably remove the MinGW build from CI, I don't think there's any point since it has a hard dependency on MinGW libs."
+      },
+      {
+        "user": "madebr",
+        "created_at": "2024-11-11T18:15:49Z",
+        "body": "GitHub actions is imho primarily for ci. Providing binaries is a second goal.\r\n\r\nI think we can fix this by linking with `-static`.\r\nI removed `-static-libgcc` from `CMakeLists.txt` because adding this is a job for the packager."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-11T18:21:36Z",
+        "body": "Fair enough. There is no static implementation of 64-bit MinGW libwinpthread though, and SPIRV-Cross does `#include <thread>`, so anyone using the binaries will have to ship MinGW's libwinpthread."
+      },
+      {
+        "user": "madebr",
+        "created_at": "2024-11-11T22:37:09Z",
+        "body": "Try latest main, it should now install dependent runtime.\r\n\r\n```\r\n-- Installing: D:/a/SDL_gpu_shadercross/SDL_gpu_shadercross/prefix/bin/libspirv-cross-c-shared.dll\r\n-- Installing: D:/a/SDL_gpu_shadercross/SDL_gpu_shadercross/prefix/bin/libgcc_s_seh-1.dll\r\n-- Installing: D:/a/SDL_gpu_shadercross/SDL_gpu_shadercross/prefix/bin/libstdc++-6.dll\r\n-- Installing: D:/a/SDL_gpu_shadercross/SDL_gpu_shadercross/prefix/bin/libwinpthread-1.dll\r\n-- Installing: D:/a/SDL_gpu_shadercross/SDL_gpu_shadercross/prefix/bin/SDL3.dll\r\n```"
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-12T00:07:33Z",
+        "body": "Looks good."
+      }
+    ]
+  },
+  {
+    "number": 44,
+    "title": "Use linking instead of SDL_LoadObject where possible",
+    "created_at": "2024-11-04T04:51:52Z",
+    "closed_at": "2024-11-05T18:53:20Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/44",
+    "body": "We recommend vendoring the dxcompiler dependency, but the SDL_LoadObject calls use strings like \"libdxcompiler.so\", so if the client doesn't explicitly set LD_LIBRARY_PATH the dlopen calls will search the system libraries instead. Is it bad practice to use a relative path for dlopen? I feel like this is surprising behavior, but I understand if this is an issue for package managers.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/44/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-04T06:18:57Z",
+        "body": "Upon further reflection I'm very confused about why dlopen doesn't seem to be respecting the rpath setting. If we can figure that out then this is non issue."
+      },
+      {
+        "user": "madebr",
+        "created_at": "2024-11-04T09:34:29Z",
+        "body": "`dlopen` uses the rpath of the elf that does the call: `libSDL3.so.0`.\r\nFor rpath to work, you'd have to duplicate the `SDL_LoadObject` logic in the shadercross so."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-04T16:34:44Z",
+        "body": "After some discussion I think we should do the following:\r\n\r\n- ~~Statically link dxcompiler~~ Never mind, I forgot that dxcompiler's build system is horrible, let's just do dynamic\r\n- Have a CMake option to disable HLSL support\r\n\r\nThe dxcompiler binary space is large but having the option to disable it for people who don't need it resolves that.\r\n\r\nWhen Shader Model 7 is ready we can modify this dependency because HLSL compilation will be upstreamed into Clang. "
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-04T17:37:38Z",
+        "body": "Apparently we're also using LoadObject for spirv-cross. That's not really an optional component, we should just link it."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-11-04T18:02:12Z",
+        "body": "@madebr Could we trouble you to help us with this build system stuff?"
+      },
+      {
+        "user": "madebr",
+        "created_at": "2024-11-04T18:45:19Z",
+        "body": "Sure, create a pr with the C changes to use a linked spirv-cross library and I'll push the required changes to make the ci happy.\r\nThis patch will let the SDL_gpu_shadercross libraries link to a shared spirv-cross-c-shared library.\r\n(using a static spirv-cross library is a bit more complicated, as is optionally building spirv-cross)\r\n```patch\r\n--- a/CMakeLists.txt\r\n+++ b/CMakeLists.txt\r\n@@ -122,9 +122,12 @@ if(SDLGPUSHADERCROSS_STATIC)\r\n        )\r\n endif()\r\n \r\n+find_package(spirv_cross_c_shared REQUIRED)\r\n+\r\n foreach(target IN LISTS SDL3_gpu_shadercross_targets)\r\n        sdl_add_warning_options(${target} WARNING_AS_ERROR ${SDLGPUSHADERCROSS_WERROR})\r\n        target_compile_features(${target} PRIVATE c_std_99)\r\n+       target_link_libraries(${target} PRIVATE spirv-cross-c-shared)\r\n endforeach()\r\n \r\n if(NOT TARGET SDL3_gpu_shadercross::SDL3_gpu_shadercross)\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "title": "Fix segfault when D3DCompile is not found",
+    "created_at": "2024-10-28T22:43:06Z",
+    "closed_at": "2024-11-12T03:12:13Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/35",
+    "body": "Resolves #32 ",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/35/comments",
+    "author": "thatcosmonaut",
+    "comments": [
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-11-12T03:12:58Z",
+        "body": "For now let's fix the crash and work on the init and error reporting (#51) separately."
+      }
+    ]
+  },
+  {
+    "number": 26,
+    "title": "Translation of SPIR-V bindings into MSL is not correct",
+    "created_at": "2024-10-16T20:28:21Z",
+    "closed_at": "2024-10-28T22:26:49Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/26",
+    "body": "I've addressed a special case of this in #23, but unfortunately this doesn't work in the general case and has caused a regression in TheSpydog/SDL_gpu_examples#46\r\n\r\nThe problem stems from the fact that MSL doesn't support descriptor sets. By default, SPIRV-Cross ignores the SPIR-V `binding` decoration. This makes it generate non-overlapping resource indices, but they are effectively unusable without some kind of reflection. With the change in #23, `binding` is preserved, but `set` is still ignored. This works for some simple cases, but breaks when there are multiple kinds of resources involved.\r\n\r\nExample from the affected SpriteBatch compute shader:\r\n\r\n```glsl\r\nlayout (std430, set = 0, binding = 0) readonly buffer inBuffer\r\n{\r\n\tSpriteComputeData computeData[];\r\n};\r\nlayout (std430, set = 1, binding = 0) writeonly buffer outBuffer\r\n{\r\n\tSpriteVertex vertexData[];\r\n};\r\n```\r\n\r\nAfter #23 both get buffer index 0, causing a conflict:\r\n```\r\n2024-10-16 09:51:18.624 SDL_gpu_examples[34993:1465642] ERROR: Creating MTLLibrary failed: Error Domain=MTLLibraryErrorDomain Code=3 \"program_source:41:79: error: cannot reserve 'buffer' resource location at index 0\r\nkernel void main0(const device inBuffer& _27 [[buffer(0)]], device outBuffer& _114 [[buffer(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])\r\n                                                                              ^\r\n```\r\n\r\nFrom SDL_GPU docs on resource layout for compute shaders:\r\n```\r\nFor SPIR-V shaders, use the following resource sets:\r\n- 0: Sampled textures, followed by read-only storage textures, followed by\r\n  read-only storage buffers\r\n- 1: Write-only storage textures, followed by write-only storage buffers\r\n- 2: Uniform buffers\r\n\r\nFor MSL/metallib, use the following order:\r\n\r\n- [[buffer]]: Uniform buffers, followed by write-only storage buffers,\r\n  followed by write-only storage buffers\r\n- [[texture]]: Sampled textures, followed by read-only storage textures,\r\n  followed by write-only storage textures\r\n```\r\n\r\n(There seems to be a typo since it says `write-ony storage` twice; I'll assume it actually meant `read-only` followed by `write-only`)\r\n\r\nWe have to do some transformations to reconcile these differences:\r\n\r\n* Subtract the number of **sampled textures** and **read-only storage textures** from the **read-only storage buffer indices**. Those live in the same descriptor set in SPIR-V and come before read-only storage buffers.\r\n* Subtract the number of **write-only storage textures** from the **write-only storage buffer indices**. Same story.\r\n* Add the number of **read-only storage buffers** to the **write-only storage buffer indices**, assuming ro comes before rw. Those share the same namespace in MSL.\r\n* Add the number of **uniform buffers** to both **read-only and write-only storage buffer indices**. Those also live in the same namespace in MSL, and come first.\r\n* Add the number of **sampled textures** and **read-only storage textures** to **write-only storage texture indices**. Again, SPIRV puts the write-only stuff into a separate descriptor set, while MSL has only two namespaces: buffers and textures.\r\n\r\nA similar kind of dance has to be performed for vertex/fragment shaders as well, which have slightly different layout requirements.\r\n\r\nIt should be possible to do this by patching the SPIR-V before sending it to SPIRV-Cross, but it would be much easier (and beneficial to other projects) to implement these transformations in SPIRV-Cross itself. Basically we'd need to add an index offset option for each kind of resource.\r\n\r\nAn alternative way to solve this is to rework the Vulkan descriptor set layout to be more compatible with MSL at the SDL_GPU level. Unfortunately, that means breaking compatibility with existing SPIR-V shaders.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/26/comments",
+    "author": "Akaricchi",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-10-16T21:16:44Z",
+        "body": "I think for MSL we are intended to declare a remapping scheme, see `CompilerMSL::add_msl_resource_binding` in SPIRV-Cross."
+      },
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-10-16T23:03:19Z",
+        "body": "In the meantime should we revert the MSL changes from #23? Not sure if that option is still needed when making the mapping scheme."
+      },
+      {
+        "user": "Akaricchi",
+        "created_at": "2024-10-17T06:24:37Z",
+        "body": "It probably won't be needed, though by reverting it now you'd be trading one type of breakage for another (anything using multiple samplers or buffers is potentially affected). I've discovered the original problem because it broke some shaders in Taisei. I don't actually use shadercross for Taisei though, so it wouldn't affect me if you were to revert it."
+      },
+      {
+        "user": "TheSpydog",
+        "created_at": "2024-10-17T14:33:43Z",
+        "body": "Since this change breaks the examples for the sake of a game that doesn't use shadercross, we've reverted this commit for now. We'll still definitely want to set up a remapping scheme as cosmonaut mentioned above."
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "Formally add the zlib license",
+    "created_at": "2024-10-04T18:41:52Z",
+    "closed_at": "2024-10-04T19:02:31Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/17",
+    "body": "This was established with the internal team but I didn't expect this to grow beyond a thing for MojoShader and by extension FNA/Moonworks, so I never got around to it... now that it's in the org we should probably get to this, and have it all in writing.\r\n\r\n@Beyley, @RandyGaul, @leandro-benedet-garcia, @ritalat, do we have your blessing to officially put the zlib license on this?",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/17/comments",
+    "author": "flibitijibibo",
+    "comments": [
+      {
+        "user": "Beyley",
+        "created_at": "2024-10-04T18:43:10Z",
+        "body": "sounds good to me!"
+      },
+      {
+        "user": "leandro-benedet-garcia",
+        "created_at": "2024-10-04T18:47:42Z",
+        "body": "Perfectly fine to me."
+      },
+      {
+        "user": "RandyGaul",
+        "created_at": "2024-10-04T18:50:48Z",
+        "body": "Do it "
+      },
+      {
+        "user": "ritalat",
+        "created_at": "2024-10-04T19:01:10Z",
+        "body": "Fine by me."
+      },
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-10-04T19:02:27Z",
+        "body": "Thanks everybody, both for the approval and the work on shadercross! <3"
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "title": "Move compiler loading to an init function",
+    "created_at": "2024-09-06T22:55:35Z",
+    "closed_at": "2024-09-10T21:33:33Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/14",
+    "body": "Closes #7 \r\n\r\nDo note that I'm not the most comfortable with C, so I may have made some beginner mistakes with this PR.\r\n\r\nThis PR also comes bundled with a couple tiny other changes I made while doing this refactor, notably\r\n- `SDL_ShaderCross_GetShaderFormats` has been split in two, and the returned formats are accurate to what is actually possible to generate given the loaded compilers\r\n- `SDL_ShaderCross_INTERNAL_CompileDXC` takes in an `encoding` parameter, however it is left unexposed past that, since FXC cannot handle it. Maybe its something worth allowing in the future with a safety check on the FXC path? I don't think its *particularly* uncommon to want to use unicode characters in comments and such.\r\n- Refactored `SDL_ShaderCross_INTERNAL_CompileDXC` to create a new `IDxcCompiler3` every call, allowing the function to be thread-safe. Maybe this could be made thread-local in the future to allow re-use, if supported by the C compiler.\r\n- Basic docs, following the style of SDL",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/14/comments",
+    "author": "Beyley",
+    "comments": [
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-09-06T23:44:22Z",
+        "body": "Looks good at first glance, should be able to do a full review on Monday!"
+      },
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-09-10T01:56:34Z",
+        "body": "Expect a review in the morning, sorry for the delay!"
+      },
+      {
+        "user": "Beyley",
+        "created_at": "2024-09-10T01:57:58Z",
+        "body": "> Expect a review in the morning, sorry for the delay!\r\n\r\nAll good! Take your time"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "C++ compile fixes (MSVC 2022)",
+    "created_at": "2024-08-24T04:55:51Z",
+    "closed_at": "2024-08-24T13:57:31Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/10",
+    "body": "I was actually quite confused on why the wide char assignments here weren't compiling. I suspect it's just a quirk of MSVC. Looking into the typedefs they match, but there was a failure to implicitly cast from a C-array to pointer. Odd. Any thoughts?\r\n\r\nI also noticed what looks like an erroneous call to `SDL_UnloadObject(DXIL_DLL);`. Passing in a path doesn't make sense for this function, and it need not be called in the case of failure to load anyways. This was also causing a compile error in C++ since the string cannot implicitly cast down to `void*` as in C.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/10/comments",
+    "author": "RandyGaul",
+    "comments": [
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-08-24T05:23:46Z",
+        "body": "The DXIL snippet is my bad, should be \r\n\r\n```c\r\n        void* dxil_dll = SDL_LoadObject(DXIL_DLL);\r\n        if (dxil_dll == NULL) {\r\n            SDL_LogError(SDL_LOG_CATEGORY_GPU, \"Failed to load DXIL library, this will cause pipeline creation failures!\");\r\n            return NULL;\r\n        }\r\n        SDL_UnloadObject(dxil_dll); /* Unload immediately, we don't actually need it*/ \r\n```"
+      }
+    ]
+  },
+  {
+    "number": 7,
+    "title": "Move compiler loading to an Init function",
+    "created_at": "2024-08-18T22:01:11Z",
+    "closed_at": "2024-09-10T21:33:34Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/issues/7",
+    "body": "Benefit of this would be to allow unloading the compilers gracefully, and also allows dynamically generating the supported shader formats based on which compilers successfully start up.",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/7/comments",
+    "author": "flibitijibibo",
+    "comments": [
+      {
+        "user": "Akaricchi",
+        "created_at": "2024-08-19T08:31:45Z",
+        "body": "Also necessary for thread-safety without spinlocks everywhere."
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Support for static SPIRV-Cross, MSVC cleanup <> to \"\", void* warning",
+    "created_at": "2024-08-10T14:09:43Z",
+    "closed_at": "2024-08-16T03:59:26Z",
+    "labels": [],
+    "url": "https://github.com/libsdl-org/SDL_shadercross/pull/3",
+    "body": "Spent some time today trying this out with MSVC2022. I maintain a small 2D game creation framework and wanted to try out SDL_Gpu. There were a couple difficulties here since I statically linked SPIRV-Cross.\r\n\r\nMy understanding is the current implementation assumes SPIRV-Cross is installed by the user before trying out this header. Though, I don't want users of my framework to have to bother installing anything external, besides CMake/python.\r\n\r\n```c++\r\n#define SPIRV_CROSS_DLL \"spirv-cross-c-shared.dll\"\r\n```\r\n\r\nThis line doesn't actually seem super helpful for anyone compiling from source, shared or not. I noticed the default behavior from SPIRV-Cross's cmake file was to created `spriv-cross-c.dll`, not `spirv-cross-c-shared.dll`, so I assume the -shared name came perhaps from a vcpkg install? Maybe you could help explain this bit. Let me know if you have thoughts here, I'm totally new to all this SPIR-V stuff and might be just a total dumb idiot here.\r\n\r\nI decided to try adding `SDL_GPU_SHADERCROSS_STATIC` to eliminate all the function pointer loading, and this worked pretty well. It's an optional define similar to `SDL_GPU_SHADERCROSS_IMPLEMENTATION`.\r\n\r\nI did swap `#include<spirv_cross_c.h>` to #include \"spirv_cross_c.h\", this makes it a bit easier to integrate all the headers together with a relative path here. I don't actually have `#include<spirv_cross_c.h>` on the path, so this include gives an error under MSVC2022.\r\n\r\nThe last bit were some minor warnings on assigning from `void*`, since C++ is a little pickier on type conversions here",
+    "comments_url": "https://api.github.com/repos/libsdl-org/SDL_shadercross/issues/3/comments",
+    "author": "RandyGaul",
+    "comments": [
+      {
+        "user": "flibitijibibo",
+        "created_at": "2024-08-10T14:33:50Z",
+        "body": "That all makes sense to me - the dll names were picked based on what was provided in the Vulkan SDK. The idea was that the library from the SDK would be bundled, so no building of spirv-cross would be needed.\r\n\r\nWill take a closer look on Monday, thanks for checking this out! I think the only thing I saw was // over /**/ comments but that's a nitpick at most."
+      },
+      {
+        "user": "thatcosmonaut",
+        "created_at": "2024-08-11T23:53:30Z",
+        "body": "> My understanding is the current implementation assumes SPIRV-Cross is installed by the user before trying out this header. Though, I don't want users of my framework to have to bother installing anything external, besides CMake/python.\r\n\r\nNo install is necessary, you just ship the SPIRV-Cross dll with your game/engine/whatever. Providing a path for static linkage does seem reasonable. The only potential downside is having to recompile if there are upstream improvements to SPIRV-Cross but we don't have to get in a whole debate about the tradeoffs of static vs dynamic linkage here."
+      },
+      {
+        "user": "RandyGaul",
+        "created_at": "2024-08-12T01:00:17Z",
+        "body": "Makes sense, glad you're both in favor of supporting static linking. It can be a great simplification to not have to deal with disparate shared libs and tracking them. I'd also recommend to add in another option to specify the shared lib path. It's nice to have the default strings in there, but making it overrideable would be really nice. I'll just add this to the PR here.\r\n\r\nI like how you guys architected SDLG_GpuCompileFromSPIRV to allow everyone to get rid of dependencies once icculus gets his shader tools going. Really solid technical decisions and planning there.\r\n\r\nAnd thanks @thatcosmonaut for your blog post describing SPIR-V Reflect. I'm not used to the whole SPIRV stuff so that little bit of guidance really helped a lot for getting in a working online compilation flow."
+      }
+    ]
+  }
+]

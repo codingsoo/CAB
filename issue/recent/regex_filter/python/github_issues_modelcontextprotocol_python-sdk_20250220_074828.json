@@ -1,0 +1,245 @@
+[
+  {
+    "number": 209,
+    "title": "MCP GO SDK",
+    "created_at": "2025-02-14T09:17:34Z",
+    "closed_at": "2025-02-18T11:26:11Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/209",
+    "body": "Do I want to know if there will be an SDK for Go language released next? If it is to be launched, when will it be released?\nIf there are no plans to launch it temporarily, I am willing to develop a Go SDK. Is there anything I need to pay attention to or can you provide me with some help?",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/209/comments",
+    "author": "bearslyricattack",
+    "comments": [
+      {
+        "user": "sbshah97",
+        "created_at": "2025-02-17T02:06:11Z",
+        "body": "I'd love to join and help on the effort for this. "
+      },
+      {
+        "user": "dsp-ant",
+        "created_at": "2025-02-18T11:26:11Z",
+        "body": "This should likely be a discussion in the discussion forums.\n\nI'd love to see a Go SDK, but we do not have the resources at the moment to invest into that. That being said, if there is a community or company that wants to drive that effort, that would be great. We are happy to host this under the MCP umbrella if you like. At this point, I would love to see a spec compatible implementation for Go and then we can discuss how we proceed to make this either standalone or an official SDK."
+      }
+    ]
+  },
+  {
+    "number": 190,
+    "title": "stdio sever - tool calls are not parallel when using asyncio",
+    "created_at": "2025-02-05T17:48:49Z",
+    "closed_at": "2025-02-18T11:28:27Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/190",
+    "body": "**Describe the bug**\nA clear and concise description of what the bug is.\n\n**To Reproduce**\n**server**\n```\nimport asyncio\nimport logging\nimport os\nimport random\nimport subprocess\nimport mcp\nfrom mcp.server import NotificationOptions\nfrom mcp.server.models import InitializationOptions\nfrom mcp.server.stdio import stdio_server\n\nimport asyncio\nimport json\nfrom mcp import types\n\n\n\nlogger = logging.getLogger(__name__)\nformat_str = \"%(asctime)s  %(name)s  %(levelname)s: %(message)s\"\nlogging.basicConfig(level=logging.INFO, format = format_str)\n\n\nfrom mcp.server import Server\n\n\nserver = Server(\"Index\")\n\n@server.call_tool()\nasync def handle_call_tool(\n    name: str, arguments: dict | None\n) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:\n    \"\"\"\n    Handle tool execution requests.\n    Tools can fetch weather data and notify clients of changes.\n    \"\"\"\n\n    try:\n        if name == \"test\":\n            logger.info(f\"Handling call_tool request for {name} with arguments {arguments}\")\n            random_number = arguments.get(\"nr\", 0)\n            await asyncio.sleep(random_number)\n            # await asyncio.sleep(0)\n            logger.info(f\"Returning random number: {random_number}\")\n            return [types.TextContent(\n                type=\"text\",\n                text=f'Random number: {random_number}'\n            )]\n\n    except Exception as e:\n        raise e\n\n\n\nasync def main():\n    \n    # Run the server using stdin/stdout streams\n    async with stdio_server() as (read_stream, write_stream):\n        #initialize\n        from server_side.golden_retriever.entities import index_retriever\n\n        await server.run(\n            read_stream,\n            write_stream,\n            InitializationOptions(\n                server_name=\"Index\",\n                server_version=\"0.1.0\",\n                capabilities=server.get_capabilities(\n                    notification_options=NotificationOptions(),\n                    experimental_capabilities={},\n                ),\n            ),\n            raise_exceptions=False\n        )\n\nif __name__ == \"__main__\":\n    asyncio.run(main())\n```\n**client**\n```\nimport asyncio\nimport logging\nimport os\nfrom pathlib import Path\nimport sys\n\nfrom mcp import ClientSession, StdioServerParameters, stdio_client\n\nlogger = logging.getLogger(__name__)\n\nserver_path = str(Path(__file__).parent.resolve() / 'test_server.py')\nlogger = logging.getLogger(__name__)\nlogger.info(f\"Starting server at {server_path}\")\n\n# Load the ML model\nserver_params = StdioServerParameters(\n    command=sys.executable, # Executable\n    args=[server_path], # Optional command line arguments\n    env=os.environ # Optional environment variables\n)\nasync def main():\n    async with stdio_client(server_params) as (read, write):\n        async with ClientSession(read, write, ) as session:\n            await session.initialize()\n\n            tool_calls = []\n            tool_calls.append(session.call_tool('test', arguments={'nr': 10}))\n            tool_calls.append(session.call_tool('test', arguments={'nr': 5}))\n            await asyncio.gather(*tool_calls)\n    \nif __name__ == \"__main__\":\n    logging.basicConfig(level=logging.INFO)\n    asyncio.run(main())\n```\n**Expected behavior**\nThe function calls happen concurrently in parallel instead of sequentially.\n\n**What happens**\n2025-02-05 16:09:04,288  __main__  INFO: Handling call_tool request for test with arguments {'nr': 10}\n2025-02-05 16:09:14,299  __main__  INFO: Returning random number: 10\n2025-02-05 16:09:14,299  mcp.server  INFO: Processing request of type CallToolRequest\n2025-02-05 16:09:14,299  __main__  INFO: Handling call_tool request for test with arguments {'nr': 5}\n2025-02-05 16:09:19,306  __main__  INFO: Returning random number: 5\n\n\n**Desktop (please complete the following information):**\n - OS: Ubuntu\n - Browser [e.g. chrome, safari]\n - Version 1.1.3\n\n\n\n**Additional context**\nAdd any other context about the problem here.\n",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/190/comments",
+    "author": "kocsszi",
+    "comments": [
+      {
+        "user": "dsp-ant",
+        "created_at": "2025-02-18T11:28:27Z",
+        "body": "This should be fixed in v1.3.0rc1"
+      }
+    ]
+  },
+  {
+    "number": 173,
+    "title": "How to set client session timeout?",
+    "created_at": "2025-01-26T09:08:01Z",
+    "closed_at": "2025-01-26T20:59:22Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/173",
+    "body": "I am getting this error on some of my long-running tool calls: \n\n```\nmcp.shared.exceptions.McpError: Execution timed out — the 'timeoutMs' option can be used to increase this timeout\n\nTraceback (most recent call last):\n  [My internal stuff here ...]\n\n  File \"/Users/chris/Projects/qckfx/mcp-python-sdk/src/mcp/client/session.py\", line 163, in call_tool\n    return await self.send_request(\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/chris/Projects/qckfx/mcp-python-sdk/src/mcp/shared/session.py\", line 176, in send_request\n    raise McpError(response_or_error.error)\n```\n\nI can't figure out where this timeoutMs option is - can anyone help me figure out how to adjust this higher?\n\nThe only timeout I can find through searching is the ClientSession read_timeout_seconds but that was set to None which is supposed to mean there is no timeout. Searches in the repo for `timeoutMs` don't return anything. ",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/173/comments",
+    "author": "christopherhwood",
+    "comments": [
+      {
+        "user": "VikashLoomba",
+        "created_at": "2025-01-28T08:48:54Z",
+        "body": "Did you figure out an answer @christopherhwood ?"
+      }
+    ]
+  },
+  {
+    "number": 171,
+    "title": "Describe where logging info should be observed",
+    "created_at": "2025-01-24T23:41:49Z",
+    "closed_at": "2025-01-27T20:46:21Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/171",
+    "body": "I am examining the Context .info(), .debug() and report_progress() methods.  I would like a simple example of how to use them and where I should look for output.\n\nI have written the following tiny example.  The Error output from the Inspector is shown ad the end of this message.  Where should I be able to find the messages or progress?  An example of the correct way to use these facilities would be appreciated.\n\nCould there be an error where the send_log_message() method is not awaited?\n\n```\nfrom mcp.server.fastmcp import FastMCP, Context\nimport time\n\nmcp = FastMCP(\"Tom2 Server 2024-01-23\", debug=True, log_level=\"DEBUG\")\n\n@mcp.tool()\nasync def my_tool(x: float, y:float, ctx:Context) -> str:\n    \"\"\"Perform a long running calculation\"\"\"\n\n    ctx.info(f\"Processing Message 1\")\n    await ctx.report_progress(1, 2)\n    time.sleep(2)\n    ctx.debug(f\"Processing Message 2\")\n    await ctx.report_progress(2, 2)\n    time.sleep(2)\n    return x*y\n\n```\n\nError Output from the inspector.\n\n```\n[01/24/25 15:32:26] DEBUG Using selector: selector_events.py:59 KqueueSelector\nDEBUG Received message: server.py:428 root=InitializedNotification(method=' notifications/initialized', params=None, jsonrpc='2.0')\n[01/24/25 15:32:31] DEBUG Received message: server.py:428 <mcp.shared.session.RequestResponder object at 0x106d86080>\nINFO Processing request of type server.py:432 ListToolsRequest\nDEBUG Dispatching request of type server.py:437 ListToolsRequest\nDEBUG Response sent server.py:475\n[01/24/25 15:32:35] DEBUG Received message: server.py:428 <mcp.shared.session.RequestResponder object at 0x106d87f40>\nINFO Processing request of type server.py:432 CallToolRequest\nDEBUG Dispatching request of type server.py:437 CallToolRequest\n[01/24/25 15:32:39] DEBUG Response sent server.py:475\nINFO Warning: RuntimeWarning: coroutine server.py:495 'ServerSession.send_log_message' was never awaited\n```\n",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/171/comments",
+    "author": "sheffler",
+    "comments": [
+      {
+        "user": "VikashLoomba",
+        "created_at": "2025-01-27T07:12:38Z",
+        "body": "+1, experiencing this as well."
+      },
+      {
+        "user": "dsp-ant",
+        "created_at": "2025-01-27T20:46:34Z",
+        "body": "fixed in #172 "
+      }
+    ]
+  },
+  {
+    "number": 155,
+    "title": "feat: Add Golang SDK for MCP",
+    "created_at": "2025-01-17T02:34:22Z",
+    "closed_at": "2025-01-22T13:40:05Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/155",
+    "body": "**Is your feature request related to a problem? Please describe.**\nWe are developing our own LLM application using Golang and would like to integrate with MCP, which has been quite frustrating for us. From what I understand, in addition to mainstream Python, there are a significant number of LLM applications developed in Golang, particularly in high-concurrency and high-security enterprise scenarios.\n\n**Describe the solution you'd like**\nWe hope to have a Golang MCP SDK available.\n\n**Describe alternatives you've considered**\nImplementing an MCP client using a Python SDK and providing services to Golang. However, this solution increases architectural complexity and introduces risks associated with heterogeneity.\n\n**Additional context**\nNone.\n",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/155/comments",
+    "author": "barlowliu",
+    "comments": [
+      {
+        "user": "dsp-ant",
+        "created_at": "2025-01-22T13:40:05Z",
+        "body": "Sorry, I think this is unrelated to the Python SDK. We have at the moment no intention to build our own Golang SDK, but welcome any effort in that direction"
+      }
+    ]
+  },
+  {
+    "number": 146,
+    "title": "error: No `pyproject.toml` found in current directory or any parent directory",
+    "created_at": "2025-01-10T07:37:07Z",
+    "closed_at": "2025-01-23T12:12:08Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/146",
+    "body": "When attempting to install a Python package, encounter the following error message:\r\n\r\nwhen installed, error: No `pyproject.toml` found in current directory or any parent directory\r\n",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/146/comments",
+    "author": "ziren926",
+    "comments": [
+      {
+        "user": "namin",
+        "created_at": "2025-01-23T03:51:39Z",
+        "body": "You can use `uv init`."
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "pip install mcp - Unable to find FastMCP",
+    "created_at": "2025-01-03T09:59:32Z",
+    "closed_at": "2025-01-03T14:39:49Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/124",
+    "body": "**Describe the bug**\r\nI installed mcp using pip install mcp. But I see it doesnt have FastMCO installed. Is it not yet released?\r\n",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/124/comments",
+    "author": "raolak",
+    "comments": [
+      {
+        "user": "dsp-ant",
+        "created_at": "2025-01-03T14:39:43Z",
+        "body": "FastMCP is still RC1 and will be released today. So this will work tomorrow."
+      },
+      {
+        "user": "raolak",
+        "created_at": "2025-01-04T04:00:45Z",
+        "body": "Thanks for quick update !"
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "Requirement name `mcp` matches project name `mcp`",
+    "created_at": "2024-12-24T06:11:32Z",
+    "closed_at": "2025-01-03T21:01:07Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/issues/111",
+    "body": "When I run the first step `uv add \"mcp[cli]\"`, \r\n\r\nit said: \r\n```error: Requirement name `mcp` matches project name `mcp`, but self-dependencies are not permitted without the `--dev` or `--optional` flags. If your project name (`mcp`) is shadowing that of a third-party dependency, consider renaming the project.```\r\n\r\nI guess something wrong in `pyproject.toml`, but I don't know how to solve it.",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/111/comments",
+    "author": "SHTechBoBo",
+    "comments": [
+      {
+        "user": "phil65",
+        "created_at": "2024-12-24T09:10:57Z",
+        "body": "Well, it says what you have to do 😄.\r\nYour own project may not be called \"mcp\" if you add a dependency called \"mcp\".\r\nSolution: Rename your own project to something else. (-> change project.name in pyproject.toml)"
+      },
+      {
+        "user": "alexjacobs08",
+        "created_at": "2025-02-19T14:52:08Z",
+        "body": "This is a genuine issue though no?  If you pull the project and follow the installation instructions you get an error right off the bat"
+      }
+    ]
+  },
+  {
+    "number": 108,
+    "title": "Fix Bug: request_meta is not available in server.request_context #103",
+    "created_at": "2024-12-21T00:29:36Z",
+    "closed_at": "2024-12-21T23:17:04Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/pull/108",
+    "body": "## Summary\r\n- Fixes **Bug: request_meta is not available in server.request_context #103**\r\n- Pydantic fields starting with underscore are hidden/private and won't get deserialized. As a result, the `_meta` field was never available.\r\n\r\n## Test plan\r\n- Run pytest tests/server/test_request_context.py",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/108/comments",
+    "author": "dsp-ant",
+    "comments": [
+      {
+        "user": "phact",
+        "created_at": "2024-12-23T14:46:09Z",
+        "body": "Hi folks, curious when this will hit a released version. Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "title": "Add CONTRIBUTING.md",
+    "created_at": "2024-11-20T15:32:35Z",
+    "closed_at": "2024-11-20T15:35:10Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/pull/59",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/59/comments",
+    "author": "jspahrsummers",
+    "comments": [
+      {
+        "user": "jspahrsummers",
+        "created_at": "2024-11-20T15:35:07Z",
+        "body": "Thank Claude 😉 "
+      },
+      {
+        "user": "dsp-ant",
+        "created_at": "2024-11-20T15:37:05Z",
+        "body": "> Thank Claude 😉\r\n\r\nthis claude person seems to be pretty smart and good at what they are doing."
+      }
+    ]
+  },
+  {
+    "number": 55,
+    "title": "Update SECURITY.md",
+    "created_at": "2024-11-19T16:38:07Z",
+    "closed_at": "2024-11-19T17:00:59Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/pull/55",
+    "body": "Update wording and link to submission form",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/55/comments",
+    "author": "petery-ant",
+    "comments": [
+      {
+        "user": "dsp-ant",
+        "created_at": "2024-11-19T17:01:25Z",
+        "body": "I took this version and applied it to all repos with slight changes where the text refers to SDKs and the repo is not an SDK"
+      }
+    ]
+  },
+  {
+    "number": 25,
+    "title": "Add in-memory transport",
+    "created_at": "2024-11-04T19:50:55Z",
+    "closed_at": "2024-11-05T23:42:42Z",
+    "labels": [],
+    "url": "https://github.com/modelcontextprotocol/python-sdk/pull/25",
+    "body": "## Goal\r\n\r\nSupport running an MCP server in the same process as the client, while preserving MCP abstractions.\r\n\r\n## Details\r\n\r\n1. **(core change)** Adds a new `memory` transport module that enables in-process client-server communication.\r\nThis includes:\r\n   - `create_client_server_memory_streams()` to create bidirectional memory streams\r\n   - `create_connected_server_and_client_session()` to establish an in-process client-server connection\r\n\r\n3. (minor) Enhances error handling and timeout support:\r\n   - Adds configurable read timeouts to sessions via `read_timeout_seconds` parameter\r\n   - Improves exception handling in the server with a new `raise_exceptions` flag to control whether errors are returned to clients or raised directly\r\n   - Ensures proper cleanup of request context tokens in error cases\r\n\r\n4. (minor) Makes server improvements:\r\n   - Adds built-in ping handler support",
+    "comments_url": "https://api.github.com/repos/modelcontextprotocol/python-sdk/issues/25/comments",
+    "author": "nick-merrill",
+    "comments": [
+      {
+        "user": "k6l3",
+        "created_at": "2024-11-05T19:14:27Z",
+        "body": "sweeeet"
+      }
+    ]
+  }
+]

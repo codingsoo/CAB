@@ -1,0 +1,422 @@
+[
+  {
+    "number": 23077,
+    "title": "Add `build_file` attribute to `git_override`, `archive_override`",
+    "created_at": "2024-07-23T20:03:16Z",
+    "closed_at": "2024-12-13T22:35:19Z",
+    "labels": [
+      "type: feature request",
+      "P2",
+      "good first issue",
+      "team-ExternalDeps",
+      "help wanted",
+      "area-Bzlmod"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/23077",
+    "body": "### Description of the feature request:\n\n\nIt would be convenient if `git_override` and `archive_override` had a `build_file` attribute, analogous to that exposed by `git_repository` and `http_archive`.\n\n### Which category does this issue belong to?\n\nExternal Dependency\n\n### What underlying problem are you trying to solve with this feature?\n\n\nThis would be particularly helpful during migrations to bzlmod of repositories that currently use `build_file`. The state of the art currently is that you need to convert the BUILD file into a patch, which adds friction to the migration and is less maintainable in the long run (especially in cases where the `build_file` was itself loaded from a dependency).\n\n### Which operating system are you running Bazel on?\n\n\n_No response_\n\n### What is the output of `bazel info release`?\n\n\n_No response_\n\n### If `bazel info release` returns `development version` or `(@non-git)`, tell us how you built Bazel.\n\n\n_No response_\n\n### What's the output of `git remote get-url origin; git rev-parse HEAD` ?\n\n\n_No response_\n\n### Have you found anything relevant by searching the web?\n\n_No response_\n\n### Any other information, logs, or outputs that you want to share?\n\n_No response_",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/23077/comments",
+    "author": "tpudlik",
+    "comments": [
+      {
+        "user": "Wyverald",
+        "created_at": "2024-07-23T20:08:13Z",
+        "body": "This is very easily to implement -- start by looking at ModuleFileGlobals.java. Contributions welcome!"
+      },
+      {
+        "user": "taimoorzaeem",
+        "created_at": "2024-07-28T15:11:10Z",
+        "body": "@Wyverald I would love to work on this issue. Could you please assign it to me?"
+      },
+      {
+        "user": "EliphazBouye",
+        "created_at": "2024-11-13T11:59:46Z",
+        "body": "@Wyverald  this issue is still relevant ? "
+      },
+      {
+        "user": "robinlinden",
+        "created_at": "2024-12-13T21:42:34Z",
+        "body": "Looks like this was done in #24443."
+      }
+    ]
+  },
+  {
+    "number": 21287,
+    "title": "Add support to allow credential helper to return of JSON payloads larger than 4K",
+    "created_at": "2024-02-10T19:42:40Z",
+    "closed_at": "2024-05-21T15:06:06Z",
+    "labels": [
+      "type: bug",
+      "P3",
+      "team-Remote-Exec",
+      "help wanted"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/21287",
+    "body": "### Description of the feature request:\n\n\nIt seems that the current implementation of credential helper only works for the return of JSON payloads less than 4K. JSON payloads larger than 4K will cause the credential helper call to hang and timeout.\r\n\n\n### Which category does this issue belong to?\n\nCLI, Remote Execution\n\n### What underlying problem are you trying to solve with this feature?\n\n\nCredential helper JSON payloads greater than 4K are timing out.\n\n### Which operating system are you running Bazel on?\n\n\nWindows and Linux\n\n### What is the output of `bazel info release`?\n\n\nversion 6.3.1 to 7.x\n\n### If `bazel info release` returns `development version` or `(@non-git)`, tell us how you built Bazel.\n\n\n_No response_\n\n### What's the output of `git remote get-url origin; git rev-parse HEAD` ?\n\n\n_No response_\n\n### Have you found anything relevant by searching the web?\n\n_No response_\n\n### Any other information, logs, or outputs that you want to share?\n\n_No response_",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/21287/comments",
+    "author": "RiverPup",
+    "comments": [
+      {
+        "user": "tjgq",
+        "created_at": "2024-05-15T19:30:08Z",
+        "body": "The issue here is that Bazel reads the credential helper output from a pipe, and we don't start reading from the pipe until the process terminates. So if the response is too big to fit in the pipe buffer, we deadlock and timeout.\r\n\r\nI can think of two possible fixes: increase the size of the pipe buffer or read the response in a separate thread that does its own buffering. Either way, we definitely want to cap the response size at some sane value (say, 64KB)."
+      }
+    ]
+  },
+  {
+    "number": 18764,
+    "title": "Reconnection may not have retry capacity",
+    "created_at": "2023-06-24T19:14:01Z",
+    "closed_at": "2023-07-19T02:32:08Z",
+    "labels": [
+      "type: bug",
+      "P2",
+      "team-Remote-Exec",
+      "help wanted"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/18764",
+    "body": "### Description of the bug:\r\n\r\n\r\nA build failure occurs when GrpcCacheClient cannot reach the remote endpoint in the Ssl handshake timeout. The local exception is wrapped in a grpc UNAVAILABLE StatusRuntimeException with a silent inner request error handler, bounded by downloadBlobs future aggregation.\r\n\r\n```\r\n(01:48:39) ERROR: /<redacted>/BUILD:41:9: Compiling REDACTED <redacted> failed: (Exit 34): io.grpc.StatusRuntimeException: UNAVAILABLE: io exception\r\nChannel Pipeline: [SslHandler#0, ProtocolNegotiators$ClientTlsHandler#0, WriteBufferingAndExceptionHandler#0, DefaultChannelPipeline$TailContext#0]\r\ncom.google.devtools.build.lib.remote.common.BulkTransferException: io.grpc.StatusRuntimeException: UNAVAILABLE: io exception\r\nChannel Pipeline: [SslHandler#0, ProtocolNegotiators$ClientTlsHandler#0, WriteBufferingAndExceptionHandler#0, DefaultChannelPipeline$TailContext#0]\r\n  at com.google.devtools.build.lib.remote.util.Utils.waitForBulkTransfer(Utils.java:594)\r\n  at com.google.devtools.build.lib.remote.RemoteExecutionService.downloadOutputs(RemoteExecutionService.java:1120)\r\n  at com.google.devtools.build.lib.remote.RemoteSpawnRunner.downloadAndFinalizeSpawnResult(RemoteSpawnRunner.java:413)\r\n  at com.google.devtools.build.lib.remote.RemoteSpawnRunner.exec(RemoteSpawnRunner.java:218)\r\n  at com.google.devtools.build.lib.exec.SpawnRunner.execAsync(SpawnRunner.java:301)\r\n  at com.google.devtools.build.lib.exec.AbstractSpawnStrategy.exec(AbstractSpawnStrategy.java:152)\r\n  at com.google.devtools.build.lib.exec.AbstractSpawnStrategy.exec(AbstractSpawnStrategy.java:112)\r\n  at com.google.devtools.build.lib.actions.SpawnStrategy.beginExecution(SpawnStrategy.java:47)\r\n  at com.google.devtools.build.lib.exec.SpawnStrategyResolver.beginExecution(SpawnStrategyResolver.java:64)\r\n  at com.google.devtools.build.lib.analysis.actions.SpawnAction.beginExecution(SpawnAction.java:352)\r\n  at com.google.devtools.build.lib.actions.Action.execute(Action.java:133)\r\n  at com.google.devtools.build.lib.skyframe.SkyframeActionExecutor$5.execute(SkyframeActionExecutor.java:957)\r\n  at com.google.devtools.build.lib.skyframe.SkyframeActionExecutor$ActionRunner.continueAction(SkyframeActionExecutor.java:1124)\r\n  at com.google.devtools.build.lib.skyframe.SkyframeActionExecutor$ActionRunner.run(SkyframeActionExecutor.java:1082)\r\n  at com.google.devtools.build.lib.skyframe.ActionExecutionState.runStateMachine(ActionExecutionState.java:160)\r\n  at com.google.devtools.build.lib.skyframe.ActionExecutionState.getResultOrDependOnFuture(ActionExecutionState.java:93)\r\n  at com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.executeAction(SkyframeActionExecutor.java:516)\r\n  at com.google.devtools.build.lib.skyframe.ActionExecutionFunction.checkCacheAndExecuteIfNeeded(ActionExecutionFunction.java:827)\r\n  at com.google.devtools.build.lib.skyframe.ActionExecutionFunction.computeInternal(ActionExecutionFunction.java:323)\r\n  at com.google.devtools.build.lib.skyframe.ActionExecutionFunction.compute(ActionExecutionFunction.java:161)\r\n  at com.google.devtools.build.skyframe.AbstractParallelEvaluator$Evaluate.run(AbstractParallelEvaluator.java:571)\r\n  at com.google.devtools.build.lib.concurrent.AbstractQueueVisitor$WrappedRunnable.run(AbstractQueueVisitor.java:382)\r\n  at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)\r\n  at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)\r\n  at java.base/java.lang.Thread.run(Unknown Source)\r\n  Suppressed: java.io.IOException: io.grpc.StatusRuntimeException: UNAVAILABLE: io exception\r\nChannel Pipeline: [SslHandler#0, ProtocolNegotiators$ClientTlsHandler#0, WriteBufferingAndExceptionHandler#0, DefaultChannelPipeline$TailContext#0]\r\n    at com.google.devtools.build.lib.remote.GrpcCacheClient.lambda$downloadBlob$18(GrpcCacheClient.java:346)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.doFallback(AbstractCatchingFuture.java:203)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.doFallback(AbstractCatchingFuture.java:190)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture.run(AbstractCatchingFuture.java:133)\r\n    at com.google.common.util.concurrent.DirectExecutor.execute(DirectExecutor.java:31)\r\n    at com.google.common.util.concurrent.AbstractFuture.executeListener(AbstractFuture.java:1270)\r\n    at com.google.common.util.concurrent.AbstractFuture.complete(AbstractFuture.java:1038)\r\n    at com.google.common.util.concurrent.AbstractFuture.setException(AbstractFuture.java:808)\r\n    at com.google.common.util.concurrent.AbstractTransformFuture.run(AbstractTransformFuture.java:104)\r\n    at com.google.common.util.concurrent.DirectExecutor.execute(DirectExecutor.java:31)\r\n    at com.google.common.util.concurrent.AbstractFuture.executeListener(AbstractFuture.java:1270)\r\n    at com.google.common.util.concurrent.AbstractFuture.complete(AbstractFuture.java:1038)\r\n    at com.google.common.util.concurrent.AbstractFuture.setFuture(AbstractFuture.java:851)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.setResult(AbstractCatchingFuture.java:214)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.setResult(AbstractCatchingFuture.java:190)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture.run(AbstractCatchingFuture.java:142)\r\n    at com.google.common.util.concurrent.DirectExecutor.execute(DirectExecutor.java:31)\r\n    at com.google.common.util.concurrent.AbstractFuture.executeListener(AbstractFuture.java:1270)\r\n    at com.google.common.util.concurrent.AbstractFuture.complete(AbstractFuture.java:1038)\r\n    at com.google.common.util.concurrent.AbstractFuture.setFuture(AbstractFuture.java:851)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.setResult(AbstractCatchingFuture.java:214)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture$AsyncCatchingFuture.setResult(AbstractCatchingFuture.java:190)\r\n    at com.google.common.util.concurrent.AbstractCatchingFuture.run(AbstractCatchingFuture.java:142)\r\n    at com.google.common.util.concurrent.DirectExecutor.execute(DirectExecutor.java:31)\r\n    at com.google.common.util.concurrent.AbstractFuture.executeListener(AbstractFuture.java:1270)\r\n    at com.google.common.util.concurrent.AbstractFuture.complete(AbstractFuture.java:1038)\r\n    at com.google.common.util.concurrent.AbstractFuture.setException(AbstractFuture.java:808)\r\n    at com.google.common.util.concurrent.SettableFuture.setException(SettableFuture.java:55)\r\n    at com.google.devtools.build.lib.remote.util.RxFutures$2.onError(RxFutures.java:257)\r\n    at io.reactivex.rxjava3.internal.operators.single.SingleFlatMap$SingleFlatMapCallback$FlatMapSingleObserver.onError(SingleFlatMap.java:117)\r\n    at io.reactivex.rxjava3.internal.operators.single.SingleUsing$UsingSingleObserver.onError(SingleUsing.java:180)\r\n    at io.reactivex.rxjava3.internal.operators.single.SingleCreate$Emitter.tryOnError(SingleCreate.java:95)\r\n    at io.reactivex.rxjava3.internal.operators.single.SingleCreate$Emitter.onError(SingleCreate.java:81)\r\n    at com.google.devtools.build.lib.remote.util.RxFutures$OnceSingleOnSubscribe$1.onFailure(RxFutures.java:172)\r\n    at com.google.common.util.concurrent.Futures$CallbackListener.run(Futures.java:1124)\r\n    at com.google.common.util.concurrent.DirectExecutor.execute(DirectExecutor.java:31)\r\n    at com.google.common.util.concurrent.AbstractFuture.executeListener(AbstractFuture.java:1270)\r\n    at com.google.common.util.concurrent.AbstractFuture.complete(AbstractFuture.java:1038)\r\n    at com.google.common.util.concurrent.AbstractFuture.setException(AbstractFuture.java:808)\r\n    at com.google.common.util.concurrent.SettableFuture.setException(SettableFuture.java:55)\r\n    at com.google.devtools.build.lib.remote.GrpcCacheClient$1.onError(GrpcCacheClient.java:422)\r\n    at io.grpc.stub.ClientCalls$StreamObserverToCallListenerAdapter.onClose(ClientCalls.java:478)\r\n    at io.grpc.PartialForwardingClientCallListener.onClose(PartialForwardingClientCallListener.java:39)\r\n    at io.grpc.ForwardingClientCallListener.onClose(ForwardingClientCallListener.java:23)\r\n    at io.grpc.ForwardingClientCallListener$SimpleForwardingClientCallListener.onClose(ForwardingClientCallListener.java:40)\r\n    at com.google.devtools.build.lib.remote.NetworkTimeInterceptor$NetworkTimeCall$1.onClose(NetworkTimeInterceptor.java:81)\r\n    at io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:562)\r\n    at io.grpc.internal.ClientCallImpl.access$300(ClientCallImpl.java:70)\r\n    at io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:743)\r\n    at io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:722)\r\n    at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)\r\n    at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)\r\n    ... 3 more\r\n  Caused by: io.grpc.StatusRuntimeException: UNAVAILABLE: io exception\r\nChannel Pipeline: [SslHandler#0, ProtocolNegotiators$ClientTlsHandler#0, WriteBufferingAndExceptionHandler#0, DefaultChannelPipeline$TailContext#0]\r\n    at io.grpc.Status.asRuntimeException(Status.java:535)\r\n    ... 14 more\r\n  Caused by: io.netty.handler.ssl.SslHandshakeTimeoutException: handshake timed out after 10000ms\r\n    at io.netty.handler.ssl.SslHandler$7.run(SslHandler.java:2113)\r\n    at io.netty.util.concurrent.PromiseTask.runTask(PromiseTask.java:98)\r\n    at io.netty.util.concurrent.ScheduledFutureTask.run(ScheduledFutureTask.java:170)\r\n    at io.netty.util.concurrent.AbstractEventExecutor.safeExecute(AbstractEventExecutor.java:164)\r\n    at io.netty.util.concurrent.SingleThreadEventExecutor.runAllTasks(SingleThreadEventExecutor.java:469)\r\n    at io.netty.channel.epoll.EpollEventLoop.run(EpollEventLoop.java:384)\r\n    at io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:986)\r\n    at io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)\r\n    at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)\r\n    ... 1 more\r\n```\r\n\r\nEvidence for the lack of retry is circumstantial: Unavailability of the server for >10s * 5 would have been unlikely, and if it was caused by a severed connection on time wait, I would have expected a reconnection attempt after the first. I observed this stack trace with a silent accepting remote endpoint from the Capabilities check (which also failed to retry).\r\n\r\n### What's the simplest, easiest way to reproduce this bug? Please provide a minimal example if possible.\r\n\r\n\r\nVery little easy here: a server would have to lose connection after startup and be replaced with a silent accepting one in the time period before a download began.\r\n\r\nMinimum spec: grpcs (not grpc plaintext), remote_cache (to inspire downloadBlob), hitting the remote cache for an action and downloading results.\r\n\r\n### Which operating system are you running Bazel on?\r\n\r\n\r\n_No response_\r\n\r\n### What is the output of `bazel info release`?\r\n\r\n\r\n6.2.0\r\n\r\n### If `bazel info release` returns `development version` or `(@non-git)`, tell us how you built Bazel.\r\n\r\n\r\n_No response_\r\n\r\n### What's the output of `git remote get-url origin; git rev-parse master; git rev-parse HEAD` ?\r\n\r\n\r\n_No response_\r\n\r\n### Is this a regression? If yes, please try to identify the Bazel commit where the bug was introduced.\r\n\r\n\r\n_No response_\r\n\r\n### Have you found anything relevant by searching the web?\r\n\r\n_No response_\r\n\r\n### Any other information, logs, or outputs that you want to share?\r\n\r\n_No response_",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/18764/comments",
+    "author": "werkt",
+    "comments": [
+      {
+        "user": "werkt",
+        "created_at": "2023-06-24T22:13:23Z",
+        "body": "Confirmed. The SslHandshakeException is continuously generated for a given connection, without the elapsed time to indicate that it would timeout with retries. Additionally, the unwrapping that happens in ReferenceCountedChannel will discard the retriable UNAVAILABLE SRE, leaving a single chance for a server to respond within 10s to a build client on RemoteModule startup under TLS."
+      },
+      {
+        "user": "werkt",
+        "created_at": "2023-06-24T22:13:39Z",
+        "body": "@coeuvre ^"
+      },
+      {
+        "user": "coeuvre",
+        "created_at": "2023-06-27T09:45:59Z",
+        "body": "Since you can reliably reproduce this error and it sounds easy to fix. Would you mind send us a PR?"
+      },
+      {
+        "user": "werkt",
+        "created_at": "2023-06-27T12:09:04Z",
+        "body": "> Since you can reliably reproduce this error and it sounds easy to fix. Would you mind send us a PR?\r\n\r\nHappy to. Solution will come in two parts - unwrap fix, then whatever is causing the same error from socket. I've only got the first so far."
+      },
+      {
+        "user": "werkt",
+        "created_at": "2023-07-19T02:32:08Z",
+        "body": "The associated #18836 fixes this 'enough' to get the retry in place. The remaining issue is one that looks like grpc-java is doing interesting things after it receives the first handshake timeout - the same exception is thrown repeatedly while no attempt to reconnect occurs, which means that the retries aren't given their fair shake after the first timeout. It will require more investigation, but it is no longer a bug in bazel. Closing."
+      }
+    ]
+  },
+  {
+    "number": 18006,
+    "title": "Make --profile path unique by default",
+    "created_at": "2023-04-06T13:38:22Z",
+    "closed_at": "2024-09-09T15:07:40Z",
+    "labels": [
+      "type: feature request",
+      "P2",
+      "team-Performance",
+      "help wanted"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/18006",
+    "body": "### Description of the feature request:\n\n\nIt is good to see that `--generate_json_trace_profile` is on by default for all build-like commands. What's unfortunate is that the JSON profiles are written, unconditionally, to a file named `command.profile.gz`. This means that a build will clobber the profile of a previous build.\r\n\r\nThe reason this is unfortunate is because when a user wants to report a \"my build was slow!\" situation, it is *very* likely that they have already run a second build and that the profile for the slow build is lost, nullifying all chances of troubleshooting the problem.\r\n\r\nIt'd be ideal if Bazel stamped the profiles under the output base, just like it does with the `java.log` files. This could be via a timestamp or via the invocation ID of the build or both. This should possibly also cap the number of log files stored to prevent uncontrolled disk growth.\n\n### What underlying problem are you trying to solve with this feature?\n\n\nHave the ability of obtaining profiles from users that report slow builds, without asking them to re-run the build. Rerunning a build is unlikely to showcase the same problems they previously experienced, so ensuring the profiles remain available is critical.\n\n### Which operating system are you running Bazel on?\n\n\nN/A\n\n### What is the output of `bazel info release`?\n\n\n6.1.1\n\n### If `bazel info release` returns `development version` or `(@non-git)`, tell us how you built Bazel.\n\n\n_No response_\n\n### What's the output of `git remote get-url origin; git rev-parse master; git rev-parse HEAD` ?\n\n\n_No response_\n\n### Have you found anything relevant by searching the web?\n\n_No response_\n\n### Any other information, logs, or outputs that you want to share?\n\n_No response_",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/18006/comments",
+    "author": "jmmv",
+    "comments": [
+      {
+        "user": "brentleyjones",
+        "created_at": "2023-04-06T13:40:20Z",
+        "body": "I would _love_ to see this changed, along with an easy way to collect the last `n` profiles."
+      }
+    ]
+  },
+  {
+    "number": 14973,
+    "title": "Document requirement for fusermount executable for sandboxfs",
+    "created_at": "2022-03-06T18:39:32Z",
+    "closed_at": "2024-12-06T15:05:16Z",
+    "labels": [
+      "type: documentation (cleanup)",
+      "P3",
+      "team-Local-Exec",
+      "help wanted",
+      "team-Documentation"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/14973",
+    "body": "`--experimental_use_sandboxfs` requires the fusermount executable (e.g. Debian fuse package) to work.\r\n\r\nThis requirement isn't listed (nor strictly necessary) in the install instructions of the sandboxfs project. The instructions list libfuse2, but not fuse.\r\n\r\n(Terribly unspecific error message make the problem worse. #5369)",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/14973/comments",
+    "author": "pauldraper",
+    "comments": [
+      {
+        "user": "benjaminp",
+        "created_at": "2023-10-12T20:09:22Z",
+        "body": "217fafe2b492de7349547cc3be2b9eef38628055"
+      }
+    ]
+  },
+  {
+    "number": 14209,
+    "title": "Log file output from --execution_log_json_file flag is not valid JSON",
+    "created_at": "2021-11-01T23:03:42Z",
+    "closed_at": "2023-06-08T01:36:14Z",
+    "labels": [
+      "type: bug",
+      "P3",
+      "team-Local-Exec",
+      "help wanted",
+      "stale"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/14209",
+    "body": "### Description of the problem / feature request:\r\n\r\nOutput to `execution_log_json_file` is not a valid JSON file when multiple actions are recorded.\r\n\r\n### Feature requests: what underlying problem are you trying to solve with this feature?\r\n\r\nWe are trying to parse the JSON execution log to gather some data with custom python and swift tools. `jq` seems to work with the file as output, but Python's `json.load` error:\r\n\r\n```\r\n  File \"./tools/bazel_execution_trace.py\", line 52, in <module>\r\n    _main()\r\n  File \"./tools/bazel_execution_trace.py\", line 19, in _main\r\n    for execution in json.load(args.execution_log)\r\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/__init__.py\", line 293, in load\r\n    return loads(fp.read(),\r\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/__init__.py\", line 357, in loads\r\n    return _default_decoder.decode(s)\r\n  File \"/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/decoder.py\", line 340, in decode\r\n    raise JSONDecodeError(\"Extra data\", s, end)\r\njson.decoder.JSONDecodeError: Extra data: line 135 column 2 (char 5713)\r\n```\r\n\r\nSwift's `JSONSerialization(with: stream)` error:\r\n```\r\nFatal error: error: Error Domain=NSCocoaErrorDomain Code=3840 \"Garbage at end.\" UserInfo={NSDebugDescription=Garbage at end.}\r\n```\r\n\r\n### Bugs: what's the simplest, easiest way to reproduce this bug? Please provide a minimal example if possible.\r\n\r\nAdd `--execution_log_json_file=path/to/log/file.log` to the bazel invocation and inspect the file. Observe that there is no beginning or ending `[]`s to indicate a top-level JSON array object and the objects aren't separated with `,`s. Instead we see something like this:\r\n\r\n```json\r\n{\r\n  \"commandArgs\": [...],\r\n  ...\r\n} {\r\n  \"commandArgs\": [...],\r\n  ...\r\n}\r\n```\r\n\r\n### What operating system are you running Bazel on?\r\n\r\nMacOS Big Sur 11.6.1\r\n\r\n### What's the output of `bazel info release`?\r\n\r\nrelease 5.0.0-pre.20211006.1\r\n\r\n###  Have you found anything relevant by searching the web?\r\n\r\nNo, I've searched StackOverflow, GitHub Issues, and the email threads for `execution_log_json_file`\r\n\r\n### Any other information, logs, or outputs that you want to share?\r\n\r\nI used the `jq` query from issue #13845 to verify that `jq` does, indeed, work with the output file.\r\n`jq  -r '.progressMessage, \"Primary output: \" + .listedOutputs[0], \"Properties: \", .platform.properties, \"\"' log.json`\r\n",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/14209/comments",
+    "author": "codeman9",
+    "comments": [
+      {
+        "user": "meisterT",
+        "created_at": "2021-11-09T09:30:07Z",
+        "body": "Not sure since when this is broken but I will happily accept a PR to fix it."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-05-25T01:35:13Z",
+        "body": "Thank you for contributing to the Bazel repository! This issue has been marked as stale since it has not had any activity in the last 1+ years. It will be closed in the next 14 days unless any other activity occurs or one of the following labels is added: \"not stale\", \"awaiting-bazeler\". Please reach out to the triage team (`@bazelbuild/triage`) if you think this issue is still relevant or you are interested in getting the issue resolved."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-06-08T01:36:13Z",
+        "body": "This issue has been automatically closed due to inactivity. If you're still interested in pursuing this, please reach out to the triage team (`@bazelbuild/triage`). Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 12045,
+    "title": "bazel query --output=maxrank doesn't work across repository boundaries",
+    "created_at": "2020-09-03T20:02:20Z",
+    "closed_at": "2023-05-13T01:32:18Z",
+    "labels": [
+      "type: bug",
+      "P3",
+      "team-Performance",
+      "help wanted",
+      "stale"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/12045",
+    "body": "GOOD:\r\n\r\n```\r\n/foo/BUILD:\r\nsh_binary(\r\n\tname = \"a\",\r\n\tsrcs = [\"a.sh\"],\r\n)\r\n\r\nsh_binary(\r\n\tname = \"b\",\r\n\tsrcs = [\"b.sh\"],\r\n\tdata= [\":a\"]\r\n)\r\n\r\n####\r\n\r\n% cd foo && bazel query --output=minrank '//...'\r\n0 //:b\r\n1 //:a\r\n```\r\n\r\nBAD:\r\n\r\n```\r\n/foo/BUILD\r\nsh_binary(\r\n\tname = \"a\",\r\n\tsrcs = [\"a.sh\"],\r\n\tvisibility = [\"//visibility:public\"],\r\n)\r\n\r\nsh_binary(\r\n\tname = \"b\",\r\n\tsrcs = [\"b.sh\"],\r\n\tdata = [\"@bar//:x\"]\r\n)\r\n\r\n/bar/BUILD\r\nalias(\r\n\tname = \"x\",\r\n\tactual = \"@foo//:a\",\r\n\tvisibility = [\"//visibility:public\"],\r\n)\r\n####\r\n\r\n% cd foo && bazel query --output=minrank '//...'\r\n0 //:b\r\n0 //:a\r\n```\r\n\r\nWhat I would expect in this scenario is something like:\r\n```\r\n0 //:b\r\n1 @bar//:x\r\n2 //:a\r\n```",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/12045/comments",
+    "author": "dmitrig01",
+    "comments": [
+      {
+        "user": "meisterT",
+        "created_at": "2020-12-04T08:39:55Z",
+        "body": "cc @Wyverald\r\n\r\nI am surprised to see that this cyclic reference works. Xudong, do you know whether that's officially supported?"
+      },
+      {
+        "user": "dmitrig01",
+        "created_at": "2020-12-04T23:33:31Z",
+        "body": "Cyclic reference between the two repositories you mean? interesting – I use it frequently. specifically, I have my main monorepo, but I have various http_archive dependencies for which I specify a build_file, which uses rules from my main repository, imported like this.\r\n\r\nIs it not officially supported in general for all usage, or specifically within the scope of returning interesting/intelligent results from queries?"
+      },
+      {
+        "user": "Wyverald",
+        "created_at": "2021-01-13T15:21:30Z",
+        "body": "Sorry for the delay (astonishingly I still don't know how to properly set up GitHub notifications) but yeah, this is supported behavior. Cyclic references do already exist between external repositories and are okay as long as there's no cycle between targets. The (in)famous example is that stardoc depends on bazel-skylib, which depends on stardoc."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-04-28T01:32:51Z",
+        "body": "Thank you for contributing to the Bazel repository! This issue has been marked as stale since it has not had any activity in the last 2+ years. It will be closed in the next 14 days unless any other activity occurs or one of the following labels is added: \"not stale\", \"awaiting-bazeler\". Please reach out to the triage team (`@bazelbuild/triage`) if you think this issue is still relevant or you are interested in getting the issue resolved."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-05-13T01:32:17Z",
+        "body": "This issue has been automatically closed due to inactivity. If you're still interested in pursuing this, please reach out to the triage team (`@bazelbuild/triage`). Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 11356,
+    "title": "Allow more flexibility for C++ file extensions given as input to rules or Starlark API",
+    "created_at": "2020-05-11T14:33:44Z",
+    "closed_at": "2023-05-24T01:34:29Z",
+    "labels": [
+      "type: feature request",
+      "P3",
+      "team-Rules-CPP",
+      "help wanted",
+      "stale"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/11356",
+    "body": "Currently, extensions are allowed for rules and the Starlark C++ API are hard-coded. This leads to users getting errors unnecessarily and we see a lot of PRs to add a new extension to the hard-coded list.\r\n\r\nWe should evaluate how to be more flexible with extensions in a safe way without breaking existing code.",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/11356/comments",
+    "author": "oquenchil",
+    "comments": [
+      {
+        "user": "loshca",
+        "created_at": "2020-05-12T13:40:41Z",
+        "body": "How about to start with\r\n1) removing extension validation for public headers and private headers in CcModule.java. \r\n2) removing extension validation in addPrivateHeader (CcCompilationHelper.java)?\r\n\r\nThis will not break existing code: cc_binary && cc_library still will use the hardcoded list to separate sources and private headers, but we can use any headers (including headers with no extension) in custom cc rules using cc_common.compile.\r\nIt looks cheap, but will help a lot!"
+      },
+      {
+        "user": "oquenchil",
+        "created_at": "2020-05-20T10:09:13Z",
+        "body": "Yes, that sounds excellent! If you want to send a PR we will review happily."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-05-10T01:31:56Z",
+        "body": "Thank you for contributing to the Bazel repository! This issue has been marked as stale since it has not had any activity in the last 1+ years. It will be closed in the next 14 days unless any other activity occurs or one of the following labels is added: \"not stale\", \"awaiting-bazeler\". Please reach out to the triage team (`@bazelbuild/triage`) if you think this issue is still relevant or you are interested in getting the issue resolved."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-05-24T01:34:28Z",
+        "body": "This issue has been automatically closed due to inactivity. If you're still interested in pursuing this, please reach out to the triage team (`@bazelbuild/triage`). Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 8259,
+    "title": "rule.toolchains should warn if anything except toolchain_type targets is used",
+    "created_at": "2019-05-08T08:15:02Z",
+    "closed_at": "2023-02-15T13:32:43Z",
+    "labels": [
+      "type: bug",
+      "P3",
+      "team-Configurability",
+      "help wanted",
+      "stale",
+      "next_month"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/8259",
+    "body": "A user attempted to add a rule like this:\r\n```\r\nnew_rule = rule(\r\n  implementation = _impl,\r\n  attrs = {...},\r\n  toolchains = [\"@bazel_tools//tools/cpp:cc_tools\"],\r\n)\r\n```\r\n\r\nThis is incorrect but not clear because of the difference between how `genrule` and `rule` use the `toolchains` attribute.\r\n\r\nCurrently, the error this gives is something like:\r\n`While resolving toolchains for target <snip>: no matching toolchains found for types //:cc_flags`. It should instead be made clear that the target rule type is invalid (since it should be a target created from `toolchain_type`.)",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/8259/comments",
+    "author": "katre",
+    "comments": [
+      {
+        "user": "katre",
+        "created_at": "2020-05-11T13:03:50Z",
+        "body": "Leaving this open in case anyone wants to pick it up."
+      },
+      {
+        "user": "sgowroji",
+        "created_at": "2023-02-15T13:32:43Z",
+        "body": "Hi there! We're doing a clean up of old issues and will be closing this one. Please reopen if you’d like to discuss anything further. We’ll respond as soon as we have the bandwidth/resources to do so.\t\t"
+      }
+    ]
+  },
+  {
+    "number": 7713,
+    "title": "Minimize output of --toolchain_resolution_debug",
+    "created_at": "2019-03-13T17:17:26Z",
+    "closed_at": "2021-03-12T01:24:20Z",
+    "labels": [
+      "type: feature request",
+      "P2",
+      "team-Configurability",
+      "help wanted"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/7713",
+    "body": "### Description of the problem / feature request:\r\n\r\n--toolchain_resolution_debug contains useful information for understanding why a toolchain was selected, but it's also very verbose - in an example case involving the Go rules, 1600 lines of output mostly of the form \"considering X; constraint doesn't match; rejected X\", plus a large number of repeated lines when unspecified actions choose a toolchain (_\"Selected execution platform //:builder_platform, type @io_bazel_rules_go//go:toolchain -> toolchain @go_sdk//:go_linux_amd64-impl\"_ 800 times)\r\n\r\n### Feature requests: what underlying problem are you trying to solve with this feature?\r\n\r\nIt'd be nice if this could be more compacted, and easier to scan. E.g. by collecting up the resolution details first, then producing a compact structured output second - \r\n\r\n    Toolchain resolution debug info:\r\n        @io_bazel_rules_go//go:toolchain for @bazel_tools//platforms:target_platform\r\n            Matched execution platforms and toolchains: {//:builder_platform -> @go_sdk//:go_linux_amd64-impl, @bazel_tools//platforms:host_platform -> @go_sdk//:go_linux_amd64-impl}\r\n            Rejected toolchains @go_sdk//:go_android_386-impl, @go_sdk//:go_android_amd64-impl, and 20 others for not matching constraint @bazel_tools//platforms:os , value @bazel_tools//platforms:linux\r\n        @io_bazel_rules_go//go:toolchain for @bazel_tools//platforms:host_platform\r\n            Matched execution platforms and toolchains: {//:builder_platform -> @go_sdk//:go_linux_amd64-impl, @bazel_tools//platforms:host_platform -> @go_sdk//:go_linux_amd64-impl}\r\n            Rejected toolchains @go_sdk//:go_android_386-impl, @go_sdk//:go_android_amd64-impl, and 20 others for not matching constraint @bazel_tools//platforms:os , value @bazel_tools//platforms:linux\r\n        @bazel_tools//tools/cpp:toolchain_type for @bazel_tools//platforms:target_platform\r\n        ...\r\n\r\nFor matching of toolchains against actions themselves, it seems it'd be better to either omit those lines, or to emit the target as well - 800 lines saying the go toolchain was selected but without context don't quite solve that well.\r\n\r\n### Bugs: what's the simplest, easiest way to reproduce this bug? Please provide a minimal example if possible.\r\n\r\nAdd --toolchain_resolution_debug to any build including Go.",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/7713/comments",
+    "author": "EricBurnett",
+    "comments": [
+      {
+        "user": "cushon",
+        "created_at": "2019-03-13T21:21:31Z",
+        "body": "see also b/126375095"
+      },
+      {
+        "user": "katre",
+        "created_at": "2020-05-11T12:54:01Z",
+        "body": "This is being left open because it's still an issue, but I don't have any good ideas for better ways to report this output.\r\n\r\nIf anyone does have ideas, I'd welcome comments or PRs."
+      }
+    ]
+  },
+  {
+    "number": 6418,
+    "title": "Test fails if give function long name",
+    "created_at": "2018-10-17T09:15:17Z",
+    "closed_at": "2023-04-01T01:31:06Z",
+    "labels": [
+      "type: bug",
+      "P3",
+      "area-EngProd",
+      "team-OSS",
+      "help wanted",
+      "stale"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/6418",
+    "body": "Steps to reproduce:\r\n\r\n1) run: bazel test //src/test/shell/bazel:bazel_enable_disable_tools_defaults_flag_test\r\nexpected result: passed\r\n\r\n2) vim src/test/shell/bazel/bazel_enable_disable_tools_defaults_flag_test.sh\r\nchange line 91 from \r\n`function test_independent_target_doesnt_depend_on_flag (){`\r\nto \r\n`function test_independent_target_doesnt_depend_on_flag_very_long_name_very_long_name_very_long_name_very_long_name_very_long_name (){\r\n`\r\n3) run: bazel test //src/test/shell/bazel:bazel_enable_disable_tools_defaults_flag_test\r\nexpected result: passed\r\nactual result: failed without any error in log file\r\n",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/6418/comments",
+    "author": "dbabkin",
+    "comments": [
+      {
+        "user": "philwo",
+        "created_at": "2019-05-06T11:44:08Z",
+        "body": "Looks like a bug in our test framework (or maybe in bash?). Unlikely to fix, because people can just use a shorter test name, but if someone wants to send a PR, I'm happy to review it."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-03-16T01:33:38Z",
+        "body": "Thank you for contributing to the Bazel repository! This issue has been marked as stale since it has not had any activity in the last 2.5 years. It will be closed in the next 14 days unless any other activity occurs or one of the following labels is added: \"not stale\", \"awaiting-bazeler\". Please reach out to the triage team (`@bazelbuild/triage`) if you think this issue is still relevant or you are interested in getting the issue resolved."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-04-01T01:31:06Z",
+        "body": "This issue has been automatically closed due to inactivity. If you're still interested in pursuing this, please reach out to the triage team (`@bazelbuild/triage`). Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 4254,
+    "title": "bazel --client_debug should print server.pid location",
+    "created_at": "2017-12-07T19:27:00Z",
+    "closed_at": "2023-05-11T01:31:28Z",
+    "labels": [
+      "type: feature request",
+      "P3",
+      "team-OSS",
+      "help wanted",
+      "stale"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/4254",
+    "body": "We got a workspace into a strange state: the server process had been killed, but the client kept trying to connect to it. Don't know how to repro.\r\n\r\nHowever, recovering from this was difficult, because\r\n- we didn't know where bazel keeps the server pid\r\n- when we did figure out that it's in the output_base, we couldn't run `bazel info` to find out the location of the output_base\r\n\r\nWe did discover `bazel --client_debug` from the documentation, but it didn't tell us how it finds the server. If it printed the absolute path to the server-pid.txt file it would have saved a lot of trouble.",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/4254/comments",
+    "author": "alexeagle",
+    "comments": [
+      {
+        "user": "dahlstrom-g",
+        "created_at": "2018-07-07T02:59:44Z",
+        "body": "Incidentally maybe you can find it this way:\r\n```\r\n$ ls ~/.cache/bazel/*/*/server/server.pid.txt\r\n```"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-04-26T01:31:11Z",
+        "body": "Thank you for contributing to the Bazel repository! This issue has been marked as stale since it has not had any activity in the last 2+ years. It will be closed in the next 14 days unless any other activity occurs or one of the following labels is added: \"not stale\", \"awaiting-bazeler\". Please reach out to the triage team (`@bazelbuild/triage`) if you think this issue is still relevant or you are interested in getting the issue resolved."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-05-11T01:31:27Z",
+        "body": "This issue has been automatically closed due to inactivity. If you're still interested in pursuing this, please reach out to the triage team (`@bazelbuild/triage`). Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 3497,
+    "title": "query: support --relative_locations with --output=location",
+    "created_at": "2017-08-03T06:53:28Z",
+    "closed_at": "2020-10-16T10:35:37Z",
+    "labels": [
+      "type: feature request",
+      "P3",
+      "team-Performance",
+      "help wanted"
+    ],
+    "url": "https://github.com/bazelbuild/bazel/issues/3497",
+    "body": "The `--relative_locations` flag makes the output of `query` with `--output=proto` and `--output=xml` more succinct, readable, and machine independent. However, `--relative_locations` does nothing for `--output=location`, whose output could also benefit from analogous abbreviation.\r\n\r\nTechnically, making `--relative_locations` have effect for `--output=location` would be a breaking change, since it currently silently does nothing. I'm not sure how serious that is, though.",
+    "comments_url": "https://api.github.com/repos/bazelbuild/bazel/issues/3497/comments",
+    "author": "benjaminp",
+    "comments": [
+      {
+        "user": "gregestren",
+        "created_at": "2020-05-01T16:17:48Z",
+        "body": "@meisterT - do you / we have an agreed on triage process for `query` bugs now? Note we have a `query bugs` label."
+      }
+    ]
+  }
+]

@@ -1,0 +1,109 @@
+[
+  {
+    "number": 19,
+    "title": "feat: final revisions",
+    "created_at": "2024-08-28T21:38:22Z",
+    "closed_at": "2024-08-29T01:35:25Z",
+    "labels": [],
+    "url": "https://github.com/platformatic/ssr-performance-showdown/pull/19",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/platformatic/ssr-performance-showdown/issues/19/comments",
+    "author": "galvez",
+    "comments": [
+      {
+        "user": "ryansolid",
+        "created_at": "2024-08-28T22:01:08Z",
+        "body": "I see.. removing keying altogether.. I might need to change the Solid implementation then as our `For` is implicitly keyed. I hate to ask but given I have spent some time here. Can we delay the article until I get a chance to look at these changes?\r\n"
+      },
+      {
+        "user": "galvez",
+        "created_at": "2024-08-28T22:46:22Z",
+        "body": "Think this updated piece only goes out tomorrow — feel free to commit improvements to the Solid version as long as it doesn't break the consistency rules. I've added you as a collaborator on my repo."
+      },
+      {
+        "user": "ryansolid",
+        "created_at": "2024-08-28T22:52:50Z",
+        "body": "It is getting close to the end of my work day so I'm scrambling a bit here. I do have a question though. Why `toFixed`? Like it adds extra overhead on the rendering and it doesn't make the styles any more accurate. It could be considered busy work I guess but the excess bandwidth over HTML doesn't make up for the computational cost. So it's like busy work for no gain which is independent of the framework rendering like a fixed cost tax.\r\n\r\nAlso I don't think template literals as a consistency rule for style is fair. It's stylistic choice that shouldn't be normalized. I guess the question is what do you want normalized? The output? The input? You can't get normalized output as it is because every framework has their own markers and identifiers. You can't get normalized input because they have different templating/reactivity. As we learned in the JS Framework Benchmark, the only thing you can do is have concrete behavioral constraints and then let every implementation be written in the way most reasonable for them. Otherwise its picking favorites. And I won't support that."
+      },
+      {
+        "user": "galvez",
+        "created_at": "2024-08-28T23:06:24Z",
+        "body": "Without it, there's a rendering mismatch on Vue and React. \r\n\r\nSomething about the float precision in Node and on the browser, it seems to vary a lot. \r\n\r\nI think you make a good case re: style attribute being rendered to the best of each framework's idiomatic ability — since React actually requires us to use an object. Feel free to change that in the Solid version as well!\r\n"
+      },
+      {
+        "user": "galvez",
+        "created_at": "2024-08-28T23:07:14Z",
+        "body": "You should have gotten an invite to my repo where this PR stems from. Please push directly to my branch."
+      },
+      {
+        "user": "ryansolid",
+        "created_at": "2024-08-29T00:33:04Z",
+        "body": "Ok. I'm glad I got to review this as the results here changed considerably over something as trivial as adding `toFixed(2)` which you would think would just add a little bit of extra processing to everyone. But it had a different effect. It reduced the overall bandwidth of the HTML document being sent. Significantly enough that the size difference actually makes a bigger impact now on what `autocannon` shows. Remember `autocannon` doesn't just test raw render performance but also how long it takes to transfer all the bytes.\r\n\r\nTools that have larger HTML output to help with hydration got punished more, ie this favors libraries that don't hydrate (fastify-html) or that use Virtual DOMs (Vue, Preact, React) and as to not depend on as many HTML markers. This advantage would disappear as pages got larger but now has more impact on the final results. Given what this benchmark intends to show this is probably reasonable. Solid has the largest output because of our hydration IDs. This was masked previously by large style elements and is the cause of the drop for us. Even removing our inline script that does event replay and manages streaming, which is included but not being used in this benchmark, showed a 20-30 request improvement. I turned off hydration so that we generated the same HTML output as the others and sure enough we score right near the top (Between fastify-html, and vue).\r\n\r\nEven keeping hydration and changing to `toFixed(16)` showed similar results. Basically a test where each element is independent is our worst case. If there were larger templates with more elements/attributes this overhead isn't as emphasized. I won't make the argument for realism here as SFC styles defacto in certain solutions also come with disproportional overhead and have been avoided.\r\n\r\nWhile equally arbitrary given there is no reactivity, I don't get the sense turning off hydration features is in the spirit of the benchmark even if it means that Solid's score is punished by having slightly larger payloads due to having thousands of additional attributes given the way this benchmark is constructed and the way it measures speed. Looking at Bytes per Second you get a different perspective on rendering speed. I'm glad that this will also shown in the article.\r\n\r\nI think the overall message is clear that client frameworks are essentially no slower than specialized HTML renderers especially when you consider what they offer (ie.. interactive client components). And that should come as a surprise to no one considering we've had almost a decade to optimize them for this case.\r\n\r\nGo ahead and merge and publish etc... I won't be changing anything else. It looks legit. Thanks for your patience, and humoring my request to review this further."
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "Align implementations around keying",
+    "created_at": "2024-08-28T16:14:45Z",
+    "closed_at": "2024-08-28T22:17:48Z",
+    "labels": [],
+    "url": "https://github.com/platformatic/ssr-performance-showdown/pull/17",
+    "body": "This PR implements what I refer to in #16. While it leaves Solid basically holding the bag on serialization due to our hydration mechanism I think it is fair. We also are the only hydration implementation that doesn't use id keyed lists (but they are keyed) but that's part of the tradeoff. \r\n\r\nThe end result is at least locally fastify-html takes the crown again as I'd expect it to. Although I imagine hydratable frameworks with hydration disabled should give it a run for its money.",
+    "comments_url": "https://api.github.com/repos/platformatic/ssr-performance-showdown/issues/17/comments",
+    "author": "ryansolid",
+    "comments": [
+      {
+        "user": "galvez",
+        "created_at": "2024-08-28T22:13:19Z",
+        "body": "@mcollina I already did this in the final revisions PR, feel free to close. Thanks @ryansolid!"
+      },
+      {
+        "user": "ryansolid",
+        "created_at": "2024-08-28T22:17:44Z",
+        "body": "Yeah actually made them all unkeyed which is different I need to review your update now. But yeah it solves the same issue from the otherside. So I will close this."
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "remove unused `data-key` attribute",
+    "created_at": "2024-08-28T02:21:28Z",
+    "closed_at": "2024-08-28T06:32:02Z",
+    "labels": [],
+    "url": "https://github.com/platformatic/ssr-performance-showdown/pull/10",
+    "body": "I figure if #6 can do it, so can we — another 22% speed boost\r\n\r\nBefore:\r\n\r\n```\r\n┌─────────┬──────┬───────┬───────┬───────┬──────────┬─────────┬───────┐\r\n│ Stat    │ 2.5% │ 50%   │ 97.5% │ 99%   │ Avg      │ Stdev   │ Max   │\r\n├─────────┼──────┼───────┼───────┼───────┼──────────┼─────────┼───────┤\r\n│ Latency │ 9 ms │ 10 ms │ 21 ms │ 22 ms │ 10.92 ms │ 3.37 ms │ 37 ms │\r\n└─────────┴──────┴───────┴───────┴───────┴──────────┴─────────┴───────┘\r\n┌───────────┬────────┬────────┬────────┬────────┬────────┬─────────┬────────┐\r\n│ Stat      │ 1%     │ 2.5%   │ 50%    │ 97.5%  │ Avg    │ Stdev   │ Min    │\r\n├───────────┼────────┼────────┼────────┼────────┼────────┼─────────┼────────┤\r\n│ Req/Sec   │ 773    │ 773    │ 881    │ 901    │ 871.7  │ 36.56   │ 773    │\r\n├───────────┼────────┼────────┼────────┼────────┼────────┼─────────┼────────┤\r\n│ Bytes/Sec │ 214 MB │ 214 MB │ 244 MB │ 250 MB │ 241 MB │ 10.1 MB │ 214 MB │\r\n└───────────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┘\r\n```\r\n\r\nAfter:\r\n\r\n```\r\n┌─────────┬──────┬──────┬───────┬───────┬─────────┬─────────┬───────┐\r\n│ Stat    │ 2.5% │ 50%  │ 97.5% │ 99%   │ Avg     │ Stdev   │ Max   │\r\n├─────────┼──────┼──────┼───────┼───────┼─────────┼─────────┼───────┤\r\n│ Latency │ 7 ms │ 8 ms │ 17 ms │ 17 ms │ 8.92 ms │ 2.84 ms │ 32 ms │\r\n└─────────┴──────┴──────┴───────┴───────┴─────────┴─────────┴───────┘\r\n┌───────────┬────────┬────────┬────────┬────────┬──────────┬─────────┬────────┐\r\n│ Stat      │ 1%     │ 2.5%   │ 50%    │ 97.5%  │ Avg      │ Stdev   │ Min    │\r\n├───────────┼────────┼────────┼────────┼────────┼──────────┼─────────┼────────┤\r\n│ Req/Sec   │ 944    │ 944    │ 1,077  │ 1,088  │ 1,062.19 │ 40.2    │ 944    │\r\n├───────────┼────────┼────────┼────────┼────────┼──────────┼─────────┼────────┤\r\n│ Bytes/Sec │ 226 MB │ 226 MB │ 258 MB │ 261 MB │ 255 MB   │ 9.65 MB │ 226 MB │\r\n└───────────┴────────┴────────┴────────┴────────┴──────────┴─────────┴────────┘\r\n```",
+    "comments_url": "https://api.github.com/repos/platformatic/ssr-performance-showdown/issues/10/comments",
+    "author": "Rich-Harris",
+    "comments": [
+      {
+        "user": "mcollina",
+        "created_at": "2024-08-28T04:29:44Z",
+        "body": "Unfortunately this now conflicts"
+      },
+      {
+        "user": "ryansolid",
+        "created_at": "2024-08-28T05:07:08Z",
+        "body": "Yeah Solid keys by reference not by ID. That being said Svelte keys by #each directive argument not by data attribute. And React wouldn't serialize it's key so the whole thing seemed a bit off."
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "Align Svelte implementation with all the others",
+    "created_at": "2024-08-27T19:01:42Z",
+    "closed_at": "2024-08-28T04:24:05Z",
+    "labels": [],
+    "url": "https://github.com/platformatic/ssr-performance-showdown/pull/2",
+    "body": "Every implementation does `tiles.push` except for the Svelte one, which does `tiles = [...tiles, ...]`. That's the only reason Svelte is slower than the others.\r\n\r\nIf you make the implementations more similar, Svelte outpaces React, Solid and Vue at least according to my local tests with autocannon. If you use Svelte 5 instead of Svelte 3 (I'll open a separate PR for that), it's faster than the `fastify-html` test:\r\n\r\n```\r\nfastify-html — 735.4\r\nreact - 136.6\r\nsolid - 558.4\r\nsvelte - 134\r\nvue - 115.4\r\n\r\nsvelte fixed — 752.3\r\nsvelte@next — 872.6\r\n```\r\n\r\n(Note that Vue is slower than React. I'm not sure why you got such different results there.)",
+    "comments_url": "https://api.github.com/repos/platformatic/ssr-performance-showdown/issues/2/comments",
+    "author": "Rich-Harris",
+    "comments": [
+      {
+        "user": "zsilbi",
+        "created_at": "2024-08-27T22:15:24Z",
+        "body": "> (Note that Vue is slower than React. I'm not sure why you got such different results there.)\n\nI created a PR to address that.\n\n"
+      }
+    ]
+  }
+]

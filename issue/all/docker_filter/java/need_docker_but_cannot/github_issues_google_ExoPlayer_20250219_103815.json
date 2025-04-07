@@ -1,0 +1,495 @@
+[
+  {
+    "number": 9148,
+    "title": "How to clear the view and the buffer?",
+    "created_at": "2021-07-04T13:31:44Z",
+    "closed_at": "2021-09-06T13:41:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/9148",
+    "body": "My app is focusing on downloading videos and then playing them with Exoplayer. And obviously Downloading comes together with deleting the file.\r\n\r\nSo the downloading/playing parts work but then I want to be able to clear the player when the user is deleting the video he/she is playing. So I have:\r\n\r\n```\r\nvideoView.player?.stop()\r\nvideoView.player?.release()\r\n```\r\n\r\nHowever, the videoview still shows the image that it was last playing and I'm also guessing that the buffer is still there because when I delete and redownload the same video just after I cannot play it, it gives me this error:\r\n\r\n```\r\nE/ExoPlayerImplInternal: Playback error\r\n      com.google.android.exoplayer2.ExoPlaybackException: Source error\r\n        at com.google.android.exoplayer2.ExoPlayerImplInternal.handleMessage(ExoPlayerImplInternal.java:580)\r\n        at android.os.Handler.dispatchMessage(Handler.java:102)\r\n        at android.os.Looper.loop(Looper.java:246)\r\n        at android.os.HandlerThread.run(HandlerThread.java:67)\r\n     Caused by: com.google.android.exoplayer2.source.UnrecognizedInputFormatException: None of the available extractors (Mp4Extractor, AdtsExtractor) could read the stream.\r\n        at com.google.android.exoplayer2.source.BundledExtractorsAdapter.init(BundledExtractorsAdapter.java:92)\r\n        at com.google.android.exoplayer2.source.ProgressiveMediaPeriod$ExtractingLoadable.load(ProgressiveMediaPeriod.java:1027)\r\n        at com.google.android.exoplayer2.upstream.Loader$LoadTask.run(Loader.java:417)\r\n        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)\r\n        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)\r\n        at java.lang.Thread.run(Thread.java:923)\r\n```\r\n\r\n(i tried to use all the possible exrtractors)\r\n\r\nHow can I clear view and buffer in this case and then still being able to play the new downloaded video?",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/9148/comments",
+    "author": "Clement-Jean",
+    "comments": [
+      {
+        "user": "marcbaechinger",
+        "created_at": "2021-07-05T12:00:55Z",
+        "body": "Can you give some more details what you do after calling `release`? Because I'd say that after releasing you have to recreate the player to restart playback with a new stream.\r\n\r\nI don't think it has something to do with the buffer because data in the buffer isn't read by the extractor. For my understanding the data in the buffer has been extracted by an extractor already and is then buffered before it is sent to the codec.\r\n\r\nCan you give some more details in how you release and then recreate the player in your code?"
+      },
+      {
+        "user": "Clement-Jean",
+        "created_at": "2021-07-05T23:21:39Z",
+        "body": "I was not recreating the player but yesterday I saw that the `release` documentation says something like `don't use the player after calling this`.\n\nSo I recreated it and it works. However, I wonder if there is a less \"heavy\" way of doing this because I have a player with a Playlist (ConcatenatingMediaSource) and I need to reinitialize everything each time this event happens.\n\nWhat do you think ?"
+      },
+      {
+        "user": "marcbaechinger",
+        "created_at": "2021-07-07T09:51:59Z",
+        "body": "I think it should be enough to just remove the `MediaSource` for the given stream to the download that have been removed. Then you can create a new `MediaSource` and add it to the `ConcatentaingMediaSource` again. When the user then seeks to that item in the playlist (or playback transitions to it automatically), the new source will be prepared.\r\n\r\n```\r\nconcatenatingMediaSource.removeMediaSource(index);\r\nconcatenatingMediaSource.addMediaSource(index, newMediaSource);\r\n```\r\n\r\nAs an aside, we support playlist with a top level API since a while (2.12). So you could move from the concatenating media source to `player.addMediaSource()`. \r\n\r\n```\r\nplayer.removeMediaSource(index);\r\nplayer.addMediaSource(index, newMediaSource);\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must fully reset player state to prevent residual UI elements",
+      "Must handle media source replacement without file conflicts",
+      "Should maintain playlist integrity during media source updates",
+      "Must explain proper player lifecycle management for resource reuse"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:50:30"
+    }
+  },
+  {
+    "number": 8116,
+    "title": "Widevine license renewal using azure media services",
+    "created_at": "2020-10-26T14:11:06Z",
+    "closed_at": "2020-11-09T11:42:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/8116",
+    "body": "hello, \r\n\r\nI'm trying to renew my widevine offline license for playback, I'm not able to do so with azure media services because it provides a dynamic license server URL that is included in the manifest.\r\n\r\na bug report was opened for a variant of this issue #3393  and was fixed. ( when the player doesn't parse incoming data in the manifest and now that it is fixed , the parser reads directly from the manifest and parses the azure license URL without a problem.)   \r\n\r\nmy issue comes at hand when I'm trying to renew my license using a dynamic license URL because I can't include it in my widevine license template in the field renewal_server_url since it's not static, and azure media services does not provide a commun url for their license server.\r\n\r\nwhat can i do to retreive the license url in order to ask for a renewal?\r\n\r\nVersion of ExoPlayer being used\r\n2.12.0\r\n\r\nHUAWEI P30 LITE\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/8116/comments",
+    "author": "AnassHmida",
+    "comments": [
+      {
+        "user": "ojw28",
+        "created_at": "2020-10-27T19:06:17Z",
+        "body": "If the URL is included in the manifest then I think you'll need to request and parse the manifest, and then retrieve the URL from it. You can load and parse the manifest with `DashUtil.loadManifest`. Once you have it, you can dig around inside the `DashManifest` to retrieve the license URL. I didn't test this, but it's probably retrievable via:\r\n```\r\ndashManifest.getPeriod(0).adaptationSets.get(0).representations.get(0).format.drmInitData.get(0).licenseServerUrl\r\n```\r\nIf not, try attaching a debugger and exploring in the `DashManifest` object. "
+      },
+      {
+        "user": "AnassHmida",
+        "created_at": "2020-10-27T19:22:34Z",
+        "body": "Good evening @ojw28,\r\nThank you for your detailed response, i will get back to you after i test this. \r\nI do have one last question tho,\r\nafter renewing my license for offline playback , do i need to replace the generated keysetid response from offlinelicencehelper.renewlicense with the one that is linked to the download so i can playback my downloaded content with the new license or is there an other step to it?\r\n\r\n"
+      },
+      {
+        "user": "ojw28",
+        "created_at": "2020-11-02T11:20:40Z",
+        "body": "If you're using `OfflineLicenseHelper.renewLicense`, was your initial question about getting a `defaultLicenseUrl` to build a `HttpMediaDrmCallback`? I'm not sure, but it might be possible for you to set it to any dummy value for your media, if it's always specifying a URL internally. That would avoid you needing to look inside the DASH manifest. In future releases we will allow this parameter to be `null`.\r\n\r\n> after renewing my license for offline playback , do i need to replace the generated keysetid response from offlinelicencehelper.renewlicense with the one that is linked to the download so i can playback my downloaded content with the new license or is there an other step to it?\r\n\r\nI'm not entirely sure what you're asking here. Is the `keySetId` returned by `renewLicense` _different_ to the one when the license was originally obtained, or is it the same? If the `keySetId` has changed, you'll need to use the one returned by `renewLicense` for successful playback after renewal. We should probably look at an easy way to update the download database in this case."
+      },
+      {
+        "user": "AnassHmida",
+        "created_at": "2020-11-02T14:06:31Z",
+        "body": "@ojw28 yes that's exactly what I meant, and by setting that value to `null` will that mean it will use a license URL if it has one and `null` if it doesn't?\r\n\r\nas for the download part, that is what I meant precisely, I use the `newkeySetId `generated from the `OfflineLicenseHelper.renewLicense` function using my old `keySetId` like this : \r\n\r\n```\r\n        keySetId = mediaItem.playbackProperties.drmConfiguration.getKeySetId();\r\n        android.util.Log.d(TAG, \"doInBackground: Old key : \"+ Arrays.toString(keySetId));\r\n        newkeySetId = offlineLicenseHelper.renewLicense(keySetId);\r\n        android.util.Log.d(TAG, \"doInBackground: new key : \"+Arrays.toString(newkeySetId));\r\n```\r\n\r\nThen afterwards , i'm creating a new downloadRequest  using the same data from the old DownloadRequest and only replacing my old `keySetId ` with the new `newkeySetId` and adding that request to a new download and replacing that download with the one in the `downloads` list, here's the function that i'm using to do so : \r\n\r\n`updateDownloadwithKeySetId(mediaItem, newkeySetId);`\r\n\r\nHere's how it works.\r\n\r\n```\r\n private void  updateDownloadwithKeySetId(MediaItem mediaItem,byte[] KeysetId) {\r\n\r\n//Adding a new download request using previous data from my stored download Request.\r\n//Here i'm using my uri for the ID.\r\n\r\n  DownloadRequest downloadRequest = downloadHelper.getDownloadRequest(Util.getUtf8Bytes(checkNotNull(mediaItem.mediaMetadata.title))).copyWithKeySetId(keySetId);\r\n\r\n    DownloadRequest newDownloadRequest =\r\n            new DownloadRequest.Builder(downloadRequest.id, downloadRequest.uri)\r\n                    .setStreamKeys(downloadRequest.streamKeys)\r\n                    .setCustomCacheKey(downloadRequest.customCacheKey)\r\n//Changing the keysetId here\r\n                    .setKeySetId(keySetId)\r\n                    .setData(downloadRequest.data)\r\n                    .setMimeType(downloadRequest.mimeType)\r\n                    .build();\r\n\r\n\r\n//creating a new download based on the stored download (Updating Download Request).\r\n\r\n    Download download = downloads.get(checkNotNull(mediaItem.playbackProperties).uri);\r\n\r\n    Download download1 = new Download(\r\n            newDownloadRequest,\r\n            download.state,\r\n            download.startTimeMs,\r\n            download.updateTimeMs,\r\n            download.contentLength,\r\n            download.stopReason,\r\n            download.failureReason);\r\n\r\n//Replacing the old download with the new modified one.\r\n\r\n    downloads.put(mediaItem.playbackProperties.uri,download1);\r\n    Download justDownloaded = downloads.get(checkNotNull(mediaItem.playbackProperties).uri);\r\n\r\n    /*Checking */\r\n\r\n    String justDown = new String(justDownloaded.request.keySetId);\r\n    String oldDown = new String(download.request.keySetId);\r\n\r\n    if(justDown.equals(oldDown)){\r\n      android.util.Log.d(TAG, \"onPostExecute: License renew error.\");\r\n    }else{\r\n      android.util.Log.d(TAG, \"onPostExecute: License has been renewed.\");\r\n    }\r\n\r\n  }\r\n```\r\nNot sure if this is the correct approach to achieve license renewal.\r\nthis function is not tested because I'm not able to receive a new `keySetID` from the azure license URL ( for some reason )  , but I wrote it based on the logic of what will happen when my license is renewed."
+      },
+      {
+        "user": "ojw28",
+        "created_at": "2020-11-09T11:20:07Z",
+        "body": "> We should probably look at an easy way to update the download database in this case.\r\n\r\nAha, it looks like you've figured out how to do this, just by adding the same download request again with an updated `keySetId`. Nice one :)! It looks like that should work fine, although we can optimize it slightly to not moving the download out of the `STATE_COMPLETED` state.\r\n\r\nI think everything else you've written looks sensible/correct. Can I close this issue as answered?"
+      },
+      {
+        "user": "AnassHmida",
+        "created_at": "2020-11-09T11:42:49Z",
+        "body": "> > We should probably look at an easy way to update the download database in this case.\r\n> \r\n> Aha, it looks like you've figured out how to do this, just by adding the same download request again with an updated `keySetId`. Nice one :)! It looks like that should work fine, although we can optimize it slightly to not moving the download out of the `STATE_COMPLETED` state.\r\n> \r\n> I think everything else you've written looks sensible/correct. Can I close this issue as answered?\r\n\r\n\r\nYes, I believe you can, my problem is now with azure, since everything works as intended in here. \r\nThank you for your guidance! \r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to dynamically retrieve the Widevine license server URL from the Azure Media Services manifest",
+      "Clear guidance on associating renewed licenses with offline content",
+      "Validation of the license renewal workflow with dynamic URLs",
+      "Compatibility with Azure Media Services' license delivery mechanism"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:53:29"
+    }
+  },
+  {
+    "number": 8084,
+    "title": "The custom render can only play for 52 seconds. Is there anything that needs special treatment?",
+    "created_at": "2020-10-18T10:34:35Z",
+    "closed_at": "2020-10-19T09:31:58Z",
+    "labels": [
+      "question",
+      "need more info"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/8084",
+    "body": "I customized the audio and video render, processed the data in the processOutputBuffer method, and then released the outputbuffer, but each time it can only be played for 52 seconds, the processOutputBuffer stops outputting. Is there anything that needs special treatment?\r\n\r\n--------------------------\r\n\r\nThanks for answering\r\n--------------------------\r\ncode\uff1a\r\n\r\nplayer\r\n```\r\nRtmpDataSourceFactory rtmpDataSourceFactory = new RtmpDataSourceFactory();\r\n        MediaSource videoSource = new ProgressiveMediaSource.Factory(rtmpDataSourceFactory)\r\n                .createMediaSource(MediaItem.fromUri(Uri.parse(mRtmpUrl)));\r\n        TrackSelection.Factory trackSelectionFactory = new AdaptiveTrackSelection.Factory();\r\n        DefaultTrackSelector trackSelector = new DefaultTrackSelector(AppContext.get(), trackSelectionFactory);\r\n        mExoPlayer = new SimpleExoPlayer.Builder(AppContext.get(), new RenderersFactory() {\r\n            @Override\r\n            public Renderer[] createRenderers(Handler eventHandler, VideoRendererEventListener videoRendererEventListener, AudioRendererEventListener audioRendererEventListener, TextOutput textRendererOutput, MetadataOutput metadataRendererOutput) {\r\n                Renderer [] renderers = new Renderer[2];\r\n                renderers[0]= new CustomMediaCodecAudioRenderer(AppContext.get(), MediaCodecSelector.DEFAULT);\r\n                renderers[1]= new CustomMediaCodecVideoRenderer(AppContext.get(), MediaCodecSelector.DEFAULT);\r\n                return renderers;\r\n            }\r\n        }).setTrackSelector(trackSelector).build();\r\n mExoPlayer.addListener(new Player.EventListener() {\r\n ...\r\n@Override\r\n   public void onIsLoadingChanged(boolean isLoading) {\r\n      Log.info(TAG,\"onIsLoadingChanged == \"+ isLoading);\r\n               \r\n     }\r\n}\r\nmExoPlayer.setMediaSource(videoSource);\r\nmExoPlayer.prepare();\r\nmExoPlayer.setPlayWhenReady(true);\r\n```\r\n\r\nrender:\r\n\r\n```\r\npublic class CustomMediaCodecVideoRenderer extends MediaCodecVideoRenderer {\r\n ...\r\n @Override\r\n    protected boolean processOutputBuffer(long positionUs, long elapsedRealtimeUs, @Nullable MediaCodec codec, @Nullable ByteBuffer buffer, int bufferIndex, int bufferFlags, int sampleCount, long bufferPresentationTimeUs, boolean isDecodeOnlyBuffer, boolean isLastBuffer, Format format) throws ExoPlaybackException {\r\n        ByteBuffer byteBuffer = codec.getOutputBuffer(bufferIndex);\r\n        CPHAgent.instance().submitI420(byteBuffer);\r\n       codec.releaseOutputBuffer(bufferIndex,false);\r\n        return true;\r\n\r\n    }\r\n}\r\n```\r\n\r\n```\r\npublic class CustomMediaCodecAudioRenderer extends MediaCodecAudioRenderer {\r\n @Override\r\n    protected boolean processOutputBuffer(long positionUs, long elapsedRealtimeUs, @Nullable MediaCodec codec, @Nullable ByteBuffer buffer, int bufferIndex, int bufferFlags, int sampleCount, long bufferPresentationTimeUs, boolean isDecodeOnlyBuffer, boolean isLastBuffer, Format format) throws ExoPlaybackException {\r\n         ByteBuffer byteBuffer = codec.getOutputBuffer(bufferIndex);\r\n        CPHAgent.instance().submitPCM(byteBuffer);\r\n        codec.releaseOutputBuffer(bufferIndex,false);\r\n        return true;\r\n    }\r\n}\r\n```\r\nLog\uff1a(Every time the processOutputBuffer stops outputting after 52 seconds of playback, I use other players to see that the data stream is working)\r\n```\r\n2020-10-18 18:12:04.517 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:62:setup()] -- setup() -- \r\n2020-10-18 18:12:04.517 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:87:connect()] ==========connect=========\r\n2020-10-18 18:12:04.540 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:163:onPlaybackStateChanged()] onPlaybackStateChanged == 2\r\n2020-10-18 18:12:04.541 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:142:onIsLoadingChanged()] onIsLoadingChanged == true\r\n2020-10-18 18:12:04.541 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:121:onTimelineChanged()] onTracksChanged == com.google.android.exoplayer2.PlaylistTimeline@c1eb3f82,1\r\n2020-10-18 18:12:04.648 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:121:onTimelineChanged()] onTracksChanged == com.google.android.exoplayer2.PlaylistTimeline@ee4e81a4,1\r\n2020-10-18 18:12:04.664 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:137:onTracksChanged()] onTracksChanged == com.google.android.exoplayer2.trackselection.TrackSelectionArray@ea0764a7\r\n2020-10-18 18:12:56.375 60205-60222/? I/[bs-java][RtmpFilter]: [RtmpDecodeFilter.java:142:onIsLoadingChanged()] onIsLoadingChanged == false\r\n```\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/8084/comments",
+    "author": "luohaohaha",
+    "comments": [
+      {
+        "user": "andrewlewis",
+        "created_at": "2020-10-19T08:47:53Z",
+        "body": "Based on the information provided, I'd guess that the player position is stuck at zero because the `CustomMediaCodecAudioRenderer` is not writing data to the `AudioTrack`, whose position is normally used to determine the player position. You can verify this hypothesis by checking whether the position passed to `render` is advancing.\r\n\r\nIf you actually want to play the audio, you could try calling `super.processOutputBuffer` in your subclass. If you don't want to play the audio, I'd suggest overriding `MediaCodecAudioRenderer.getPositionUs` and making it return an advancing position (probably best to use the microsecond time associated with the latest sample you've handled). Or it might give a cleaner design to implement a custom `AudioSink` that does the audio processing you need, and just use the normal `MediaCodecAudioRenderer` instead of subclassing it.\r\n\r\nIf that doesn't help, I think we'll need a minimal sample project that reproduces the issue, or you'll need to do some investigation on your side to check whether/why the source is not ready (`MediaCodecRenderer`'s call to `readSource` in `feedInputBuffer` is not getting any data), or whether data flow is stuck somewhere else."
+      },
+      {
+        "user": "luohaohaha",
+        "created_at": "2020-10-19T09:31:58Z",
+        "body": "As you said, I override the getPositionUs method and it's fine, thank you for your answer."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures proper advancement of player position when using custom renderers",
+      "Addresses synchronization between custom processing and player state management",
+      "Provides mechanism to handle media timeline progression without standard rendering"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:53:56"
+    }
+  },
+  {
+    "number": 7276,
+    "title": "PlayerNotificationManager event onNotificationCanceled is never called",
+    "created_at": "2020-04-21T18:08:56Z",
+    "closed_at": "2020-04-22T12:50:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/7276",
+    "body": "### [REQUIRED] Issue description\r\nHi everyone, \r\n\r\nNotification cannot be swiped and onNotificationCanceled is never called.\r\n\r\n### [REQUIRED] Reproduction steps\r\n```\r\n`\r\n@Override\r\npublic void onCreate() {\r\nsuper.onCreate();\r\n\r\nfinal Context context = this;\r\n\r\nplayer = ExoPlayerFactory.newSimpleInstance(context, new DefaultTrackSelector());\r\n\r\n// playlist preparation\r\n\r\n// player.prepare(concatenatedSource, false, false);\r\nplayer.prepare(playlist);\r\nplayer.setPlayWhenReady(true);\r\n\r\nPlayerNotificationManager.MediaDescriptionAdapter notificationAdapter = new PlayerNotificationManager.MediaDescriptionAdapter() {\r\n    // implementation\r\n};\r\n\r\nPlayerNotificationManager.NotificationListener notificationListener = new PlayerNotificationManager.NotificationListener() {\r\n\r\n    @Override\r\n    public void onNotificationCancelled(int notificationId, boolean dismissedByUser) {\r\n        System.out.println(\"onNotificationCancelled dismissedByUser \"+dismissedByUser);\r\n        stopForeground(true);\r\n    }\r\n\r\n    @Override\r\n    public void onNotificationPosted(int notificationId, Notification notification, boolean ongoing) {\r\n        startForeground(notificationId, notification);\r\n    }\r\n};\r\n\r\nIntent dialogIntent = new Intent(this, PlayerActivity.class);\r\ndialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\r\n\r\nstartActivity(dialogIntent);\r\nplayerNotificationManager = PlayerNotificationManager.createWithNotificationChannel(\r\n        context, \"channelId\", R.string.player_activity_name, R.string.player_activity_description, 1, notificationAdapter, notificationListener );\r\nplayerNotificationManager.setPlayer(player);\r\n```\r\n`\r\n\r\n### [REQUIRED] Version of ExoPlayer being used\r\ncom.google.android.exoplayer:exoplayer-core:2.10.5\r\n\r\n### [REQUIRED] Device(s) and version(s) of Android being used\r\n    compileSdkVersion 29\r\n    defaultConfig {\r\n        minSdkVersion 16\r\n        targetSdkVersion 29\r\n\r\nMany thanks !!",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/7276/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "marcbaechinger",
+        "created_at": "2020-04-22T12:25:04Z",
+        "body": "The notification can only be swiped when not assigned to a foreground service. So it requires you to stop the foreground service, when the notification is not ongoing anymore (that is when the player is paused).\r\n\r\nYou are pretty close to that already with the code you show above.  You need to change `onNotificationPosted()` and check wether the notification is still ongoing. If paused `isOngoing` is false and you should stop the foreground service. Now the notification can be swiped, because it's not tied to a foreground service anymore.\r\n\r\nWhen you receive the cancellation event after swipe, you can totally destroy your service. The user needs to restart in the app UI without notification. That's when you can start the cycle again and start your foreground service again.\r\n\r\nThat could probably look like this:\r\n\r\n```\r\n@Override\r\npublic void onNotificationPosted(\r\n    int notificationId, Notification notification, boolean ongoing) {\r\n  if (ongoing) {\r\n    startForeground(notificationId, notification);\r\n   } else {\r\n     stopForeground(/* removeNotification= */ false);\r\n   }\r\n}\r\n\r\n@Override\r\npublic void onNotificationCancelled(int notificationId, boolean dismissedByUser) {\r\n   stopSelf();\r\n}\r\n``` \r\n\r\nPlease let me know if this help."
+      },
+      {
+        "user": "ghost",
+        "created_at": "2020-04-22T12:50:16Z",
+        "body": "I understand perfectly I think, it works as expected. Thank you so much!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of foreground service binding requirements for notification swipeability",
+      "Guidance on handling notification ongoing state transitions",
+      "Mechanism to trigger service termination on notification dismissal",
+      "Clear lifecycle management between notifications and playback service"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:56:00"
+    }
+  },
+  {
+    "number": 6847,
+    "title": "Blank screen while switching video from portrait to landscape full screen for DRM enabled videos in DASH format",
+    "created_at": "2020-01-08T07:37:27Z",
+    "closed_at": "2020-01-09T10:22:32Z",
+    "labels": [
+      "question",
+      "documentation candidate"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/6847",
+    "body": "Issue description:\r\nWhile switching a video from portrait to landscape mode a blank black screen is visible for a sec before showing the video frame.This happens while switching from landscape to portrait also.This is occuring only for the videos which are DRM protected.This is seen only in few devices.It appears in the exoplayer demo app as well.\r\n\r\nReproduction steps:\r\n1.In the exoplayer demo app play the video with DASH+DRM\r\n2.Enable auto rotate option in settings.\r\n3.Rotate the phone to landscape.\r\n4.A blank screen is shown for a sec before the video frame shows up.\r\n5.Switch to portrait again and see the same blank screen\r\n\r\nLink to test content\r\nYou can check any drm enabled video from the demo app for dash stream.\r\n\r\nVersion of ExoPlayer being used\r\n2.9.0\r\n\r\nDevice(s) and version(s) of Android being used\r\n1.Mi Note 7 Pro Android version:9.0--Issue arises\r\n2.Asus Zenfone Max Pro M2. Android version:8.0--Issue arises\r\n3.Real Me 2 Pro. Android version 9.0--No issue\r\n4.Lenovo K5 note. Android Version 6.0--Issue Arises\r\n5.Samsung Galaxy J2 Pro. Andorid version 6.0--No Issue\r\n6.Mi A2. Android Version 9.0--No issue\r\n7.Redmi Note 3. Android Version 6.0--No issue \r\n\r\nCould you please check into this issue.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/6847/comments",
+    "author": "meenukrishnamurthy",
+    "comments": [
+      {
+        "user": "ojw28",
+        "created_at": "2020-01-08T07:45:10Z",
+        "body": "This is a limitation in the underlying platform. The fact that the output path is secure means that the video buffers aren't available to be composited into the rotation animation when the display orientation changes, so for the duration of the animation the surface appears as though it is black. You will observe the issue in all applications that play DRM protected content."
+      },
+      {
+        "user": "meenukrishnamurthy",
+        "created_at": "2020-01-08T07:49:02Z",
+        "body": "Can you be more specific as to which underlying platform the issue arises.Because i dont see this issue in all the devices."
+      },
+      {
+        "user": "ojw28",
+        "created_at": "2020-01-08T08:01:47Z",
+        "body": "As above:\r\n\r\n> The fact that the output path is secure means that the video buffers aren't available to be composited into the rotation animation when the display orientation changes, so for the duration of the animation the surface appears as though it is black.\r\n\r\nI'm not sure why you don't see the issue on all devices, but my best guess would be that your content doesn't require a secure output path in the license policy, and that the devices where you don't see the issue only support L3 Widevine. If that's the case then you could try forcing L3 Widevine on all devices, to see if that resolves the problem.\r\n\r\nAlternatively, is it possible the devices where you don't see the issue simply don't animate orientation changes?"
+      },
+      {
+        "user": "meenukrishnamurthy",
+        "created_at": "2020-01-09T07:07:45Z",
+        "body": "Thanks a lot @ojw28 . Forcing to L3 on all devices worked for me."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why DRM security level affects screen rotation transitions",
+      "Solution that prevents secure output path interference during orientation changes",
+      "Clarification of device-specific behavior variations",
+      "Workaround that maintains DRM protection while avoiding visual glitches"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:56:48"
+    }
+  },
+  {
+    "number": 6020,
+    "title": "Player currentPosition is 0 on PlayerNotificationManager.onNotificationCancelled",
+    "created_at": "2019-06-11T17:57:38Z",
+    "closed_at": "2019-06-19T19:13:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/6020",
+    "body": "### [REQUIRED] Issue description\r\n\r\nThe currentPosition is 0 on dismissing the player from the PlayerNotificationManager with method onNotificationCancelled. Also in the EventListener.onPlayerStateChanged the currentPosition is 0.\r\n\r\n### [REQUIRED] Reproduction steps\r\n\r\n1. Start the ExoPlayer with PlayerNotificationManager\r\n2. Release the player from the notification\r\n3. Check the currentPosition of the player on dismissing the notification and releasing the player.\r\n\r\n###  [REQUIRED] Link to test content\r\n\r\n-\r\n\r\n### [REQUIRED] A full bug report captured from the device\r\n\r\n-\r\n\r\n### Version of ExoPlayer being used\r\nExoPlayer version 2.10.1\r\n\r\n### Device(s) and version(s) of Android being used\r\nAndroid API 28\r\n\r\n<!-- DO NOT DELETE\r\nvalidate_template=true\r\ntemplate_path=.github/ISSUE_TEMPLATE/bug.md\r\n-->\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/6020/comments",
+    "author": "AleksandarKovachev",
+    "comments": [
+      {
+        "user": "marcbaechinger",
+        "created_at": "2019-06-12T20:27:20Z",
+        "body": "The `PlayerNotificationManager` uses roughly `Player.add/removeEventListener` and setters methods of the player which is passed to `PlayerNotificationManager.setPlayer(player)`. These do not affect the playback position. Besides this no other methods are called, which potentially could affect the position of the player.\r\n\r\nI added the `PlayerNotificationManager` to `PlayerActivity` of the demo app. Then I paused at 0:20, dismissed the notification and then continued playback at 0:20 in the player activity. The playback position has not been reset to 0.\r\n\r\nCan you provide some code around what you do in `onNotificationCancelled` of your notification listener. I don't exactly understand what you mean with step 2 and 3?"
+      },
+      {
+        "user": "AleksandarKovachev",
+        "created_at": "2019-06-17T14:20:02Z",
+        "body": "I am running the player in foreground service. In the foreground service, I have EventListener and in the EventListener.onPlayerStateChanged I am saving the currentPosition in shared preferences. When I am dismissing the PlayerNotification (clicking the stop button) while still playing, the method EventListener.onPlayerStateChanged is called with 0 currentPosition."
+      },
+      {
+        "user": "marcbaechinger",
+        "created_at": "2019-06-18T18:31:47Z",
+        "body": "When the `PlayerNotificationManager` receives the `ACTION_STOP` action, it calls `controlDispatcher.dispatchStop(player, /* reset= */ true)`. This resets the player, which means the position is reset to 0. \r\n\r\nYou can intercept this call by using your own `ControlDispatcher`. Something like this:\r\n\r\n```\r\nplayerNotificationManager.setControlDispatcher(new DefaultControlDispatcher() {\r\n      @Override\r\n      public boolean dispatchStop(Player player, boolean reset) {\r\n        // store current position to shared preferences now.\r\n        return super.dispatchStop(player, reset);\r\n      }\r\n});\r\n```"
+      },
+      {
+        "user": "AleksandarKovachev",
+        "created_at": "2019-06-19T19:13:48Z",
+        "body": "Perfect! This helped me a lot. Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Mechanism to capture playback position before player reset",
+      "Interception of notification dismissal/stop action",
+      "Preservation of playback state during notification lifecycle",
+      "Integration with ExoPlayer's notification management system"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:58:17"
+    }
+  },
+  {
+    "number": 4913,
+    "title": "Sound stop after a while when looping",
+    "created_at": "2018-10-04T23:34:08Z",
+    "closed_at": "2018-10-11T08:15:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/4913",
+    "body": "### Issue description\r\n\r\nUsing ExoPlayer 2.8.2 to play a local .m4a sound file in repeat mode, the sound stop after a while (typically a couple of hours). If playing several files simultaneously, each file stop at a different time. No error is reported in neither the player event listener nor the media source event listener.\r\n\r\nThe error occurs with both `player.setRepeatMode(Player.REPEAT_MODE_ALL);` or by using a LoopingMediaSource object.\r\n\r\nWhen the audio stop, the following lines appears in Logcat:\r\n    1536-1577/? I/AudioFlinger: BUFFER TIMEOUT: remove(4096) from active list on thread 0xf1203680\r\n    1430-1578/? W/audio_hw_generic: Not supplying enough data to HAL, expected position 942828484 , only wrote 934428960\r\n\r\ntoggling player.setPlayWhenReady(...) does not restore the playback.\r\n\r\nWe didn't notice this issue (and none of our users complain) with the previous version of ExoPlayer we were using: r2.4.1. Unfortunately it is not possible to roll back as an audio glitch was audible at the end of each loop.\r\n\r\n### Reproduction steps\r\n\r\nThe following code is running in a service:\r\n\r\n```\r\n...\r\ndataSourceFactory = new DefaultDataSourceFactory(context, Util.getUserAgent(context, \"XXXX\"), null);\r\nplayer = ExoPlayerFactory.newSimpleInstance(context, new DefaultTrackSelector());\r\nMediaSource audioSource = new ExtractorMediaSource.Factory(dataSourceFactory).createMediaSource(audioItem.getUri());\r\nplayer.setRepeatMode(Player.REPEAT_MODE_ALL);\r\nplayer.prepare(audioSource);\r\n...\r\nplayer.setPlayWhenReady(true);\r\n```\r\n\r\nWait until the sound stops\r\n\r\n### Link to test content\r\nSent by email\r\n\r\n### Version of ExoPlayer being used\r\n2.8.2\r\n\r\n### Device(s) and version(s) of Android being used\r\nPixel XL simulator with Android Oreo 8.1\r\nSome of our users complained about the same issue on different devices.\r\n\r\n### A full bug report captured from the device\r\nSent by email\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/4913/comments",
+    "author": "retameur",
+    "comments": [
+      {
+        "user": "andrewlewis",
+        "created_at": "2018-10-05T16:31:48Z",
+        "body": "I couldn't see any obvious issues with the media or in the bug report.\r\n\r\nPlease could you try to reproduce this in the ExoPlayer demo app, but modified to set repeat mode, and on a physical device rather than using the emulator? If you can reproduce it please send the bug report. If not, that suggests there's something wrong with the service (perhaps a leak or not holding locks required to keep the device awake). Thanks.\n\n---\n\nI think the issue here is that there's a discrepancy between the duration declared in the MP4 container metadata and the actual duration of audio after applying the iTunSMPB trimming for gapless playback. I think the actual duration is 18955260 us (this is the declared duration 19017142 us, which is the duration of audio before trimming, minus the duration of 2112 + 617 audio frames at 44.1 kHz, which are trimmed). This discrepancy causes the renderer position to drift slowly away from the expected position based on the durations of earlier loops, until the player stops loading because it permanently thinks it has enough data buffered, at which point audio runs out.\r\n\r\nIf you have control over the media you may be able to fix the issue by rewriting the duration in the container to take into account trimmed frames, or possibly switching to using edit lists to signal gapless trimming.\r\n\r\nThe next steps here are to verify the hypothesis by hardcoding the calculated duration and verifying that playback doesn't get stuck, then possibly altering the extractor to update the duration to compensate for audio frames trimmed based on iTunSMPB metadata."
+      },
+      {
+        "user": "retameur",
+        "created_at": "2018-10-10T19:26:54Z",
+        "body": "I have been able to reproduce the bug with ExoPlayer Demo 2.8.4 (report sent by email). The playback stops after the same number of loops (which varies with each specific sound file) as in our app. Its 241 for the frogs.m4a file I've sent by email.\r\n\r\nWe have control over the media, but it is not a solution for us, as the same media are also used for iOS and the Web. And most of the current users have already downloaded the files.\r\n\r\nI'm not sure it is related to the iTunSMPB metatag. I've re-encoded the file twice using fdkaac:\r\n    - once with the --gapless-mode option set to 0 (iTunSMPB)\r\n    - once with the option set to 1: ISO standard (edts and sgpd)\r\nThe playback of both files fails simultaneously.\r\n\r\nAs for the steps you are suggesting verifying the hypothesis, I have no idea how to do so.\n\n---\n\nI have also tested with ExoPlayer demo 2.9.0 and the bug seems to be fixed now (if it still occurs, it is after way more loops). So problem solved. \r\n\r\nThanks for your help."
+      },
+      {
+        "user": "tonihei",
+        "created_at": "2018-10-11T08:15:49Z",
+        "body": "Yes, it was fixed by a change in 2.9.0 which prevents the problem you describe. Still, if you want perfect gapless playback of the looped file, you should try to ensure the duration exactly matches the content."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must resolve audio playback stopping during long-term looping without requiring media file modifications",
+      "Addresses underlying timing discrepancy between container metadata and actual audio content",
+      "Maintains gapless playback functionality across loop iterations",
+      "Compatible with multiple gapless signaling methods (iTunSMPB and ISO standard)"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:00:22"
+    }
+  },
+  {
+    "number": 4836,
+    "title": "VP9 ext crash from libvpx 1.7.0",
+    "created_at": "2018-09-18T10:53:04Z",
+    "closed_at": "2018-09-23T15:17:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/4836",
+    "body": "It seems libvpx 1.7.0 has more neon code added. There was error when I run config. By adding -mfloat-abi=softfp -mfpu=neon to cflag, I have managed to get the so file compiled. However, after the first frame is decoded, the sample app always crashes with: \r\n\r\ncom.google.android.exoplayer2.demo A/libc: Fatal signal 11 (SIGSEGV), code 1, fault addr 0x10 in tid 18160 (Thread-1825)\r\n\r\nMy ExoPlayer version is 2.8.2. The working libvpx is 1.6.2, which is from Jan 2017.",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/4836/comments",
+    "author": "blueslabs",
+    "comments": [
+      {
+        "user": "andrewlewis",
+        "created_at": "2018-09-21T16:32:42Z",
+        "body": "I think the errors that occur during configuration might not actually be problematic. What do you see if you just ignore the errors during configuration? I tried building with libvpx 1.7.0, ignoring the errors and playing a video with the vp9 extension and it worked."
+      },
+      {
+        "user": "blueslabs",
+        "created_at": "2018-09-22T18:53:46Z",
+        "body": "Thanks! Did a clean build, it works now. -mfloat-abi=softfp -mfpu=neon is actually only required for the current master, otherwise build can fail. 1.7.0 can build without this."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures libvpx 1.7.0 builds successfully without requiring manual compiler flag additions like -mfloat-abi=softfp -mfnu=neon",
+      "Provides a stable build process that avoids fatal SIGSEGV crashes during VP9 decoding",
+      "Addresses configuration errors during the build process without requiring workarounds",
+      "Maintains compatibility with ExoPlayer 2.8.2"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:00:55"
+    }
+  },
+  {
+    "number": 3405,
+    "title": "Multiple ClippingMediaSource not working for m3u8 files ",
+    "created_at": "2017-10-30T05:28:00Z",
+    "closed_at": "2017-10-31T13:04:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/3405",
+    "body": "# Issue \r\n**When I use two or more ClippingMediaSource not working for m3u8. But working same code for MP4**\r\n\r\n### Reproduction steps\r\n\r\n**Bug : When I use Multiple ClippingMediaSource for m3u8 files not working**\r\n\r\nBut working in following cases\r\n\r\n1. Only one ClippingMediaSource with m3u8 - working\r\n2. Multiple ClippingMediaSource with mp4 - working \r\n\r\n\r\n        MediaSource movieMediaSource =getMediaSourceFromUrl(context, mLiveURL);\r\n            final long oneMinute = 60000000L;\r\n            ClippingMediaSource videoSource1 = new ClippingMediaSource(movieMediaSource, 0, oneMinute/2);\r\n\r\n            ClippingMediaSource videoSource2 = new ClippingMediaSource(movieMediaSource, oneMinute/2, oneMinute);\r\n  \r\n            ConcatenatingMediaSource concatenatingMediaSource = new ConcatenatingMediaSource(videoSource1,videoSource2);\r\n\r\n\r\n       public static MediaSource getMediaSourceFromUrl(Context context, String url) {\r\n        mBandwidthMeter = new DefaultBandwidthMeter();\r\n       //Produces DataSource instances through which media data is loaded.\r\n        DefaultDataSourceFactory dataSourceFactory = new DefaultDataSourceFactory(context, \r\n        Util.getUserAgent(context, \"MOD\"), mBandwidthMeter);\r\n       //Produces Extractor instances for parsing the media data.\r\n        ExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();\r\n        MediaSource videoSource = null;\r\n        if (url != null && !url.isEmpty()) {\r\n            Log.d(TAG, \"getMediaSourceFromUrl: 11\");\r\n            if (url.contains(\".m3u8\")) {\r\n          //FOR LIVESTREAM LINK:\r\n                Uri mp4VideoUri = Uri.parse(url);\r\n                videoSource = new HlsMediaSource(mp4VideoUri, dataSourceFactory, null, null);\r\n        \r\n            } else if (url.contains(\".mp4\")) {\r\n         //FOR SD CARD SOURCE:\r\n                Uri mp4VideoUri = Uri.parse(url);\r\n                videoSource = new ExtractorMediaSource(mp4VideoUri, dataSourceFactory, extractorsFactory, null, null);\r\n              }\r\n           }\r\n            return videoSource;\r\n        }\r\n\r\n\r\n### Version of ExoPlayer being used\r\n2.5.4\r\n\r\n### Device(s) and version(s) of Android being used\r\nAndroid 5.1 & Android 7.0\r\n\r\n### A full bug report captured from the device\r\n\r\nLenova A6000+  & Nexus 6\r\n\r\n\r\n### Error Log\r\n\r\n> Internal runtime error.\r\n                                                                    java.lang.IllegalStateException at com.google.android.exoplayer2.util.Assertions.checkState(Assertions.java:79) at com.ajax.mod.controller.player.MyHlsMediaSource.prepareSource(MyHlsMediaSource.java:97)  at com.google.android.exoplayer2.source.ClippingMediaSource.prepareSource(ClippingMediaSource.java:89) at com.google.android.exoplayer2.source.ConcatenatingMediaSource.prepareSource(ConcatenatingMediaSource.java:78) at com.google.android.exoplayer2.ExoPlayerImplInternal.prepareInternal(ExoPlayerImplInternal.java:425)  at com.google.android.exoplayer2.ExoPlayerImplInternal.handleMessage(ExoPlayerImplInternal.java:328) at android.os.Handler.dispatchMessage(Handler.java:98)\r\nat android.os.Looper.loop(Looper.java:154)\r\nat android.os.HandlerThread.run(HandlerThread.java:61)",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/3405/comments",
+    "author": "rranjithkumar100",
+    "comments": [
+      {
+        "user": "tonihei",
+        "created_at": "2017-10-30T09:12:04Z",
+        "body": "The problem is that you can't re-use MediaSources. That means you need to create a new movieMediaSource for each ClippingMediaSource. "
+      },
+      {
+        "user": "rranjithkumar100",
+        "created_at": "2017-10-31T13:04:58Z",
+        "body": "Yes you are right.. @tonihei \r\n\r\nProblem solved. I close this issue \ud83d\udc4d "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why reusing MediaSource instances causes failures with HLS streams",
+      "Guidance on proper MediaSource instance management for concatenated HLS streams",
+      "Clarification of HLS stream handling limitations in ExoPlayer's MediaSource composition"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:05:26"
+    }
+  },
+  {
+    "number": 3006,
+    "title": "Bitrate value is -1 for any HLS content",
+    "created_at": "2017-06-30T13:27:15Z",
+    "closed_at": "2017-07-13T16:17:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/3006",
+    "body": "### Issue description\r\nWhen I try to reproduce an HLS content the method player.getVideoFormat().bitrate in DebugTextViewHelper returns always -1.\r\n\r\n### Reproduction steps\r\n - Open Exoplayer 2.4.2 demo app\r\n - Select any HLS content for example \"Apple 4x3 basic stream\"\r\n - Log _player.getVideoFormat().bitrate_ in _private String getVideoString()_ method in _DebugTextViewHelper_ class\r\n- bitrate is always -1\r\n\r\n### Link to test content\r\nAny HLS content, for example \"Apple 4x3 basic stream\" in Exoplayer demo app\r\n\r\n### Version of ExoPlayer being used\r\nExoplayer 2.4.2\r\n\r\n### Device(s) and version(s) of Android being used\r\nNexus 5, Android 6.0.1\r\n\r\n### A full bug report captured from the device\r\nno logs\r\n\r\n### Info\r\nI have checked in _HlsPlaylistParser_ class and the bitrate value is correct.\r\nI'm continuing to study this case and I will add more info soon.\r\n\r\nThanks\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/3006/comments",
+    "author": "Gian84",
+    "comments": [
+      {
+        "user": "ojw28",
+        "created_at": "2017-07-03T10:39:13Z",
+        "body": "The format you're seeing here is really only intended for internal use by the player (and for debugging purposes). It is correct to say that the bitrate is set to -1, but it's also correct to say this shouldn't really be a problem. Note that this format represents just the video component of the stream, after de-muxing and extraction from the container."
+      },
+      {
+        "user": "Gian84",
+        "created_at": "2017-07-13T16:17:30Z",
+        "body": "So, it is not a bug.\r\nI had this doubt because other formats (DASH or SS) have this information in the same callback or in EventLogger.\r\n\r\nThank you for your answer."
+      },
+      {
+        "user": "takn",
+        "created_at": "2017-09-11T21:32:44Z",
+        "body": "What should the proper way to access bitrate be?\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why HLS content returns bitrate=-1 in this context",
+      "Clarification of proper method to access HLS bitrate information",
+      "Differentiation between internal format data vs. actual stream metadata",
+      "Guidance on accessing HLS-specific streaming metrics"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:06:22"
+    }
+  },
+  {
+    "number": 2969,
+    "title": "UnrecognizedInputFormatException when play dash live stream in v2 ",
+    "created_at": "2017-06-19T13:11:15Z",
+    "closed_at": "2017-06-19T14:59:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/2969",
+    "body": "There is a live stream(dash with widevine),  it worked fine in exoplayer v1, but after upgrade to v2, it shows below error   \r\n```                                              com.google.android.exoplayer2.source.UnrecognizedInputFormatException: None of the available extractors (MatroskaExtractor, FragmentedMp4Extractor, Mp4Extractor, Mp3Extractor, AdtsExtractor, Ac3Extractor, TsExtractor, FlvExtractor, OggExtractor, PsExtractor, WavExtractor) could read the stream.\r\n                                                                       at com.google.android.exoplayer2.source.ExtractorMediaPeriod$ExtractorHolder.selectExtractor(ExtractorMediaPeriod.java:722)\r\n                                                                       at com.google.android.exoplayer2.source.ExtractorMediaPeriod$ExtractingLoadable.load(ExtractorMediaPeriod.java:645)\r\n                                                                       at com.google.android.exoplayer2.upstream.Loader$LoadTask.run(Loader.java:295)\r\n                                                                       at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1133)\r\n                                                                       at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:607)\r\n                                                                       at java.lang.Thread.run(Thread.java:761)\r\n06-19 22:23:13.812 2750-3372/com.test.player E/ExoPlayerImplInternal: Source error.\r\n                                                                             com.google.android.exoplayer2.source.UnrecognizedInputFormatException: None of the available extractors (MatroskaExtractor, FragmentedMp4Extractor, Mp4Extractor, Mp3Extractor, AdtsExtractor, Ac3Extractor, TsExtractor, FlvExtractor, OggExtractor, PsExtractor, WavExtractor) could read the stream.\r\n                                                                                 at com.google.android.exoplayer2.source.ExtractorMediaPeriod$ExtractorHolder.selectExtractor(ExtractorMediaPeriod.java:722)\r\n                                                                                 at com.google.android.exoplayer2.source.ExtractorMediaPeriod$ExtractingLoadable.load(ExtractorMediaPeriod.java:645)\r\n                                                                                 at com.google.android.exoplayer2.upstream.Loader$LoadTask.run(Loader.java:295)\r\n                                                                                 at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1133)\r\n                                                                                 at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:607)\r\n                                                                                 at java.lang.Thread.run(Thread.java:761)\r\n06-19 22:23:13.812 2750-2750/com.test.player E/playback\u00a0error\u00a0>>>: com.google.android.exoplayer2.ExoPlaybackException\r\n```\r\nShould I email you the MPD file?\r\nThanks.\r\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/2969/comments",
+    "author": "jiafei1986",
+    "comments": [
+      {
+        "user": "ojw28",
+        "created_at": "2017-06-19T13:46:21Z",
+        "body": "You're trying to play a DASH stream using `ExtractorMediaSource`, where-as you should be using `DashMediaSource`."
+      },
+      {
+        "user": "jiafei1986",
+        "created_at": "2017-06-19T14:49:03Z",
+        "body": "@ojw28 Thank you very very much, i just check the code, found the playback URL does not end with mpd, so the sample code will use ExtractorMediaSource,  now i force to use DashMediaSource, the problem fixed.  THANK YOU !!!!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the correct media source type required for DASH streams in ExoPlayer v2",
+      "Explanation of ExoPlayer v2's stream type detection mechanism",
+      "Clarification of API differences between ExoPlayer v1 and v2 regarding stream handling"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:06:32"
+    }
+  },
+  {
+    "number": 1009,
+    "title": "Howto read from codec output buffers",
+    "created_at": "2015-11-30T19:56:27Z",
+    "closed_at": "2015-12-03T18:43:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/google/ExoPlayer/issues/1009",
+    "body": "I am attempting to play the HLS sample filie BipPop.  I have added code to MediaCodecVideoTrackRenderer. \n\nThe following code can be called in processOutputBuffer or in renderOutputBufferV21 but gets the same buffer freed error regardless (and the video successfully plays despite the buffer supposedly being freed).\n\n```\nprivate Boolean customHack(MediaCodec codec, int bufferIndex) {\nByteBuffer buffer = codec.getOutputBuffer(bufferIndex);\nbyte[] data =  new byte[buffer.remaining()];\n    try {\n      buffer.get(data);\n    }catch(Exception e){\n      Log.e(\"Custom\", \"Error trying to get the buffer\",e);\n      return false;\n    }\n}\n```\n\nMy objective is post-decode modification of the buffer.  I can do this using the regular Android player with non HLS content, but in ExoPlayer, I get the BufferFreed problem.\n",
+    "comments_url": "https://api.github.com/repos/google/ExoPlayer/issues/1009/comments",
+    "author": "jadedResearcher",
+    "comments": [
+      {
+        "user": "ojw28",
+        "created_at": "2015-12-03T17:06:41Z",
+        "body": "There are quite strict rules about calls to `getOutputBuffer`. Specifically, in the `MediaCodec` Javadoc, it says: \n\n_After calling this method, any ByteBuffer or Image object previously returned for the same output index MUST no longer be used._.\n\nIt's likely that your call to `getOutputBuffer` is causing an output buffer that ExoPlayer code already has a reference to to become invalid.\n\nIf you're modifying `processOutputBuffer` then you should read from the `buffer` argument that gets passed to it, rather than making any calls to `getOutputBuffer` yourself. Note also that you shouldn't rely on the position and limit of the buffer being set correctly. Use the `bufferInfo` argument to find out the offset and size of the data in the buffer. You can set the buffer position and limit using this information yourself, like:\n\n```\nbuffer.position(bufferInfo.offset);\nbuffer.limit(bufferInfo.offset + bufferInfo.size);\n```\n"
+      },
+      {
+        "user": "jadedResearcher",
+        "created_at": "2015-12-03T18:36:19Z",
+        "body": "Thank you for response. I changed my code to use the buffer that is passed into the processOutputBuffer method directly, and it works unless I need to get the width and the height, which I use the bufferIndex to do as well.\n\nint h = codec.getOutputImage(bufferIndex).getHeight();\n\nIs there an alternate way to get the width and the height without running into this error?\n"
+      },
+      {
+        "user": "ojw28",
+        "created_at": "2015-12-03T18:39:35Z",
+        "body": "MediaCodecVideoTrackRenderer already has `currentWidth` and `currentHeight` variables.\n"
+      },
+      {
+        "user": "jadedResearcher",
+        "created_at": "2015-12-03T18:42:27Z",
+        "body": "I do in fact see that now, thank you so much, you have answered my question in full.\n"
+      },
+      {
+        "user": "ojw28",
+        "created_at": "2015-12-03T18:43:10Z",
+        "body": "No worries; Glad you got it working!\n"
+      },
+      {
+        "user": "nikhilkilivayil",
+        "created_at": "2017-06-28T09:12:08Z",
+        "body": "Can you post sample full source code? @ojw28 "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow accessing output buffer data without invalidating ExoPlayer's internal buffer references",
+      "Must provide a method to obtain video dimensions without using buffer index-based MediaCodec calls",
+      "Solution must enable post-decode buffer modification in ExoPlayer's HLS pipeline"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 01:11:16"
+    }
+  }
+]

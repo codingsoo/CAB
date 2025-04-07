@@ -1,0 +1,1700 @@
+[
+  {
+    "number": 11018,
+    "title": "findOne adds \"ORDER BY\" internally breaking MSSQL",
+    "created_at": "2019-05-30T09:05:25Z",
+    "closed_at": "2020-06-08T09:06:41Z",
+    "labels": [
+      "question",
+      "dialect: mssql"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/11018",
+    "body": "## What are you doing?\r\nTrying to get count of the whole table records while executing some other aggregate functions like \"max\", while there is no `group by` specified. \r\n\r\n**To Reproduce**\r\nSteps to reproduce the behavior:\r\n1. Define model:\r\n```js\r\nsequelize.define('item', {\r\n    id: {\r\n         type: DataTypes.STRING,\r\n         allowNull: false,\r\n         primaryKey: true\r\n    },\r\n    column_1: {\r\n        type: DataTypes.DATE,\r\n\tallowNull: true,\r\n    }\r\n});\r\n```\r\n2. Run the following\r\n```js\r\nconst result = await model.Item.findOne({\r\n    attributes: [\r\n        [db.sequelize.fn('max', db.sequelize.col('column_1')), 'max_column_1'],\r\n        [db.sequelize.fn('count', '1'), 'count']\r\n    ],\r\n});\r\n```\r\n\r\n3. See error\r\n```\r\nSequelizeDatabaseError: Column \"item.id\" is invalid in the ORDER BY clause because it is not contained in either an aggregate function or the GROUP BY clause.\r\n    at Query.formatError (/project-path/node_modules/sequelize/lib/dialects/mssql/query.js:309:12)\r\n    at Request.connection.lib.Request [as userCallback] (/project-path/node_modules/sequelize/lib/dialects/mssql/query.js:69:23)\r\n    at Request.callback (/project-path/node_modules/tedious/lib/request.js:37:27)\r\n    at Connection.endOfMessageMarkerReceived (/project-path/node_modules/tedious/lib/connection.js:2149:20)\r\n    at Connection.dispatchEvent (/project-path/node_modules/tedious/lib/connection.js:1172:36)\r\n    at Parser.tokenStreamParser.on (/project-path/node_modules/tedious/lib/connection.js:975:14)\r\n    at Parser.emit (events.js:193:13)\r\n    at Parser.parser.on.token (/project-path/node_modules/tedious/lib/token/token-stream-parser.js:27:14)\r\n    at Parser.emit (events.js:193:13)\r\n    at addChunk (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_readable.js:297:12)\r\n    at readableAddChunk (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_readable.js:279:11)\r\n    at Parser.Readable.push (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_readable.js:240:10)\r\n    at Parser.Transform.push (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_transform.js:139:32)\r\n    at Parser.afterTransform (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_transform.js:88:10)\r\n    at Parser._transform (/project-path/node_modules/tedious/lib/token/stream-parser.js:41:7)\r\n    at Parser.Transform._read (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_transform.js:177:10)\r\n    at Parser.Transform._write (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_transform.js:164:83)\r\n    at doWrite (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_writable.js:405:139)\r\n    at writeOrBuffer (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_writable.js:394:5)\r\n    at Parser.Writable.write (/project-path/node_modules/tedious/node_modules/readable-stream/lib/_stream_writable.js:303:11)\r\n    at Parser.addEndOfMessageMarker (/project-path/node_modules/tedious/lib/token/token-stream-parser.js:45:24)\r\n    at Connection.message (/project-path/node_modules/tedious/lib/connection.js:2138:32)\r\n```\r\n\r\n## What do you expect to happen?\r\n`SELECT max([column_1]) AS [max_column_1],count(1) AS [count] FROM [item] AS [item];`\r\n\r\n## What is actually happening?\r\n`SELECT max([column_1]) AS [max_column_1],count(1) AS [count] FROM [item] AS [item] ORDER BY [item].[id] OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY;`\r\n\r\n## Environment\r\nDialect:\r\n- mssql\r\nDialect **tedious** version: 6.1.1\r\nDatabase version: Microsoft SQL Azure (RTM) - 12.0.2000.8 \r\nSequelize version: both v4 and v5\r\nNode Version: 11.15.0\r\nOS: Mac OS\r\n\r\nTested with latest release:\r\n- Yes, v5.8.7",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/11018/comments",
+    "author": "myleshk",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2020-06-08T09:06:41Z",
+        "body": "This is how `findOne` works, it limits records by 1. Use `findAll`"
+      },
+      {
+        "user": "myleshk",
+        "created_at": "2020-06-10T03:49:34Z",
+        "body": "ok `findAll` works."
+      }
+    ]
+  },
+  {
+    "number": 10984,
+    "title": "Sequelize automatically sets a default value for NOT NULL columns",
+    "created_at": "2019-05-22T07:58:12Z",
+    "closed_at": "2019-07-30T15:42:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/10984",
+    "body": "I am currently running Sequelize.js code on my MySQL database, that is created using migrations. I have a table with persons that is defined like this:\r\n\r\n```\r\nreturn queryInterface.createTable('Persons', {\r\n      id: {\r\n        allowNull: false,\r\n        autoIncrement: true,\r\n        primaryKey: true,\r\n        unique: true,\r\n        type: Sequelize.INTEGER\r\n      },\r\n      email: {\r\n        allowNull: false,\r\n        unique: true,\r\n        type: Sequelize.STRING\r\n      },\r\n      firstName: {\r\n        type: Sequelize.STRING\r\n      },\r\n      lastName: {\r\n        type: Sequelize.STRING\r\n      },\r\n      createdAt: {\r\n        allowNull: false,\r\n        type: Sequelize.DATE\r\n      },\r\n      updatedAt: {\r\n        allowNull: false,\r\n        type: Sequelize.DATE\r\n      }\r\n    });\r\n```\r\n\r\nand the resulting table looks like this:\r\n\r\n```\r\n`Persons` (\r\n  `id` int(11) NOT NULL AUTO_INCREMENT,\r\n  `email` varchar(255) NOT NULL,\r\n  `firstName` varchar(255) DEFAULT NULL,\r\n  `lastName` varchar(255) DEFAULT NULL,\r\n  `createdAt` datetime NOT NULL,\r\n  `updatedAt` datetime NOT NULL,\r\n  PRIMARY KEY (`id`),\r\n  UNIQUE KEY `id` (`id`),\r\n  UNIQUE KEY `email` (`email`)\r\n)\r\n```\r\n\r\nWhen I add an entry to the database using Model.create({}) (with nothing between the brackets), the following object is added to the database:\r\n\r\n```\r\nid  email   firstName   lastName    createdAt   updatedAt\r\n1   ''      NULL        NULL        2019-05-21 15:33:13 2019-05-21 15:33:13\r\nEvery NOT NULL column I have in my database gets a default value (empty string for varchar, false for boolean, NOW() for datetime).\r\n```\r\n\r\nThe Sequelize.js docs state the following:\r\n\r\n> setting allowNull to false will add NOT NULL to the column, which means an error will be thrown from the DB when the query is executed if the column is null. If you want to check that a value is not null before querying the DB, look at the validations section below.\r\n> \r\n> title: { type: Sequelize.STRING, allowNull: false },\r\n\r\nI never get this error. When trying to insert a new row with NULL as value for email in the database directly, I do get an error, but not with Sequelize.js",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/10984/comments",
+    "author": "Brammz",
+    "comments": [
+      {
+        "user": "papb",
+        "created_at": "2019-07-25T00:57:04Z",
+        "body": "Do you have `allowNull: false` also set in the model itself? Or you have it only in the migration?"
+      },
+      {
+        "user": "Brammz",
+        "created_at": "2019-07-30T14:52:25Z",
+        "body": "@papb No, they simple stated the datatype of the attribute. I remember trying this and getting declaration issues. However, I tried this again and now I do get the error. Thank you!"
+      },
+      {
+        "user": "papb",
+        "created_at": "2019-07-30T15:24:32Z",
+        "body": "> and now I do get the error\r\n\r\nYou mean \"don't\", right?\r\n\r\nYou're welcome :+1:"
+      },
+      {
+        "user": "Brammz",
+        "created_at": "2019-07-30T15:42:34Z",
+        "body": "Well, I don\u2019t get the declaration error anymore indeed. But I do get an error when violating the null constraint, as it is supposed to go! (also misclicked..)"
+      },
+      {
+        "user": "papb",
+        "created_at": "2019-07-30T15:46:36Z",
+        "body": "Ah, I see! :+1: "
+      }
+    ]
+  },
+  {
+    "number": 10241,
+    "title": "How to save complex changes to MySQL JSON data type",
+    "created_at": "2018-12-08T11:29:20Z",
+    "closed_at": "2018-12-09T09:29:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/10241",
+    "body": "When I make more complex changes to my users JSON col \u201cpreferences\u201d like this:\r\n\r\n```\r\nuser.preferences.notifications.disable_emails = {\r\n\tissues: true,\r\n\treports: true,\r\n\tcomments: true\r\n}\r\nuser.save().then(user2 => { \r\n\tconsole.log(user2) \r\n})\r\n```\r\n\r\nMy changes are correctly in user2, but not in the database, it stays NULL or keeps the previous value.\r\nIs there a callback I can call after complex changes so its detecting something is different?\r\nI guess auto watch for changes in a multidimensional JSON is too complex - am I right?",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/10241/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "knoxcard",
+        "created_at": "2018-12-09T07:18:39Z",
+        "body": "user is your model.  `model.save()` is correct, but you can't have your data variable be the same as the Model itself, as you have with the user variable.\r\n```\r\nvar userData = {}\r\nuserData.name = 'Tom'\r\nuserData.logged_in = 'true'\r\nuserData.preferences = {}\r\nuserData.preferences.notifications = {}\r\nuserData.preferences.notifications.disable_emails = {\r\n\tissues: true,\r\n\treports: true,\r\n\tcomments: true\r\n}\r\n\r\n// update record\r\nuser.update(userData).then(user2 => {\r\n})\r\n\r\n// save new record\r\nuser.build(userData).save().then(user2 => { \r\n\tconsole.log(user2) \r\n})\r\n```"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2018-12-09T09:29:08Z",
+        "body": "Oh, thank you, I did not understand it like this.\r\nI always work like this:\r\n```\r\nUser.findById(125689).then(user => {\r\n\ts.user = user\r\n})\r\n\r\n// tons of other stuff, user is persistant while logged in\r\n\r\n// socket change request comes in\r\ns.user.name = request.name\r\ns.user.preferences = request.preferences // complex JSON\r\ns.user.save()\r\n```\r\nnow i do this (which i would never have come up with myself):\r\ns.user is already there since login:\r\n```\r\n\ts.user.preferences = request.preferences\r\n\ts.user.update({\r\n\t\tpreferences: s.user.preferences\r\n\t}).then(user => {\r\n\t\tc(user)\r\n\t})\r\n```\r\nit looks weird, why not just save whats currently in it - but it works, thanks!"
+      },
+      {
+        "user": "knoxcard",
+        "created_at": "2018-12-09T09:53:10Z",
+        "body": "When I first started using Sequelize, I made the same exact mistakes! lol, hours and hours of reading and trial/error to get things right.  To this day,  I am still enhancing my Sequelize/Session code..."
+      }
+    ]
+  },
+  {
+    "number": 10082,
+    "title": "Virtual fields that rely on sibling fields",
+    "created_at": "2018-10-26T18:43:03Z",
+    "closed_at": "2018-10-27T17:28:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/10082",
+    "body": "<!--\r\n\r\nPlease note this is an issue tracker, not a support forum.\r\nFor general questions, please use StackOverflow or Slack.\r\n\r\nFor bugs, please fill out the template below.\r\n\r\n-->\r\n\r\n## What are you doing?\r\n\r\nWhen you have a model with virtual fields that rely on other fields then you exclude that field in a query, your custom getter doesn't work. Is this a feature that should be added? Or is there a better pattern I should be using?\r\n\r\n```js\r\nmodule.exports = function (sequelize,DataTypes) {\r\n  var Widget = sequelize.define('Widget',{\r\n    data: {\r\n      type: DataTypes.TEXT\r\n    },\r\n    info: {\r\n      type: DataTypes.VIRTUAL,\r\n      get: function () {\r\n        return JSON.parse(this.data).info;\r\n      }\r\n    }\r\n  });\r\n};\r\n```\r\n\r\nExcluding the `data` field would break the query.\r\n\r\n## What do you expect to happen?\r\n\r\nWanted my virtual field tow work\r\n\r\n## What is actually happening?\r\n\r\nMy virtual field doesn't work when the requisite sibling fields are excluded from the query.\r\n\r\n__Dialect:__ sqlite\r\n__Dialect version:__\r\n__Database version:__\r\n__Sequelize version:__ 4.41.0\r\n__Tested with latest release:__ \r\n\r\n\r\n**Note :** _Your issue may be ignored OR closed by maintainers if it's not tested against latest version OR does not follow issue template._\r\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/10082/comments",
+    "author": "ryanburnette",
+    "comments": [
+      {
+        "user": "ryanburnette",
+        "created_at": "2018-10-26T18:43:57Z",
+        "body": "I guess I could parse the JSON once and put the parsed results into real fields, but I'm asking the question partially in principle."
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-10-27T06:49:04Z",
+        "body": "Virtual type accepts dependent attributes which get pulled when virtual field is used\r\n\r\n```js\r\n{\r\n  active: {\r\n    type: new DataTypes.VIRTUAL(DataTypes.BOOLEAN, ['createdAt']),\r\n    get: function() {\r\n      return this.get('createdAt') > Date.now() - (7 * 24 * 60 * 60 * 1000)\r\n    }\r\n  }\r\n}\r\n```"
+      },
+      {
+        "user": "ryanburnette",
+        "created_at": "2018-10-27T16:37:06Z",
+        "body": "Thanks for the help comprehending the doc."
+      }
+    ]
+  },
+  {
+    "number": 9944,
+    "title": "Access timestamps from createdAt/updatedAt instead of custom field name",
+    "created_at": "2018-09-21T02:24:17Z",
+    "closed_at": "2018-09-21T07:04:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/9944",
+    "body": "In current sequelize, when a custom column name has been assigned to one of the timestamps, the timestamp value is no longer accessible from Model.createdAt / updated.At etc.\r\n\r\nFrom my understanding, this [v5 change](/sequelize/sequelize/issues/6423#issuecomment-379472035) will only change the behavior when timestamps are not customized.\r\n\r\nI'm a very new user of sequelize, but tbh I think this is inconsistent, isn't it? What is the reason behind this design? (Please consider this as a feature request)\r\n\r\n## What are you doing?\r\n```js\r\nconst MyTable = sequelize.define('mytable', {\r\n  myField: {\r\n    type: Sequelize.INTEGER,\r\n    field: 'my_column',\r\n  },\r\n}, {\r\n  createdAt: 'my_created_at',\r\n  updatedAt: false,\r\n});\r\nMyTable.create({\r\n  myField: 0,\r\n})).then(myInstance => {\r\n  console.log(myInstance.myField); // 0\r\n  console.log(myInstance.createdAt); // undefined\r\n  console.log(myInstance.my_created_at); // createdAt timestamp\r\n});\r\n```\r\n\r\n## What do you expect to happen?\r\nmyInstance.createdAt shows the createdAt timestamp.\r\n\r\n__Dialect:__ mysql\r\n__Sequelize version:__ 4.38.1",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/9944/comments",
+    "author": "zypA13510",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-09-21T05:48:11Z",
+        "body": "`createdAt: 'my_created_at',` means a new attribute will be created with this name `my_created_at`\r\n\r\nIf you want to customize just field name you should do something like this\r\n\r\n```js\r\n'use strict';\r\n\r\nconst Sequelize = require('./index');\r\nconst sequelize = require('./test/support').createSequelizeInstance();\r\n\r\nconst MyTable = sequelize.define('mytable', {\r\n  myField: {\r\n    type: Sequelize.INTEGER,\r\n    field: 'my_column',\r\n  },\r\n  createdAt: {\r\n    type: Sequelize.DATE,\r\n    field: 'my_created_at'\r\n  }\r\n}, {\r\n  updatedAt: false,\r\n  timestamps: true\r\n});\r\n\r\nsequelize.sync({ force: true }).then(() => {\r\n  return sequelize.authenticate();\r\n}).then(() => {\r\n  return MyTable.create({\r\n    myField: 0,\r\n  }).then(myInstance => {\r\n    console.log(myInstance.myField); // 0\r\n    console.log(myInstance.createdAt); //  createdAt timestamp\r\n    console.log(myInstance.my_created_at); // undefined\r\n  });\r\n});\r\n```\r\n\r\n```sql\r\n0\r\n2018-09-21T05:47:30.001Z\r\nundefined\r\n```"
+      },
+      {
+        "user": "zypA13510",
+        "created_at": "2018-09-21T07:04:10Z",
+        "body": "My bad, I forgot the timestamp fields can be modified from the attributes parameter instead of options.\r\nThanks. Closing this issue."
+      }
+    ]
+  },
+  {
+    "number": 9768,
+    "title": "the default foreign key is not overwritten with the foreignKey option",
+    "created_at": "2018-08-07T06:33:31Z",
+    "closed_at": "2018-08-07T14:34:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/9768",
+    "body": "\r\n## What are you doing?\r\ncreating association between two model classes: Product and ProductPhoto[One product can have many photos]\r\nwhere product_id from Product table should be foreign key in ProductPhoto table.\r\n\r\n\r\n```js\r\nProduct Model :\r\nvar product = sequelize.define('product', {\r\n    product_id:{\r\n        allowNull: false,\r\n        type:DataTypes.INTEGER,\r\n        primaryKey: true,\r\n        autoIncrement:true,\r\n    },\r\n    productName: {\r\n      type:DataTypes.STRING,\r\n      field:'product_name'\r\n    }\r\n, {\r\n    underscored: true,\r\n    freezeTableName: true\r\n  });\r\n  product.associate = function(models) {\r\n  product.hasMany(models.productPhoto,{foriegnKey:'product_id'});\r\n   }\r\n}\r\nProductPhoto Model:\r\nvar productPhoto = sequelize.define('productPhoto', {\r\n  \t productPhotoId:{\r\n        allowNull: false,\r\n        type:DataTypes.INTEGER,\r\n        primaryKey: true,\r\n        autoIncrement:true,\r\n        field:'product_photo_id'\r\n      },\r\n    productPhotoPath: {\r\n      type:DataTypes.STRING,\r\n      field:'product_photo_path'\r\n    }\r\n}\r\nproductPhoto.associate = function(models) {\r\n    productPhoto.belongsTo(models.product, {foreignKey: 'product_id'});\r\n\r\n  }\r\n```\r\n\r\n## What do you expect to happen?\r\nWhen i execute sync to create database tables ,name product and productPhoto, the foreign key with name product_id in table productPhoto should be created.\r\n\r\n## What is actually happening?\r\nsequelize is generating foriegn key product_product_id, it is not taking foreignKey option.\r\n\r\n\r\n_Output, either JSON or SQL_\r\n\r\n CREATE TABLE IF NOT EXISTS `product` (`product_id` INTEGER NOT NULL auto_increment , `product_name` VARCHAR(255), `product_price` FLOAT, `product_description` TEXT, `product_sku` VARCHAR(255), `product_stock` INTEGER, `product_brand` VARCHAR(255), `product_title` VARCHAR(255), `product_fabric` VARCHAR(255), `product_manufacturer_info` VARCHAR(255), `product_country_of_origin` VARCHAR(255), `product_style` VARCHAR(255), `product_sold_by` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, PRIMARY KEY (`product_id`)) ENGINE=InnoDB;\r\nExecuting (default): SHOW INDEX FROM `product` FROM `ecommerse_db_dev`\r\n\r\nCREATE TABLE IF NOT EXISTS `productPhoto` (`product_photo_id` INTEGER NOT NULL auto_increment , `product_photo_path` VARCHAR(255), `product_photo_alt` VARCHAR(255), `createdAt` DATETIME, `updatedAt` DATETIME, `created_at` DATETIME NOT NULL, `updated_at` DATETIME NOT NULL, `product_product_id` INTEGER, PRIMARY KEY (`product_photo_id`), FOREIGN KEY (`product_product_id`) REFERENCES `product` (`product_id`) ON DELETE SET NULL ON UPDATE CASCADE) ENGINE=InnoDB;\r\nExecuting (default): SHOW INDEX FROM `productPhoto` FROM `ecommerse_db_dev`\r\n\r\n\r\n__Dialect:__ mysql\r\n__Dialect version:__ 1.6.1\r\n__Database version:__ 5.7.21\r\n__Sequelize version:__ 4.37.10\r\n__Tested with latest release:__ Yes (sequelize@4.38.0)\r\n\r\n\r\n**Note :** _Your issue may be ignored OR closed by maintainers if it's not tested against latest version OR does not follow issue template._\r\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/9768/comments",
+    "author": "mail2nitinraj",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-08-07T06:53:58Z",
+        "body": "> ```product.hasMany(models.productPhoto,{foriegnKey:'product_id'});```\r\n\r\nSpelling mistake `foriegnKey` should be `foreignKey`"
+      },
+      {
+        "user": "mail2nitinraj",
+        "created_at": "2018-08-07T14:34:53Z",
+        "body": "Thanks! now it worked as expected :)"
+      }
+    ]
+  },
+  {
+    "number": 9494,
+    "title": "instance.constructor different when .scope() is used to retrieve the instance",
+    "created_at": "2018-05-30T21:08:10Z",
+    "closed_at": "2018-06-01T15:00:42Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/9494",
+    "body": "## What are you doing?\r\n```\r\nconst Sequelize = require('sequelize');\r\nconst sequelize = new Sequelize('test-db', '', '', { host: 'localhost', dialect: 'postgres', operatorsAliases: false, logging: false });\r\n\r\nconst User = sequelize.define('User', {\r\n  name: Sequelize.STRING(200),\r\n  status: Sequelize.ENUM('active', 'inactive', 'unverified'),\r\n}, {\r\n  scopes: {\r\n    active: {\r\n      where: {\r\n        status: 'active',\r\n      },\r\n    },\r\n  },\r\n});\r\n\r\nasync function main () {\r\n  await sequelize.sync({ force: true });\r\n  await Promise.all([\r\n    User.create({ name: 'Active User 1', status: 'active' }),\r\n    User.create({ name: 'Active User 2', status: 'active' }),\r\n    User.create({ name: 'Inactive User 1', status: 'inactive' }),\r\n    User.create({ name: 'Inactive User 2', status: 'inactive' }),\r\n  ]);\r\n\r\n  const unscopedUser = await User.findOne({ where: { name: 'Inactive User 1' } });\r\n  const unscopedUsers = await User.findAll({ where: { status: 'inactive' } });\r\n  const scopedUser = await User.scope('active').findOne({ where: { name: 'Active User 1' } });\r\n  const scopedUsers = await User.scope('active').findAll();\r\n\r\n  console.log('unscopedUser constructor is User ==', unscopedUser.constructor === User); // true\r\n  console.log('unscopedUsers constructors are User ==', unscopedUsers.every(i => i.constructor === User)); // true\r\n  console.log('scopedUser constructor is User ==', scopedUser.constructor === User); // false\r\n  console.log('scopedUsers constructors are User ==', scopedUsers.every(i => i.constructor === User)); // false\r\n\r\n  process.exit(0);\r\n}\r\n\r\nmain();\r\n```\r\n\r\n## What do you expect to happen?\r\nI expect the object instance constructors to always be `User` even if I used `.scope()` to retrieve it.\r\n\r\n## What is actually happening?\r\nWhen `.scope()` is used during retrieval the instance constructor is no longer `User`.\r\n\r\n__Dialect:__ postgres\r\n__Dialect version:__ ??\r\n__Database version:__ 10.3\r\n__Sequelize version:__ 4.37.10\r\n__Tested with latest release:__ Yes (4.37.10)",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/9494/comments",
+    "author": "aforty",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-06-01T04:45:59Z",
+        "body": "`.scope / .unscope` creates a new copy of model, instances created by them refer to this new copy. For identification purpose you can use `instance.constructor.name` which should be common for different scoped instances.\r\n\r\nWe need a new copy of class to maintain multiple scopes at a time. If we keep the class same, changing scope on one of them will change scope on other sibling classes."
+      },
+      {
+        "user": "aforty",
+        "created_at": "2018-06-01T15:00:42Z",
+        "body": "I see, thank you!"
+      }
+    ]
+  },
+  {
+    "number": 8856,
+    "title": "add support of || (double-pipe) concat operator",
+    "created_at": "2018-01-08T10:11:05Z",
+    "closed_at": "2018-01-11T04:54:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/8856",
+    "body": "<!--\r\n\r\nPlease note this is an issue tracker, not a support forum.\r\nFor general questions, please use StackOverflow or Slack.\r\n\r\nFor bugs, please fill out the template below.\r\n\r\n-->\r\n\r\n## What are you doing?\r\n<!-- Post a minimal, self-contained code sample that reproduces the issue, including models and associations -->\r\n\r\nI try to concat (`||`) binary data to a field using `updateQuery`.\r\n\r\n```js\r\nvar query = db.dialect.QueryGenerator.updateQuery('myTable', { data: db.literal('data || $data') }, { id:1 } ) )\r\n...\r\ndb.query(query, {\r\n  type: db.QueryTypes.UPDATE,\r\n  bind: {\r\n    data: myBuffer\r\n  }\r\n});\r\n```\r\nI would like to use `db.col()` and `db.literal()` in my previous expression, but the `||` operator is not available:\r\n`{ data: db.concat(db.col('data'), db.literal('$data')) }`\r\n\r\n\r\n__Dialect:__  any\r\n__Dialect version:__ latest\r\n__Database version:__ latest\r\n__Sequelize version:__ latest\r\n__Tested with latest release:__ No (If yes, specify that version)\r\n\r\n\r\n**Note :** _Your issue may be ignored OR closed by maintainers if it's not tested against latest version OR does not follow issue template._\r\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/8856/comments",
+    "author": "FranckFreiburger",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T04:54:10Z",
+        "body": "You can use `sequelize.fn` \r\n\r\n```js\r\n  await Test.sync({ force: true });\r\n\r\n  await Test.create({ a: 'gdsds' });\r\n\r\n  var query = sequelize.dialect.QueryGenerator.updateQuery('Tests', {\r\n    a: sequelize.fn('CONCAT', sequelize.col('a'), sequelize.literal('$a::text'))\r\n  });\r\n\r\n  await sequelize.query(query, {\r\n    type: sequelize.QueryTypes.UPDATE,\r\n    bind: {\r\n      a: 'ABC'\r\n    }\r\n  });\r\n\r\n  console.log(await Test.findAll({ raw: true }));\r\n```\r\n\r\n```sql\r\nExecuting (default): DROP TABLE IF EXISTS \"Tests\" CASCADE;\r\nExecuting (default): CREATE TABLE IF NOT EXISTS \"Tests\" (\"id\"   SERIAL , \"a\" VARCHAR(255), \"createdAt\" TIMESTAMP WITH TIME ZONE NOT NULL, \"updatedAt\" TIMESTAMP WITH TIME ZONE NOT NULL, PRIMARY KEY (\"id\"));\r\nExecuting (default): SELECT i.relname AS name, ix.indisprimary AS primary, ix.indisunique AS unique, ix.indkey AS indkey, array_agg(a.attnum) as column_indexes, array_agg(a.attname) AS column_names, pg_get_indexdef(ix.indexrelid) AS definition FROM pg_class t, pg_class i, pg_index ix, pg_attribute a WHERE t.oid = ix.indrelid AND i.oid = ix.indexrelid AND a.attrelid = t.oid AND t.relkind = 'r' and t.relname = 'Tests' GROUP BY i.relname, ix.indexrelid, ix.indisprimary, ix.indisunique, ix.indkey ORDER BY i.relname;\r\nExecuting (default): INSERT INTO \"Tests\" (\"id\",\"a\",\"createdAt\",\"updatedAt\") VALUES (DEFAULT,'gdsds','2018-01-11 04:52:59.466 +00:00','2018-01-11 04:52:59.466 +00:00') RETURNING *;\r\nExecuting (default): UPDATE \"Tests\" SET \"a\"=CONCAT(\"a\", $1::text)\r\nExecuting (default): SELECT \"id\", \"a\", \"createdAt\", \"updatedAt\" FROM \"Tests\" AS \"Test\";\r\n[ { id: 1,\r\n    a: 'gdsdsABC',\r\n    createdAt: 2018-01-11T04:52:59.466Z,\r\n    updatedAt: 2018-01-11T04:52:59.466Z } ]\r\n\r\n```"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T07:40:29Z",
+        "body": "Thanks for the reply.\r\nUsing CONCAT is the first alternative I thought of.\r\nI use pgsql and I cannot find a clear information in the doc to know if CONCAT supports binary data (operates on BYTEA), however, `||` clearly supports BYTEA concatenation.\r\n\r\n"
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T07:44:16Z",
+        "body": "Can you try and see if `CONCAT` works on binary data, possibly typecast with `bytea`"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:09:19Z",
+        "body": "without casting:\r\nsql: `UPDATE \"images\" SET \"data\"=CONCAT(\"data\", $1) WHERE \"id\" = 1`\r\nerr: `SequelizeDatabaseError: column \"data\" is of type bytea but expression is of type text:`\r\n"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:14:21Z",
+        "body": "with casting:\r\nsql: `UPDATE \"images\" SET \"data\"=CAST(CONCAT(CAST(\"data\" AS TEXT), $1::text) AS BYTEA) WHERE \"id\" = 1`\r\nerr: `invalid byte sequence for encoding \"UTF8\": 0x9`\r\n"
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T08:34:51Z",
+        "body": "Just using `literal` will work\r\n\r\n```js\r\n    await Test.sync({ force: true });\r\n\r\n    await Test.create({ a: new Buffer('thing') });\r\n\r\n    var query = sequelize.dialect.QueryGenerator.updateQuery('Tests', {\r\n      a: sequelize.literal('$a || a')\r\n    });\r\n\r\n    await sequelize.query(query, {\r\n      type: sequelize.QueryTypes.UPDATE,\r\n      bind: {\r\n        a: 'some'\r\n      }\r\n    });\r\n\r\n    const result = await Test.findAll();\r\n\r\n    console.log(result[0].get('a').toString('utf8'));\r\n```\r\n\r\n```sql\r\nExecuting (default): DROP TABLE IF EXISTS \"Tests\" CASCADE;\r\nExecuting (default): CREATE TABLE IF NOT EXISTS \"Tests\" (\"id\"   SERIAL , \"a\" BYTEA, \"createdAt\" TIMESTAMP WITH TIME ZONE NOT NULL, \"updatedAt\" TIMESTAMP WITH TIME ZONE NOT NULL, PRIMARY KEY (\"id\"));\r\nExecuting (default): SELECT i.relname AS name, ix.indisprimary AS primary, ix.indisunique AS unique, ix.indkey AS indkey, array_agg(a.attnum) as column_indexes, array_agg(a.attname) AS column_names, pg_get_indexdef(ix.indexrelid) AS definition FROM pg_class t, pg_class i, pg_index ix, pg_attribute a WHERE t.oid = ix.indrelid AND i.oid = ix.indexrelid AND a.attrelid = t.oid AND t.relkind = 'r' and t.relname = 'Tests' GROUP BY i.relname, ix.indexrelid, ix.indisprimary, ix.indisunique, ix.indkey ORDER BY i.relname;\r\nExecuting (default): INSERT INTO \"Tests\" (\"id\",\"a\",\"createdAt\",\"updatedAt\") VALUES (DEFAULT,E'\\\\x7468696e67','2018-01-11 08:33:37.006 +00:00','2018-01-11 08:33:37.006 +00:00') RETURNING *;\r\nExecuting (default): UPDATE \"Tests\" SET \"a\"=$1 || a\r\nExecuting (default): SELECT \"id\", \"a\", \"createdAt\", \"updatedAt\" FROM \"Tests\" AS \"Test\";\r\nsomething\r\n```"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:47:07Z",
+        "body": "I agree.\r\nThe drawback of literal is that we lost sequelize tools like column name escaping, etc..."
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T08:54:09Z",
+        "body": "If you are binding variables in query, I see no problem with that if query is correctly generated"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:56:27Z",
+        "body": "It's ok for me, thanks."
+      }
+    ]
+  },
+  {
+    "number": 7697,
+    "title": "'include' itself issue?",
+    "created_at": "2017-05-27T05:30:12Z",
+    "closed_at": "2017-05-27T05:43:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/7697",
+    "body": "## What you are doing?\r\n```js\r\nmodels.Booking\r\n.findAll({\r\nattributes: ['id'], // for testing\r\ninclude: [\r\n{\r\nmodel: models.Room,\r\nattributes: ['name'], // for testing\r\nwhere: { pensionId: request.params.pensionId }\r\n}\r\n]\r\n})\r\n```\r\n\r\n## What do you expect to happen?\r\nThe sql I wanted is\r\n````select * from [Booking] inner join [Room] room on room.pensionId = 'Foo'````\r\nthis comes out exactly what i want. (tested on heidisql)\r\n\r\n\r\n## What is actually happening?\r\nHowever, it comes\r\n````SELECT [Booking].[id], [Room].[id] AS [Room.id], [Room].[name] AS [Room.name] FROM [Booking] AS [Booking] INNER JOIN [Room] AS [Room] ON [Booking].[roomId] = [Room].[id] AND [Room].[pensionId] = N'Foo';````\r\n\r\nProblem is why automatically include this clause????\r\n````[Booking].[roomId] = [Room].[id]````\r\nthis will be perfect without above clause.\r\n\r\n\r\n__Dialect:__ mssql",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/7697/comments",
+    "author": "xkguq007",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2017-05-27T05:34:34Z",
+        "body": "`[Booking].[roomId] = [Room].[id]` is the join condition between these two models, for each booking it will look for its room + other conditions you want to query for.\r\n\r\nIf we dont add this condition it will add other rooms to query as well which may not belong to booking, giving incorrect result"
+      },
+      {
+        "user": "xkguq007",
+        "created_at": "2017-05-27T05:43:44Z",
+        "body": "Oh i understand.\r\nit was my fault.\r\nIf that clause doesn't exist, it returns same arrays. thanks.\r\nI will close issue."
+      }
+    ]
+  },
+  {
+    "number": 6611,
+    "title": "Changing the name of an association to get output as JSON",
+    "created_at": "2016-09-19T15:47:48Z",
+    "closed_at": "2016-09-19T15:59:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6611",
+    "body": "## What you are doing?\n\nSo, lets say I have an association (below) and it has been included and then output to JSON.\n\n``` js\n// in the model\nUser.belongsToMany(models.Permissions, {through: models.UsersPermissions, foreignKey: 'userId'});\n\n// included\ndb.Users.findAll({ \n        include: [ {\n            model: db.Permissions,\n        through: {\n                 attributes: []\n                }\n        }]\n})\n\n//output\n\"Permissions\": [\n        {\n          \"id\": 1,\n          \"name\": \"add-role\",\n          \"description\": \"Allows the user to add a new role to the system\"\n        }\n      ]\n```\n## What do you expect to happen?\n\nNow, that final output comes out as a 'Permission', note the capital P.\n\nWhat I would expect is a lower case 'p', because I don;t know of any standard that would like that capitalized.\n\nThe only way to change this is to use the \"as\" operator. Therefore...\n\n``` js\n// in the model\nUser.belongsToMany(models.Permissions, {through: models.UsersPermissions, foreignKey: 'userId', as: 'permissions'});\n\n// included\ndb.Users.findAll({ \n        include: [ {\n        model: db.Permissions,\n                as: 'permissions',\n        through: {\n                 attributes: []\n                }\n        }]\n})\n\n//output\n\"permissions\": [\n        {\n          \"id\": 1,\n          \"name\": \"add-role\",\n          \"description\": \"Allows the user to add a new role to the system\"\n        }\n      ]\n```\n\nNow, you may feel this is great, what isnt great however is that this \"as\" operator must be used in both the model AND the includes.\n\nIs this the only way to have this happen? Or have I got something wrong here?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6611/comments",
+    "author": "Kyderman",
+    "comments": [
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-19T15:59:21Z",
+        "body": "``` js\nUser.belongsToMany(models.Permissions, {through: models.UsersPermissions, foreignKey: 'userId', as: 'permissions'});\n\ndb.Users.findAll({ \n        include: [ {\n        association: db.User.associations.permissions,\n        through: {\n                 attributes: []\n                }\n        }]\n})\n```\n\nThe object in `User.associations.permissions` is also returned by `belongsToMany`.\n"
+      },
+      {
+        "user": "Kyderman",
+        "created_at": "2016-09-19T16:24:11Z",
+        "body": "beautiful!\n\nThanks\n"
+      }
+    ]
+  },
+  {
+    "number": 6576,
+    "title": "JSON format for queries using \"include\"",
+    "created_at": "2016-09-09T17:33:16Z",
+    "closed_at": "2016-09-09T17:59:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6576",
+    "body": "First, thanks for the awesome library. Saves me a ton of time in my projects. I've had this problem for quite a while and made a bunch of workarounds, finally decided to just ask you guys. Thanks in advance!\n\nBasically i want to query the db and include an association as nest json. EG:\n\n```\nUser.findOne({\n    raw: true,\n    include: [{\n      model: Company,\n      as: 'company'\n    }]\n  })\n```\n\nWhat im getting is:\n\n```\n{\n  id: 1234,\n  name: 'Blah',\n  company.id: 1234,\n  company.name: 'blah blah'\n}\n```\n\nI would expect:\n\n```\n{\n  id: 1234,\n  name: 'Blah',\n  company: { \n    id: 1234,\n    name: 'blah blah'\n  }\n}\n```\n\nWhat am i doing wrong here?\n\n**Dialect:** postgres \n**Database version:** 9.5.2.0\n**Sequelize version:** 3.23.4\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6576/comments",
+    "author": "brianmmorton",
+    "comments": [
+      {
+        "user": "brianmmorton",
+        "created_at": "2016-09-09T17:38:37Z",
+        "body": "Does this have to do with using raw?\n"
+      },
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T17:52:49Z",
+        "body": "Yes, this is not supported why using raw, as raw returns the fields like they come from the DB. Is there any reason why you need raw?\n"
+      },
+      {
+        "user": "brianmmorton",
+        "created_at": "2016-09-09T17:57:52Z",
+        "body": "Perhaps not? My impression was that i should use raw when I am looking to only return json data. So typically in express I will query data with raw, then res.json(results). Do i not need raw in that case?\n"
+      },
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T17:59:06Z",
+        "body": "No, not at all. You can just `JSON.stringify()` the result.\n"
+      },
+      {
+        "user": "brianmmorton",
+        "created_at": "2016-09-09T18:00:01Z",
+        "body": "Great. thanks for the help!\n"
+      },
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T18:01:23Z",
+        "body": "No problem :)\n"
+      },
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T18:01:58Z",
+        "body": "Oh, and if it wasn't clear, of course you can also just `res.json()` the result.\n"
+      },
+      {
+        "user": "rafaelvmedeiros",
+        "created_at": "2020-04-13T00:21:45Z",
+        "body": "another option is set: nest: true\r\n\r\nawait Empresa.findOne({\r\n      where: {},\r\n      raw: true,\r\n      nest: true,\r\n      attributes: ['cnpj', 'razao_social', 'inscricao_estadual'],\r\n      include: [{}]"
+      }
+    ]
+  },
+  {
+    "number": 6572,
+    "title": "Sequelize omitting field when casting to array",
+    "created_at": "2016-09-08T20:59:12Z",
+    "closed_at": "2016-09-10T18:50:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6572",
+    "body": "I am attempting to use the postgres citext module with Sequelize, so far it has worked well by using literals for queries and defining the type in the model. However because Sequelize does not understand what the citext type is, it returns my citext arrays as strings. e;g \"{item 1, item2}\"  \nTo get around this I am trying to cast the citext array to a TEXT or VARCHAR array in the query, however when I do this, Sequelize does not show that field at all.    \n\nIf I set raw: true, the field shows fine, and as an array.\n\n``` js\nUsers.findAndCountAll({\n        where: { },\n        attributes: [\n          'id',\n          'createdAt',\n          'updatedAt',\n          db.cast(db.col('nicknames'), 'text[]')\n        ]\n})\n```\n## What do you expect to happen?\n\nI expect there to be a nicknames field returned from sequelize and it to be an array, instead it's as if the attribute is not there at all.\n## What is actually happening?\n\nThis is the generated SQL, the SQL itself works fine when I try it in a database manager, but the output Sequelize gives me omits the nickname field.\n\nSELECT \"User\".\"id\", \"User\".\"createdAt\", \"User\".\"updatedAt\", CAST(\"nicknames\" AS TEXT[]) FROM \"Users\" AS \"User\" WHERE \"User\".\"deletedAt\" IS NULL;\n\n**Dialect:** postgres\n**Database version:** 9.5\n**Sequelize version:** 3.23.4\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6572/comments",
+    "author": "SuperManifolds",
+    "comments": [
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T06:51:59Z",
+        "body": "You need to tell sequelize under which alias you want to have your expression. I believe the syntax is\n\n``` js\nUsers.findAndCountAll({\n        where: { },\n        attributes: [\n          'id',\n          'createdAt',\n          'updatedAt',\n          [db.cast(db.col('nicknames'), 'text[]'), 'nicknames']\n        ]\n})\n```\n\nbut please refer to the docs\n"
+      },
+      {
+        "user": "SuperManifolds",
+        "created_at": "2016-09-10T18:50:26Z",
+        "body": "Worked! Can't believe I missed that, thank you so much.\n"
+      }
+    ]
+  },
+  {
+    "number": 6564,
+    "title": "How access a model's associated models",
+    "created_at": "2016-09-07T18:20:05Z",
+    "closed_at": "2016-09-07T18:22:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6564",
+    "body": "Is there a programmatic way to access the associated models of a model?\n\nFor example, if there is a 1:M association between the models `Author` and `Book`, is there a way that I can access the `Book` model from the `Author` model along with the type of association?\n\nSomething like `Author.getAssociations()` would return something like:\n\n``` javascript\n[{\n    relationship: \"hasMany\",\n    model: Book\n}]\n```\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6564/comments",
+    "author": "nareynolds",
+    "comments": [
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-07T18:22:50Z",
+        "body": "Yes, the associations are saved under `Model.associations`, which is an object hash from alias to association object. The association objects are seperate classes for hasMany / belongsTo / ... and have a couple of attributes, if they are not documented you might wanna peek into the source. \n"
+      },
+      {
+        "user": "nareynolds",
+        "created_at": "2016-09-07T18:49:07Z",
+        "body": "thanks, again!\n"
+      }
+    ]
+  },
+  {
+    "number": 6549,
+    "title": "How can I create this SQL?",
+    "created_at": "2016-09-06T08:05:47Z",
+    "closed_at": "2016-09-07T01:05:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6549",
+    "body": "Hello. \n## What you are doing?\n\n``` js\nRoom.belongsTo(Hotel, {foreignKey: 'hotelId'});\n\nRoom.findAndCountAll({\n  where: {\n    sellPrice: {lte: 10000}\n  },\n  include: [{\n    model: Hotel,\n    required: false,\n    where: {\n      region: 'Tokyo'\n    }\n  }]\n});\n\n```\n## What do you expect to happen?\n\n_I wanted._\n- get a room even if hotelId does not exist.\n- make the filter with the region.\n- LEFT OUTER JOIN `hotels` AS `hotel` ON `rooms`.`hotelId` = `hotel`.`id` **WHERE** `hotel`.`region` = 'Tokyo';\n### I wanted this sql\n\n``` sql\nSELECT `rooms`.`id`,\n       `rooms`.`hotelId`,\n       `rooms`.`hotelName`,\n       `rooms`.`roomType`,\n       `rooms`.`smoking`,\n       `rooms`.`breakfast`,\n       `rooms`.`dinner`,\n       `rooms`.`checkIn`,\n       `rooms`.`checkOut`,\n       `rooms`.`numberOfAdults`,\n       `rooms`.`numberOfChildren`,\n       `rooms`.`bookingFrom`,\n       `rooms`.`reservationCode`,\n       `rooms`.`confirmationCode`,\n       `rooms`.`originalPrice`,\n       `rooms`.`sellPrice`,\n       `rooms`.`discountRate`,\n       `rooms`.`chargeStatus`,\n       `rooms`.`postingPeriod`,\n       `rooms`.`message`,\n       `rooms`.`reviewStatus`,\n       `rooms`.`saleStatus`,\n       `rooms`.`transferStatus`,\n       `rooms`.`chargeId`,\n       `rooms`.`createdAt`,\n       `rooms`.`updatedAt`,\n       `hotel`.`id` AS `hotel.id`,\n       `hotel`.`name` AS `hotel.name`,\n       `hotel`.`kanaName` AS `hotel.kanaName`,\n       `hotel`.`formattedAddress` AS `hotel.formattedAddress`,\n       `hotel`.`country` AS `hotel.country`,\n       `hotel`.`region` AS `hotel.region`,\n       `hotel`.`locality` AS `hotel.locality`,\n       `hotel`.`subLocality1` AS `hotel.subLocality1`,\n       `hotel`.`subLocality2` AS `hotel.subLocality2`,\n       `hotel`.`subLocality3` AS `hotel.subLocality3`,\n       `hotel`.`subLocality4` AS `hotel.subLocality4`,\n       `hotel`.`postalCode` AS `hotel.postalCode`,\n       `hotel`.`phone` AS `hotel.phone`,\n       `hotel`.`fax` AS `hotel.fax`,\n       `hotel`.`access` AS `hotel.access`,\n       `hotel`.`station` AS `hotel.station`,\n       `hotel`.`reviewRate` AS `hotel.reviewRate`,\n       `hotel`.`reviewCount` AS `hotel.reviewCount`,\n       `hotel`.`parking` AS `hotel.parking`,\n       `hotel`.`images` AS `hotel.images`,\n       `hotel`.`checkInTime` AS `hotel.checkInTime`,\n       `hotel`.`checkOutTime` AS `hotel.checkOutTime`,\n       `hotel`.`lastCheckInTime` AS `hotel.lastCheckInTime`,\n       `hotel`.`hotelPolicy` AS `hotel.hotelPolicy`,\n       `hotel`.`cancelPolicy` AS `hotel.cancelPolicy`,\n       `hotel`.`creditCard` AS `hotel.creditCard`,\n       `hotel`.`latitude` AS `hotel.latitude`,\n       `hotel`.`longitude` AS `hotel.longitude`,\n       `hotel`.`listedStatus` AS `hotel.listedStatus`,\n       `hotel`.`source` AS `hotel.source`,\n       `hotel`.`createdAt` AS `hotel.createdAt`,\n       `hotel`.`updatedAt` AS `hotel.updatedAt`\nFROM `rooms` AS `rooms`\nLEFT OUTER JOIN `hotels` AS `hotel` ON `rooms`.`hotelId` = `hotel`.`id`\nWHERE `hotel`.`region` = 'Tokyo';\n```\n## What is actually happening?\n- filter with the region is not working.\n- LEFT OUTER JOIN `hotels` AS `hotel` ON `rooms`.`hotelId` = `hotel`.`id` **AND** `hotel`.`region` = 'Tokyo';\n### Actual sql\n\n``` sql\nSELECT `rooms`.`id`,\n       `rooms`.`hotelId`,\n       `rooms`.`hotelName`,\n       `rooms`.`roomType`,\n       `rooms`.`smoking`,\n       `rooms`.`breakfast`,\n       `rooms`.`dinner`,\n       `rooms`.`checkIn`,\n       `rooms`.`checkOut`,\n       `rooms`.`numberOfAdults`,\n       `rooms`.`numberOfChildren`,\n       `rooms`.`bookingFrom`,\n       `rooms`.`reservationCode`,\n       `rooms`.`confirmationCode`,\n       `rooms`.`originalPrice`,\n       `rooms`.`sellPrice`,\n       `rooms`.`discountRate`,\n       `rooms`.`chargeStatus`,\n       `rooms`.`postingPeriod`,\n       `rooms`.`message`,\n       `rooms`.`reviewStatus`,\n       `rooms`.`saleStatus`,\n       `rooms`.`transferStatus`,\n       `rooms`.`chargeId`,\n       `rooms`.`createdAt`,\n       `rooms`.`updatedAt`,\n       `hotel`.`id` AS `hotel.id`,\n       `hotel`.`name` AS `hotel.name`,\n       `hotel`.`kanaName` AS `hotel.kanaName`,\n       `hotel`.`formattedAddress` AS `hotel.formattedAddress`,\n       `hotel`.`country` AS `hotel.country`,\n       `hotel`.`region` AS `hotel.region`,\n       `hotel`.`locality` AS `hotel.locality`,\n       `hotel`.`subLocality1` AS `hotel.subLocality1`,\n       `hotel`.`subLocality2` AS `hotel.subLocality2`,\n       `hotel`.`subLocality3` AS `hotel.subLocality3`,\n       `hotel`.`subLocality4` AS `hotel.subLocality4`,\n       `hotel`.`postalCode` AS `hotel.postalCode`,\n       `hotel`.`phone` AS `hotel.phone`,\n       `hotel`.`fax` AS `hotel.fax`,\n       `hotel`.`access` AS `hotel.access`,\n       `hotel`.`station` AS `hotel.station`,\n       `hotel`.`reviewRate` AS `hotel.reviewRate`,\n       `hotel`.`reviewCount` AS `hotel.reviewCount`,\n       `hotel`.`parking` AS `hotel.parking`,\n       `hotel`.`images` AS `hotel.images`,\n       `hotel`.`checkInTime` AS `hotel.checkInTime`,\n       `hotel`.`checkOutTime` AS `hotel.checkOutTime`,\n       `hotel`.`lastCheckInTime` AS `hotel.lastCheckInTime`,\n       `hotel`.`hotelPolicy` AS `hotel.hotelPolicy`,\n       `hotel`.`cancelPolicy` AS `hotel.cancelPolicy`,\n       `hotel`.`creditCard` AS `hotel.creditCard`,\n       `hotel`.`latitude` AS `hotel.latitude`,\n       `hotel`.`longitude` AS `hotel.longitude`,\n       `hotel`.`listedStatus` AS `hotel.listedStatus`,\n       `hotel`.`source` AS `hotel.source`,\n       `hotel`.`createdAt` AS `hotel.createdAt`,\n       `hotel`.`updatedAt` AS `hotel.updatedAt`\nFROM `rooms` AS `rooms`\nLEFT OUTER JOIN `hotels` AS `hotel` ON `rooms`.`hotelId` = `hotel`.`id`\nAND `hotel`.`region` = 'Tokyo';\n```\n\n**Dialect:** mysql\n**Database version:** 5.7.11\n**Sequelize version:** 3.24.1\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6549/comments",
+    "author": "tomoktan",
+    "comments": [
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-06T08:08:01Z",
+        "body": "It's `$lte`\n"
+      },
+      {
+        "user": "tomoktan",
+        "created_at": "2016-09-06T09:03:36Z",
+        "body": "@felixfbecker\nIt means that this?\n\n``` js\nRoom.belongsTo(Hotel, {foreignKey: 'hotelId'});\n\nRoom.findAndCountAll({\n  where: {\n    sellPrice: {$lte: 10000}\n  },\n  include: [{\n    model: Hotel,\n    required: false,\n    where: {\n      region: 'Tokyo'\n    }\n  }]\n});\n```\n\nBut , it does not work yet as i think.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2016-09-06T10:55:59Z",
+        "body": "If you want where clauses on the outer statement, you should put them at the top level of the sequelize options as well :)\n\n``` js\nRoom.findAndCountAll({\n  where: {\n    sellPrice: {$lte: 10000}\n    '$hotel.region$': 'Tokyo'\n  },\n  include: [{\n    model: Hotel,\n    required: false\n  }]\n});\n```\n\nNotice the use of `$` to refer to columns from the join table\n"
+      },
+      {
+        "user": "tomoktan",
+        "created_at": "2016-09-07T01:05:04Z",
+        "body": "@janmeier Thank you! It worked! (^o^)\n"
+      }
+    ]
+  },
+  {
+    "number": 3237,
+    "title": "Question: raw:true in the relational queries",
+    "created_at": "2015-02-27T18:17:33Z",
+    "closed_at": "2015-02-28T12:44:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/3237",
+    "body": "Hi,\n\nAssuming I have the next relations described:\n\n``` javascript\n    models.User.belongsToMany(models.Role,{through:'user__role',foreignKey:'users_id',otherKey:'roles_id'});\n```\n\nSo in the code I do the next:\n\n``` javascript\nUser.find(2298139).then(function(user){\n                    user.getRoles().then(function(roles){\n                        console.log(roles);\n                        reply(roles);\n                    });\n                });\n```\n\nAnd I want to receive the plain result, without the sequelize wrappings.\n\nThe questions are:\n1. How and where should I inject `{options: {raw: true}}`\n2. How can I know that the `raw:true` had worked? I mean how the roles object would be different then?\n\nLooking forward to receive any answer.\n\nRegards,\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/3237/comments",
+    "author": "PavelPolyakov",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2015-02-28T08:25:47Z",
+        "body": "likely `user.getRoles({raw: true})`.\nYou would know it by roles not being instances, and just being POJOs.\n"
+      },
+      {
+        "user": "PavelPolyakov",
+        "created_at": "2015-02-28T08:53:32Z",
+        "body": "@mickhansen \n\nThanks for the response.\n\nThe thing is, that I receive the same object each time, it looks like this:\n\n``` javascript\n[ { dataValues: { id: '606', name: 'USER', client: null, user__role: [Object] },\n    _previousDataValues: { id: '606', name: 'USER', client: null, user__role: [Object] },\n    __options: \n     { timestamps: false,\n       createdAt: 'createdAt',\n       updatedAt: 'updatedAt',\n       deletedAt: 'deletedAt',\n       instanceMethods: [Object],\n       classMethods: {},\n       validate: {},\n       freezeTableName: true,\n       underscored: false,\n       underscoredAll: false,\n       paranoid: false,\n       whereCollection: [Object],\n       schema: null,\n       schemaDelimiter: '',\n       defaultScope: null,\n       scopes: null,\n       hooks: {},\n       name: [Object],\n       indexes: [],\n       getterMethods: {},\n       tableName: 'role',\n       omitNull: false,\n       sequelize: [Object],\n       uniqueKeys: {},\n       hasPrimaryKeys: true },\n    options: \n     { isNewRecord: false,\n       isDirty: false,\n       include: [Object],\n       includeNames: [Object],\n       includeMap: [Object],\n       includeValidated: true,\n       attributes: [Object],\n       raw: true },\n    hasPrimaryKeys: true,\n    __eagerlyLoadedAssociations: [],\n    isNewRecord: false,\n    user__role: \n     { dataValues: [Object],\n       _previousDataValues: [Object],\n       __options: [Object],\n       options: [Object],\n       hasPrimaryKeys: true,\n       __eagerlyLoadedAssociations: [],\n       isNewRecord: false } } ]\n```\n\nI've tried to do:\n\n``` javascript\nuser.getRoles()\nuser.getRoles({raw: true})\nuser.getRoles({options:{raw: true}})\n```\n\nAs I understand, it's expected that I would receive something like:\n\n``` javascript\n[{\n    id: \"606\",\n    name: \"USER\",\n    client: null,\n    user__role: {\n        users_id: \"2294553\",\n        roles_id: \"606\"\n    }\n}]\n```\n\nAm I right? Or I already receive the raw object?\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2015-02-28T12:33:27Z",
+        "body": "Try `user.getRoles({}, {raw: true})`\n"
+      },
+      {
+        "user": "PavelPolyakov",
+        "created_at": "2015-02-28T12:44:52Z",
+        "body": "@mickhansen \nCool, this works!\n"
+      }
+    ]
+  },
+  {
+    "number": 3210,
+    "title": "How to populate a table through migrations?",
+    "created_at": "2015-02-24T10:35:25Z",
+    "closed_at": "2015-02-24T16:44:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/3210",
+    "body": "Hi there:\n\nI've set up a project with it's Models and the tables are created automatically by sequelize.\nI've also set up umzug to run the pending migrations automatically.\n\nSo far so good. Is there a simple way to populate a table through a migration?\nHaving a table 'Country' and a SQL to populate it how would my 'up' section look like?\nIs there a doc page where I can look for the right params to use use `QueryInterface.insert()`? \n\nThanks in advance for the help.\n\nEDIT: Using Sequelize 2.0.3\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/3210/comments",
+    "author": "sandokanelcojo",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2015-02-24T11:37:00Z",
+        "body": "You shouldn't interface with `QueryInterface` directly.\nUse `sequelize.query` or `Model.bulkCreate`.\n"
+      },
+      {
+        "user": "sandokanelcojo",
+        "created_at": "2015-02-24T16:22:36Z",
+        "body": "Thanks a lot.\nI went with `Model.bulkCreate`.\nHere I leave a snippet in case it helps someone:\n\n```\nvar countries = [\n    {code: 'ZMB', name: 'Zambia'},\n    {code: 'ZWE', name: 'Zimbabwe'},\n ];\n\nup: function (sequelize, Sequelize) {\n    sequelize.models.Country.bulkCreate(countries, null)\n      .then(function (models) {\n        console.log(models);\n      });\n},\ndown...\n```\n\nRegards.\n"
+      },
+      {
+        "user": "barmatz",
+        "created_at": "2015-02-27T15:52:40Z",
+        "body": "+1\n\nI was looking for a workaround for a while.\nThis is my solution when the model is not available yet.\n\n``` js\nmodule.exports = {\n  up: function(migration, DataTypes, done) {\n    migration.createTable('Currencies', {\n      id: {\n        type: DataTypes.INTEGER,\n        primaryKey: true,\n        autoIncrement: true\n      },\n      createdAt: {\n        type: DataTypes.DATE\n      },\n      updatedAt: {\n        type: DataTypes.DATE\n      },\n      name: {\n        type: DataTypes.STRING,\n        allowNull: false\n      },\n      code: {\n        type: DataTypes.STRING,\n        allowNull: false\n      },\n      entity: DataTypes.STRING\n    }).complete(function () {\n      migration.sequelize.query(migration.QueryGenerator.bulkInsertQuery('Currencies', [{\n        name: 'United States dollar',\n        code: 'USD',\n        entity: '&#36;'\n      }, {\n        name: 'Euro',\n        code: 'EUR',\n        entity: '&#8364;'\n      }])).complete(done);\n    });\n  },\n  down: function(migration, DataTypes, done) {\n    migration.dropTable('Currencies').complete(done);\n  }\n};\n\n```\n\nIt would be great if the documentation would reflect the various ways to do this.\n"
+      },
+      {
+        "user": "AlexisNo",
+        "created_at": "2016-11-08T20:19:47Z",
+        "body": "> you shouldn't interface with QueryInterface directly.\n\n@mickhansen What is wrong about that? This is an example of the solution I use: \n\n``` javascript\n'use strict';\nmodule.exports = {\n  up: function(queryInterface, Sequelize) {\n    return queryInterface.bulkInsert('roles', [{\n      label: 'user',\n      createdAt: new Date(),\n      updatedAt: new Date()\n    }, {\n      label: 'admin',\n      createdAt: new Date(),\n      updatedAt: new Date()\n    }]);\n  },\n  down: function(queryInterface, Sequelize) {\n    return queryInterface.bulkDelete('roles', null, {});\n  }\n};\n```\n\nIs there something wrong about it? I usually do not insert data in migration files and use seeders, but in some cases, it can be relevant.\n\nAbout using `Model.bulkCreate()`, wouldn't it be susceptible to break the migration suite one day? Migration files should be immutable while a model definition can evolve. When a model evolves, I create a new migration file but do not alter the previous one so that new deployments do not require to rebuild the database completely. If a migration file references a model, an update of this model could break the migration suite.\n"
+      },
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-11-08T20:27:57Z",
+        "body": "We moved more towards making QueryInterface public API, so no problem with that.\n"
+      },
+      {
+        "user": "darkotuning",
+        "created_at": "2018-09-06T18:31:44Z",
+        "body": "Is it possible that the seed is full of data at one time? I would like to have a lot of data in tables using the faker but not to run the anchor command many times but to do it all at once? Thank you\r\n"
+      }
+    ]
+  },
+  {
+    "number": 3082,
+    "title": "Update a record by using an instance method on one of the fields (one query)",
+    "created_at": "2015-02-09T18:30:59Z",
+    "closed_at": "2015-02-12T23:38:59Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/3082",
+    "body": "Hi,\n\n  First off - sequelize has been a pleasure to work with.  Been helping much on a project I'm working on.  Digging around github, looks like LOTS of hard and mindful work has been put in.  Thanks. \n\n  I was wondering if it was possible to use a Model's instance method in the updating of a specific row.  The preference is to generate one update query (update... where...) and keep associated Model functionality, like creating a UUID, in the Model without replicating elsewhere.  So doing a find first, then an update would allow me to use instance methods (or getters/setters) on the Model, but would be an example of two queries.  I could also do an update() call with where clause, but would have to re-create the functionality in my model, like the generation of a UUID, and use that inside my update().  \n\nI'm using 2.0.0-rc8 with postgres.\n\nModel:\nI've simplified the Model here...\n\n``` javascript\nmodule.exports = function(sequelize, DataTypes) {\n  var tableA = sequelize.define(\"tableA\", {\n    id: {\n      type: DataTypes.UUID,\n      primaryKey: true,\n      defaultValue: DataTypes.UUIDV4,\n    }\n  }, {\n    classMethods: {\n      associate: function(models) {\n        tableA.belongsTo(models.tableB);\n      }\n    },\n    instanceMethods: {\n      newUUID: function() {\n        return uuid.v4();  // required sequelize's module dependency on node-uuid to enable this\n      }\n    }\n  });\n```\n\n  There are three ways I was trying to make this happen, and I'm probably just missing something...\n\n1.Using the update method:\n\n``` javascript\ntableA.update({\n      id: this.newUUID,\n    }, {\n      where: {\n        tableB_id: 'some value'\n      }\n    }\n  );\n```\n\nThe problem is that 'primaryKey' is considered null and this violate a not-null constraint - my understanding is that Model instance methods, and getters/setters require an instance to be created first, hence the issue.  I've observed this occurring with a field that is allowNull: false too.\n\n2.Building to generate an instance method:\n\n``` javascript\nvar tableUpdate = models.tableA.build({\n    id: this.newUUID,\n  }, {\n    isNewRecord: false  // to make this an update and NOT a create\n  });\n```\n\nThis works in providing me access to an instance method or a getter/setter, however I can't figure out how to limit the update to a \"where\" on a foreign key field.\n\n3.Creating a public function, outside sequelize, as a helper of sorts:\n\n``` javascript\nmodule.exports = function(sequelize, DataTypes) {\n  var tableA = sequelize.define(\"tableA\", {\n    id: {\n      type: DataTypes.UUID,\n      primaryKey: true,\n      defaultValue: DataTypes.UUIDV4,\n    }\n  }, {\n    classMethods: {\n      associate: function(models) {\n        tokenA.belongsTo(models.tableB);\n      }\n    }\n  });\n\n  tableA.newUUID = function() {\n    return uuid.v4();\n  }\n\n... then later on \n\n    tableA.update({\n      id: tableA.newUUID,\n    }, {\n      where: {\n        tableB_id: 'some value'\n      }\n    }\n  );\n```\n\nThis works, but its nature does not make it exclusive to a model's instance.  Maybe its good enough - it opens the door for a model helper file. \n\nIf it's not possible to do such a thing with one query, is it reasonable to request an options.where for a build? Or possibly some other solution?\n\nI may have overcomplicated things with my desire for one query vs two.  I'm open to any suggestions/best-practices.\n\nThanks.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/3082/comments",
+    "author": "shaiherman",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2015-02-10T08:47:07Z",
+        "body": "I think you should be able to call the instance method like this:\n\n``` js\ntableA.update({\n  id: tableA.Instance.prototype.newUUID(),\n}, {\n  where: {\n    tableB_id: 'some value'\n  }\n});\n```\n"
+      },
+      {
+        "user": "shaiherman",
+        "created_at": "2015-02-10T22:36:42Z",
+        "body": "That works!  Thanks.\n\nMade me dig around models.js and understand things a lil better - appreciate it. \n"
+      }
+    ]
+  },
+  {
+    "number": 3015,
+    "title": "ORDER BY applied incorrectly with nested includes",
+    "created_at": "2015-01-27T23:01:26Z",
+    "closed_at": "2015-01-28T19:14:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/3015",
+    "body": "I'm trying to get the last few files like this:\n\n```\ndb.files.findAll(\n      {\n        where: {\n          id: id,\n          company_id: company_id,\n        },\n        include: [\n          {model: db.datasource, include: [db.job]}\n        ],\n        limit: 4,\n        order: 'created_at DESC'\n      }\n    )\n```\n\nIt generates a query like this:\n\n```\nSELECT \"filesToMap\".*, [... AS ...]\nFROM (SELECT \"files\".\"id\", [...COLUMNS... ]\n      FROM \"files\" AS \"files\" WHERE \"files\".\"company_id\"='1659' LIMIT 4) \n  AS \"files\" LEFT OUTER JOIN \"datasources\" AS \"datasource\" ON \"files\".\"datasource_id\" = \"datasource\".\"id\" \n  LEFT OUTER JOIN \"jobs\" AS \"datasource.jobs\" ON \"datasource\".\"id\" = \"datasource.jobs\".\"datasource_id\" \nORDER BY created_at DESC;\n```\n\nNotice the created_at is at the end, it should be after the LIMIT 4. I end up getting the first files rather than the last.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/3015/comments",
+    "author": "marcus",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2015-01-28T10:00:26Z",
+        "body": "Hi @marcus \n\nThis might be a bit confusing but the syntax you're using is for raw orders so we don't know where to place it.\n\nIf you use:\n\n``` js\norder: [\n  ['created_at', 'DESC']\n]\n```\n\nWe know that you mean `created_at` on the main table and it will be inside the subquery.\n"
+      },
+      {
+        "user": "marcus",
+        "created_at": "2015-01-28T17:39:15Z",
+        "body": "Huh. Yes, that is confusing but it works! Thank you very much for answering!\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2015-01-28T19:14:13Z",
+        "body": "Yes but thats because `order: string` is use literally.\n"
+      }
+    ]
+  },
+  {
+    "number": 2892,
+    "title": "Question: passing data from create to bulkcreate",
+    "created_at": "2015-01-11T13:26:15Z",
+    "closed_at": "2015-01-15T00:13:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2892",
+    "body": "Hi guys,\n\nI'm having some trouble with passing data from create to bulkcreate.\n\nMy code looks like this:\n\n```\nTable.create({\n    userid: req.user.id,\n    tabletype:  req.body.tabletype,\n})\n.then(function(table){\n    Othertable.bulkCreate(req.body.othertabledata, {tableid: table.id});\n});\n```\n\nI would expect this code to: \n1. first create a single instance of table, \n2. then pass through the data of this instance to bulkcreate, and \n3. add the \"tableid\" to each of my records created by bulkcreate.\n\nHowever, the data being inserted in my tableid column ends up being \"null\".\n\nI've tried changing my code to represent an array rather than an object (as indicated in the API), but then sequelize gives me an error code.\n\nAny idea where I'm going wrong?\n\nThanks in advance!\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2892/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2015-01-11T17:09:08Z",
+        "body": "The 2nd argument to `bulkCreate` is `options`, not default values.\nYou'll need to do something like:\n\n``` js\nbulkCreate(req.body.othertabledata.map(function (values) {\n  return _.extend(values, {tableid: table.id});\n});\n```\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2015-01-15T00:13:33Z",
+        "body": "Thanks @mickhansen Mick, that worked perfectly.\n\nFor those that look this up, @mickhansen's solution requires underscore.js:\nIn your terminal:\n\n```\nnpm install underscore --save\n```\n\nIn your app:\n\n```\nvar _ = require('underscore');\n```\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2015-01-15T08:35:23Z",
+        "body": "Or lodash ;)\n"
+      }
+    ]
+  },
+  {
+    "number": 2775,
+    "title": "BOOLEAN field not updating when passed a string 'true' or 'false' (Postgres)",
+    "created_at": "2014-12-24T07:27:42Z",
+    "closed_at": "2015-02-23T10:01:24Z",
+    "labels": [
+      "question",
+      "type: docs"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2775",
+    "body": "I have the following model: \n\n``` javascript\n\"use strict\";\n\nmodule.exports = function(sequelize, DataTypes) {\n  var Program = sequelize.define(\"Program\", {\n    name: {\n      type: DataTypes.STRING,\n      allowNull: false\n    },\n    short_name: DataTypes.STRING,\n    description: DataTypes.STRING,\n    short_description: DataTypes.STRING,\n    fitness_level: {\n      type: DataTypes.ENUM('average', 'good', 'high'),\n      defaultValue: 'average'\n    },\n    prerequisites: DataTypes.ARRAY(DataTypes.STRING),\n    knowledge_skills_equipment: DataTypes.ARRAY(DataTypes.STRING),\n    premium_activity: {\n      type: DataTypes.BOOLEAN,\n      defaultValue: false\n    },\n    location: {\n      type: DataTypes.ENUM('onsite', 'offsite'),\n      defaultValue: 'onsite',\n      allowNull: false\n    },\n    program_periods_available: DataTypes.INTEGER,\n    max_participants_per_period: DataTypes.INTEGER,\n    program_periods_required: {\n      type: DataTypes.INTEGER,\n      defaultValue: 1,\n      validate: { min: 1, max: 3 },\n      allowNull: false\n    },\n    fee: {\n      type: DataTypes.FLOAT,\n      defaultValue: 0.00\n    },\n    hidden: {\n      type: DataTypes.BOOLEAN,\n      defaultValue: true,\n      allowNull: false\n    },\n    oos_required: {\n      type: DataTypes.INTEGER,\n      defaultValue: 0,\n      allowNull: false\n    }\n  }, {\n    underscored: true,\n    classMethods: {\n      associate: function(models) {\n        Program.hasMany(models.OOS, { as: 'OOS', through: 'program_oos_assignments' })\n      }\n    }\n  });\n\n  return Program;\n};\n```\n\nIf I pass a boolean literal to `Instance#updateAttributes`, the value gets updated successfully:\n\n``` javascript\nmodels.Program.find(1).then(function(record) { record.updateAttributes( {hidden: true} ) })\n```\n\nSQL Generated:\n\n``` sql\nExecuting (default): SELECT \"id\", \"name\", \"short_name\", \"description\", \"short_description\", \"fitness_level\", \"prerequisites\", \"knowledge_skills_equipment\", \"premium_activity\", \"location\", \"program_periods_available\", \"max_participants_per_period\", \"program_periods_required\", \"fee\", \"hidden\", \"oos_required\", \"created_at\", \"updated_at\" FROM \"Programs\" AS \"Program\" WHERE \"Program\".\"id\"=1;\nExecuting (default): UPDATE \"Programs\" SET \"hidden\"=true,\"updated_at\"='2014-12-24 07:17:01.762 +00:00' WHERE \"id\"=1 RETURNING *\n```\n\nIf I pass in a string value of 'true' or 'false' (as might be received in a form POST), I get some weird behaviour:\n\n``` javascript\nmodels.Program.find(1).then(function(record) { record.updateAttributes( {hidden: 'true'} ) })\n```\n\nSQL Generated: \n\n``` sql\nExecuting (default): SELECT \"id\", \"name\", \"short_name\", \"description\", \"short_description\", \"fitness_level\", \"prerequisites\", \"knowledge_skills_equipment\", \"premium_activity\", \"location\", \"program_periods_available\", \"max_participants_per_period\", \"program_periods_required\", \"fee\", \"hidden\", \"oos_required\", \"created_at\", \"updated_at\" FROM \"Programs\" AS \"Program\" WHERE \"Program\".\"id\"=1;\nExecuting (default): UPDATE \"Programs\" SET \"hidden\"=false,\"updated_at\"='2014-12-24 07:18:01.253 +00:00' WHERE \"id\"=1 RETURNING *\n```\n\nIn this case, setting `hidden` to `'true'` (or any string value, for that matter) resulted in it being set to `false`.\n\nI've tried using a setter method on the `hidden` field to cast the string to a boolean:\n\n``` javascript\nfunction castStringToBoolean(value) {\n  var ret;\n  if (value === 'true') {\n    ret = true;\n  } else {\n    ret = false;\n  }\n  return ret;\n}\n```\n\nWith this setter in place, nothing at all is set for the `hidden` field:\n\n``` javascript\nmodels.Program.find(1).then(function(record) { record.updateAttributes( {hidden: 'true'} ) })\n```\n\nSQL Generated:\n\n``` sql\nExecuting (default): SELECT \"id\", \"name\", \"short_name\", \"description\", \"short_description\", \"fitness_level\", \"prerequisites\", \"knowledge_skills_equipment\", \"premium_activity\", \"location\", \"program_periods_available\", \"max_participants_per_period\", \"program_periods_required\", \"fee\", \"hidden\", \"oos_required\", \"created_at\", \"updated_at\" FROM \"Programs\" AS \"Program\" WHERE \"Program\".\"id\"=1;\nExecuting (default): UPDATE \"Programs\" SET \"updated_at\"='2014-12-24 07:20:49.153 +00:00' WHERE \"id\"=1 RETURNING *\n```\n\nIf I cast the field to a boolean before sending it to `updateAttributes` (e.g. in my Express route handler), then it works:\n\n``` javascript\nif (req.body.hasOwnProperty('hidden') && typeof req.body.hidden === 'string') {\n    req.body.hidden = req.body.hidden === 'true' ? true : false\n}\n```\n\nWhat is the proper way of handling booleans in Seqelize? Why is the setter method not working as I think it should?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2775/comments",
+    "author": "grahamb",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-24T09:42:32Z",
+        "body": "The proper way is using literal booleans.\nA setter/getter should definitely work, have you tried something like:\n\n``` js\nhidden: {\n  type: DataTypes.BOOLEAN,\n  defaultValue: true,\n  allowNull: false,\n  set: function(value) {\n    if (value === 'true') value = true;\n    if (value === 'false') value = false;\n    this.setDataValue('hidden', value);\n  }\n}\n```\n"
+      },
+      {
+        "user": "grahamb",
+        "created_at": "2014-12-24T17:58:48Z",
+        "body": "Ah, I see now that I my setter was incorrect; I was returning what the new value should be instead of calling `this.setDataValue` to set it.\n\nThe docs aren't very clear on this. The \"example\" given for a setter leaves much to be desired:\n\n``` javascript\n set      : function(v) { /* do your magic with the input here! */ }\n```\n\nHaving a concrete example of \"magic\" would be very helpful. The biggest problem I've run into so far with Sequelize is the documentation. It's lengthy, but not terribly useful. It doesn't help that there is two different and inconsistent versions. The docs on sequelizejs.com are for 1.7.8 and still come up in google searches, while the ones on sequelize.readthedocs.org reference things that don't yet exist in 2.0.0rc3 (e.g. the docs reference the `belongsToMany` association, but that doesn't exist on 2.0.0rc3, it's still `hasMany`).\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-26T10:41:14Z",
+        "body": "@grahamb right you are, that's a very incomplete example.\nDocs are a sore thumb for us yes, we are working hard on it currently with the move to RTD and a huge update to 2.0 docs. Hopefully we'll have the docs updated completely in early january.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-26T10:42:09Z",
+        "body": "We should probably redirect the pages google can lookup to the new read the docs.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-26T10:43:35Z",
+        "body": "@grahamb The docs are part of the main repo, we would appreciate ANY help in making them more clear and helpfull for new users (we are really only two maintainers and we have to keep on top of bugs too :))\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2015-02-23T10:01:45Z",
+        "body": "I've rewritten the example slightly and removed any mention of magic - hopefully that makes it more clear :)\n"
+      }
+    ]
+  },
+  {
+    "number": 2681,
+    "title": "How to create association in a migration?",
+    "created_at": "2014-12-05T22:03:14Z",
+    "closed_at": "2014-12-11T12:55:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2681",
+    "body": "Given the following role:\n\n``` javascript\n'use strict';\n\n  module.exports = function (sequelize, DataTypes) {\n     var Role = sequelize.define('Role', {\n         name: {\n             type: DataTypes.STRING\n         }\n     },\n     {\n         associate: function (models) {\n             Role.hasMany(models.User);\n         }\n     });\n      return Role;\n };\n```\n\nHow do you create the migration?  I have this:\n\n``` javascript\nmodule.exports = {\n  up: function(migration, DataTypes, done) {\n      migration.createTable('Roles',\n      {\n          id: {\n              type: DataTypes.INTEGER,\n              primaryKey: true,\n              autoIncrement: true\n          },\n          createdAt: {\n              type: DataTypes.DATE\n          },\n          updatedAt: {\n              type: DataTypes.DATE\n          },\n          name: {\n              type: DataTypes.STRING,\n              unique: true\n          }\n      });\n\n      done()\n  },\n  down: function(migration, DataTypes, done) {\n      migration.dropTable('Roles');\n      done()\n  }\n}\n```\n\nBut it doesn't create the fields needed in the User table when I run the migration, so obviously its missing something...I've read all the documentation I can find but I'm coming up short.  Any assistance would be much appreciated.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2681/comments",
+    "author": "socketwiz",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-06T11:39:04Z",
+        "body": "If it's a 1:M association you need to create the foreign key on the user table manually.\nIf it's a N:M association you need to create the through table manually.\n"
+      },
+      {
+        "user": "socketwiz",
+        "created_at": "2014-12-11T12:55:40Z",
+        "body": "Thank you :)\n"
+      }
+    ]
+  },
+  {
+    "number": 2648,
+    "title": "how to assign relationship in more than one many to many relationships",
+    "created_at": "2014-12-03T07:29:23Z",
+    "closed_at": "2014-12-05T03:36:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2648",
+    "body": "Now I'm running into a problem , I have two entities of person and company, at the same time, they have two relationships say companyperson, boardmembership, and both of them are many to many. Here is the problem ,when I use like this:\n    person.getCompanies()\nwhich give me companies of boardmembership, but how can I get companies from relation table of companyperson? Is there any ways to explicitly assign my relation table?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2648/comments",
+    "author": "mike442144",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-12-03T07:44:25Z",
+        "body": "``` js\nPerson.hasMany(Company, { through: 'CompanyPerson', as: 'Companies' });\nCompany.hasMany(Person, { through: 'CompanyPerson', as: 'Employees' });\n\nPerson.hasMany(Company, { through: 'BoardMembership', as: 'Boards' });\nCompany.hasMany(Person, { through: 'BoardMembership', as: 'BoardMembers' });\n```\n\n`person.getCompanies()` will give you all companies where that user is employed, while `person.getBoards()` will get you all companies where that user is a board member. You can change what the `getBoards` accessor will be by changing the `as` part of the relation\n"
+      },
+      {
+        "user": "mike442144",
+        "created_at": "2014-12-03T08:58:04Z",
+        "body": "@janmeier thanks a lot, I changed to use the `as` just now, but I cannot get any entities too. the output is below:\n`{\"isFulfilled\":false,\"isRejected\":false}`\nwhat does this mean? I should load relation entities when I load data from database?\nThanks.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-03T09:19:39Z",
+        "body": "@mike442144 it's returning a promise, you need to use `.then()`\n"
+      },
+      {
+        "user": "mike442144",
+        "created_at": "2014-12-03T09:29:51Z",
+        "body": "@mickhansen That's great, I make it. Many thanks.\n"
+      },
+      {
+        "user": "mike442144",
+        "created_at": "2014-12-04T14:02:49Z",
+        "body": "Now here is a new problem, I want to query all persons and boardmembers of one company just use `include`, but I tried include Person, CompanyPerson and Employees, neither is correct. I just don't want to call Company.getEmployees() and Company.getBoardMembers() after query from database. thanks.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-12-04T15:08:44Z",
+        "body": "@mike442144 please always show what you actually tried\nHave you tried:\n\n``` js\nCompany.findAll({\n  include: [\n    {model: User, as: 'BoardMembers'},\n    {model: User, as: 'Employees'}\n  ]\n});\n```\n"
+      },
+      {
+        "user": "mike442144",
+        "created_at": "2014-12-05T03:36:51Z",
+        "body": "@mickhansen That's great. everything is ok then. Thank you very much.\n"
+      }
+    ]
+  },
+  {
+    "number": 2530,
+    "title": "proper way of doing instance update",
+    "created_at": "2014-11-05T05:52:58Z",
+    "closed_at": "2014-11-05T12:20:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2530",
+    "body": "why does update does not take the form of \nModel.build().update({attributes to be update})?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2530/comments",
+    "author": "rutaihwa",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-11-05T06:41:55Z",
+        "body": "Not sure what you mean here? Update can be called on an instance, so that will already be built. And as far as I know bulk update will do a build before updating to get default values etc \n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-11-05T10:06:46Z",
+        "body": "It's possible to do:\n\n``` js\nModel.build({ primaryKey: 1 }, {isNewRecord: false}).updateAttributes(values);\n// or\nModel.update(values, {where: {primaryKey: 1}})\n```\n"
+      },
+      {
+        "user": "rutaihwa",
+        "created_at": "2014-11-05T12:20:31Z",
+        "body": "@janmeier I knew you could build an update bulk instances but i didn't know how to call with updateAttributes.  I find that this syntax better than the later one. @mickhansen :+1: \n"
+      }
+    ]
+  },
+  {
+    "number": 2330,
+    "title": "Defining field and name for foreignKey in association",
+    "created_at": "2014-09-22T20:31:14Z",
+    "closed_at": "2014-09-24T06:18:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2330",
+    "body": "Hi, so I am migrating to Sequelize from Geddy/Model while using a Postgres. In Geddy all properties in the code are camelCase and when making queries it translates things to snake_case. \n\nTo keep with our existing codebase I want to continue having properties in the code be camelCase while column names are snake_case. For the property names I created a work around by creating a wrapper around `sequelize.define` to add a field entry to all attributes. \n\nI have not figured out how to do this for associations. I want to be able to specify `consult.find({where: {userId: 12}})` and have Sequelize know that the column name should be `user_id`. Is it possible to specify both field and name for foreignKey associations? Or what would be an appropriate work around?\n\nRight now I am using the most up-to-date beta (I believe it is 8) and intend on migrating to 2.0.0 when it comes out. \n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2330/comments",
+    "author": "vpontis",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-23T07:17:56Z",
+        "body": "The where part is built-in when using `field`.\nIn 2.0.0-rc1+ you can do:\n\n`ModelA.belongsTo(ModelB, {foreignKey: {name: 'userId', field: 'user_id'}})` \n"
+      },
+      {
+        "user": "vpontis",
+        "created_at": "2014-09-23T16:55:09Z",
+        "body": "Ah, great thank you. I'll try switching to that version now. \n"
+      },
+      {
+        "user": "vpontis",
+        "created_at": "2014-09-23T16:58:10Z",
+        "body": "Is there any way to define this programmatically so that the field is always the snake case version of the name? \n\nAs I mentioned before, I am doing this with `sequelize.define` and `attributes` by creating a wrapper around `sequelize.define`. But maybe there is a better way to convert both to snake_case. (The problem stems from Postgres not recognizing case so we have camelCase in app and need snake_case in Postgres.)\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-24T06:18:50Z",
+        "body": "@vpontis Not currently.\n"
+      },
+      {
+        "user": "vpontis",
+        "created_at": "2014-09-24T17:37:28Z",
+        "body": "Great, thanks. The work for 2.0 is looking great. \n\nIt would definitely be awesome to have camelCase convert to snake_case on the db side in future instances. \n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-24T17:44:35Z",
+        "body": "Yeah a way to define naming strategies would be something to consider.\n"
+      }
+    ]
+  },
+  {
+    "number": 2305,
+    "title": "Can anyone explain how come dataValues can also be accessed directly from the Instance in sequelize",
+    "created_at": "2014-09-20T02:55:49Z",
+    "closed_at": "2014-09-20T06:20:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2305",
+    "body": "Can anyone explain how come dataValues can also be accessed directly from the Instance in sequelize?\n\nI use for( var key in instance) but can't see any attributes. However I can use instance.name as instance.get('name').\n\nThanks.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2305/comments",
+    "author": "bluecenter",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-20T06:20:23Z",
+        "body": "`instance.get()` is the \"correct\" way. However for backwards compat we have set op dynamic getters on the instance that map to the respective `get()` calls.\n"
+      },
+      {
+        "user": "bluecenter",
+        "created_at": "2014-12-03T03:41:51Z",
+        "body": "Thank you.\n"
+      }
+    ]
+  },
+  {
+    "number": 2282,
+    "title": "How to disconnect from DB?",
+    "created_at": "2014-09-15T04:40:49Z",
+    "closed_at": "2014-09-15T05:51:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2282",
+    "body": "Hi! I'm being incredibly cheap and running a mysql+node project on heroku.  The super cheap DB option has a hard limit of 10 connections to mysql.  Heroku often \"suspends\" applications when they aren't in use, but that doesn't disconnect the sequelize client from mysql.  I can catch the `SIGTERM` and call a disconnect when the app is \"suspending\", but how would I disconnect the client?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2282/comments",
+    "author": "evantahler",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-15T05:51:09Z",
+        "body": "`sequelize.close()` is available on 2.0.0-dev13 and up i believe.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-09-15T05:56:52Z",
+        "body": "Do however note that there is no equivalent reconnect method so you won't be able to use that particular instance again \n"
+      },
+      {
+        "user": "evantahler",
+        "created_at": "2014-09-15T21:30:17Z",
+        "body": "Thanks for the info! My desire is to have a \"clean\" shutdown where all connections my app has open can be closed, and `sequelize.close()` is exactly what I need.\n"
+      }
+    ]
+  },
+  {
+    "number": 2232,
+    "title": "How access instance properties on view engine not using dataValues",
+    "created_at": "2014-09-04T03:24:33Z",
+    "closed_at": "2014-09-05T00:23:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2232",
+    "body": "Hi,\nfrom the API reference:\n\n> Instance instances operate with the concept of a dataValues property, which stores the actual values represented by the instance. By default, the values from dataValues can also be accessed directly from the Instance, that is:\n> \n> instance.field\n> // is the same as\n> instance.get('field')\n> // is the same as\n> instance.getDataValue('field')\n\nSo my goal was displaying User properties on my index.dust file. First I tried:\n\n```\napp.get('/dashboard',isLoggedIn, function(req, res) {\n      res.render('dashboard', {\n          user : req.user //  the values from dataValues can also be accessed directly from the Instance\n    });\n});\n```\n\n... and on the view:\n\n```\n<li><a hred=\"#\">{user.username}</a></li>\n```\n\n... but the result was an anchor without the username. The reason of this was because I had to define user like: req.user.**dataValues** instead just req.user.\n\nIs this the expected behavior, should I always expose my record instances using  **dataValues** ??\n\nThanks\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2232/comments",
+    "author": "AlvaroOlivencia",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-09-04T07:23:18Z",
+        "body": "No, dataValues is in internal property, so you _definitely_ shouldn't use that :). Use `toJSON` instead\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-04T07:27:35Z",
+        "body": "`req.user` ought to work directly as a view variable, but if it does not use `toJSON()` or `.get()` as @janmeier suggests\n"
+      },
+      {
+        "user": "AlvaroOlivencia",
+        "created_at": "2014-09-05T00:23:21Z",
+        "body": "Thanks guys !\n"
+      }
+    ]
+  },
+  {
+    "number": 2169,
+    "title": "Message belongs to Author which is related to Receiver",
+    "created_at": "2014-08-21T07:20:58Z",
+    "closed_at": "2014-08-21T08:24:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2169",
+    "body": "I want to make a relationship of which is the same as the title. The user sends a message, this Message belongs to User, the Message belongs to Receiver (which is a User instance), and vice-versa. Someone can help me to find the best way of doing this?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2169/comments",
+    "author": "VictorQueiroz",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T07:26:30Z",
+        "body": "If i understood you correctly: \n\n``` js\nUser.hasMany(Message, { as: 'sent', foreignKey: 'sender_id' });\nUser.hasMany(Message, { as: 'recieved', foreignKey: 'reciever_id' });\n\nMessage.belongsTo(User, { as: 'sender', foreignKey: 'sender_id' });\nMessage.belongsTo(User, { as: 'reciever', foreignKey: 'reciever_id' });\n\n\nuser.getSent();\nuser.getRecieved();\nmessage.getSender();\nmessage.getReciever();\n```\n"
+      },
+      {
+        "user": "VictorQueiroz",
+        "created_at": "2014-08-21T07:37:53Z",
+        "body": "I solved my question, in my own question. What I dumb I am, really thank's :+1: \n\nBut `message.addSender()` it is not working, I got undefined...\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T07:38:47Z",
+        "body": ":D\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T07:47:43Z",
+        "body": "Which version are you on?\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T07:49:04Z",
+        "body": "Oh, just noticed. Since message can only have one sender its `setSender`\n"
+      },
+      {
+        "user": "VictorQueiroz",
+        "created_at": "2014-08-21T08:04:55Z",
+        "body": "Now, look at this:\n\n```\n      User.create({\n        name: faker.Name.findName(),\n        email: faker.Internet.email(),\n        password: '123456789',\n        username: faker.Internet.userName()\n      }).success(function (author) {\n        User.create({\n          name: faker.Name.findName(),\n          email: faker.Internet.email(),\n          password: '123456789',\n          username: faker.Internet.userName()\n        }).success(function (receiver) {\n          Message.create({\n            content: faker.Lorem.sentences(30)\n          }).success(function (message) {\n            message.setAuthor(author);\n            message.setReceiver(receiver);\n            message.save();\n\n            Message.findAll({\n                where: {\n                    id: message.id,\n                },\n                include: [\n                    {model: User, as: 'Author'}\n                ]\n            }).success(function (message) {\n                res.json(message)\n            })\n          });\n        });\n      });\n```\n\nI got `Error: User (Author) is not associated to Message!`...\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T08:08:06Z",
+        "body": "Because in the relations we called them sender and reciever, not author :). You'll haveto change the as part of the belongsto\n"
+      },
+      {
+        "user": "VictorQueiroz",
+        "created_at": "2014-08-21T08:10:59Z",
+        "body": "Yeah, I have changed it, of course. But still the error, this is not the cause. Look at my model:\n\n```\nvar faker = require('faker');\n\nmodule.exports = function (sequelize, DataTypes) {\n    var Message = sequelize.define('Message', {\n        content: DataTypes.TEXT\n    }, {\n    freezeTableName: true,\n    timestamps: true,\n    paranoid: false,\n    underscored: true,\n    classMethods: {\n      associate: function(models) {\n        var User = models.User;\n\n        Message.belongsTo(User, {\n          as: 'receiver',\n          foreignKey: 'receiver_id'\n        });\n\n        Message.belongsTo(User, {\n          as: 'author',\n          foreignKey: 'author_id'\n        });        \n\n        User.hasMany(Message, { \n          foreignKey: 'author_id'\n        });        \n\n        User.hasMany(Message, { \n          foreignKey: 'receiver_id'\n        });\n      }\n    },\n    tableName: 'messages'\n    });\n\n    return Message;\n};\n```\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-21T08:11:24Z",
+        "body": "Lower case a in your belongsTo - upper case in your find ;)\n"
+      },
+      {
+        "user": "VictorQueiroz",
+        "created_at": "2014-08-21T08:23:01Z",
+        "body": "You was right. And I just attached a .success() at the final of each .set[AS] and everything worked just as I expected. Thank you.\n"
+      }
+    ]
+  },
+  {
+    "number": 2130,
+    "title": "Define PK and FK simultaneously",
+    "created_at": "2014-08-08T07:47:54Z",
+    "closed_at": "2014-08-12T10:25:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2130",
+    "body": "Seems it's not possible to define PK and FK simultaneously. If I have tables Foo and Bar it's not possible to create FooBar, where PK(foo_id, bar_id) is also foreign keys. I can define additional index in migration but it's not always possible in some DB like SQLite.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2130/comments",
+    "author": "shadeglare",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-08T13:19:30Z",
+        "body": "That should be possible. If you let sequelize create the foobar table it should do exactly that (on 2.0). Or perhaps it creates a unique instead of a primary index but the effect should be the same. \n\nTry to show a concrete example and the structure you expect then I'll help you achieve that :-) \n"
+      },
+      {
+        "user": "shadeglare",
+        "created_at": "2014-08-10T21:05:36Z",
+        "body": "Hi. There are tables:\n\n``` javascript\nvar Mood = connection.define('Mood', {\n    description: {\n        type: Sequelize.STRING,\n        unique: true\n    }\n});\n\nvar Gag = connection.define('Gag', {\n    description: {\n        type: Sequelize.STRING,\n        unique: true\n    }\n});\n\nvar MoodGag = connection.define('MoodGag', {\n    gagId: {\n        type: Sequelize.INTEGER,\n        primaryKey: true\n    },\n    moodId: {\n        type: Sequelize.INTEGER,\n        primaryKey: true\n    }\n});\n```\n\nHow could I make the moodId and gagId foreign keys? gagId should be a FK to the Gag table id and moodId should be a FK to the Mood table id.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-12T06:44:03Z",
+        "body": "``` js\nvar MoodGag = sequelize.define('MoodGag', {\n    gagId: {\n        type: Sequelize.INTEGER,\n        primaryKey: true,\n        references: Gag\n    },\n    moodId: {\n        type: Sequelize.INTEGER,\n        primaryKey: true,\n        references: Mood\n    }\n});\n```\n\nWill give you\n\n``` sql\nCREATE TABLE IF NOT EXISTS \"mood_gags\" (\"gagId\" INTEGER  REFERENCES \"gags\" (\"id\"), \"moodId\" INTEGER  REFERENCES \"moods\" (\"id\"), PRIMARY KEY (\"gagId\",\"moodId\"))\n```\n\nYou can also use associations:\n\n``` js\nGag.hasMany(Mood, { through: MoodGag });\nMood.hasMany(Gag, { through: MoodGag });\n```\n\nWhich will give you\n\n``` sql\nCREATE TABLE IF NOT EXISTS \"mood_gags\" (\"gagId\" INTEGER , \"moodId\" INTEGER , \"MoodId\" INTEGER REFERENCES \"moods\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE, \"GagId\" INTEGER REFERENCES \"gags\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE, UNIQUE (\"MoodId\", \"GagId\"), PRIMARY KEY (\"gagId\",\"moodId\"));\n```\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-12T06:44:28Z",
+        "body": "Mind you, these things are primarily for 2.0. I think references works for 1.7 also though\n"
+      },
+      {
+        "user": "shadeglare",
+        "created_at": "2014-08-12T10:19:59Z",
+        "body": "Thanks. I also noticed that I haven't to define PK in the 'middle' table when I want to create FKs cause they will be created automatically ). Exactly what I need.\n\nSo the full example will be:\n\n``` javascript\nvar Mood = connection.define('Mood', {\n    description: {\n        type: Sequelize.STRING,\n        unique: true\n    }\n});\n\nvar Gag = connection.define('Gag', {\n    description: {\n        type: Sequelize.STRING,\n        unique: true\n    }\n});\n\nvar MoodGag = connection.define('MoodGag', {});\n\nGag.hasMany(Mood, { through: MoodGag, foreignKey: 'gagId' });\nMood.hasMany(Gag, { through: MoodGag, foreignKey: 'moodId' });\n```\n\nAnd that gives you SQL:\n\n``` SQL\nCREATE TABLE IF NOT EXISTS `MoodGags` (`createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, `moodId` INTEGER NOT NULL REFERENCES `Moods` (`id`) ON DELETE CASCADE ON UPDATE CASCADE, `gagId` INTEGER NOT NULL REFERENCES `Gags` (`id`) ON DELETE CASCADE ON UPDATE CASCADE, PRIMARY KEY (`moodId`, `gagId`));\n```\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-08-12T10:25:35Z",
+        "body": "In that case you can also just use MoodGag as a string so you don't have to define a model for it. \n\nYou only need to create the model manually if you want to have additional attributes in the through table \n"
+      }
+    ]
+  },
+  {
+    "number": 2028,
+    "title": "SQL injections",
+    "created_at": "2014-07-09T06:20:07Z",
+    "closed_at": "2014-07-15T02:59:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2028",
+    "body": "I'm curious if sequelize takes care of sanitizing input to mitigate sql injections?\n\nThanks.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2028/comments",
+    "author": "rcorral",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-07-09T07:19:05Z",
+        "body": "Most it should yeah, you have any cases where it doesn't?\n"
+      },
+      {
+        "user": "durango",
+        "created_at": "2014-07-09T15:22:19Z",
+        "body": "The only time in which I can think Sequelize does _not_ do this is when you use `Sequelize.literal` but you should NOT be using that unless you know what you're doing anyway. If you avoid that, you'll be safe.\n"
+      },
+      {
+        "user": "rcorral",
+        "created_at": "2014-07-15T02:59:19Z",
+        "body": "I was just curious, there wasn't any documentation I could find on the website.\n\nThanks for the quick answer.\n"
+      },
+      {
+        "user": "DG-Wangtao",
+        "created_at": "2018-11-20T10:32:23Z",
+        "body": "But, why follow code can excute?\r\n```\r\nTable.findAll({\r\n      attributes:\r\n      [\r\n        'id',\r\n        ['sum(\"col1\")', 'sum']\r\n      ],\r\n      group: ['id'],\r\n    });\r\n```\r\n\r\nAs I can us `sum` function in atttribute,is there any risk of  sql injection?"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2018-11-20T10:34:13Z",
+        "body": "@DG-Wangtao If you were to accept user input into the first argument of the array used in the attributes array, then yes you might be exposed"
+      },
+      {
+        "user": "DG-Wangtao",
+        "created_at": "2018-11-20T10:49:02Z",
+        "body": "> @DG-Wangtao If you were to accept user input into the first argument of the array used in the attributes array, then yes you might be exposed\r\n\r\nThanks !\r\nBecause I meet erro `attr[0].indexOf is not a function` when I use Sequelize.fn like this:\r\n```\r\nTable.findAll({\r\n      attributes:\r\n      [\r\n        'id',\r\n       [Sequelize.fn('sum', Sequelize.col('col1')), 'sum']\r\n      ],\r\n      group: ['id'],\r\n    });\r\n```\r\n\r\nThe error was here \r\n```\r\negg-sequelize/node_modules/sequelize/lib/dialects/abstract/query-generator.js:1243:28)\r\n\r\nelse if (attr[0].indexOf('(') === -1 && attr[0].indexOf(')') === -1) {\r\n```\r\nSo I try to use `sum` function as this."
+      }
+    ]
+  },
+  {
+    "number": 1941,
+    "title": "many to many association for single model",
+    "created_at": "2014-06-21T00:52:26Z",
+    "closed_at": "2014-06-21T13:24:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1941",
+    "body": "Is there a way to make a model have a `hasMany` association with itself as both the source and target?\n\n```\nA.hasMany(A)\n```\n\nPer the documentation (and testing) creates a one to many relationship\n\n```\n       A\n     /   \\\n    A     A\n  / | \\\n A  A  A\n\n```\n\nWhere what I want is many to many\n\n```\n A  A  A\n  \\ | /\n    A\n  / | \\\n A  A  A\n```\n\nI am functionally doing this right now by using a second model to define a join table as a go between, which has one-to-many and one-to-one associations with the primary model. And I've added `addA`, `removeA`, and `getAs` as instance methods on `A` to hide the join table code.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1941/comments",
+    "author": "wrenoud",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-06-21T08:37:05Z",
+        "body": "Hm i'm pretty sure @overlookmotel fixed this.\nYou can define a join table with `A.hasMany(A, {through: JoinModel|'JoinTable'})`\n"
+      },
+      {
+        "user": "wrenoud",
+        "created_at": "2014-06-21T13:24:49Z",
+        "body": "Thanks! That does the trick.\n"
+      }
+    ]
+  },
+  {
+    "number": 1718,
+    "title": "Where clause failed on second level nested include",
+    "created_at": "2014-05-07T08:50:59Z",
+    "closed_at": "2014-05-09T12:13:14Z",
+    "labels": [
+      "type: bug",
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1718",
+    "body": "Following example:\n\n``` js\nvar co = require('co');\nvar Sequelize = require('sequelize');\n\nvar sequelize = new Sequelize('sequelize-test', 'root', '');\n\nvar Parent = sequelize.define('Parent', {});\nvar Child1 = sequelize.define('Child1', {});\nvar Child2 = sequelize.define('Child2', {});\n\nParent.hasMany(Child1);\nChild1.belongsTo(Parent);\n\nChild1.hasMany(Child2);\nChild2.belongsTo(Child1);\n\nco(function* () {\n    yield sequelize.sync({\n        force: true\n    });\n\n    var parent = yield Parent.create();\n    var child1 = yield Child1.create();\n    var child2 = yield Child2.create();\n\n    yield parent.addChild1(child1);\n    yield child1.addChild2(child2);\n\n    var result = yield Parent.find({\n        attributes: ['id'], // Added for better query readability\n        include: [\n            {\n                model: Child1,\n                attributes: ['id'],\n                include: [\n                    {\n                        model: Child2,\n                        attributes: ['id'],\n                        where: {\n                            id: child2.id\n                        }\n                    }\n                ]\n            }\n        ]\n    });\n\n    console.log(result);\n})();\n```\n\nWhich produces the following output:\n\n```\nExecuting (default): INSERT INTO `Parents` (`id`,`createdAt`,`updatedAt`) VALUES (DEFAULT,'2014-05-07 08:44:29','2014-05-07 08:44:29');\nExecuting (default): INSERT INTO `Child1s` (`id`,`createdAt`,`updatedAt`) VALUES (DEFAULT,'2014-05-07 08:44:29','2014-05-07 08:44:29');\nExecuting (default): INSERT INTO `Child2s` (`id`,`createdAt`,`updatedAt`) VALUES (DEFAULT,'2014-05-07 08:44:29','2014-05-07 08:44:29');\nExecuting (default): SELECT * FROM `Child1s` AS `Child1` WHERE (`Child1`.`ParentId`=1 AND `Child1`.`id`=1);\nExecuting (default): UPDATE `Child1s` SET `id`=1,`createdAt`='2014-05-07 08:44:29',`updatedAt`='2014-05-07 08:44:29',`ParentId`=1 WHERE `id`=1\nExecuting (default): SELECT * FROM `Child2s` AS `Child2` WHERE (`Child2`.`Child1Id`=1 AND `Child2`.`id`=1);\nExecuting (default): UPDATE `Child2s` SET `id`=1,`createdAt`='2014-05-07 08:44:29',`updatedAt`='2014-05-07 08:44:29',`Child1Id`=1 WHERE `id`=1\nExecuting (default): SELECT `Parent`.*, `Child1s`.`id` AS `Child1s.id`, `Child1s`.`id` AS `Child1s.id`, `Child1s.Child2s`.`id` AS `Child1s.Child2s.id`, `Child1s.Child2s`.`id` AS `Child1s.Child2s.id` FROM (SELECT `Parent`.`id` FROM `Parents` AS `Parent` WHERE (SELECT `Child1Id` FROM `Child2s` AS `Child1s.Child2s` WHERE `Child1s`.`id` = `Child1s.Child2s`.`Child1Id` LIMIT 1) IS NOT NULL LIMIT 1) AS `Parent` LEFT OUTER JOIN `Child1s` AS `Child1s` ON `Parent`.`id` = `Child1s`.`ParentId` INNER JOIN `Child2s` AS `Child1s.Child2s` ON `Child1s`.`id` = `Child1s.Child2s`.`Child1Id` AND `Child1s.Child2s`.`id`=1;\n/Users/mlegenhausen/dev/github/sequelize-test/node_modules/co/index.js:290\n    throw err;\n          ^\nError: ER_BAD_FIELD_ERROR: Unknown column 'Child1s.id' in 'where clause'\n    at Query.Sequence._packetToError (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/protocol/sequences/Sequence.js:30:14)\n    at Query.ErrorPacket (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/protocol/sequences/Query.js:82:18)\n    at Protocol._parsePacket (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/protocol/Protocol.js:205:24)\n    at Parser.write (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/protocol/Parser.js:62:12)\n    at Protocol.write (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/protocol/Protocol.js:37:16)\n    at Socket.<anonymous> (/Users/mlegenhausen/dev/github/sequelize-test/node_modules/mysql/lib/Connection.js:73:28)\n    at Socket.EventEmitter.emit (events.js:104:17)\n    at readableAddChunk (_stream_readable.js:156:16)\n    at Socket.Readable.push (_stream_readable.js:123:10)\n    at TCP.onread (net.js:520:20)\n```\n\nThe error occurs cause of the `where` clause of Child2. If I remove the clause it works.\n\nNote: I am using generators for better readability to start this use node 0.11.x with `--harmony` flag.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1718/comments",
+    "author": "mlegenhausen",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-05-07T09:25:48Z",
+        "body": "The problem is the subquery, have you tested this against master? A fix was introduced in something similar to this.\n\nElse try adding required: true to child1, or required: false to both child1 and child2\n"
+      },
+      {
+        "user": "mlegenhausen",
+        "created_at": "2014-05-07T10:50:56Z",
+        "body": "Tested against master with same result as before.\n\nAdding `required:false` to  `child2` did the trick (with dev11 and master).\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-05-07T10:52:01Z",
+        "body": "Yeah `required: false` will turn off the subquery since it doesn't need to be there anymore - I guess there's an issue with having a required :M child to a non required parent.\n"
+      },
+      {
+        "user": "mlegenhausen",
+        "created_at": "2014-05-07T11:41:30Z",
+        "body": "Thanks that saved my day again :) Great project and great maintainers!\n"
+      },
+      {
+        "user": "Celadora",
+        "created_at": "2017-02-14T10:02:45Z",
+        "body": "This solves the problem of the query error, but if I use it the where clause no longer constrains the query. I need both. Is there any work around to this other than doing two separate queries?"
+      }
+    ]
+  },
+  {
+    "number": 1693,
+    "title": "Accessing Defined Models from a Sequelize Instance",
+    "created_at": "2014-04-29T00:49:52Z",
+    "closed_at": "2014-04-29T08:42:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1693",
+    "body": "I've seen this syntax to access a defined model from the Sequelize instance:\n\n```\nvar sequelize = new Sequelize('database', 'username'[, 'password']);\n\nvar Project = sequelize.define('Project', {\n  title: Sequelize.STRING,\n  description: Sequelize.TEXT\n});\n\nsequelize.Project.build({});\n```\n\nHowever, when I tried it myself on 1.7.0:\n\n```\nconsole.log(sequelize.Project);\n```\n\nReturned `undefined`\n\nIs there another way or a correct way to accomplish this?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1693/comments",
+    "author": "noah-goodrich",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-29T06:21:41Z",
+        "body": "You need to attach the object on your own. Usually people do something like:\n\n``` js\nsequelize.Project = sequelize.import('./models/project');\n```\n\nSequelize doesn't do that for you. (The fact that people decide to attach models to the sequelize object is purely a convenience thing that emerged)\n"
+      },
+      {
+        "user": "noah-goodrich",
+        "created_at": "2014-04-29T08:42:51Z",
+        "body": "Thanks.\n"
+      }
+    ]
+  },
+  {
+    "number": 1692,
+    "title": "updates and associations",
+    "created_at": "2014-04-28T09:43:45Z",
+    "closed_at": "2014-04-28T19:14:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1692",
+    "body": "Hi, I'm developing a Backbone app, and for certain things it's really convenient to fetch my collections with their associations.  If I try to save these models back to sequelize will the associations be ignored, or am I going to have to filter them out beforehand to avoid errors?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1692/comments",
+    "author": "ckot",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-28T09:56:42Z",
+        "body": "That probably depends on what version your using. But to be on the safe side you can just use `{fields: Object.keys(Model.rawAttributes)}` whenever calling save/create etc. (This is the default in 2.0.0).\n"
+      },
+      {
+        "user": "ckot",
+        "created_at": "2014-04-28T10:16:06Z",
+        "body": "Hi Mick,\n\nThanks for the quick response!  I\u2019m using the 1.7 version, so I\u2019ll need to do it manually.\n\nAccording to the docs you can do:\n\nTask.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, [\u2018title\u2019]);\n\nwhere the second parameter restricts which of the fields actually get update (description is unmodified).\n\nIf I\u2019m understanding this correctly, I would be putting this {fields: Object.keys(Model.rawAttributes)} in that second parameters place, and it returns a constrained list of fields in the model (for example [\u2018title\u2019, \u2018description\u2019])\n\nThanks again,\n\nScott\n\nOn Apr 28, 2014, at 5:56 AM, Mick Hansen notifications@github.com wrote:\n\n> That probably depends on what version your using. But to be on the safe side you can just use {fields: Object.keys(Model.rawAttributes)} whenever calling save/create etc. (This is the default in 2.0.0).\n> \n> \u2014\n> Reply to this email directly or view it on GitHub.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-28T10:53:51Z",
+        "body": "`task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, [\u2018title\u2019]);` is equivelant to `task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, {fields: [\u2018title\u2019]});` so yes `task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, {fields: Object.keys(Task.rawAttributes)});` would scope the update to just the attributes you have defined (where 'task' is an instance of the model 'Task').\n"
+      },
+      {
+        "user": "ckot",
+        "created_at": "2014-04-28T18:24:19Z",
+        "body": "Hi Mick,\n\nThanks for the clarification. You rule!\n\n-Scott\n\nOn Apr 28, 2014, at 6:53 AM, Mick Hansen notifications@github.com wrote:\n\n> task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, [\u2018title\u2019]); is equivelant to task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, {fields: [\u2018title\u2019]}); so yes task.updateAttributes({title: \u2018bar\u2019, description: \u2018blah blah blah\u2019}, {fields: Object.keys(Task.rawAttributes)}); would scope the update to just the attributes you have defined (where 'task' is an instance of the model 'Task').\n> \n> \u2014\n> Reply to this email directly or view it on GitHub.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-28T19:14:37Z",
+        "body": "Great :)\n"
+      }
+    ]
+  },
+  {
+    "number": 1682,
+    "title": "Problem renaming associations output",
+    "created_at": "2014-04-25T03:40:13Z",
+    "closed_at": "2014-04-27T08:10:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1682",
+    "body": "So I'm having an issue with the `as` sub-parameter of the `include` parameter to `.findAll`.  I'm using 2.0.0-dev11 + MySQL.\n\nThe error I get back is:\n\n```\nPossibly unhandled Error: Task (Experiment) is not associated to User!\n```\n\nThe error occurs in:\n\n```\nnode_modules/sequelize/lib/dao-factory.js:1812:13\n```\n\nSo in the code below, if I change `{ include: [{model:Task,as:'Experiment'}]}` to `{ include: Task }` then it works just fine.\n\nBut I really want to get the association back in a list named `Experiments` instead of named `Tasks`.\n\n```\nvar User = sequelize.define('User', { name: Sequelize.STRING });\nvar Task = sequelize.define('Task', { name: Sequelize.STRING });\n\nTask.belongsTo(User);\nUser.hasMany(Task);\n\nsequelize.sync({force: true})\n  .then(function() {\n    return User.create({name:'Rick'});\n  })\n  .then(function(u) {\n    var task = Task.build({name:'Science'});\n    return u.addTask(task);\n  })\n  .then(function() {\n    return User.findAll({ include: [{model:Task,as:'Experiment'}]});\n  })\n  .then(function(users) {\n    console.log(JSON.stringify(users, null, 2));\n  })\n  .then(function() {\n    console.log('done');\n  });\n```\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1682/comments",
+    "author": "baliw",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-25T04:38:23Z",
+        "body": "The way it currently is that if you use an alias for an include you have to use it on the association aswell. That's to allow us to identify the correct association (since there might be multiple).\n\nSo for `User.findAll({ include: [{model:Task,as:'Experiment'}]});` to work you need `User.hasMany(Task, {as: 'Experiment'});`\n"
+      },
+      {
+        "user": "baliw",
+        "created_at": "2014-04-27T08:10:18Z",
+        "body": "Thanks for the help.  That put me on the right track. :-)\n"
+      }
+    ]
+  },
+  {
+    "number": 1675,
+    "title": "Validation Error vs actual Error",
+    "created_at": "2014-04-23T03:56:53Z",
+    "closed_at": "2014-04-25T23:05:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1675",
+    "body": "This is more of a question than an issue, but when creating/updating models, I've been struggling with finding the best way to differentiate validation errors from 'actual' errors.\n\nFor example;\n\n```\nmodel.save()\n    .success( function () {})\n    .error( function (err) { /*err could be a validation error, or a database error */ })\n```\n\nAm I missing something here?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1675/comments",
+    "author": "nrmitchi",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-23T06:25:11Z",
+        "body": "That's supported in 2.0.0 - You can use `instanceof Sequelize.ValidationError`\n"
+      },
+      {
+        "user": "nrmitchi",
+        "created_at": "2014-04-25T23:05:22Z",
+        "body": "Okay awesome. Thanks.\n"
+      }
+    ]
+  },
+  {
+    "number": 1668,
+    "title": "Select Rows that have children",
+    "created_at": "2014-04-21T22:01:13Z",
+    "closed_at": "2014-04-22T13:36:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1668",
+    "body": "hi is there a way to use Having in the queries? to do something like this\n\n```\nSELECT Count(Table2.Id), Table1.* \nFROM Table1 \nLEFT JOIN Table2\nON Table1.id = Table2.Table1Id\nHAVING Count(Table2.Id) > 0\n```\n\nI only want to get Categories that have asociated children records.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1668/comments",
+    "author": "theHazzard",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-22T06:11:16Z",
+        "body": "You can use `having` like you can use `where`.\n\nSo something like:\n\n``` js\nModelA.findAll({\n  include: [ModelB],\n  having: 'count(ModelB.id) > 0'\n});\n```\n\nOr you could use an INNER JOIN if you don't need a specific count but just need there to be some of the included model `include: [{model: ModelB, required: true}]`.\n"
+      },
+      {
+        "user": "theHazzard",
+        "created_at": "2014-04-22T13:30:15Z",
+        "body": "Great! I used the Inner Join approach, is there's a way to tell Sequelize to omit all TableB attributes?\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-22T13:32:16Z",
+        "body": "@theHazzard `include: [{model: ModelB, required: true, attributes: []}]` might work, but no garauntees.\n"
+      },
+      {
+        "user": "theHazzard",
+        "created_at": "2014-04-22T13:33:07Z",
+        "body": "it still brings the ID, but it's ok, I've filtered with lodash, thanks for all your help!\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-22T13:36:49Z",
+        "body": "@theHazzard hmm, what version are you using? We add the id explicitely for faster deduplication matching - But it shouldn't be in the final result.\n"
+      },
+      {
+        "user": "theHazzard",
+        "created_at": "2014-04-22T13:38:47Z",
+        "body": "I'm using v1.7.2\n"
+      },
+      {
+        "user": "theHazzard",
+        "created_at": "2014-04-22T13:39:59Z",
+        "body": "this is an example of the result I have.\n\n```\n{\n    \"id\": 4,\n    \"Nombre\": \"Institutos\",\n    \"clasificadoes\": [\n      {\n        \"id\": 256\n      },\n      {\n        \"id\": 257\n      }\n    ]\n  },\n```\n"
+      },
+      {
+        "user": "theHazzard",
+        "created_at": "2014-04-22T13:41:45Z",
+        "body": "and here is the code I'm running\n\n```\nrubroClasificado.findAll({\n            attributes: ['Rubroclasificadoes.id', 'Rubroclasificadoes.Nombre'],\n            include: {\n                attributes: [],\n                model: Clasificado,\n                required: true\n            } \n})\n```\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-04-22T13:50:55Z",
+        "body": "Fix for attributes not being in the final result might be only be in 2.0.0-dev11\n"
+      }
+    ]
+  },
+  {
+    "number": 1545,
+    "title": "How can I \"inject\" one model into another?",
+    "created_at": "2014-03-23T19:59:06Z",
+    "closed_at": "2014-03-23T20:56:06Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1545",
+    "body": "Alright, this may seem kind of crazy but please try to follow along.  I'm hoping there's a simple solution.\n\nI've found that when providing a complete \"document\" to my angular client of a user account...\n\n```\nUser.find(\n    {\n        where:whereObj,\n        order: '\"People\".\"gender\" DESC',\n        include:[\n            {\n                model: Person,\n                as: \"People\",\n                include:[\n                    {\n                        model: PersonalTrait,\n                        as: \"Traits\"\n                    }\n                ]\n            },\n            {\n                model: Media,\n                as: \"PrimaryMedia\"\n            },\n            {\n                model: MediaFolder,\n                as: \"MediaFolders\",\n                include:[\n                    {\n                        model: Media,\n                        as: \"Media\"\n                    }\n                ]\n            }\n        ]\n    }\n).success(function(user){\n    if(user === null){\n        res.send(404);\n    }else{\n        res.json(200, user);\n   }\n}).error(function(err){\n    res.send(400);\n});\n```\n\nI see the database query resulting in exponential rows, depending on the number of rows for Traits, MediaFolders and Media.  For example...  1 User row has 2 People rows and 2 MediaFolder rows produces 4 rows in Sequelize's query to produce the object.  Adding 2 MediaRows linked to a MediaFolder row produces 6 rows. Adding 2 Traits to the User now produces 9 rows.  20 traits = 63 rows.  20 traits & 12 media = 252 rows.\n\nI'm fairly certain I understand why this is and that I'm using Sequelize properly.  So I decided to try taking a different approach by first getting the basic User object with everything but the Media Folders, then getting those media folders and \"injecting\" them into the User object result.\n\n```\nUser.find(\n    {\n        where:whereObj,\n        order: '\"People\".\"gender\" DESC',\n        include:[\n            {\n                model: Person,\n                as: \"People\",\n                include:[\n                    {\n                        model: PersonalTrait,\n                        as: \"Traits\"\n                    }\n                ]\n            },\n            {\n                model: Media,\n                as: \"PrimaryMedia\"\n            }\n        ]\n    }\n).success(function(user){\n    if(user === null){\n        res.send(404);\n    }else{\n\n        MediaFolder.findAll(\n            {\n                where: {\n                    \"UserId\": user.id\n                },\n                include:[\n                    {\n                        model: Media,\n                        as: \"Media\"\n                    }\n                ]\n            }\n        ).success(function(mediaFolders){\n            user.mediaFolders = mediaFolders; // <-- pseudocode\n            res.json(200, user);\n        }).error(function(err){\n            res.send(400);\n        });\n   }\n}).error(function(err){\n    res.send(400);\n});\n```\n\nThe only problem is that I'm not sure how I can do this because that \"pseudocode\" line above didn't work.  :)\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1545/comments",
+    "author": "emadd",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-03-23T20:17:21Z",
+        "body": "In `res.json(200, user)` the user object is being converted to JSON using sequelize's toJSON method, which includes all eagerly loaded relations automatically. However, when you add mediaFolders manually sequelize does not know to include that in the JSON output. \n\nTry something along the lines of\n\n``` js\nresponse = user.toJSON()\nresponse.mediaFolders = mediaFolders\nres.json(200, response);\n```\n"
+      },
+      {
+        "user": "emadd",
+        "created_at": "2014-03-23T20:56:06Z",
+        "body": "Fantastic!  This works perfectly and is scalable.  Very fast.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-24T08:05:35Z",
+        "body": "The first find call should be able to work though.\n"
+      },
+      {
+        "user": "emadd",
+        "created_at": "2014-03-24T15:12:14Z",
+        "body": "It works, but it's not efficient. Sequelize is writing SQL that produces thousands of rows just to pull a couple dozen objects. \n\nSent from my iPhone\n\n> On Mar 24, 2014, at 2:05 AM, Mick Hansen notifications@github.com wrote:\n> \n> The first find call should be able to work though.\n> \n> \u2014\n> Reply to this email directly or view it on GitHub.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-24T15:17:45Z",
+        "body": "@emadd how would you write the SQL any differently?\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-24T15:18:22Z",
+        "body": "But no joins can be less efficient than doing seperate queries, especially with the extra parsing needed. I'm thinking we might want to add an option that takes hasMany queries and does them in a seperate query instead.\n"
+      },
+      {
+        "user": "emadd",
+        "created_at": "2014-03-24T15:36:16Z",
+        "body": "I wouldn't. It's brilliant, really. I was only looking for some advice on how to go about it another way. My application has very specific scalability challenges that any ORM would struggle with, but Sequelize kicks all kinds of ass. \n\n\"Normalize until it hurts, de-normalize until it works\"\n\nHaving the option to specify how the related objects are included would be pretty cool. \n\nSent from my iPhone\n\n> On Mar 24, 2014, at 9:17 AM, Mick Hansen notifications@github.com wrote:\n> \n> @emadd how would you write the SQL any differently?\n> \n> \u2014\n> Reply to this email directly or view it on GitHub.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-24T15:46:20Z",
+        "body": "Ah, yeah. Huge performance hit on that unfortuneatly, i really want to optimize that as much as possible since it adds a shitload of convenience.\n\nIn my performance critical app i've put an aggressive redis cache i front to get the performance i really need.\n\nYeah, Bookshelf does it in seperate queries, and it definitely has its usecases as i've come to find out.\n"
+      }
+    ]
+  },
+  {
+    "number": 1537,
+    "title": "Self reference (bi-directional)",
+    "created_at": "2014-03-22T11:07:57Z",
+    "closed_at": "2014-03-22T22:50:05Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1537",
+    "body": "A Person can have many children: Person.hasMany(Person {as: 'children})\nA Person has one father: Person.hasOne(Person {as: 'father'})\n\nSeems straightforward enough. \nNow I want to find records for a Person, and their father:\nPerson.find({include: [{model: Person, as: 'father}])\n\nBad things happen: \"Error: Person (Father) is not associated to Person!\" which was unexpected given that there are actually two relationships in place.\n\nBut then, it also occurs to me that I don't know how to tell Sequelize which of the relations to follow in a given include? If I wanted to return records for both father and children how would I do that?\n\nPerhaps I'm just thinking about it all wrong?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1537/comments",
+    "author": "EduceHealth",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-22T11:50:38Z",
+        "body": "Using `as` tells it what relation to use. You must have misspelled something, there's also a type in the code you provided us, please show us the actual code you are using.\n\nSide note: For the relation to work from both sides you probably wan't something like `foreignkey: 'parent_id` on both relation calls hasOne/hasMany. Conceptually you might want to use belongsTo rather than hasOne. (belongsTo is usually the opposite of hasMany in a 1:M relation, although hasOne should work since its a self-refential association, normally it wouldn't know)\n"
+      },
+      {
+        "user": "EduceHealth",
+        "created_at": "2014-03-22T22:50:05Z",
+        "body": "\"You must have misspelled something\" - you are right. \n\nI hadn't made the connection that the two 'as' statements needed to match for it to work. I'd declared the relationship as 'Parent', but then tried to use it as 'father'. Makes perfect sense.\n\nThanks for the pointer.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-03-23T07:49:18Z",
+        "body": "Ah, yes it has to match. That's how we distinguish between the relations :)\n"
+      }
+    ]
+  },
+  {
+    "number": 1528,
+    "title": "potential bug in quoteIdentifiers function in query generator of mysql / mariadb",
+    "created_at": "2014-03-20T15:02:01Z",
+    "closed_at": "2014-03-20T17:34:46Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1528",
+    "body": "hi,\n\ni have an problem with multi associated properties in where and order conditions with nested eager loading.\n\ni get wrong sql with the following find / findAll ...\n\n``` javascript\nvar Article = sequelize.define('Article', { name: Sequelize.STRING })\n  , Customer = sequelize.define('Customer', { name: Sequelize.STRING })\n  , PostCode = sequelize.define('PostCode', { postcode: Sequelize.INTEGER, city: Sequelize.STRING })\n\nArticle.belongsTo(Customer)\nCustomer.belongsTo(PostCode)\n\nsequelize.sync().done(function() {\n  Article.findAll({\n    attributes: ['name'],\n    include: [{\n      model: Customer,\n      attributes: ['name'],\n      include: [{\n        model: PostCode,\n        attributes: ['postcode', 'city'],\n      }]\n    }],\n    order: ['Customer.PostCode.postcode', 'ASC']\n  }).success(function(articles) {\n    console.log('articles', articles)\n  })\n})\n```\n\n``` sql\nSELECT\n  `Article`.`name`,\n  `Customer`.`name` AS `Customer.name`,\n  `Customer`.`id` AS `Customer.id`,\n  `Customer.PostCode`.`postcode` AS `Customer.PostCode.postcode`,\n  `Customer.PostCode`.`city` AS `Customer.PostCode.city`,\n  `Customer.PostCode`.`id` AS `Customer.PostCode.id`\nFROM `Article`\n  LEFT OUTER JOIN `Customer` AS `Customer`\n    ON `Customer`.`id` = `Article`.`customer_id`\n      LEFT OUTER JOIN `PostCode` AS `Customer.PostCode`\n        ON `Customer.PostCode`.`id` = `Customer`.`post_code_id`\nORDER BY `Customer`.`PostCode`.`postcode`, `ASC`;\n```\n\ni think the problem is the quoteIdentifiers from lib/dialects/mysql/query-generator.js. it escapes the string \n\n```\nCustomer.PostCode.postcode\n```\n\n to \n\n```\n`Customer`.`PostCode`.`postcode`\n```\n\nTo make the query working it should by \n\n```\n`Customer.PostCode`.`postcode`\n```\n\n cause of the generated table alias.\n\nthe problem could by solved by the following code ...\n\n``` javascript\n    quoteIdentifiers: function(identifiers, force) {\n      var seperator = identifiers.lastIndexOf('.')\n      if (seperator === -1) {\n        return this.quoteIdentifier(identifiers, force)\n      } else {\n        return this.quoteIdentifier(identifiers.substr(0, seperator), force) + '.' + this.quoteIdentifier(identifiers.substr(seperator + 1), force)\n      }   \n    },\n```\n\nbut i am not sure we're using that the right way. it would be nice if somebody can look over it.\n\nthx, mithrandir\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1528/comments",
+    "author": "mithrandirii",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-03-20T16:23:24Z",
+        "body": "Just tried running your example against master (thanks for providing an example that i can actually copy paste directly into my env btw, not everyone remembers that!) and it runs correctly. One change however, I changed the order to be wrapped in a second array.\n\n``` sql\nSELECT \n  `Articles`.`name`, \n  `Customer`.`name` AS `Customer.name`, \n  `Customer`.`id` AS `Customer.id`, \n  `Customer.PostCode`.`postcode` AS `Customer.PostCode.postcode`, \n  `Customer.PostCode`.`city` AS `Customer.PostCode.city`, \n  `Customer.PostCode`.`id` AS `Customer.PostCode.id` \nFROM `Articles` \n  LEFT OUTER JOIN `Customers` AS `Customer` \n    ON `Customer`.`id` = `Articles`.`customer_id` \n  LEFT OUTER JOIN `PostCodes` AS `Customer.PostCode` \n    ON `Customer.PostCode`.`id` = `Customer`.`post_code_id` \nORDER BY `Customer.PostCode`.`postcode` ASC;\n```\n\nThe fact that your order syntax actually kind of worked suggests to me that you are on an old version - could you try upgrading?\n"
+      },
+      {
+        "user": "mithrandirii",
+        "created_at": "2014-03-20T16:36:40Z",
+        "body": "i used the version 1.7 . if i use the current git master i get another error on sync with our real application: 'cyclic dependency found'. so first i have to build an test env. but thx for the fast reply\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-03-20T16:40:03Z",
+        "body": "No problem :)\n\nMaster introduced automatically adding foreign key references on associations, so you are creating a circual reference somewhere, probably of the form\n\n``` js\nx.hasOne(y)\ny.hasOne(x)\n```\n\nWhich adds x_id to y and y_id to x - one of them should be a belongsTo\n"
+      },
+      {
+        "user": "mithrandirii",
+        "created_at": "2014-03-20T17:34:46Z",
+        "body": "ok, with git master the problem is solved. thanks again for your help and hint with the cyclic dependency ;)\n"
+      }
+    ]
+  },
+  {
+    "number": 1413,
+    "title": "`include` breaks when using `include: { daoFactory: DaoFactory1, as: 'factory' }` form",
+    "created_at": "2014-02-20T15:57:34Z",
+    "closed_at": "2014-02-20T16:40:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1413",
+    "body": "Not sure if it has to do with the association in my db being backwards.\n\nI have \n\n```\nAddress.hasOne(Firm);\nCompany.belongsTo(Address);\n```\n\nThis works as expected:  \n\n```\nCompany.findAll({include: [Address]});\n```\n\nBut this breaks:  \n\n```\nCompany.findAll({include: [{daoFactory: Address, as: 'address'}]});  \n```\n\nWith an error log of \n\n```\nError: Address (address) is not associated to Firm!\nat module.exports.validateIncludedElement (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\sequelize\\lib\\dao-factory.js:1433:13)\nat null. (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\sequelize\\lib\\dao-factory.js:1337:41)\nat Array.map (native)\nat module.exports.validateIncludedElements (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\sequelize\\lib\\dao-factory.js:1336:39)\nat module.exports.DAOFactory.findAll (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\sequelize\\lib\\dao-factory.js:451:34)\nat port (D:\\Work\\LittleRoom\\Sequelize\\index.js:46:17)\nat callbacks (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\express\\lib\\router\\index.js:164:37)\nat param (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\express\\lib\\router\\index.js:138:11)\nat param (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\express\\lib\\router\\index.js:135:11)\nat pass (D:\\Work\\LittleRoom\\Sequelize\\node_modules\\express\\lib\\router\\index.js:145:5)\n```\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1413/comments",
+    "author": "cheapsteak",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2014-02-20T16:12:04Z",
+        "body": "The `as` option is only for when you have explicitly aliased your relation, like this:\n\n``` js\nCompany.belongsTo(Address, { as: 'HomeAddress' })\n\nCompany.findAll({include: [{model: Address, as: 'HomeAddress'}]});  \n```\n"
+      },
+      {
+        "user": "cheapsteak",
+        "created_at": "2014-02-20T16:20:17Z",
+        "body": "Explicitly aliasing the `belongsTo` part of the relation seems to have broken the other way of include as well.\n\nThis was working:\n\n```\nAddress.hasOne(Firm, { as: 'Company'} );\nCompany.belongsTo(Address, { foreignKey: 'address_id'});\n\nCompany.findAll({\n    where: { compay_ids : ids },\n    include: [Address]\n})  \n```\n\nThis breaks:  \n\n```\nAddress.hasOne(Firm, { as: 'Company'} );\nCompany.belongsTo(Address, { as: 'Address', foreignKey: 'address_id'});  //added explicit alias\n\nCompany.findAll({  //same as before\n    where: { compay_ids : ids },\n    include: [Address]\n})  \n```\n\nAgain a `Address is not associated to Company!` error exception is thrown\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-02-20T16:25:20Z",
+        "body": "If your association is using `as` you need to use it in your `include` statement aswell.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-02-20T16:25:57Z",
+        "body": "```\nAddress.hasOne(Firm, { as: 'Company'} );\nCompany.belongsTo(Address, { as: 'Address', foreignKey: 'address_id'});  //added explicit alias\n\nCompany.findAll({  //same as before\n  where: { compay_ids : ids },\n  include: [{model: Address, as: 'Address'}]\n})  \n```\n\nOr remove the alias all together. But you have to pick one, no alias, or alias on both.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-02-20T16:26:29Z",
+        "body": "Put another way, you can only use `as` in include if you also use `as` in the association. It is not possible to load your model under another name when including\n"
+      },
+      {
+        "user": "cheapsteak",
+        "created_at": "2014-02-20T16:30:52Z",
+        "body": "Ah, I see. Thank you for the clarification. That worked.\n"
+      },
+      {
+        "user": "mickhansen",
+        "created_at": "2014-02-20T16:40:09Z",
+        "body": "A continuing point of confusion, guess we'll have to clear up the docs on that somehow. \n"
+      }
+    ]
+  },
+  {
+    "number": 1392,
+    "title": "how to filter findAll include modle fields",
+    "created_at": "2014-02-14T18:43:42Z",
+    "closed_at": "2014-02-15T11:00:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1392",
+    "body": "Example\n\n``` js\n    DB.Article.findAll({\n        include : [{model : DB.User}],\n        order : 'article.created_at DESC',\n        limit : 50\n    }).done(function (err, result){\n\n        })\n```\n\nit show sql\n\n``` sql\nExecuting (default): SELECT `article`.*, `user`.`id` AS `user.id`, `user`.`name` AS `user.name`, `user`.`password` AS `user.password`, `user`.`email` AS `user.email`, `user`.`bio` AS `user.bio`, `user`.`posts_count` AS `user.posts_count`, `user`.`digged_count` AS `user.digged_count`, `user`.`status` AS `user.status`, `user`.`create_passport_id` AS `user.create_passport_id`, `user`.`created_at` AS `user.created_at`, `user`.`modified_at` AS `user.modified_at` FROM `article` LEFT OUTER JOIN `user` AS `user` ON `user`.`id` = `article`.`user_id` ORDER BY article.created_at DESC LIMIT 50;\n```\n\nHave an way change include model select fields?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1392/comments",
+    "author": "youxiachai",
+    "comments": [
+      {
+        "user": "dpolyakov",
+        "created_at": "2014-02-15T03:37:10Z",
+        "body": "```\nDB.Article.findAll({\n        include : [{\n            model : DB.User,\n            attributes: ['name']\n            }],\n        order : 'article.created_at DESC',\n        limit : 50\n    }).done(function (err, result){\n})\n```\n\nit will include only user name\n"
+      },
+      {
+        "user": "youxiachai",
+        "created_at": "2014-02-15T11:00:40Z",
+        "body": "@dpolyakov thanks !\n"
+      }
+    ]
+  },
+  {
+    "number": 1366,
+    "title": "Oddities with one to one relationships?",
+    "created_at": "2014-02-09T14:11:14Z",
+    "closed_at": "2014-02-10T10:05:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1366",
+    "body": "I've got a fairly simple schema, a Users table and a UserRoles table. One User has one Role, linked from the User's roleId to the UserRole's id.\n\nFor some reason I can't specify the relationship like this:\n\n``` javascript\nm.User.hasOne(m.UserRole, {as: 'role', foreignKey: 'roleId'});\n```\n\nBecause I get the following error:\n\n``` javascript\n{ [Error: ER_BAD_FIELD_ERROR: Unknown column 'role.roleId' in 'field list']\n  code: 'ER_BAD_FIELD_ERROR',\n  errno: 1054,\n  sqlState: '42S22',\n  index: 0,\n  sql: 'SELECT `Users`.*, `role`.`id` AS `role.id`, `role`.`name` AS `role.name`, `role`.`roleId` AS `role.roleId` FROM `Users` LEFT OUTER JOIN `UserRoles` AS `role` ON `Users`.`id` = `role`.`roleId` WHERE `Users`.`id`=1;' }\n```\n\nHowever if I specify the relationship with a belongsTo like so:\n\n``` javascript\nm.User.belongsTo(m.UserRole, {as: 'role', foreignKey: 'roleId'});\n```\n\nIt works fine.\n\nThis seems a bit confusing to me, I'd expect hasOne to represent a situation where you're mapping from a column on the source table, to a target table, instead of what is happening which is the inverse of that, the target table is mapping onto the source table.\n\nCan anyone clear this up for me?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1366/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-02-09T18:22:21Z",
+        "body": "If the foreignKey is on the source model, in this case User, it's a belongsTo association. If the foreignKey is on the target model, it's a hasOne association.\n\nYou can think about this in terms of ownership, you really only use hasOne when it owns that model. A user/role relationship would usually be a 1:M association with user belonging to roles and roles having many users.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2014-02-10T10:05:44Z",
+        "body": "That makes sense, thanks for clearing that up!\n"
+      }
+    ]
+  },
+  {
+    "number": 1336,
+    "title": "Guidance on error handling",
+    "created_at": "2014-02-03T05:59:51Z",
+    "closed_at": "2014-02-03T18:58:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1336",
+    "body": "I have a one-to-many relationship: 1 order has many items. I am trying to write a function that creates an item for a given orderId (see below). This function has 3 sequential steps: 1) find the order, 2) create the item, 3) connect the item to the order. If any of the steps fails, I must return an error. That's why my function takes a `successCallback` and an `errorCallback`.\n\nIs there a more elegant way to write this function? Ideally, I would like to avoid the 3 nested levels. Also, if possible, I would like to avoid sending the two callback functions as parameters.\n\n```\nexports.createItem = function(orderId, itemInput, successCallback, errorCallback) {\n\n    domain.Order.find({where: {id: orderId}})\n        .success(function(order) {\n            domain.Item.create(itemInput)\n                .success(function(item) {\n                    order.addItem(item)\n                        .success(function() {\n                            successCallback(item);\n                        })\n                        .error(function(err) {\n                            errorCallback(err);\n                        })\n                })\n                .error(function(err) {\n                    errorCallback(err);\n                })\n        })\n        .error(function(err) {\n            errorCallback(err);\n        })\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1336/comments",
+    "author": "nareshbhatia",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-02-03T06:16:41Z",
+        "body": "Ideal case for promises.\nSomething like this should work:\n\n``` js\nreturn domain.Order.find({where: {id: orderId}}).then(function (order) {\n  return domain.Item.create(itemInput).then(function (item) {\n    return order.addItem(item);\n  });\n}).then(function (item) {\n\n}, function (error) {\n\n});\n```\n"
+      },
+      {
+        "user": "nareshbhatia",
+        "created_at": "2014-02-03T18:58:57Z",
+        "body": "This is perfect! Thanks @mickhansen, as always!\n"
+      }
+    ]
+  },
+  {
+    "number": 1102,
+    "title": "many to one question?",
+    "created_at": "2013-12-04T12:47:34Z",
+    "closed_at": "2013-12-04T21:22:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1102",
+    "body": "Is this the same?\n\nProject.hasMany(User)\nUser.belongsTo(Project)\n\nI can establish someone or I have to establish all?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1102/comments",
+    "author": "carlituxman",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2013-12-04T18:25:48Z",
+        "body": "When you do `User.belongsTo(Project)` you are creating the relation enabling you to call `user.getProject()`. `Project.hasMany(User)` links the association the other way, enabling you to call `project.getUsers()`. If you only did one of those two, e.g. if you only did `User.belongsTo(Project)` you would be able to retrieve the project that a user is currently working on, but not all users working on a project\n\nSo yes, in short, they create the same fields, but creates the relation from two \"different perspectives\" so to say\n"
+      },
+      {
+        "user": "carlituxman",
+        "created_at": "2013-12-04T20:46:30Z",
+        "body": "Perfect! \nMany thanks\n"
+      }
+    ]
+  },
+  {
+    "number": 1075,
+    "title": "Delete associated records",
+    "created_at": "2013-11-25T10:50:27Z",
+    "closed_at": "2013-11-25T12:14:56Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/1075",
+    "body": "Hi,\n\nI have this setup:\n\n``` js\nvar Restriction = sequelize.define('restriction', {\n    id: Sequelize.INTEGER,\n    device: Sequelize.INTEGER,\n    user: Sequelize.INTEGER\n});\n\nvar User = sequelize.define('user', {\n    id: Sequelize.INTEGER,\n    name: Sequelize.STRING\n});\n\nUser.hasMany(Restriction, {as: 'Restrictions', foreignKey: 'user', primaryKey: 'id'});\n```\n\nThis means that each User has many Restrictions. When I fetch a User, I call user.getRestrictions() and it return the restrictions associated to the user. Fine.\nBut when I call user.removeRestriction() I was expecting that restriction to be deleted from the database, but instead the foreign key was set to NULL.\n\nIs there a way to actually remove that restriction instead of setting the FK to NULL?\nThanks!\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/1075/comments",
+    "author": "fonini",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2013-11-25T11:42:22Z",
+        "body": "A restriction is an actual entity, not an entity in a junction table, so removing a restriction entry when you remove the asocation from user is not a sane default behaviour.If you want it, you can call `restriction.destroy();`\n"
+      },
+      {
+        "user": "fonini",
+        "created_at": "2013-11-25T11:52:38Z",
+        "body": "Thanks.\nI just wanted to make my code more clean, because when I update a User, I have to remove all the restrictions, then write the new ones and associate then with the User.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2013-11-25T12:14:56Z",
+        "body": "Cool, closing this issue then. Please re-open if you have further questions.\n"
+      }
+    ]
+  },
+  {
+    "number": 990,
+    "title": "Consuming a DB created for Rails app",
+    "created_at": "2013-10-14T06:39:22Z",
+    "closed_at": "2013-10-16T10:10:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/990",
+    "body": "I have decided to move some functionality of an existing Rails API into Node.js. I picked up Sequelize as an ORM mainly because it seemed like it is the most feature rich out of the many others.\n\nSo I started mapping my models from Rails in Sequelize (since I didn`t need all the columns I only mapped the necessary ones) and I ended up with a 1-n relationship that is done using :through in Rails. So I created the following ralationship:\n\n```\nHole.hasMany(TrackingGroup, {foreignKey: 'hole_id', joinTableName:'holes_tracking_groups', underscored: true, useJunctionTable: true}); \n\nTrackingGroup.belongsTo(Hole, {foreignKey: 'tracking_group_id', joinTableName: 'holes_tracking_groups'});\n```\n\nThe idea is that when I get all the tracking groups for a hole I will have a query in the holes_tracking_groups where the hole_id = \"something\" but instead I was having a query in the tracking_group table (the one that has all the tracking groups). Or in other words the specified joinTableName was not considered at all.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/990/comments",
+    "author": "marval",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2013-10-14T20:09:02Z",
+        "body": "Junction tables of join tables are only used for many to many relations, so in order to fit your current data model to sequelize you will have to do:\n\n``` js\nHole.hasMany(TrackingGroup, {foreignKey: 'hole_id', joinTableName:'holes_tracking_groups', underscored: true}); \nTrackingGroup.hasMany(Hole, {foreignKey: 'tracking_group_id', joinTableName: 'holes_tracking_groups'});\n```\n\nBy the way, useJunctionTable is only used if you have a self-reference but don't need a junction table, so I've removed that as well ;)\n"
+      },
+      {
+        "user": "marval",
+        "created_at": "2013-10-16T10:10:45Z",
+        "body": "Thanks for the response. It doesn`t even make sense to have the junction table and it is actually a many-to-many relationship. I guess I wasn`t paying that much attention at that late hour :)\n"
+      }
+    ]
+  },
+  {
+    "number": 638,
+    "title": "Postgresql find() never reached .error(function(error){})",
+    "created_at": "2013-05-21T23:02:35Z",
+    "closed_at": "2013-05-22T09:21:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/638",
+    "body": "I have something strange happening. I issue this code:\n\n```\nmodels.User.find({where: {userid: req.params.uid, token: req.params.token}}).success(function(user) {\n            console.log(user);\n            console.log(user.token_sent);\n            res.send('found it!');\n        }).failure(function(error) {\n            res.send(500, error);\n        });\n```\n\nWhen the User is not in the database, I recieve an error instead of the error being passed to the error callback. Instead, console.log(user) returns null. And console.log(user.token_sent) breaks.\n\n```\nExecuting: SELECT * FROM \"Users\" WHERE \"userid\"='2' AND \"token\"='ddd580a83805f66b700c21dd6a2b54d8658a58b4978e9a18' LIMIT 1;\nnull\n\n/home/user/nodetest/admin/node_modules/pg/lib/client.js:160\n      throw error;\n            ^\nTypeError: Cannot read property 'token_sent' of null\n    at null.<anonymous> (/home/user/nodetest/admin/routes/index.js:65:29)\n    at EventEmitter.emit (events.js:95:17)\n    at null.<anonymous> (/home/user/nodetest/admin/node_modules/sequelize/lib/query-interface.js:343:17)\n    at EventEmitter.emit (events.js:117:20)\n    at module.exports.onSuccess (/home/user/nodetest/admin/node_modules/sequelize/lib/dialects/postgres/query.js:106:14)\n    at null.<anonymous> (/home/user/nodetest/admin/node_modules/sequelize/lib/dialects/postgres/query.js:47:17)\n    at EventEmitter.emit (events.js:95:17)\n    at Query.handleReadyForQuery (/home/user/nodetest/admin/node_modules/pg/lib/query.js:101:8)\n    at null.<anonymous> (/home/user/nodetest/admin/node_modules/pg/lib/client.js:151:26)\n    at EventEmitter.emit (events.js:117:20)\n```\n\nAm I doing something wrong?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/638/comments",
+    "author": "milovanderlinden",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2013-05-22T09:03:40Z",
+        "body": "Errors are only triggered when something goes seriously wrong - a syntax error in the SQL and things like that. When the user is not found the query itself was successful, so the success callback is triggered. But since nothing matched your query, null is returned. And the reason your code breaks is that you are trying to access a property on something that is null. You success handler should be something like this:\n\n``` js\nif (user) {\n    console.log(user);\n    console.log(user.token_sent);\n    res.send('found it!');\n} else {\n    res.send(\"nothing found\");\n}\n```\n"
+      },
+      {
+        "user": "milovanderlinden",
+        "created_at": "2013-05-22T09:21:19Z",
+        "body": "Thank you for the answer, perfectly clear!\n"
+      }
+    ]
+  },
+  {
+    "number": 519,
+    "title": "Load from JSON object",
+    "created_at": "2013-04-06T19:44:31Z",
+    "closed_at": "2013-04-08T18:01:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/519",
+    "body": "Hello, I know any object from the model can be stringified. But there are any method to create an Sequelize object from a plain JSON that previously was a model object?\n\nThanks.\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/519/comments",
+    "author": "maxsosa",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2013-04-06T20:50:04Z",
+        "body": "Model.build(JSON.parse(jsonString)) - or just Model.build(object)\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2013-04-08T08:26:56Z",
+        "body": "You might want to pass in `isNewRecord = false` as well\n\n`Model.build(object, { isNewRecord : false ))`\n\n_edit:_ fat fingers..\n"
+      },
+      {
+        "user": "maxsosa",
+        "created_at": "2013-04-08T18:01:39Z",
+        "body": "Thank you! That's exactly wat I needed.\n\nRegards.\n"
+      }
+    ]
+  },
+  {
+    "number": 474,
+    "title": "Do you have support DOUBLE/DOUBLE PRECISION ?",
+    "created_at": "2013-03-05T12:47:13Z",
+    "closed_at": "2013-03-05T12:59:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/474",
+    "body": "",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/474/comments",
+    "author": "killmenot",
+    "comments": [
+      {
+        "user": "janmeier",
+        "created_at": "2013-03-05T12:51:39Z",
+        "body": "Right now Sequelize supports FLOAT fields out of the box. But you can also specify the type of a row yourself, instead of using the Sequelize types:\n\n``` javascript\nsequelize.define(... , {\n    float: Sequelize.FLOAT\n});\n\nsequelize.define(... , {\n    double: 'DOUBLE'\n});\n```\n"
+      },
+      {
+        "user": "killmenot",
+        "created_at": "2013-03-05T12:59:36Z",
+        "body": "Cool, it works. Thank you.\n"
+      }
+    ]
+  }
+]

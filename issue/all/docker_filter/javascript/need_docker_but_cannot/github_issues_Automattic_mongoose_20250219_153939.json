@@ -1,0 +1,72 @@
+[
+  {
+    "number": 5138,
+    "title": "Mongoose authentication fail when trying to connect to MongoDB Atlas",
+    "created_at": "2017-03-31T17:05:48Z",
+    "closed_at": "2017-10-09T14:49:55Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/Automattic/mongoose/issues/5138",
+    "body": "#4818 Referencing this issue: it's closed but I am still reproducing the same problem.\r\n\r\nMongoose version: `4.9.2`\r\nNode.js version: `7.7.4`\r\nMongoDB Atlas version: `3.2`\r\n\r\nWhen trying to connect via mongo shell, everything works fine.\r\n\r\n```\r\nmongo 'mongodb://someUser:somePassword@someShard-shard-00-00-fjfvq.mongodb.net:27017,someShard-shard-00-01-fjfvq.mongodb.net:27017,someShard-shard-00-02-fjfvq.mongodb.net:27017/someDb?replicaSet=someShard-shard-0&ssl=true&authSource=admin'\r\n```\r\n\r\nHere, I'm connecting to `someDb`, but I'm authenticating the user against the `admin` database.\r\n\r\nWhen trying to connect with Mongoose I get the following error:\r\n\r\n```\r\n { MongoError: authentication fail\r\nat Function.MongoError.create ...\r\n```\r\n\r\nI'm thinking it's an error with it not handling the `authSource` properly. Mongoose successfully connects if I make `admin` the database I'm trying to connect to, but doesn't connect if I make `admin` the `authSource` I'm trying to authenticate against.\r\n\r\nAny ideas?",
+    "comments_url": "https://api.github.com/repos/Automattic/mongoose/issues/5138/comments",
+    "author": "emaxedon",
+    "comments": [
+      {
+        "user": "gilalan",
+        "created_at": "2017-04-07T00:01:33Z",
+        "body": "Same problem here! \r\n\r\nMongoose version: 4.2.10\r\nNode.js version: 6.9.5\r\nMongoDB Atlas version: 3.4.2\r\n\r\nWhen trying to connect via mongo shell, everything works fine, but when I trying from my express.js code, I get the following error:\r\n\r\n`name: 'MongoError', message: 'no valid seed servers in list'`\r\n\r\nHas anyone found a solution?"
+      },
+      {
+        "user": "emaxedon",
+        "created_at": "2017-04-07T17:33:56Z",
+        "body": "It for some reason works for me now. Can I see your code?"
+      },
+      {
+        "user": "gilalan",
+        "created_at": "2017-04-07T20:47:21Z",
+        "body": "Hello @emaxedon , I am using MEANJS generator from Yeoman. Here is my code:\r\n`var config.db.uri = 'mongodb://myUser:myPass@myCluster-shard-00-00-67fdt.mongodb.net:27017,myCluster-shard-00-01-67fdt.mongodb.net:27017,myCluster-shard-00-02-67fdt.mongodb.net:27017/myDatabase?ssl=true&replicaSet=myCluster-shard-0&authSource=admin'`\r\n\r\n`var db = mongoose.connect(config.db.uri, function (err) {\r\n    // Log Error\r\n    if (err) {\r\n      console.error(chalk.red('Could not connect to MongoDB!'));\r\n      console.log(err);\r\n    } else {\r\n\r\n      // Enabling mongoose debug mode if required\r\n      mongoose.set('debug', config.db.debug);\r\n\r\n      // Call callback FN\r\n      if (cb) cb(db);\r\n    }\r\n  });`\r\n\r\nIt returns the following error: \r\n`Could not connect to MongoDB!\r\n    { MongoError: no valid seed servers in list}`\r\n\r\nUsing this same String, I can successfully connect via mongo shell. Until I find a solution, I'm using an old database from Xervo.io, but my actual database is already set in Atlas. Any ideas ? "
+      },
+      {
+        "user": "sobafuchs",
+        "created_at": "2017-04-08T22:33:59Z",
+        "body": "@emaxedon did you change anything between when it was working and when it started working? And is it still working?"
+      },
+      {
+        "user": "emaxedon",
+        "created_at": "2017-04-08T23:55:22Z",
+        "body": "@gilalan @varunjayaraman \r\n\r\nNot sure if it makes a difference - but the only thing I changed that made it work (no idea why this works) is the following.\r\n\r\n```\r\nconst db = mongoose.connect(config.db.uri, {\r\n\tserver: {\r\n\t\tsocketOptions: {\r\n\t\t\tkeepAlive: 1\r\n\t\t}\r\n\t}\r\n}).connection;\r\n\r\ndb.on('error', (err) => {\r\n\tconsole.log(err);\r\n});\r\ndb.once('open', (err) => {\r\n\tif (err) {\r\n\t\tconsole.log(err);\r\n\t} else {\r\n\t\t// ...\r\n\t}\r\n});\r\n```"
+      },
+      {
+        "user": "gilalan",
+        "created_at": "2017-04-10T12:07:37Z",
+        "body": "Not changed for me =( i'm stucked with that error.\r\nAnyway @emaxedon, thanks for your help!"
+      },
+      {
+        "user": "BGTN",
+        "created_at": "2017-05-09T17:13:33Z",
+        "body": "I had the same issue like @gilalan. \"name: 'MongoError', message: 'no valid seed servers in list'\". I updated node to version v6.10.3 and mongoose to version 4.9.8. After these updates I was able to connect to Atlas via Mongoose.\r\n\r\n"
+      },
+      {
+        "user": "kevinadi",
+        "created_at": "2017-05-11T01:22:18Z",
+        "body": "@gilalan I can confirm that mongoose 4.2.10 cannot connect to MongoDB Atlas with the error message `MongoError: no valid seed servers in list`.\r\n\r\nHowever, I can also confirm that upgrading to the latest mongoose (currently 4.9.8) fixed the issue, and enabled mongoose to connect to MongoDB Atlas.\r\n\r\nI believe this issue should be closed."
+      },
+      {
+        "user": "gilalan",
+        "created_at": "2017-05-11T01:45:47Z",
+        "body": "It is fixed now! I don't know why but it's ok!."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly configure Mongoose connection options for MongoDB Atlas authentication",
+      "Compatibility guidance between Mongoose versions and MongoDB Atlas",
+      "Clarification of connection string formatting for replica sets",
+      "Authentication source specification methodology"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:42:39"
+    }
+  }
+]

@@ -1,0 +1,455 @@
+[
+  {
+    "number": 298,
+    "title": "EPIC - Redefine AI Models abstraction",
+    "created_at": "2025-01-27T09:48:36Z",
+    "closed_at": "2025-02-11T21:25:16Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/298",
+    "body": "> [!WARNING]\n> **Breaking change**\n\nThis issue relates to unifying communication with LLM providers through a new `Backend` module. This module groups AI models (chat, embedding, tokenization, image, audio, etc.) and provides an intuitive usage interface. \n\nThis proposal will allow us to do the same in Python SDK (which will use LiteLLM under the hood). \n\nWe will also leverage ENV variables to simplify provider initiation.\n\n## High-Level\n\n```ts\nconst backend = await Backend.fromProvider('watsonx');\n```\n\n### Usage\n\n```ts\nawait backend.chat.create({ messages: [], tools: [] })\nawait backend.chat.createStructured({\n    schema: z.object(...),\n    messages: [],\n})\n\nawait backend.embedding.create({ ... })\n```\n\nor a more verbose approach\n\n```ts\n// direct class instation\nconst backend = new Backend({\n    chat: await ChatModel.fromName('watsonx:ibm/granite-3-8b-instruct'),\n    embedding: await EmbeddingModel.fromName('openai:text-embedding-3-small')\n});\n```\n\nor a way more verbose approach\n\n```ts\nconst backend = new Backend({\n    chat: new WatsonXChatModel('ibm/granite-3-8b-instruct'),\n    embedding: new WatsonXEmbeddingModel('text-embedding-3-small')\n});\n```\n\n### Alternative initiation\n\n```ts\nconst chatModel = await ChatModel.fromName('openai:gpt4o')\nconst chatModel = await ChatModel.fromName('watsonx') // default WatsonX model\n```\n\n```ts\nconst embeddingModel = await EmbeddingModel.fromName('openai')\nconst embeddingModel = await EmbeddingModel.fromName('watsonx')\n```\n\n## Low-Level\n\nThe `ChatModel` abstract class defines the standard interface for chat completion.\nThe `EmbeddingModel` abstract class defines the standard interface for embedding.\nThe `AudioModel` abstract class defines the standard interface for audio creation.\nThe `ImageModel` abstract class defines the standard interface for image creation.\n\nThe `BackendProvider` class defines the factory interface for a given provider (WatsonX/Ollama/OpenAI...), so it knows how to create  `ChatModel` / `EmbeddingModel` for a given provider.\n\nThe `Backend` class is a centralized factory for creating custom backends.\n\n### Directory structure\n\n```\nsrc/backend/backend.ts\nsrc/backend/chat.ts\nsrc/backend/embedding.ts\nsrc/backend/audio.ts\nsrc/backend/image.ts\nsrc/backend/provider.ts\n```\n\n### Provider implementation\n\n```\n/adapters/watsonx/backend/chat.ts (exposes `WatsonXChatModel` class)\n/adapters/watsonx/backend/embedding.ts  (exposes `WatsonXEmbeddingModel` class)\n/adapters/watsonx/backend/provider.ts  (exposes `WatsonXProvider` class)\n...\n```\n\n## Messaging\n\nSo far, we have used the `BaseMessage` class to support text-only messages. However, we are about to support multimodalities, so the `BaseMessage` class is insufficient. Therefore, it will be replaced with the following classes: `UserMessage`, `SystemMessage`, `AssistantMessage`, and `ToolMessage`, all extending the new base `Message` class.\n\n## Aditional features\n- simplify usage\n- add more providers\n- improve observability/traceability (currently, tokenization/embedding are not tracked)\n- switching to WatsonX NodeJS SDK instead of our implementation\n- drop **Drivers** as one can use native tool calling / structured generation\n\n## Notes\n- Image/Audio are not gonna be implemented in this PR\n- Most providers will internally use VercelAI Core SDK, but not all of them, and the interface will not be exactly the same.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/298/comments",
+    "author": "Tomas2D",
+    "comments": [
+      {
+        "user": "HendrikStrobelt",
+        "created_at": "2025-01-27T13:13:18Z",
+        "body": "+1 for that and adding \"ollama:modelid\""
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2025-02-11T21:25:16Z",
+        "body": "Released in v0.1.0"
+      }
+    ]
+  },
+  {
+    "number": 270,
+    "title": "feat(agents): improve template overriding",
+    "created_at": "2025-01-09T16:56:30Z",
+    "closed_at": "2025-01-10T16:43:31Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/270",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/270/comments",
+    "author": "jezekra1",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2025-01-10T16:42:29Z",
+        "body": "Good job! 🚀 👍🏻 "
+      }
+    ]
+  },
+  {
+    "number": 262,
+    "title": "feat: add workflows",
+    "created_at": "2024-12-18T20:04:22Z",
+    "closed_at": "2025-01-08T20:00:51Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/262",
+    "body": "This PR introduces (experimental) **Workflow** 🚀. Flexible and extensible component for managing and executing workflows.\r\n\r\n**Workflow** class is created by providing a `schema` (zod) that defines the state, and an optional output schema that ensures the flow finishes and the result is in the desired shape. One can then add `steps`.\r\n\r\n**AgentWorkflow** class serves as a simplified interface for creating multi-agent flows.\r\n\r\n**Step** has *name* and *handler*, which receives a current `state` and execution context, returns the updates to the state, and optionally a name of the next step it wants to jump to. The handler can be either a sync/async function or a different flow. One can also add a custom validation schema to ensure data consistency and type safety so you can be sure that when the flow enters the given step, it is in a particular state. Hops between steps are, by default, in the order they were added, but each step can define where it wants to jump. Also, the starting node can be changed.\r\n\r\n**▶️ More complex examples can be seen in changed files.**\r\n\r\n## Simple Example\r\n\r\n```ts\r\nimport { Workflow } from \"bee-agent-framework/experimental/workflows/workflow\";\r\nimport { z } from \"zod\";\r\n\r\nconst schema = z.object({\r\n  hops: z.number().default(0),\r\n});\r\n\r\n// Definition\r\nconst flow = new Workflow({ schema })\r\n  .addStep(\"a\", async (state) => ({})) // does nothing\r\n  .addStep(\"b\", async (state) => ({ // adds one and moves to b\r\n    update: { hops: state.hops + 1 },\r\n  }))\r\n  .addStep(\"c\", async (state) => ({\r\n    update: { hops: state.hops + 1 },\r\n    next: Math.random() > 0.5 ? Flow.PREV : Flow.END,\r\n  }))\r\n\r\n// Execution + Observability\r\nconst response = await flow.run({ hops: 0 }).observe((emitter) => {\r\n  emitter.on(\"start\", (data) => console.log(`-> start ${data.step}`));\r\n  emitter.on(\"error\", (data) => console.log(`-> error ${data.step}`));\r\n  emitter.on(\"success\", (data) => console.log(`-> finish ${data.step}`));\r\n});\r\n\r\n// Outputs\r\nconsole.log(`Hops: ${response.result.hops}`)\r\nconsole.log(`-> steps`, resonse.steps.map((step) => step.name).join(\",\"));\r\n```\r\n\r\n## Agent Workflows\r\n\r\nThe following example is a simple CLI application that retrieves data from the user and calls simple multi-agentic flow while preserving conversation history.\r\n\r\n```ts\r\nimport \"dotenv/config\";\r\nimport { BAMChatLLM } from \"bee-agent-framework/adapters/bam/chat\";\r\nimport { UnconstrainedMemory } from \"bee-agent-framework/memory/unconstrainedMemory\";\r\nimport { createConsoleReader } from \"examples/helpers/io.js\";\r\nimport { OpenMeteoTool } from \"bee-agent-framework/tools/weather/openMeteo\";\r\nimport { WikipediaTool } from \"bee-agent-framework/tools/search/wikipedia\";\r\nimport { AgentWorkflow } from \"bee-agent-framework/experimental/workflows/agent\";\r\nimport { BaseMessage, Role } from \"bee-agent-framework/llms/primitives/message\";\r\n\r\n// Flow creation\r\nconst flow = new AgentWorkflow();\r\nworkflow.addAgent({\r\n  name: \"WeatherAgent\",\r\n  instructions: \"You are a weather assistant. Respond only if you can provide a useful answer.\",\r\n  tools: [new OpenMeteoTool()],\r\n  llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-1-70b-instruct\"),\r\n});\r\nworkflow.addAgent({\r\n  name: \"ResearchAgent\",\r\n  instructions: \"You are a researcher assistant. Respond only if you can provide a useful answer.\",\r\n  tools: [new WikipediaTool()],\r\n  llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-1-70b-instruct\"),\r\n});\r\nworkflow.addAgent({\r\n  name: \"FinalAgent\",\r\n  instructions:\r\n    \"You are a helpful assistant. Your task is to make a final answer from the current conversation, starting with the last user message, that provides all useful information.\",\r\n  llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-1-70b-instruct\"),\r\n});\r\n\r\nconst reader = createConsoleReader();\r\nconst memory = new UnconstrainedMemory();\r\n\r\n// Reading user input\r\nfor await (const { prompt } of reader) {\r\n  await memory.add(\r\n    BaseMessage.of({\r\n      role: Role.USER,\r\n      text: prompt,\r\n      meta: { createdAt: new Date() },\r\n    }),\r\n  );\r\n\r\n  const { result } = await flow.run(memory.messages).observe((emitter) => {\r\n    // logging intermediate steps\r\n    emitter.on(\"success\", (data) => {\r\n      reader.write(`-> ${data.step}`, data.response?.update?.finalAnswer ?? \"-\");\r\n    });\r\n  });\r\n\r\n  await memory.addMany(result.newMessages);\r\n  reader.write(`Agent 🤖`, result.finalAnswer);\r\n}\r\n```\r\n\r\n# Other features\r\n\r\n- built-in integration for traceability\r\n- validation and type safety\r\n- error handling (`WorkflowError`)\r\n- composability (step can be another flow)\r\n- add support for setting the `memory` property on `BaseAgent`\r\n\r\nRef: #254 \r\n",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/262/comments",
+    "author": "Tomas2D",
+    "comments": [
+      {
+        "user": "psschwei",
+        "created_at": "2025-01-07T15:36:29Z",
+        "body": "Also, this amused me :smile: \r\n\r\n```\r\nUser 👤 : exit\r\n-> WeatherAgent Goodbye!\r\n-> ResearchAgent Goodbye!\r\n-> FinalAgent Goodbye!\r\nAgent 🤖 Goodbye!\r\nUser 👤 : q\r\n\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 242,
+    "title": "feat(tools): use agent's memory within LLM Tool",
+    "created_at": "2024-12-10T18:08:16Z",
+    "closed_at": "2024-12-11T11:20:01Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/242",
+    "body": "## Features\r\n\r\n- Propagate the agent's (runner) memory to the Tool's Run context\r\n- Replace old (not used) LLMTool with a new one that uses provided LLM to accomplish agent's intent (it uses a custom system prompt + messages from the memory)\r\n\r\n```ts\r\nnew LLMTool({\r\n  llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-8b-instruct\"),\r\n  name: \"LLM\", // optional\r\n  description: \"Uses expert LLM to work with data in the existing conversation (classification, entity extraction, summarization, ...)\", // optional\r\n  template?: LLMTool.template // optional (system prompt)\r\n})\r\n```\r\n\r\n\r\n## Standalone Tool Example (uses Ollama)\r\n`yarn start examples/tools/llm.ts`\r\n\r\n## Agent Example\r\n\r\n```ts\r\nimport \"dotenv/config\";\r\nimport { BeeAgent } from \"bee-agent-framework/agents/bee/agent\";\r\nimport { createConsoleReader } from \"examples/helpers/io.js\";\r\nimport { FrameworkError } from \"bee-agent-framework/errors\";\r\nimport { UnconstrainedMemory } from \"bee-agent-framework/memory/unconstrainedMemory\";\r\nimport { BAMChatLLM } from \"bee-agent-framework/adapters/bam/chat\";\r\nimport { WikipediaTool } from \"bee-agent-framework/tools/search/wikipedia\";\r\nimport { LLMTool } from \"bee-agent-framework/tools/llm\";\r\n\r\nconst agent = new BeeAgent({\r\n  llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-1-70b-instruct\"),\r\n  memory: new UnconstrainedMemory(),\r\n  tools: [\r\n    new LLMTool({\r\n      llm: BAMChatLLM.fromPreset(\"meta-llama/llama-3-8b-instruct\"),\r\n    }),\r\n    new WikipediaTool(),\r\n  ],\r\n});\r\n\r\nconst reader = createConsoleReader();\r\n\r\ntry {\r\n  for await (const { prompt } of reader) {\r\n    const response = await agent\r\n      .run({\r\n        prompt,\r\n      })\r\n      .observe((emitter) => {\r\n        emitter.on(\"retry\", () => {\r\n          reader.write(`Agent 🤖 : `, \"retrying the action...\");\r\n        });\r\n        emitter.on(\"update\", async ({ update }) => {\r\n          reader.write(`Agent (${update.key}) 🤖 : `, `${update.value}`);\r\n        });\r\n      });\r\n\r\n    reader.write(`Agent 🤖 : `, response.result.text);\r\n  }\r\n} catch (error) {\r\n  reader.write(\"ERROR\", FrameworkError.ensure(error).dump());\r\n}\r\n```\r\n\r\nTODOs:\r\n- [ ] evaluate\r\n\r\ncc @aleskalfas, @michael-desmond ",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/242/comments",
+    "author": "Tomas2D",
+    "comments": [
+      {
+        "user": "aleskalfas",
+        "created_at": "2024-12-11T10:38:17Z",
+        "body": "Great 👍 "
+      }
+    ]
+  },
+  {
+    "number": 230,
+    "title": "E2E Examples subprocess don't close",
+    "created_at": "2024-12-05T12:53:23Z",
+    "closed_at": "2025-01-02T14:40:05Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/230",
+    "body": "I noticed that when I run E2E examples and stop the command using Cmd+C, the scripts that were running are not terminated and continue to run in the background.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/230/comments",
+    "author": "Tomas2D",
+    "comments": [
+      {
+        "user": "akihikokuroda",
+        "created_at": "2024-12-05T14:39:55Z",
+        "body": "I can not reproduce this.  All the processes are terminated by the ctrl+c.  I'm using Mac.  What is your environment?"
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-12-10T15:09:43Z",
+        "body": "I realized that the problem is happening with `yarn release` and not `yarn test:e2e`."
+      }
+    ]
+  },
+  {
+    "number": 175,
+    "title": "Support test code in python tools",
+    "created_at": "2024-11-18T09:53:35Z",
+    "closed_at": "2025-01-10T12:22:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/175",
+    "body": "The bee framework requires that Python tools contain only a single function, with optional imports.\r\n\r\nWhen developing some python code for bee, it is useful to include some test code within the definition.\r\n\r\nFor example I would typically include something like this at the end:\r\n\r\nif __name__ == \"__main__\":\r\n    f = open('test-data', 'r')\r\n    find_stuff('mytextstring',f.read())\r\n\r\nThis makes it easy to run in vscode and then, for example, cut/paste directly into the bee framework.\r\n\r\nThere may be other ways of achieving the same goal, ie making it easier to develop small python functions, and then wrap them as an agent\r\n\r\nThis issue is targetted more at the UI - if coding using the API then there is more flexibility",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/175/comments",
+    "author": "planetf1",
+    "comments": [
+      {
+        "user": "JanPokorny",
+        "created_at": "2024-12-04T17:36:30Z",
+        "body": "@planetf1 I am not a big fan of allowing this since people would get confused on what actually gets executed by our runtime. Allowing users to include code that never gets executed (by us) is just inviting trouble and confusion. That's why we settled on the requirement of only having a single function, to ensure that it's absolutely clear that only the function itself is executed by Bee -- so it's different from a standard `python my_file.py` which would execute top-level code instead.\r\n\r\nCould you consider having a second separate test file for your local use?\r\n\r\n```\r\nfrom find_stuff import find_stuff\r\nf = open('test-data', 'r')\r\nfind_stuff('mytextstring',f.read())\r\n```\r\n\r\nAlternatively, you could still copy-paste but only select the function itself, skip the `if __name__ == \"__main__\": ...` beneath it."
+      },
+      {
+        "user": "planetf1",
+        "created_at": "2025-01-10T12:22:55Z",
+        "body": "Ok, let's close this now. \r\nFor my own agent I moved to using API in any case, so I just added some stripping past a boundary marker comment when doing the tool upload"
+      }
+    ]
+  },
+  {
+    "number": 146,
+    "title": "Add browser support",
+    "created_at": "2024-11-05T21:14:53Z",
+    "closed_at": "2025-01-20T19:30:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/146",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/146/comments",
+    "author": "radiantone",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-11-06T17:31:09Z",
+        "body": "Not really, as we use NodeJS-specific APIs like `crypto` / `fs` and others. \r\n\r\nHowever, it should be possible to provide support for web browsers. First, we would need to find suitable polyfills for some NodeJS-specific APIs and create an extra entry point for browsers. It is not on a roadmap currently, but if anyone would like to contribute, we are open to discussing the approach."
+      },
+      {
+        "user": "radiantone",
+        "created_at": "2024-11-07T15:06:43Z",
+        "body": "I will look into it"
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-11-08T09:32:18Z",
+        "body": "Great. Feel free to propose how you would like to tackle this."
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-11-25T09:11:39Z",
+        "body": "Any progress so far? @radiantone "
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2025-01-20T19:30:37Z",
+        "body": "Closing for inactivity."
+      }
+    ]
+  },
+  {
+    "number": 144,
+    "title": "tools(similarity): filter out low scoring chunks",
+    "created_at": "2024-11-05T12:01:18Z",
+    "closed_at": "2025-01-06T07:08:26Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/144",
+    "body": "The wikipedia tool might be returning chunks that have low similarity scores and therefore not relevant/useful.\r\n\r\nSimilarly to `minPageNameSimilarity`, we would like to introduce a threshold that would filter out chunks/documents from the similarity tool. The initial value could be 0.25, but some exploration might be needed to decide on the right threshold.\r\n\r\nWhen no documents are returned, the underlying tools (Wikipedia in this case) should return a LLM friendly message, such as \"No results were found. Try to reformat your query.\". This message already exists for the Wikipedia tool when no relevant pages are returned. We need to keep it DRY.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/144/comments",
+    "author": "matoushavlena",
+    "comments": [
+      {
+        "user": "pilartomas",
+        "created_at": "2024-11-05T13:16:48Z",
+        "body": "The scoring is provider specific so the filter needs to reflect that by accepting a predicate. Meaning a single numeric value won't be sufficient.\r\n\r\nThe \"No results were found.\" is indeed used by the wikipedia tool output but the runner check the output for emptiness and uses `BeeToolNoResultsPrompt` instead, so I wonder if it isn't solved already.J\r\n\r\n@Tomas2D thoughts?"
+      }
+    ]
+  },
+  {
+    "number": 133,
+    "title": "Add shell script executable agent",
+    "created_at": "2024-11-02T20:10:15Z",
+    "closed_at": "2025-01-23T10:05:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/133",
+    "body": "Is your feature request related to a problem? Please describe.  \r\n\r\nI'm working on integrating my automation tools with various platforms, and I've found that having a shell script as an executable agent would greatly simplify the process. Currently, I have to manually compile and run the script every time I want to use it. \r\n\r\nFor example, when I need to automate a task using my shell script, I have to: \r\n\r\n    Compile the script\r\n    Run the compiled script manually\r\n    Wait for the automation to complete\r\n     \r\n\r\nThis process is not only time-consuming but also prone to errors. Having an executable agent would allow me to simply run the script directly without having to compile it first. \r\n\r\nDescribe the solution you'd like  \r\n\r\nI propose adding a feature that allows users to make their shell scripts executable agents. This could be done by: \r\n\r\n    Adding a checkbox in the settings or configuration section of the tool that indicates whether the script should be executed as an agent\r\n    Providing a way to package the script into a single, executable file\r\n    Ensuring that the script can run independently without requiring additional dependencies\r\n     \r\n\r\nDescribe alternatives you've considered  \r\n\r\nI have considered using existing tools like Docker or containers to create an executable agent, but these solutions require more setup and configuration than I'm comfortable with. I also looked into using other automation platforms that provide executable agents, but they either don't integrate well with my current toolset or are not customizable enough for my needs. ",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/133/comments",
+    "author": "AbhijithGanesh",
+    "comments": [
+      {
+        "user": "JanPokorny",
+        "created_at": "2024-11-04T13:54:34Z",
+        "body": "Hello, thank you for taking the time to write this proposal.\r\n\r\nCould you clarify what you mean? As far as I know, shell scripts don't need compilation, you just run them like `bash script.sh`. What exactly do you mean by \"compile the script\" and how would an agent help here?"
+      },
+      {
+        "user": "u007",
+        "created_at": "2025-01-22T09:06:02Z",
+        "body": "can CustomTool run it locally?"
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2025-01-22T22:15:46Z",
+        "body": "CustomTool executes your provided Python code, which runs in the sandboxed environment."
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2025-01-23T10:05:03Z",
+        "body": "Closing for inactivity. Feel free to reopen @AbhijithGanesh."
+      }
+    ]
+  },
+  {
+    "number": 104,
+    "title": "\"Modules\"-\"Tools\"-\"Writing a new tool\"-\"Implementing the Tool class\"-\"Advanced\" has issue ",
+    "created_at": "2024-10-22T15:28:44Z",
+    "closed_at": "2024-10-22T17:28:51Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/104",
+    "body": "**Describe the bug**\r\nExecuting the example tool in \"Modules\"-\"Tools\"-\"Writing a new tool\"-\"Implementing the Tool class\"-\"Advanced\" errors with the following the error message.\r\n\r\n```\r\nnode:internal/modules/run_main:129\r\n    triggerUncaughtException(\r\n    ^\r\n\r\n[ToolError: Tool \"OpenLibrary\" has occurred an error!] {\r\n  isFatal: false,\r\n  isRetryable: true,\r\n  context: { input: { title: 'Hrry Potter' }, options: undefined },\r\n  [errors]: [\r\n    TypeError: Request with GET/HEAD method cannot have body.\r\n        at node:internal/deps/undici/undici:13178:13\r\n        at async OpenLibraryTool._run (/Users/akihikokuroda/development/repositories/i-am-bee/bee-agent-framework/examples/tools/custom/openLibrary.ts:59:22)\r\n        at async Object.executor (/Users/akihikokuroda/development/repositories/i-am-bee/bee-agent-framework/src/tools/base.ts:222:19)\r\n        at async pRetry.retries (/Users/akihikokuroda/development/repositories/i-am-bee/bee-agent-framework/src/internals/helpers/retryable.ts:168:16)\r\n        at async handler (/Users/akihikokuroda/development/repositories/i-am-bee/bee-agent-framework/src/internals/helpers/retry.ts:48:14)\r\n        at async pRetry (/Users/akihikokuroda/development/repositories/i-am-bee/bee-agent-framework/src/internals/helpers/retry.ts:71:10)\r\n  ]\r\n}\r\n\r\n```\r\n \r\n**To Reproduce**\r\nCopy past the example in a xxx.ts file.\r\nAdd the following lines at the end.\r\n\r\n```\r\nconst tool = new OpenLibraryTool();\r\nconst result = await tool.run({\r\n  title: \"Harry Potter\",\r\n});\r\nconsole.log(result.getTextContent());\r\n```\r\n\r\n**Expected behavior**\r\nIt shows some response without error.\r\n\r\n**Screenshots / Code snippets**\r\n\r\n**Set-up:**\r\n**Additional context**\r\nThe OpenLibrary site is always down for me so it doesn't matter to fix this issue or replace with different example.\r\nThe `openLibraryTool` example in the bee-community-tools` repository is doesn't have this issue. ",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/104/comments",
+    "author": "akihikokuroda",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-10-22T17:28:52Z",
+        "body": "Fixed. Thank you for the the report."
+      }
+    ]
+  },
+  {
+    "number": 97,
+    "title": "fix(code-interpreter): avoid crash when no files supplied",
+    "created_at": "2024-10-16T08:10:15Z",
+    "closed_at": "2024-10-16T08:48:23Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/97",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/97/comments",
+    "author": "JanPokorny",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-10-16T10:14:52Z",
+        "body": "I think that the correct commit message should be\r\n\r\n```\r\nfix(tools): avoid crashing the code interpreter when no files are supplied\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 90,
+    "title": "feat(code-interpreter): rename \"hash\" to \"pythonId\"",
+    "created_at": "2024-10-15T09:20:52Z",
+    "closed_at": "2024-10-15T12:23:38Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/90",
+    "body": "Rename `hash` to signify that we no longer require this to be a content hash of the file.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/90/comments",
+    "author": "JanPokorny",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-10-15T11:40:37Z",
+        "body": "Why not just `id`?"
+      },
+      {
+        "user": "JanPokorny",
+        "created_at": "2024-10-15T11:58:22Z",
+        "body": "@Tomas2D I'm not sure whether it is a good idea to reuse `id` for the upload identifier. One thing is `pythonId` gets generated internally by Code Interpreter for new files, which might not correspond to the way the caller generates the IDs. I think it's better to keep it this way for now."
+      }
+    ]
+  },
+  {
+    "number": 87,
+    "title": "\"yarn format:fix\" makes \"yarn lint\" an error ",
+    "created_at": "2024-10-14T17:49:37Z",
+    "closed_at": "2024-10-14T19:27:51Z",
+    "labels": [
+      "bug",
+      "formatting"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/87",
+    "body": "**Describe the bug**\r\n\r\nCode before the `yarn format:fix` that passes the `yarn lint`\r\n```\r\n      console.log({ // eslint-disable-line no-console\r\n        path: example,\r\n        stdout,\r\n      });\r\n```\r\n`yarn format` issues warnings for this\r\n```\r\nyarn format\r\nChecking formatting...\r\n[warn] tests/examples/examples.test.ts\r\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.\r\n```\r\nThen `yarn format:fix` change this code to\r\n```\r\n      console.log({\r\n        // eslint-disable-line no-console\r\n        path: example,\r\n        stdout,\r\n      });\r\n```\r\n`yarn lint` issues an error and a warning for this code\r\n```\r\n/Users/akihikokuroda/development/repositories/agenticflow/bee-agent-framework/tests/examples/examples.test.ts\r\n  40:7  error    Unexpected console statement                                                   no-console\r\n  41:9  warning  Unused eslint-disable directive (no problems were reported from 'no-console')\r\n\r\n✖ 2 problems (1 error, 1 warning)\r\n  0 errors and 1 warning potentially fixable with the `--fix` option.\r\n```\r\n\r\n**To Reproduce**\r\n\r\nRefer to Describe the bug\r\n\r\n**Expected behavior**\r\n`yarn lint` and `yarn format` should not conflict each other.\r\n\r\n\r\n\r\n**Screenshots / Code snippets**\r\n\r\n**Set-up:**\r\nCode level: commit b86629803bc1e3f65aaf1aefad2382053e3f27cd (origin/main, origin/HEAD, main)\r\n\r\n**Additional context**\r\n",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/87/comments",
+    "author": "akihikokuroda",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-10-14T19:27:48Z",
+        "body": "This issue relates to `eslint-config-prettier.`\r\n\r\nHowever, the solution is easy. Use `// eslint-disable-next-line no-console` instead.\r\n\r\n```typescript\r\n// eslint-disable-next-line no-console\r\nconsole.log();\r\n```"
+      },
+      {
+        "user": "akihikokuroda",
+        "created_at": "2024-10-14T19:47:30Z",
+        "body": "Works great!  Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "title": "Timeline for the upcoming features",
+    "created_at": "2024-10-07T01:27:31Z",
+    "closed_at": "2024-10-07T15:52:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/65",
+    "body": "🚧 (Coming soon) Chat UI: Serve your agent to users in a delightful GUI with built-in transparency, explainability, and user controls.\r\n\r\nAny suggestion when?",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/65/comments",
+    "author": "DhavalRepo18",
+    "comments": [
+      {
+        "user": "mmurad2",
+        "created_at": "2024-10-07T15:52:23Z",
+        "body": "@DhavalRepo18 the current target is end of October, we will be posting an update soon. Closing for now."
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "CustomTool is mentioned twice in README.md",
+    "created_at": "2024-09-27T17:55:24Z",
+    "closed_at": "2024-10-01T20:01:00Z",
+    "labels": [
+      "documentation"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/39",
+    "body": "**Describe the bug**\r\nCustomTool (Python) is mentioned twice in README.md.\r\nIdeally, clarify the difference in terms of tool usage between CustomTool and PythonTool as both have almost identical description.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/39/comments",
+    "author": "abughali",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-10-01T20:01:00Z",
+        "body": "Resolved"
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "OpenMeteo tool geocoding fails to produce a result, and provides unhelpful error message",
+    "created_at": "2024-09-26T18:30:37Z",
+    "closed_at": "2024-09-27T13:44:49Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/36",
+    "body": "**Describe the bug**\r\nFor certain location names the OpenMeteo tool internal geocoding fails, and the tool throws an unhelpful Tool error message.\r\n\r\n**To Reproduce**\r\nSteps to reproduce the behavior:\r\n\r\n1. Call the openMeteo tool using location name as \"White Plains NY\" or \"Windsor CT\" or \"Las Vegas NV\".\r\n2. The tool will return a Tool Error\r\n```\r\nToolError: Tool \"OpenMeteo\" has occurred an error!\r\n    TypeError: Cannot read properties of undefined (reading '0')\r\n```\r\n3. Seems like the geocoding api has some internal search logic that produces no results when qualifiers are included in the location name. For example \"Limerick, Ireland\" works but \"Limerick Ireland\" does not. \r\n4. The tool checks for `response.ok` from the geocoding api, but does not check for no results and indexes into an empty array. \r\n\r\n**Expected behavior**\r\nThe tool error should check for empty geocoding result and produce a more informative error message, perhaps indicating that the agent recheck the location name, limiting it to the place name only. \r\n\r\n**Set-up:**\r\n\r\n- Bee version: v0.0.18\r\n- Model provider: BAM\r\n",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/36/comments",
+    "author": "michael-desmond",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-09-27T13:44:49Z",
+        "body": "Thanks for the report.\r\n\r\nFix has been released in 0.0.19"
+      }
+    ]
+  },
+  {
+    "number": 26,
+    "title": "Add agent documentation page",
+    "created_at": "2024-09-18T22:36:56Z",
+    "closed_at": "2024-10-04T16:07:21Z",
+    "labels": [
+      "documentation",
+      "good first issue"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/26",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\nIt's unclear when to use each of `maxRetriesPerStep`, `totalMaxRetries`, `maxIterations` and how these concepts interact with each other.\r\n\r\n**Describe the solution you'd like**\r\nAdd documentation on one, and add examples.\r\n",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/26/comments",
+    "author": "mmurad2",
+    "comments": [
+      {
+        "user": "akihikokuroda",
+        "created_at": "2024-10-01T17:51:49Z",
+        "body": "@Tomas2D Hi!  I'm looking for something I can start contributing to this project.  This issue is marked as \"good first issue\".  If you don't mind, I want to try this.  Is it OK?"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "typeorm legacy Dependency issue",
+    "created_at": "2024-09-09T06:37:42Z",
+    "closed_at": "2024-09-16T14:21:20Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/17",
+    "body": "**Describe the bug**\r\ntrying to install the bee-agent framework into a react project, but facing the following issue\r\n\r\n ```\r\nCould not resolve dependency:\r\nnpm error peerOptional typeorm@\"^0.3.20\" from @langchain/community@0.2.32```\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/17/comments",
+    "author": "krishnac7",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-09-09T09:27:31Z",
+        "body": "LangChain is a **peer dependency** of `bee-agent-framework` and is unnecessary. Or do you need it for some reason?\r\nIf not, you can ignore this error."
+      },
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-09-13T11:31:08Z",
+        "body": "Resolved @krishnac7?"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "fix(infra): commands not working when .env already exists",
+    "created_at": "2024-08-28T08:44:11Z",
+    "closed_at": "2024-08-28T12:18:08Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/pull/6",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/6/comments",
+    "author": "jezekra1",
+    "comments": [
+      {
+        "user": "Tomas2D",
+        "created_at": "2024-08-28T12:18:08Z",
+        "body": "Already there."
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "Enhancing Agentic framework with Empathy & Value Systems",
+    "created_at": "2024-08-26T15:34:08Z",
+    "closed_at": "2024-09-05T14:19:43Z",
+    "labels": [],
+    "url": "https://github.com/i-am-bee/beeai-framework/issues/2",
+    "body": "Along with ReAct agents having access to memory, I wonder if this compound AI agentic framework can be expanded with 3 more components for full Autonomy ...\r\n1) Empathy to understand sentiment of user and\r\n2) An AI value system that it can tap into just like humans do when faced with difficult choices so that the AI chooses wisely.\r\n3) Personalize to an Enterprise's content aka RAG with ingestion of websites, pdf's, Box Folders easily to support keyword+vector based semantic searches. Any support connecting to databases or a data fabric will be a plus.\r\n\r\nThis will help it understand the situation better, personalize and make the right decision consistently with higher accuracy.",
+    "comments_url": "https://api.github.com/repos/i-am-bee/beeai-framework/issues/2/comments",
+    "author": "ronitm",
+    "comments": [
+      {
+        "user": "mmurad2",
+        "created_at": "2024-09-05T14:19:43Z",
+        "body": "Thanks @ronitm ! We don't have concrete plans for 1&2. For 3 it's on our radar and hope to expand support in the coming months. We're also exploring broader alignment issues."
+      }
+    ]
+  }
+]

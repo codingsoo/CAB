@@ -1,0 +1,80 @@
+[
+  {
+    "number": 929,
+    "title": "mac port cmake find_package(glfw3 REQUIRED) does not init INCLUDE_DIR or LIBRARY_DIR variables",
+    "created_at": "2017-01-06T03:21:04Z",
+    "closed_at": "2017-01-06T13:48:36Z",
+    "labels": [
+      "question",
+      "build"
+    ],
+    "url": "https://github.com/glfw/glfw/issues/929",
+    "body": "I'm trying to use glfw3 3.2.1 and when I run the following cmake init it successfully finds the glfw3 package but does not seem to initialize the expected include or library variables.\r\n```\r\ncmake_minimum_required(VERSION 3.7)\r\nPROJECT(test)\r\nfind_package(glfw3 REQUIRED)\r\nADD_EXECUTABLE(test test.cpp)\r\n```\r\nRunning make leads to\r\n```\r\nfatal error: 'GLFW/glfw3.h' file not found\r\n```\r\nWhat am I missing?",
+    "comments_url": "https://api.github.com/repos/glfw/glfw/issues/929/comments",
+    "author": "gentili",
+    "comments": [
+      {
+        "user": "gentili",
+        "created_at": "2017-01-06T03:23:16Z",
+        "body": "OSX Sierra 10.12.2\r\nMacPorts 2.3.5\r\ncmake 3.7.1\r\nglfw3 3.2.1 "
+      },
+      {
+        "user": "zao",
+        "created_at": "2017-01-06T06:56:52Z",
+        "body": "In short: `target_link_libraries(your_target PRIVATE glfw)`\r\n\r\nExported targets like the ones defined by the GLFW3 CMake files expose the include paths and the libraries to link as properties on the imported `glfw` target. In modern CMake, such things are defined on a per-target basis instead of polluting the scoped global compiler and linker parameters.\r\n\r\nAs a side note, `test` is a reserved target name by CMake, you should probably name your sample ones something less conflicting."
+      },
+      {
+        "user": "gentili",
+        "created_at": "2017-01-06T13:48:36Z",
+        "body": "Worked like a charm.  I had tried target_link_libraries(thing glfw3) without success.\r\n\r\nSide note: Yes I just inserted 'test' in the example; it's not the actual project name.\r\n\r\nThank you very much for the assistance!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly link GLFW3 libraries using CMake's target-based approach",
+      "Clarification of the correct target name exposed by GLFW3's CMake configuration",
+      "Demonstration of propagating include directories through target linking",
+      "Explanation of modern CMake practices vs legacy variable-based approaches"
+    ]
+  },
+  {
+    "number": 759,
+    "title": "GLFW_CURSOR_DISABLED produces large deltas",
+    "created_at": "2016-05-11T21:51:22Z",
+    "closed_at": "2016-05-12T06:56:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/glfw/glfw/issues/759",
+    "body": "I am testing GLFW on an Ubuntu Desktop 16.04 LTS x64 on Oracle VirtualBox 5.0.20 with a Windows 7 x64 host.\n\nThere, when I use `glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);` the callback registered via `glfwSetCursorPosCallback` receives very large position deltas. For example, when I move the mouse only one pixel to the right, the xpos delta sometimes is -400.0, other times -110.0 and then sometimes even -1000.0, also somtimes positive and sometimes negative.\nI know that the xpos and ypos coordinates can have arbitrary large values since the mouse cursor is unrestricted. But I am talking about the delta (the changes between successive xpos and ypos values for successive calls of the callback). I am getting very large deltas here.\nOn Windows everything is fine. It's just weird on Ubuntu Desktop 16.04 LTS. I don't know whether it is a thing with Oracle VirtualBox.\n\nHere is the example app I use to test this:\n\n``` C\n#include <GLFW/glfw3.h>\n#include <stdlib.h>\n#include <stdio.h>\nstatic void error_callback(int error, const char* description) {\n    fprintf(stderr, \"Error: %s\\n\", description);\n}\nstatic void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {\n    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)\n        glfwSetWindowShouldClose(window, GLFW_TRUE);\n}\nstatic void cp_callback(GLFWwindow* window, double xpos, double ypos) {\n  fprintf(stderr, \"%f , %f\\n\", (float)xpos, (float)ypos);\n  fflush(stderr);\n}\nint main(void) {\n    GLFWwindow* window;\n    glfwSetErrorCallback(error_callback);\n    if (!glfwInit())\n        exit(EXIT_FAILURE);\n    window = glfwCreateWindow(640, 480, \"\", NULL, NULL);\n    if (!window) {\n        glfwTerminate();\n        exit(EXIT_FAILURE);\n    }\n    glfwSetKeyCallback(window, key_callback);\n    glfwSetCursorPosCallback(window, cp_callback);\n    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);\n    while (!glfwWindowShouldClose(window)) {\n        glfwPollEvents();\n    }\n    glfwDestroyWindow(window);\n    glfwTerminate();\n    exit(EXIT_SUCCESS);\n}\n```\n\nAnd here is the output I get from moving the mouse cursor very very slightly (should be just one pixel each) to the right:\n\n```\n639.000000 , 479.000000\n958.000000 , 479.000000\n1277.000000 , 479.000000\n1596.000000 , 479.000000\n1915.000000 , 479.000000\n2234.000000 , 479.000000\n2553.000000 , 479.000000\n2872.000000 , 479.000000\n3191.000000 , 479.000000\n3510.000000 , 479.000000\n```\n\nIn this run, the delta happens to be around +319.0'ish.\nI do not have a HighDPI monitor or HighDPI mouse.\n\nThe issue does not happen when using GLFW_CURSOR_HIDDEN or GLFW_CURSOR_NORMAL. In those two settings, I get correct pixel values.\n",
+    "comments_url": "https://api.github.com/repos/glfw/glfw/issues/759/comments",
+    "author": "httpdigest",
+    "comments": [
+      {
+        "user": "elmindreda",
+        "created_at": "2016-05-11T22:47:36Z",
+        "body": "Have you disabled cursor integration in VirtualBox?\n"
+      },
+      {
+        "user": "httpdigest",
+        "created_at": "2016-05-11T23:03:42Z",
+        "body": "Hm... if, then not consciously (meaning: I don't know how to do that or what it is exactly :)). This is a very off the shelves installation with absolutely no customization of settings or stuff. The only thing I did was to install the Guest Additions which compiled and built successfully.\n\nEDIT: There is a little icon in the VirtualMachine status bar to the right bottom which says (translated) \"Mouse cursor integration (MI) is on/enabled\" with a little blue mouse and a green arrow on it.\n\n\n---\n\nInteresting. When I disable mouse cursor integration (leaving that mouse in the status bar blue with a _yellow_ arrow) the readings of the cursor position are correct now.\nThe bad thing however now is that I do not see the mouse cursor anymore in the guest operating system. I mean, the mouse cursor is completely invisible (not just in the application). I also restarted the VM multiple times, but the cursor remains invisible.\n"
+      },
+      {
+        "user": "elmindreda",
+        "created_at": "2016-05-12T00:28:06Z",
+        "body": "This is not a bug, it's just GLFW and VirtualBox fighting over where the cursor should be. Leave cursor integration off while you're working with disabled cursor mode and it'll be fine.\n"
+      },
+      {
+        "user": "httpdigest",
+        "created_at": "2016-05-12T06:56:30Z",
+        "body": "Thank you! Will do.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of large cursor position deltas in a VirtualBox guest environment",
+      "Explains how to maintain accurate cursor position tracking in GLFW_CURSOR_DISABLED mode within a VM",
+      "Addresses cursor visibility trade-offs when resolving the delta issue",
+      "Provides a general approach to prevent GLFW and VM input systems from conflicting"
+    ]
+  }
+]

@@ -1,0 +1,71 @@
+[
+  {
+    "number": 1853,
+    "title": "Windows delete by IDs",
+    "created_at": "2021-04-29T12:02:33Z",
+    "closed_at": "2021-04-29T15:41:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/faiss/issues/1853",
+    "body": "# Platform\r\nOS:\r\n- [x] Windows 10 (Error)\r\n- [x] OSX 10.15.7 (Working)\r\n\r\nFaiss version: 1.7.0\r\n\r\nInstalled from: Anaconda\r\n\r\nRunning on:\r\n- [x] CPU\r\n- [ ] GPU\r\n\r\nInterface: \r\n- [ ] C++\r\n- [x] Python\r\n\r\n# Reproduction instructions\r\n\r\nI have problems with `delete_ids` on Windows.\r\n```python\r\nxb = np.random.randn(10, 256)\r\nxb = xb.astype(np.float32)\r\nindex = faiss.IndexFlatL2(xb.shape[1])\r\nindex.remove_ids(np.array([0]))\r\n-------------\r\nTraceback (most recent call last):\r\n  File \"<stdin>\", line 1, in <module>\r\n  File \"C:\\ProgramData\\Anaconda3\\lib\\site-packages\\faiss\\__init__.py\", line 381, in replacement_remove_ids\r\n    sel = IDSelectorBatch(x.size, swig_ptr(x))\r\n  File \"C:\\ProgramData\\Anaconda3\\lib\\site-packages\\faiss\\swigfaiss.py\", line 4843, in __init__\r\n    _swigfaiss.IDSelectorBatch_swiginit(self, _swigfaiss.new_IDSelectorBatch(n, indices))\r\nTypeError: in method 'new_IDSelectorBatch', argument 2 of type 'faiss::IDSelector::idx_t const *'\r\n```\r\n\r\nAlso, I've tried to use `IndexIDMap`\r\n```python\r\nindex = faiss.IndexFlatL2(xb.shape[1])\r\nindex2 = faiss.IndexIDMap(index)\r\nindex2.add_with_ids(xb, ids)\r\n--------------\r\nTraceback (most recent call last):\r\n  File \"<stdin>\", line 1, in <module>\r\n  File \"C:\\ProgramData\\Anaconda3\\lib\\site-packages\\faiss\\__init__.py\", line 212, in replacement_add_with_ids\r\n    self.add_with_ids_c(n, swig_ptr(x), swig_ptr(ids))\r\n  File \"C:\\ProgramData\\Anaconda3\\lib\\site-packages\\faiss\\swigfaiss.py\", line 4661, in add_with_ids\r\n    return _swigfaiss.IndexIDMap_add_with_ids(self, n, x, xids)\r\nTypeError: in method 'IndexIDMap_add_with_ids', argument 4 of type 'faiss::IndexIDMapTemplate< faiss::Index >::idx_t const *'\r\n```\r\n\r\nBut have the same code samples working on OSX. How can I properly delete items from `IndexFlatL2`?\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/faiss/issues/1853/comments",
+    "author": "hadhoryth",
+    "comments": [
+      {
+        "user": "mdouze",
+        "created_at": "2021-04-29T15:08:21Z",
+        "body": "please make sure it is an array of int64s\r\n```\r\nindex.remove_ids(np.array([0], dtype='int64'))\r\n```"
+      },
+      {
+        "user": "hadhoryth",
+        "created_at": "2021-04-29T15:41:51Z",
+        "body": "Yes, you are right. Everything is working. Thank you."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures ID arrays use a data type compatible with Faiss' Windows implementation",
+      "Provides cross-platform consistency for Faiss index operations",
+      "Validates ID removal approach for IndexFlatL2 specifically"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:06:30"
+    }
+  },
+  {
+    "number": 916,
+    "title": "Very high matrice dimentionality makes crash the machine when indexing",
+    "created_at": "2019-08-16T09:53:10Z",
+    "closed_at": "2019-08-23T12:56:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/faiss/issues/916",
+    "body": "# Platform\r\n\r\nOS: Linux Ubuntu 19.04\r\nConfig machine:\r\n- 8 GPU V100\r\n- CPU 96 cores\r\n- 614 Go RAM\r\n\r\nFaiss version: 1.5.3 (commit 656368b5eda4d376177a3355673d217fa95000b6)\r\nFaiss compilation options: `./configure --with-cuda=/usr/local/cuda-10.0 --prefix=/opt/faiss --with-python=/usr/lib/python3.7/` with MKL version 2019.2.187-1\r\n\r\nRunning on:\r\n- [ ] CPU\r\n- [x] GPU\r\n\r\nInterface: \r\n- [ ] C++\r\n- [x] Python\r\n\r\n# Reproduction instructions\r\n\r\nHere the minimal piece of code to reproduce the issue:\r\n\r\n```\r\nimport numpy as np\r\nimport faiss\r\nimport time\r\nk = 10\r\nd = 1536\r\nnb = 30000000\r\nnq = 1\r\nnp.random.seed(1234) \r\nxb = np.random.random((nb, d)).astype('float32')\r\nxb[:, 0] += np.arange(nb) / 1000.\r\nxq = np.random.random((nq, d)).astype('float32')\r\nxq[:, 0] += np.arange(nq) / 1000.\r\n\r\nindex = faiss.IndexFlatL2(d)\r\nco = faiss.GpuMultipleClonerOptions()\r\nco.shard = True\r\nco.useFloat16 = True\r\nindex = faiss.index_cpu_to_all_gpus(index, co, ngpu=4)\r\nindex.add(xb) ##### WHERE IT CRASHS\r\nstart_time = time.process_time()\r\nD, I = index.search(xq, k)\r\nprint(time.process_time() - start_time, \" seconds\")\r\nprint(I)\r\n```\r\n\r\nWhen running this piece of code the line ```index.add()``` makes crash the machine without any error message, the machine just hangs and then restarts.\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/faiss/issues/916/comments",
+    "author": "jplu",
+    "comments": [
+      {
+        "user": "mdouze",
+        "created_at": "2019-08-22T13:17:23Z",
+        "body": "Right, it is a bit harsh that it does not report a usable error message. However, you are trying to add 11G of data at once. Could you try to add the data by slices of 1M elements?\r\n\r\n"
+      },
+      {
+        "user": "jplu",
+        "created_at": "2019-08-23T12:56:45Z",
+        "body": "Cool! Thanks a lot!!! Adding by slice of 1M works perfectly."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must handle large dataset additions without causing system crashes",
+      "Approach must support batched/chunked processing of data",
+      "Method should work with existing GPU resources and Faiss configuration",
+      "Implementation must maintain search functionality after indexing"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-05 00:07:57"
+    }
+  }
+]

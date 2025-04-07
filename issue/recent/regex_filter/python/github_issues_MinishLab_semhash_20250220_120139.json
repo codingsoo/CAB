@@ -1,0 +1,104 @@
+[
+  {
+    "number": 44,
+    "title": "Incompatibility with NumPy 2.x",
+    "created_at": "2025-02-04T10:57:38Z",
+    "closed_at": "2025-02-12T18:54:02Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/semhash/issues/44",
+    "body": "The Semhash library seems not to be compatible with NumPy 2.x.\n\nWhen importing data from a dataframe and applying semhash to it I get the following error:\n\n```python\nFile python3.11/site-packages/semhash/index.py:61, in Index.query_threshold(self, vectors, threshold)\n     [57] intermediate = []\n     [58] for index, distance in zip(*result):\n     [59]     # Every item in the index contains one or more records.\n     [60]     # These are all exact duplicates, so they get the same score.\n---> [61]     for record in self.items[index]:\n     [62]           # The score is the cosine similarity.\n     [63]           # The backend returns distances, so we need to convert.\n     [64]           intermediate.append((record, 1 - distance))\n     [65] out.append(intermediate)\n```\n\n```\nIndexError: cannot fit 'numpy.uint64' into an index-sized integer\n```",
+    "comments_url": "https://api.github.com/repos/MinishLab/semhash/issues/44/comments",
+    "author": "tiloflasche-sw",
+    "comments": [
+      {
+        "user": "Pringled",
+        "created_at": "2025-02-06T07:29:43Z",
+        "body": "Hi @tiloflasche-sw, that's odd, could you send the code snippet you are running, as well as information about your environment? SemHash should be compatible with NumPy 2.X."
+      },
+      {
+        "user": "tiloflasche-sw",
+        "created_at": "2025-02-06T09:02:22Z",
+        "body": "I was trying to deduplicate attribute values in a list of Pydantic models that were converted into dictionaries:\n\n```python\nrecords = [obj.model_dump() for obj in models]\nsemhash = SemHash.from_records(records=records, columns=[\"title\"])\ndeduplicated_records = semhash.self_deduplicate().deduplicated\n```\n\nThe error occurs randomly, so you will have to run this code in a for loop to encounter the error.\n\nPython: 3.11.9\nNumPy 2.0.2\nsemhash = 0.2.0\nmodel2vec = 0.3.8\nvicinity = 0.4.0"
+      },
+      {
+        "user": "Pringled",
+        "created_at": "2025-02-06T16:16:35Z",
+        "body": "Strange, I can't reproduce the issue. Does the following snippet reproduce the error for you?\n\n```python\nimport random\nimport string\nfrom pydantic import BaseModel\nfrom semhash import SemHash\n\nclass MyModel(BaseModel):\n    title: str\n\ndef random_title(k=100):\n    \"\"\"Generate a random string.\"\"\"\n    return ''.join(random.choices(string.ascii_lowercase, k=k))\n\ndef generate_example_records(n=1000):\n    \"\"\"Generate a list of Pydantic models with random 'title' fields.\"\"\"\n    models = [MyModel(title=random_title()) for _ in range(n)]\n    return [model.model_dump() for model in models]\n\nif __name__ == \"__main__\":\n    # Generate example data\n    records = generate_example_records(n=1000)\n    \n    # Instantiate SemHash\n    semhash = SemHash.from_records(records=records, columns=[\"title\"])\n\n    # Deduplicate the records in a loop\n    for i in range(1000):\n        try:\n            deduplicated = semhash.self_deduplicate().deduplicated\n            print(f\"Iteration {i}: deduplicated {len(deduplicated)} records\")\n        except IndexError as e:\n            print(f\"Iteration {i}: Caught IndexError -> {e}\")\n            break\n\n```\n"
+      },
+      {
+        "user": "Pringled",
+        "created_at": "2025-02-12T18:54:02Z",
+        "body": "Closing this for now as I cannot reproduce the error mentioned. Feel free to re-open this if you keep encountering issues, or open a new issue if you have any other questions!"
+      }
+    ]
+  },
+  {
+    "number": 41,
+    "title": "Usearch cannot be found",
+    "created_at": "2025-01-29T16:56:38Z",
+    "closed_at": "2025-01-30T17:33:31Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/semhash/issues/41",
+    "body": "I got following error when I run the sample code for single dataset deduplication:\n\n```\nFile ~/anaconda3/envs/pytorch_p310/lib/python3.10/site-packages/vicinity/backends/usearch.py:9\n      7 import numpy as np\n      8 from numpy import typing as npt\n----> 9 from usearch.index import Index as UsearchIndex\n     11 from vicinity.backends.base import AbstractBackend, BaseArgs\n     12 from vicinity.datatypes import Backend, QueryResult\n\nModuleNotFoundError: No module named 'usearch.index'; 'usearch' is not a package\n```\n\nAnd I ensure that usearch was already installed:\n`Requirement already satisfied: usearch in /home/ec2-user/anaconda3/envs/pytorch_p310/lib/python3.10/site-packages (0.2.1)`",
+    "comments_url": "https://api.github.com/repos/MinishLab/semhash/issues/41/comments",
+    "author": "Konic-NLP",
+    "comments": [
+      {
+        "user": "Konic-NLP",
+        "created_at": "2025-01-29T16:59:13Z",
+        "body": "it seems we can use `from usearch import Index as UsearchIndex` instead of `from usearch.index import Index as UsearchIndex`  but still have more errors, I believe this is  a package version issue.\n\n```\n      5 texts = load_dataset(\"ag_news\", split=\"train\")[\"text\"]\n      7 # Initialize a SemHash instance\n----> 8 semhash = SemHash.from_records(records=texts)\n     10 # Deduplicate the texts\n     11 deduplicated_texts = semhash.self_deduplicate().deduplicated\n\nFile ~/anaconda3/envs/pytorch_p310/lib/python3.10/site-packages/semhash/semhash.py:148, in SemHash.from_records(cls, records, columns, use_ann, model)\n    146 # Build the Vicinity index\n    147 backend = Backend.USEARCH if use_ann else Backend.BASIC\n--> 148 index = Index.from_vectors_and_items(\n    149     vectors=embeddings,\n    150     items=items,\n    151     backend_type=backend,\n    152 )\n    154 return cls(index=index, columns=columns, model=model, was_string=was_string)\n\nFile ~/anaconda3/envs/pytorch_p310/lib/python3.10/site-packages/semhash/index.py:43, in Index.from_vectors_and_items(cls, vectors, items, backend_type)\n     34 \"\"\"\n     35 Load the index from vectors and items.\n     36 \n   (...)\n     40 :return: The index.\n     41 \"\"\"\n     42 backend_class = get_backend_class(backend_type)\n---> 43 backend = backend_class.from_vectors(vectors)\n     45 return cls(vectors, items, backend)\n\nFile ~/anaconda3/envs/pytorch_p310/lib/python3.10/site-packages/vicinity/backends/usearch.py:70, in UsearchBackend.from_vectors(cls, vectors, metric, connectivity, expansion_add, expansion_search, **kwargs)\n     62 dim = vectors.shape[1]\n     63 index = UsearchIndex(\n     64     ndim=dim,\n     65     metric=metric,\n   (...)\n     68     expansion_search=expansion_search,\n     69 )\n---> 70 index.add(keys=None, vectors=vectors)  # type: ignore  # None keys are allowed but not typed\n     71 arguments = UsearchArgs(\n     72     dim=dim,\n     73     metric=metric_enum,\n   (...)\n     76     expansion_search=expansion_search,\n     77 )\n     78 return cls(index, arguments)\n\nTypeError: add(): incompatible function arguments. The following argument types are supported:\n    1. (self: usearch.Index, labels: buffer, vectors: buffer, *, copy: bool = True) -> None\n    2. (self: usearch.Index, label: int, vector: buffer, *, copy: bool = True) -> None\n\nInvoked with: <usearch.Index object at 0x7f9ecebaa5b0>; kwargs: keys=None, vectors=array([[ 0.10925085, -0.18434463,  0.12279131, ..., -0.05901249,\n         0.07026291, -0.02515655],\n       [-0.13792083,  0.08821835,  0.01587133, ..., -0.04141312,\n        -0.01440321, -0.0159928 ],\n       [ 0.03006585,  0.14858778,  0.01594708, ..., -0.03519573,\n         0.01778458, -0.00613052],\n       ...,\n       [-0.05669779,  0.20657459, -0.03252833, ..., -0.02481888,\n         0.01749978, -0.03955381],\n       [ 0.00390705,  0.03138762,  0.0940252 , ..., -0.00089142,\n        -0.04267466, -0.02844494],\n       [ 0.0571934 , -0.00594775,  0.15174262, ..., -0.00578459,\n        -0.0133809 , -0.01889666]], dtype=float32)\n```"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-30T07:56:26Z",
+        "body": "hello,\n\nCould you please tell us which version of `usearch` you installed? I think you're on a very old version. I think you're on 0.2.1, which is really really really old. We don't pin `usearch`, but you should just upgrade the version.\n\nStéphan"
+      },
+      {
+        "user": "Konic-NLP",
+        "created_at": "2025-01-30T17:33:31Z",
+        "body": "I think you are right. It's strange that I cannot find new version from notebooks opened within the AWS EC2 instance. The latest version available is 0.2.1. Anyway, I can close this. "
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "docs: update README.md",
+    "created_at": "2025-01-17T16:39:51Z",
+    "closed_at": "2025-01-17T19:14:21Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/semhash/pull/37",
+    "body": "objec -> object",
+    "comments_url": "https://api.github.com/repos/MinishLab/semhash/issues/37/comments",
+    "author": "eltociear",
+    "comments": [
+      {
+        "user": "Pringled",
+        "created_at": "2025-01-17T19:13:49Z",
+        "body": "Hey @eltociear, thanks, LGTM, merging 👍 "
+      }
+    ]
+  },
+  {
+    "number": 30,
+    "title": "[ENHANCEMENT] Get index back after deduplication",
+    "created_at": "2025-01-13T12:19:51Z",
+    "closed_at": "2025-01-13T13:38:24Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/semhash/issues/30",
+    "body": "First of all, thanks for the great library!\r\n\r\nOne small point I have for enhancing the results: It would be great to get the index back too, instead of just the texts.\r\n\r\nLike e.g.\r\n\r\n`duplicates=[(\"This is a duplicated text\", 4), (\"This is a duplicateddd text\", 18)]`\r\n\r\nSo we can map the results back to the original input.",
+    "comments_url": "https://api.github.com/repos/MinishLab/semhash/issues/30/comments",
+    "author": "baniasbaabe",
+    "comments": [
+      {
+        "user": "Pringled",
+        "created_at": "2025-01-13T12:43:02Z",
+        "body": "Hi @baniasbaabe, thanks for the kind words! This is actually already possible with the current implementation. For example, you can do the following:\r\n\r\n```\r\nfrom semhash import SemHash\r\n\r\nrecords = [{\"text\": \"A text\", \"index\": 0}, {\"text\": \"Another text\", \"index\": 1}, {\"text\": \"Another text\", \"index\": 2}]\r\n\r\nsemhash = SemHash.from_records(records, columns=[\"text\"])\r\n\r\ndeduplicated = semhash.self_deduplicate()\r\nprint(deduplicated.deduplicated)\r\n```\r\n\r\nAnd this will give you `[{'text': 'A text', 'index': 0}, {'text': 'Another text', 'index': 2}]` as the deduplicated output. Hope this answers your question!"
+      },
+      {
+        "user": "baniasbaabe",
+        "created_at": "2025-01-13T13:38:24Z",
+        "body": "Thanks for the answer!\r\n\r\nThis worked! Perfect :)"
+      }
+    ]
+  }
+]

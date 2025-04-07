@@ -1,0 +1,323 @@
+[
+  {
+    "number": 855,
+    "title": "Run examples/lightrag_zhipu_postgres_demo.py failed:  RuntimeWarning: coroutine 'LightRAG.initialize_storages' was never awaited",
+    "created_at": "2025-02-19T08:49:00Z",
+    "closed_at": "2025-02-19T09:38:18Z",
+    "labels": [
+      "question",
+      "lightrag-server"
+    ],
+    "url": "https://github.com/HKUDS/LightRAG/issues/855",
+    "body": "```\n  File \"/Users/sunny/.local/share/uv/python/cpython-3.13.1-macos-x86_64-none/lib/python3.13/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ~~~~~~~~~~^^^^^^\n  File \"/Users/sunny/.local/share/uv/python/cpython-3.13.1-macos-x86_64-none/lib/python3.13/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/Users/sunny/.local/share/uv/python/cpython-3.13.1-macos-x86_64-none/lib/python3.13/asyncio/base_events.py\", line 720, in run_until_complete\n    return future.result()\n           ~~~~~~~~~~~~~^^\n  File \"/private/var/www/LightRAG/hello2.py\", line 32, in main\n    rag = LightRAG(\n        working_dir=WORKING_DIR,\n    ...<15 lines>...\n        vector_storage=\"PGVectorStorage\",\n    )\n  File \"<string>\", line 34, in __init__\n  File \"/private/var/www/LightRAG/lightrag/lightrag.py\", line 563, in __post_init__\n    loop.run_until_complete(self.initialize_storages())\n    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/sunny/.local/share/uv/python/cpython-3.13.1-macos-x86_64-none/lib/python3.13/asyncio/base_events.py\", line 696, in run_until_complete\n    self._check_running()\n    ~~~~~~~~~~~~~~~~~~~^^\n  File \"/Users/sunny/.local/share/uv/python/cpython-3.13.1-macos-x86_64-none/lib/python3.13/asyncio/base_events.py\", line 632, in _check_running\n    raise RuntimeError('This event loop is already running')\nRuntimeError: This event loop is already running\nINFO:Creating a new event loop in main thread.\n<sys>:0: RuntimeWarning: coroutine 'LightRAG.initialize_storages' was never awaited\n```",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/855/comments",
+    "author": "tevooli",
+    "comments": [
+      {
+        "user": "YanSte",
+        "created_at": "2025-02-19T09:11:33Z",
+        "body": "Are you using a notebook ?\n\n``\nimport nest_asyncio\nnest_asyncio.apply()\n``\n"
+      },
+      {
+        "user": "tevooli",
+        "created_at": "2025-02-19T09:32:33Z",
+        "body": "@YanSte Thank you. This line of code solved this error."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Proper handling of asynchronous operations in environments with existing event loops",
+      "Compatibility with notebook environments or interactive Python sessions"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:04:58"
+    }
+  },
+  {
+    "number": 715,
+    "title": "Fix: AttributeError in NanoVectorDB Initialization",
+    "created_at": "2025-02-05T08:12:34Z",
+    "closed_at": "2025-02-07T05:12:43Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/pull/715",
+    "body": "Issue\r\nThe following error occurred during the initialization of NanoVectorDB in nano_vector_db_impl.py:\r\n\r\nFile \".../LightRAG/LightRAG/lightrag/kg/nano_vector_db_impl.py\", line 92, in __post_init__\r\n    self.embedding_func.embedding_dim, storage_file=self._client_file_name\r\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nAttributeError: 'function' object has no attribute 'embedding_dim'\r\n\r\nRoot Cause\r\nThe embedding_func variable was declared locally instead of being assigned to self.embedding_func.\r\nAs a result, self.embedding_func was referring to a function instead of an instance of EmbeddingFunc, causing the AttributeError.\r\n\r\nChanges Made\r\n1. Explicitly Initialized self.embedding_func in __post_init__ and query using:\r\n\r\nself.embedding_func = EmbeddingFunc(\r\n    embedding_dim=4096, max_token_size=8192, func=gpt_4o_mini_complete\r\n)\r\n\r\n2. Imported EmbeddingFunc and gpt_4o_mini_complete to avoid reference errors.\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/715/comments",
+    "author": "Vasundhhara",
+    "comments": [
+      {
+        "user": "LarFii",
+        "created_at": "2025-02-05T12:42:38Z",
+        "body": "Thanks for your contribution!  But there are some linting errors. Please make sure to run `pre-commit run --all-files` before submitting to ensure all linting checks pass."
+      },
+      {
+        "user": "danielaskdd",
+        "created_at": "2025-02-05T15:30:12Z",
+        "body": "@LarFii the embedding function is setup by post_init of LightRAG according to user preference. It can not be set to a fix method in the DB implementation."
+      },
+      {
+        "user": "ArnoChenFx",
+        "created_at": "2025-02-05T15:35:53Z",
+        "body": "It's not a good idea to create the embedding_func in NanoVectorDBStorage. The embedding_func of VectorDB is automatically passed in by LightRAG. You only need to pass the embedding_func as a parameter when creating LightRAG.\r\n\r\n```python\r\nfrom lightrag.llm.openai import gpt_4o_complete, openai_embed\r\n\r\nrag = LightRAG(\r\n    llm_model_func=gpt_4o_complete,\r\n    embedding_func=EmbeddingFunc(\r\n        embedding_dim=1024, \r\n        max_token_size=8192, \r\n        func=lambda texts: openai_embed(\r\n            texts,\r\n            model=\"text-embedding-3-small\"\r\n        )\r\n    )\r\n)\r\n```"
+      },
+      {
+        "user": "LarFii",
+        "created_at": "2025-02-05T18:04:39Z",
+        "body": "> @LarFii the embedding function is setup by post_init of LightRAG according to user preference. It can not be set to a fix method in the DB implementation.\r\n\r\nOh, I got it. Thanks!"
+      },
+      {
+        "user": "Vasundhhara",
+        "created_at": "2025-02-06T08:12:16Z",
+        "body": "@ArnoChenFx This solved the error without having to initialize the embedding_func in NanoVectorDBStorage. Thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow embedding_func to be configured externally rather than hardcoded in NanoVectorDBStorage",
+      "Fix must resolve AttributeError by ensuring embedding_func is a proper instance with embedding_dim attribute",
+      "Solution must maintain compatibility with LightRAG's existing dependency injection pattern",
+      "Implementation must preserve user's ability to customize embedding functions through LightRAG parameters"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:05:09"
+    }
+  },
+  {
+    "number": 662,
+    "title": "AttributeError: 'function' object has no attribute 'embedding_dim' in \"lightrag_openai_demo.py\" (PLEASE EXPLAIN THE FIX)",
+    "created_at": "2025-01-27T22:04:01Z",
+    "closed_at": "2025-01-28T14:37:05Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/662",
+    "body": "Hi\n\nI am getting the following error in the lightrag_openai_demo.py. Can someone please help me fix it?\n\nTraceback (most recent call last):\n  File \"C:\\Users\\arpit\\LLM Projects\\RAG\\Tutorial - GraphRAG\\LightRAG\\examples\\lightrag_openai_demo.py\", line 11, in <module>\n    rag = LightRAG(\n          ^^^^^^^^^\n  File \"<string>\", line 32, in __init__\n  File \"C:\\Users\\arpit\\LLM Projects\\RAG\\Tutorial - GraphRAG\\LightRAG\\lightrag\\lightrag.py\", line 254, in __post_init__\n    self.entities_vdb = self.vector_db_storage_cls(\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\arpit\\LLM Projects\\RAG\\Tutorial - GraphRAG\\LightRAG\\lightrag\\lightrag.py\", line 80, in import_class\n    return cls(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 8, in __init__\n  File \"C:\\Users\\arpit\\LLM Projects\\RAG\\Tutorial - GraphRAG\\LightRAG\\lightrag\\kg\\nano_vector_db_impl.py\", line 84, in __post_init__\n    self.embedding_func.embedding_dim, storage_file=self._client_file_name\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'function' object has no attribute 'embedding_dim'",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/662/comments",
+    "author": "ArpitNarain",
+    "comments": [
+      {
+        "user": "napoleon9000",
+        "created_at": "2025-01-28T01:31:32Z",
+        "body": "Same here"
+      },
+      {
+        "user": "gutama",
+        "created_at": "2025-01-28T03:03:51Z",
+        "body": "```\nimport os\n\nfrom lightrag import LightRAG, QueryParam\nfrom lightrag.llm.openai import gpt_4o_mini_complete\nfrom lightrag.utils import EmbeddingFunc\nfrom lightrag.llm.openai import openai_embed  # or your custom embedding\n\nWORKING_DIR = \"./dickens\"\n\nif not os.path.exists(WORKING_DIR):\n    os.mkdir(WORKING_DIR)\n\nrag = LightRAG(\n    working_dir=WORKING_DIR,\n    llm_model_func=gpt_4o_mini_complete,\n    # llm_model_func=gpt_4o_complete\n    embedding_func=EmbeddingFunc(\n        embedding_dim=1536,\n        max_token_size=8192,\n        func=lambda texts: openai_embed(texts, model=\"text-embedding-3-small\")\n    )\n)\n\n\nwith open(\"./book.txt\", \"r\", encoding=\"utf-8\") as f:\n    rag.insert(f.read())\n\n\n# Perform naive search\n# print(\n#     rag.query(query=\"What are the top themes in this story?\", param=QueryParam(mode=\"naive\", ))\n# )\n\n# Perform local search\nprint(\n    rag.query(\"What are the top themes in this story?\", param=QueryParam(mode=\"local\"))\n)\n\n# Perform global search\nprint(\n    rag.query(\"What are the top themes in this story?\", param=QueryParam(mode=\"global\"))\n)\n\n# Perform hybrid search\nprint(\n    rag.query(\"What are the top themes in this story?\", param=QueryParam(mode=\"hybrid\"))\n)\n\nprint(\n    rag.query(query=\"What are the top themes in this story?\", param=QueryParam(mode=\"naive\"))\n)\n```\n\n\nshould be work\n"
+      },
+      {
+        "user": "ArpitNarain",
+        "created_at": "2025-01-28T14:37:05Z",
+        "body": "Thank you so much, it worked."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the embedding function requires an 'embedding_dim' attribute",
+      "Clarification of how to properly wrap embedding functions with required metadata",
+      "Guidance on configuring LightRAG's embedding parameters according to model specifications",
+      "Explanation of proper initialization patterns for LightRAG components"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:05:18"
+    }
+  },
+  {
+    "number": 562,
+    "title": "Error running Postgres Demo - SyntaxError",
+    "created_at": "2025-01-09T17:05:10Z",
+    "closed_at": "2025-02-17T11:02:10Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/562",
+    "body": "Error running DEMO . I'm using Python 3.11. \r\n\r\n/home/asksuite/asksuite-dev/test-lightrag/venv311/bin/python /home/asksuite/asksuite-dev/test-lightrag/lightrag_openai_demo_costao_postgres.py \r\nTraceback (most recent call last):\r\n  File \"/home/asksuite/asksuite-dev/test-lightrag/lightrag_openai_demo_costao_postgres.py\", line 5, in <module>\r\n    from lightrag.kg.postgres_impl import PostgreSQLDB\r\n  File \"/home/asksuite/asksuite-dev/test-lightrag/venv311/lib/python3.11/site-packages/lightrag/kg/postgres_impl.py\", line 406\r\n    sql = f\"SELECT id FROM LIGHTRAG_DOC_STATUS WHERE workspace=$1 AND id IN ({\",\".join([f\"'{_id}'\" for _id in data])})\"\r\n                                                                               ^\r\nSyntaxError: f-string: expecting '}'",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/562/comments",
+    "author": "pavei",
+    "comments": [
+      {
+        "user": "WellTung666",
+        "created_at": "2025-01-10T03:45:48Z",
+        "body": "same error\uff01 \n\n---\n\n> Error running DEMO . I'm using Python 3.11.\r\n> \r\n> /home/asksuite/asksuite-dev/test-lightrag/venv311/bin/python /home/asksuite/asksuite-dev/test-lightrag/lightrag_openai_demo_costao_postgres.py Traceback (most recent call last): File \"/home/asksuite/asksuite-dev/test-lightrag/lightrag_openai_demo_costao_postgres.py\", line 5, in from lightrag.kg.postgres_impl import PostgreSQLDB File \"/home/asksuite/asksuite-dev/test-lightrag/venv311/lib/python3.11/site-packages/lightrag/kg/postgres_impl.py\", line 406 sql = f\"SELECT id FROM LIGHTRAG_DOC_STATUS WHERE workspace=$1 AND id IN ({\",\".join([f\"'{_id}'\" for _id in data])})\" ^ SyntaxError: f-string: expecting '}'\r\n\r\nThis seems to solve the problem.\r\n\r\n```\r\nid_list = \",\".join([f\"'{_id}'\" for _id in data])\r\nsql = f\"SELECT id FROM LIGHTRAG_DOC_STATUS WHERE workspace=$1 AND id IN ({id_list})\"\r\n```"
+      },
+      {
+        "user": "pavei",
+        "created_at": "2025-01-10T18:32:57Z",
+        "body": "Yes, it works! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves f-string syntax error caused by nested string formatting",
+      "Maintains equivalent SQL query functionality for document status checks",
+      "Works with Python 3.11 string formatting rules",
+      "Avoids complex nested f-strings in SQL construction"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:05:29"
+    }
+  },
+  {
+    "number": 359,
+    "title": "Update NanoVectorDBStorage upsert to use hash values for IDs",
+    "created_at": "2024-11-30T12:55:00Z",
+    "closed_at": "2024-12-02T10:02:12Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/pull/359",
+    "body": "- In the delete_entity method, a hash value is calculated when deleting an entity.\r\n- On the other hand, in the upsert method, the index was used directly as the ID when adding an entity.\r\n- Therefore, I modified the upsert method to also calculate a hash value.",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/359/comments",
+    "author": "FatRicePaddyyyy",
+    "comments": [
+      {
+        "user": "LarFii",
+        "created_at": "2024-12-02T08:01:21Z",
+        "body": "Thanks for your suggestion! But the hash value is already calculated in `operate.py` before calling the `upsert` method."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of whether hash values are already available/used during upsert operations",
+      "Demonstration of proper data flow between components (operate.py \u2192 storage layer)"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:05:37"
+    }
+  },
+  {
+    "number": 202,
+    "title": "Some questions about graph output comparison with GraphRAG",
+    "created_at": "2024-11-04T03:37:59Z",
+    "closed_at": "2024-11-07T15:19:32Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/202",
+    "body": "While reproducing, I noticed that the graph in the output file was slightly different from GraphRAG.\r\n\r\nAre the steps for building a graph in LightRAG the same as those for building a graph in GraphRAG? For example, are the same interfaces or logic used?\r\n\r\nIf so, how should I use the outputs generated by the two projects with each other? Is it possible?\r\n\r\n If not, what is the difference?\r\n \r\n Could you please give me more details? Thanks a lot.",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/202/comments",
+    "author": "WinstonCHEN1",
+    "comments": [
+      {
+        "user": "LarFii",
+        "created_at": "2024-11-07T07:12:43Z",
+        "body": "The main difference between LightRAG and GraphRAG in the extraction process is that LightRAG omits communities and instead introduces keywords, making them incompatible with each other. For more details, please refer to our paper."
+      },
+      {
+        "user": "WinstonCHEN1",
+        "created_at": "2024-11-07T15:19:32Z",
+        "body": "Thanks a lot!!!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of differences in graph-building processes between LightRAG and GraphRAG",
+      "Clarification about output compatibility between the two systems",
+      "Identification of core structural differences affecting compatibility",
+      "Reference to authoritative sources for deeper understanding"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:05:50"
+    }
+  },
+  {
+    "number": 163,
+    "title": "RuntimeWarning: coroutine 'LightRAG.ainsert' was never awaited   print(f\"An error occurred: {e}\") ",
+    "created_at": "2024-10-29T08:02:04Z",
+    "closed_at": "2024-10-30T02:42:42Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/163",
+    "body": "\u8fd0\u884clightrag_openai_compatible_demo.py\u62a5\u9519",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/163/comments",
+    "author": "small122",
+    "comments": [
+      {
+        "user": "dhdsjy",
+        "created_at": "2024-10-29T12:32:21Z",
+        "body": "\u6211\u5728win\u4e0b\u8fd0\u884c\u4e5f\u662f\u8fd9\u79cd\u9519\u8bef\uff0c\u63d0\u793a\u662f\u534f\u7a0b\u7684\u95ee\u9898\uff0c\u4f46\u4e5f\u6ca1\u53d1\u73b0\u5177\u4f53\u9519\u5728\u54ea\u91cc"
+      },
+      {
+        "user": "Dormiveglia-elf",
+        "created_at": "2024-10-29T15:52:52Z",
+        "body": "Please refer my PR #168 , I think you can run the program smoothly without error now."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of the unawaited coroutine error in the code",
+      "Provides a way to ensure proper async/await execution flow",
+      "Resolves the RuntimeWarning without introducing new errors",
+      "Applies to Windows environments"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:06:00"
+    }
+  },
+  {
+    "number": 124,
+    "title": "How to construct the Overall Performance Table in example/batch_eval.py?",
+    "created_at": "2024-10-25T06:39:35Z",
+    "closed_at": "2024-10-30T01:40:15Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/124",
+    "body": "How to get the score in Overall Performance Table by running example/batch_eval.py?\r\n1. How are the **result_files** obtained? Are they obtained by querying different classes (in reproduce/Step_3.py)?\r\n2. Why is it unnecessary to consider the **retrieval context** and **ground truth** ? And what's the ground_truth of the generated queries?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/124/comments",
+    "author": "SetonLiang",
+    "comments": [
+      {
+        "user": "LarFii",
+        "created_at": "2024-10-28T07:00:10Z",
+        "body": "Yes, the result_files are the results generated by Step 3. Specifically, they are the answers provided by different RAG systems to the queries produced in Step 2. As for question 2, you can refer to Section 4.1 of the paper for more details."
+      },
+      {
+        "user": "SetonLiang",
+        "created_at": "2024-10-28T12:18:49Z",
+        "body": "Got it. So, should I understand that instead of considering the ground truth, the approach is to compare different answers across multiple dimensions and then calculate the win rate, using only the **document content without (query, answer) pairs** in the UltraDomain Benchmark dataset during evaluation?"
+      },
+      {
+        "user": "LarFii",
+        "created_at": "2024-10-29T02:13:52Z",
+        "body": "You're correct. Our approach focuses on evaluating model performance across multiple dimensions. This method directly follows the GraphRAG."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how result_files are generated through a systematic process involving RAG system outputs",
+      "Clarification of evaluation methodology that compares RAG systems through multi-dimensional analysis rather than traditional ground truth matching",
+      "Justification for document-centric evaluation approach without query-answer pairs",
+      "Connection to GraphRAG framework's evaluation principles"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:06:05"
+    }
+  },
+  {
+    "number": 51,
+    "title": "Can't run any example",
+    "created_at": "2024-10-18T19:25:37Z",
+    "closed_at": "2024-10-18T23:59:08Z",
+    "labels": [],
+    "url": "https://github.com/HKUDS/LightRAG/issues/51",
+    "body": "I'm not able to run the example.\r\n\r\nI've tried this with python 3.9, 3.10, and 3.11. The initial bit of the examples work up until I run\r\n```python\r\nwith open(\"./book.txt\") as f:\r\n    rag.insert(f.read())\r\n\r\n```\r\n\r\nWhen `rag.insert(f.read())`, is run the following error appears every time:\r\n\r\n```logs\r\nRuntimeError                              Traceback (most recent call last)\r\nCell In[9], line 1\r\n----> 1 rag.insert(our_docs)\r\n\r\nFile /home/jupyter/projects/LightRAG/lightrag/lightrag.py:166, in LightRAG.insert(self, string_or_strings)\r\n    164 def insert(self, string_or_strings):\r\n    165     loop = always_get_an_event_loop()\r\n--> 166     return loop.run_until_complete(self.ainsert(string_or_strings))\r\n\r\nFile /opt/conda/envs/lightrag/lib/python3.11/asyncio/base_events.py:626, in BaseEventLoop.run_until_complete(self, future)\r\n    615 \"\"\"Run until the Future is done.\r\n    616 \r\n    617 If the argument is a coroutine, it is wrapped in a Task.\r\n   (...)\r\n    623 Return the Future's result, or raise its exception.\r\n    624 \"\"\"\r\n    625 self._check_closed()\r\n--> 626 self._check_running()\r\n    628 new_task = not futures.isfuture(future)\r\n    629 future = tasks.ensure_future(future, loop=self)\r\n\r\nFile /opt/conda/envs/lightrag/lib/python3.11/asyncio/base_events.py:586, in BaseEventLoop._check_running(self)\r\n    584 def _check_running(self):\r\n    585     if self.is_running():\r\n--> 586         raise RuntimeError('This event loop is already running')\r\n    587     if events._get_running_loop() is not None:\r\n    588         raise RuntimeError(\r\n    589             'Cannot run the event loop while another loop is running')\r\n\r\nRuntimeError: This event loop is already running\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/HKUDS/LightRAG/issues/51/comments",
+    "author": "wrosko",
+    "comments": [
+      {
+        "user": "jannikdev",
+        "created_at": "2024-10-18T20:06:01Z",
+        "body": "Hi, the problem is that you are running this in a Jupyter notebook which is itself already running a loop. To do this in a notebook add \r\n`import nest_asyncio` and\r\n`nest_asyncio.apply()`\r\nbefore trying to run the async loop.\r\n\r\nIf you are wondering where you are trying to run something asynchronously: insert just wraps around ainsert and waits for completion. It will always start an event loop."
+      },
+      {
+        "user": "ashishjaddu",
+        "created_at": "2024-10-18T20:51:00Z",
+        "body": "Hi, I tried it this way in my notebook and it worked for me. Hope this helps you.\r\n\r\n```python\r\nfrom lightrag.utils import EmbeddingFunc\r\nfrom lightrag import LightRAG, QueryParam\r\nfrom lightrag.llm import gpt_4o_mini_complete, gpt_4o_complete\r\nimport os\r\nimport nest_asyncio\r\n\r\nWORKING_DIR = \"./dickens\"\r\nnest_asyncio.apply()\r\n\r\nos.environ[\"OPENAI_API_KEY\"] = \"sk-proj-\"\r\nif not os.path.exists(WORKING_DIR):\r\n    os.mkdir(WORKING_DIR)\r\n\r\nfrom lightrag.llm import hf_model_complete, hf_embedding\r\nfrom transformers import AutoModel, AutoTokenizer\r\n\r\nbook_file_path = os.path.join(WORKING_DIR, \"book.txt\")\r\n\r\nrag = LightRAG(\r\n    working_dir=WORKING_DIR,\r\n    llm_model_func=gpt_4o_mini_complete\r\n)\r\n\r\nasync def insert_book_content():\r\n    with open(book_file_path, 'r') as f:\r\n        await rag.insert(f.read()) \r\n\r\nawait insert_book_content()\r\n"
+      },
+      {
+        "user": "wrosko",
+        "created_at": "2024-10-18T23:59:09Z",
+        "body": "> Hi, the problem is that you are running this in a Jupyter notebook which is itself already running a loop. To do this in a notebook add `import nest_asyncio` and `nest_asyncio.apply()` before trying to run the async loop.\r\n> \r\n> If you are wondering where you are trying to run something asynchronously: insert just wraps around ainsert and waits for completion. It will always start an event loop.\r\n\r\nThanks @jannikdev this solves the issue. I appreciate it"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves event loop conflict in Jupyter notebook environments",
+      "Provides a way to execute async operations in environments with pre-existing event loops",
+      "Offers guidance compatible with LightRAG's async/await pattern in interactive environments",
+      "Does not require changing Python versions"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 02:06:12"
+    }
+  }
+]

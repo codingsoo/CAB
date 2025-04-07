@@ -1,0 +1,50 @@
+[
+  {
+    "number": 328,
+    "title": "Minor edits and link repairs",
+    "created_at": "2025-01-14T18:26:15Z",
+    "closed_at": "2025-01-23T22:40:12Z",
+    "labels": [],
+    "url": "https://github.com/NVIDIA/nv-ingest/pull/328",
+    "body": "Repaired broken links and made some minor text edits. @nkmcalli, when working on the Kubernetes section, please before a light edit and fix areas where italics are improperly used for emphasis (e.g., in the Skaffold section).\r\n",
+    "comments_url": "https://api.github.com/repos/NVIDIA/nv-ingest/issues/328/comments",
+    "author": "zredeaux07",
+    "comments": [
+      {
+        "user": "nkmcalli",
+        "created_at": "2025-01-23T22:40:12Z",
+        "body": "Replaced by #375 "
+      }
+    ]
+  },
+  {
+    "number": 53,
+    "title": "[BUG]: Error extracting image: Failed to convert NumPy array to image: Cannot handle this data type: (1, 1, 1), |u1",
+    "created_at": "2024-09-06T01:02:08Z",
+    "closed_at": "2024-09-27T03:36:04Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/NVIDIA/nv-ingest/issues/53",
+    "body": "### Version\n\n24.08\n\n### Which installation method(s) does this occur on?\n\n_No response_\n\n### Describe the bug.\n\nThe log shows error:\n```\nERROR - Error extracting image: Failed to convert NumPy array to image: Cannot handle this data type: (1, 1, 1), |u1\n```\nwith CLI command:\n```\nnv-ingest-cli --client_host redis --client_port 6379 --task 'extract:{\"document_type\":\"pdf\",\"extract_text\":true,\"extract_tables\":false,\"extract_images\":true}' --doc \"data/bo_20/*.pdf\" --output_directory ./processed\n```\n\n### Minimum reproducible example\n\n_No response_\n\n### Relevant log output\n\n_No response_\n\n### Other/Misc.\n\n_No response_",
+    "comments_url": "https://api.github.com/repos/NVIDIA/nv-ingest/issues/53/comments",
+    "author": "edknv",
+    "comments": [
+      {
+        "user": "drobison00",
+        "created_at": "2024-09-06T01:44:18Z",
+        "body": "@edknv Are we sure this is a bug vs just correctly handling malformed files?"
+      },
+      {
+        "user": "edknv",
+        "created_at": "2024-09-11T18:08:45Z",
+        "body": "pdfium sometimes produces grayscale images (\"L\" mode), and with grayscale images the numpy array created by pdfium does not work with `PIL.Image.fromarray`.\n\n```python\nimport pypdfium2 as pdfium\nimport PIL\n\npdf = pdfium.PdfDocument(\"1375277.pdf\")\npage = pdf[39]\nfor obj in page.get_objects():\n    if obj.type == 3:  # IMAGE\n        bitmap = obj.get_bitmap(render=False)\n        mode = bitmap.get_info().mode\n        img_arr = bitmap.to_numpy()\n        print(mode, img_arr.shape)\n\n        PIL.Image.fromarray(img_arr)\n```\n```shell\nL (645, 5105, 1)\n---------------------------------------------------------------------------\nKeyError                                  Traceback (most recent call last)\nFile /usr/lib/python3/dist-packages/PIL/Image.py:2813, in fromarray(obj, mode)\n   2812 try:\n-> 2813     mode, rawmode = _fromarray_typemap[typekey]\n   2814 except KeyError as e:\n\nKeyError: ((1, 1, 1), '|u1')\n\nThe above exception was the direct cause of the following exception:\n\nTypeError                                 Traceback (most recent call last)\nCell In[49], line 13\n     10 img_arr = bitmap.to_numpy()\n     11 print(mode, img_arr.shape)\n---> 13 PIL.Image.fromarray(img_arr)\n\nFile /usr/lib/python3/dist-packages/PIL/Image.py:2815, in fromarray(obj, mode)\n   2813         mode, rawmode = _fromarray_typemap[typekey]\n   2814     except KeyError as e:\n-> 2815         raise TypeError(\"Cannot handle this data type: %s, %s\" % typekey) from e\n   2816 else:\n   2817     rawmode = mode\n\nTypeError: Cannot handle this data type: (1, 1, 1), |u1\n```"
+      },
+      {
+        "user": "mara004",
+        "created_at": "2025-02-02T20:48:00Z",
+        "body": "This should be fixed with the upcoming pypdfium2 v5 (beta release coming soon). Quoting the changelog: \n> PdfBitmap.to_numpy(): If the bitmap is single-channel (grayscale), use a 2d shape to avoid needlessly wrapping each pixel value in a list.\n\nPS: In the future, please report such issues upstream, it helps make the library better for everyone."
+      }
+    ]
+  }
+]

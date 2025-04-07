@@ -1,0 +1,210 @@
+[
+  {
+    "number": 9944,
+    "title": "Access timestamps from createdAt/updatedAt instead of custom field name",
+    "created_at": "2018-09-21T02:24:17Z",
+    "closed_at": "2018-09-21T07:04:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/9944",
+    "body": "In current sequelize, when a custom column name has been assigned to one of the timestamps, the timestamp value is no longer accessible from Model.createdAt / updated.At etc.\r\n\r\nFrom my understanding, this [v5 change](/sequelize/sequelize/issues/6423#issuecomment-379472035) will only change the behavior when timestamps are not customized.\r\n\r\nI'm a very new user of sequelize, but tbh I think this is inconsistent, isn't it? What is the reason behind this design? (Please consider this as a feature request)\r\n\r\n## What are you doing?\r\n```js\r\nconst MyTable = sequelize.define('mytable', {\r\n  myField: {\r\n    type: Sequelize.INTEGER,\r\n    field: 'my_column',\r\n  },\r\n}, {\r\n  createdAt: 'my_created_at',\r\n  updatedAt: false,\r\n});\r\nMyTable.create({\r\n  myField: 0,\r\n})).then(myInstance => {\r\n  console.log(myInstance.myField); // 0\r\n  console.log(myInstance.createdAt); // undefined\r\n  console.log(myInstance.my_created_at); // createdAt timestamp\r\n});\r\n```\r\n\r\n## What do you expect to happen?\r\nmyInstance.createdAt shows the createdAt timestamp.\r\n\r\n__Dialect:__ mysql\r\n__Sequelize version:__ 4.38.1",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/9944/comments",
+    "author": "zypA13510",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-09-21T05:48:11Z",
+        "body": "`createdAt: 'my_created_at',` means a new attribute will be created with this name `my_created_at`\r\n\r\nIf you want to customize just field name you should do something like this\r\n\r\n```js\r\n'use strict';\r\n\r\nconst Sequelize = require('./index');\r\nconst sequelize = require('./test/support').createSequelizeInstance();\r\n\r\nconst MyTable = sequelize.define('mytable', {\r\n  myField: {\r\n    type: Sequelize.INTEGER,\r\n    field: 'my_column',\r\n  },\r\n  createdAt: {\r\n    type: Sequelize.DATE,\r\n    field: 'my_created_at'\r\n  }\r\n}, {\r\n  updatedAt: false,\r\n  timestamps: true\r\n});\r\n\r\nsequelize.sync({ force: true }).then(() => {\r\n  return sequelize.authenticate();\r\n}).then(() => {\r\n  return MyTable.create({\r\n    myField: 0,\r\n  }).then(myInstance => {\r\n    console.log(myInstance.myField); // 0\r\n    console.log(myInstance.createdAt); //  createdAt timestamp\r\n    console.log(myInstance.my_created_at); // undefined\r\n  });\r\n});\r\n```\r\n\r\n```sql\r\n0\r\n2018-09-21T05:47:30.001Z\r\nundefined\r\n```"
+      },
+      {
+        "user": "zypA13510",
+        "created_at": "2018-09-21T07:04:10Z",
+        "body": "My bad, I forgot the timestamp fields can be modified from the attributes parameter instead of options.\r\nThanks. Closing this issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Maintain default timestamp property access while allowing custom database column names",
+      "Explain how to customize timestamp field mapping without breaking property access",
+      "Resolve perceived inconsistency in timestamp configuration behavior"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:21:50"
+    }
+  },
+  {
+    "number": 9494,
+    "title": "instance.constructor different when .scope() is used to retrieve the instance",
+    "created_at": "2018-05-30T21:08:10Z",
+    "closed_at": "2018-06-01T15:00:42Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/9494",
+    "body": "## What are you doing?\r\n```\r\nconst Sequelize = require('sequelize');\r\nconst sequelize = new Sequelize('test-db', '', '', { host: 'localhost', dialect: 'postgres', operatorsAliases: false, logging: false });\r\n\r\nconst User = sequelize.define('User', {\r\n  name: Sequelize.STRING(200),\r\n  status: Sequelize.ENUM('active', 'inactive', 'unverified'),\r\n}, {\r\n  scopes: {\r\n    active: {\r\n      where: {\r\n        status: 'active',\r\n      },\r\n    },\r\n  },\r\n});\r\n\r\nasync function main () {\r\n  await sequelize.sync({ force: true });\r\n  await Promise.all([\r\n    User.create({ name: 'Active User 1', status: 'active' }),\r\n    User.create({ name: 'Active User 2', status: 'active' }),\r\n    User.create({ name: 'Inactive User 1', status: 'inactive' }),\r\n    User.create({ name: 'Inactive User 2', status: 'inactive' }),\r\n  ]);\r\n\r\n  const unscopedUser = await User.findOne({ where: { name: 'Inactive User 1' } });\r\n  const unscopedUsers = await User.findAll({ where: { status: 'inactive' } });\r\n  const scopedUser = await User.scope('active').findOne({ where: { name: 'Active User 1' } });\r\n  const scopedUsers = await User.scope('active').findAll();\r\n\r\n  console.log('unscopedUser constructor is User ==', unscopedUser.constructor === User); // true\r\n  console.log('unscopedUsers constructors are User ==', unscopedUsers.every(i => i.constructor === User)); // true\r\n  console.log('scopedUser constructor is User ==', scopedUser.constructor === User); // false\r\n  console.log('scopedUsers constructors are User ==', scopedUsers.every(i => i.constructor === User)); // false\r\n\r\n  process.exit(0);\r\n}\r\n\r\nmain();\r\n```\r\n\r\n## What do you expect to happen?\r\nI expect the object instance constructors to always be `User` even if I used `.scope()` to retrieve it.\r\n\r\n## What is actually happening?\r\nWhen `.scope()` is used during retrieval the instance constructor is no longer `User`.\r\n\r\n__Dialect:__ postgres\r\n__Dialect version:__ ??\r\n__Database version:__ 10.3\r\n__Sequelize version:__ 4.37.10\r\n__Tested with latest release:__ Yes (4.37.10)",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/9494/comments",
+    "author": "aforty",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-06-01T04:45:59Z",
+        "body": "`.scope / .unscope` creates a new copy of model, instances created by them refer to this new copy. For identification purpose you can use `instance.constructor.name` which should be common for different scoped instances.\r\n\r\nWe need a new copy of class to maintain multiple scopes at a time. If we keep the class same, changing scope on one of them will change scope on other sibling classes."
+      },
+      {
+        "user": "aforty",
+        "created_at": "2018-06-01T15:00:42Z",
+        "body": "I see, thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why scoped instances have different constructors",
+      "Identification of a reliable way to check model type across scoped instances",
+      "Clarification about scope behavior being intentional rather than a bug",
+      "Understanding of scope management requirements in Sequelize"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:22:05"
+    }
+  },
+  {
+    "number": 8856,
+    "title": "add support of || (double-pipe) concat operator",
+    "created_at": "2018-01-08T10:11:05Z",
+    "closed_at": "2018-01-11T04:54:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/8856",
+    "body": "<!--\r\n\r\nPlease note this is an issue tracker, not a support forum.\r\nFor general questions, please use StackOverflow or Slack.\r\n\r\nFor bugs, please fill out the template below.\r\n\r\n-->\r\n\r\n## What are you doing?\r\n<!-- Post a minimal, self-contained code sample that reproduces the issue, including models and associations -->\r\n\r\nI try to concat (`||`) binary data to a field using `updateQuery`.\r\n\r\n```js\r\nvar query = db.dialect.QueryGenerator.updateQuery('myTable', { data: db.literal('data || $data') }, { id:1 } ) )\r\n...\r\ndb.query(query, {\r\n  type: db.QueryTypes.UPDATE,\r\n  bind: {\r\n    data: myBuffer\r\n  }\r\n});\r\n```\r\nI would like to use `db.col()` and `db.literal()` in my previous expression, but the `||` operator is not available:\r\n`{ data: db.concat(db.col('data'), db.literal('$data')) }`\r\n\r\n\r\n__Dialect:__  any\r\n__Dialect version:__ latest\r\n__Database version:__ latest\r\n__Sequelize version:__ latest\r\n__Tested with latest release:__ No (If yes, specify that version)\r\n\r\n\r\n**Note :** _Your issue may be ignored OR closed by maintainers if it's not tested against latest version OR does not follow issue template._\r\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/8856/comments",
+    "author": "FranckFreiburger",
+    "comments": [
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T04:54:10Z",
+        "body": "You can use `sequelize.fn` \r\n\r\n```js\r\n  await Test.sync({ force: true });\r\n\r\n  await Test.create({ a: 'gdsds' });\r\n\r\n  var query = sequelize.dialect.QueryGenerator.updateQuery('Tests', {\r\n    a: sequelize.fn('CONCAT', sequelize.col('a'), sequelize.literal('$a::text'))\r\n  });\r\n\r\n  await sequelize.query(query, {\r\n    type: sequelize.QueryTypes.UPDATE,\r\n    bind: {\r\n      a: 'ABC'\r\n    }\r\n  });\r\n\r\n  console.log(await Test.findAll({ raw: true }));\r\n```\r\n\r\n```sql\r\nExecuting (default): DROP TABLE IF EXISTS \"Tests\" CASCADE;\r\nExecuting (default): CREATE TABLE IF NOT EXISTS \"Tests\" (\"id\"   SERIAL , \"a\" VARCHAR(255), \"createdAt\" TIMESTAMP WITH TIME ZONE NOT NULL, \"updatedAt\" TIMESTAMP WITH TIME ZONE NOT NULL, PRIMARY KEY (\"id\"));\r\nExecuting (default): SELECT i.relname AS name, ix.indisprimary AS primary, ix.indisunique AS unique, ix.indkey AS indkey, array_agg(a.attnum) as column_indexes, array_agg(a.attname) AS column_names, pg_get_indexdef(ix.indexrelid) AS definition FROM pg_class t, pg_class i, pg_index ix, pg_attribute a WHERE t.oid = ix.indrelid AND i.oid = ix.indexrelid AND a.attrelid = t.oid AND t.relkind = 'r' and t.relname = 'Tests' GROUP BY i.relname, ix.indexrelid, ix.indisprimary, ix.indisunique, ix.indkey ORDER BY i.relname;\r\nExecuting (default): INSERT INTO \"Tests\" (\"id\",\"a\",\"createdAt\",\"updatedAt\") VALUES (DEFAULT,'gdsds','2018-01-11 04:52:59.466 +00:00','2018-01-11 04:52:59.466 +00:00') RETURNING *;\r\nExecuting (default): UPDATE \"Tests\" SET \"a\"=CONCAT(\"a\", $1::text)\r\nExecuting (default): SELECT \"id\", \"a\", \"createdAt\", \"updatedAt\" FROM \"Tests\" AS \"Test\";\r\n[ { id: 1,\r\n    a: 'gdsdsABC',\r\n    createdAt: 2018-01-11T04:52:59.466Z,\r\n    updatedAt: 2018-01-11T04:52:59.466Z } ]\r\n\r\n```"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T07:40:29Z",
+        "body": "Thanks for the reply.\r\nUsing CONCAT is the first alternative I thought of.\r\nI use pgsql and I cannot find a clear information in the doc to know if CONCAT supports binary data (operates on BYTEA), however, `||` clearly supports BYTEA concatenation.\r\n\r\n"
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T07:44:16Z",
+        "body": "Can you try and see if `CONCAT` works on binary data, possibly typecast with `bytea`"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:14:21Z",
+        "body": "without casting:\r\nsql: `UPDATE \"images\" SET \"data\"=CONCAT(\"data\", $1) WHERE \"id\" = 1`\r\nerr: `SequelizeDatabaseError: column \"data\" is of type bytea but expression is of type text:`\r\n\n\n---\n\nwith casting:\r\nsql: `UPDATE \"images\" SET \"data\"=CAST(CONCAT(CAST(\"data\" AS TEXT), $1::text) AS BYTEA) WHERE \"id\" = 1`\r\nerr: `invalid byte sequence for encoding \"UTF8\": 0x9`\r\n"
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T08:34:51Z",
+        "body": "Just using `literal` will work\r\n\r\n```js\r\n    await Test.sync({ force: true });\r\n\r\n    await Test.create({ a: new Buffer('thing') });\r\n\r\n    var query = sequelize.dialect.QueryGenerator.updateQuery('Tests', {\r\n      a: sequelize.literal('$a || a')\r\n    });\r\n\r\n    await sequelize.query(query, {\r\n      type: sequelize.QueryTypes.UPDATE,\r\n      bind: {\r\n        a: 'some'\r\n      }\r\n    });\r\n\r\n    const result = await Test.findAll();\r\n\r\n    console.log(result[0].get('a').toString('utf8'));\r\n```\r\n\r\n```sql\r\nExecuting (default): DROP TABLE IF EXISTS \"Tests\" CASCADE;\r\nExecuting (default): CREATE TABLE IF NOT EXISTS \"Tests\" (\"id\"   SERIAL , \"a\" BYTEA, \"createdAt\" TIMESTAMP WITH TIME ZONE NOT NULL, \"updatedAt\" TIMESTAMP WITH TIME ZONE NOT NULL, PRIMARY KEY (\"id\"));\r\nExecuting (default): SELECT i.relname AS name, ix.indisprimary AS primary, ix.indisunique AS unique, ix.indkey AS indkey, array_agg(a.attnum) as column_indexes, array_agg(a.attname) AS column_names, pg_get_indexdef(ix.indexrelid) AS definition FROM pg_class t, pg_class i, pg_index ix, pg_attribute a WHERE t.oid = ix.indrelid AND i.oid = ix.indexrelid AND a.attrelid = t.oid AND t.relkind = 'r' and t.relname = 'Tests' GROUP BY i.relname, ix.indexrelid, ix.indisprimary, ix.indisunique, ix.indkey ORDER BY i.relname;\r\nExecuting (default): INSERT INTO \"Tests\" (\"id\",\"a\",\"createdAt\",\"updatedAt\") VALUES (DEFAULT,E'\\\\x7468696e67','2018-01-11 08:33:37.006 +00:00','2018-01-11 08:33:37.006 +00:00') RETURNING *;\r\nExecuting (default): UPDATE \"Tests\" SET \"a\"=$1 || a\r\nExecuting (default): SELECT \"id\", \"a\", \"createdAt\", \"updatedAt\" FROM \"Tests\" AS \"Test\";\r\nsomething\r\n```"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:47:07Z",
+        "body": "I agree.\r\nThe drawback of literal is that we lost sequelize tools like column name escaping, etc..."
+      },
+      {
+        "user": "sushantdhiman",
+        "created_at": "2018-01-11T08:54:09Z",
+        "body": "If you are binding variables in query, I see no problem with that if query is correctly generated"
+      },
+      {
+        "user": "FranckFreiburger",
+        "created_at": "2018-01-11T08:56:27Z",
+        "body": "It's ok for me, thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Support for binary data concatenation using the || operator in Sequelize's query generation",
+      "Integration with Sequelize's column escaping and type safety features",
+      "Avoidance of explicit type casting in query construction",
+      "Native operator support within Sequelize's expression DSL"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:22:15"
+    }
+  },
+  {
+    "number": 6572,
+    "title": "Sequelize omitting field when casting to array",
+    "created_at": "2016-09-08T20:59:12Z",
+    "closed_at": "2016-09-10T18:50:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/6572",
+    "body": "I am attempting to use the postgres citext module with Sequelize, so far it has worked well by using literals for queries and defining the type in the model. However because Sequelize does not understand what the citext type is, it returns my citext arrays as strings. e;g \"{item 1, item2}\"  \nTo get around this I am trying to cast the citext array to a TEXT or VARCHAR array in the query, however when I do this, Sequelize does not show that field at all.    \n\nIf I set raw: true, the field shows fine, and as an array.\n\n``` js\nUsers.findAndCountAll({\n        where: { },\n        attributes: [\n          'id',\n          'createdAt',\n          'updatedAt',\n          db.cast(db.col('nicknames'), 'text[]')\n        ]\n})\n```\n## What do you expect to happen?\n\nI expect there to be a nicknames field returned from sequelize and it to be an array, instead it's as if the attribute is not there at all.\n## What is actually happening?\n\nThis is the generated SQL, the SQL itself works fine when I try it in a database manager, but the output Sequelize gives me omits the nickname field.\n\nSELECT \"User\".\"id\", \"User\".\"createdAt\", \"User\".\"updatedAt\", CAST(\"nicknames\" AS TEXT[]) FROM \"Users\" AS \"User\" WHERE \"User\".\"deletedAt\" IS NULL;\n\n**Dialect:** postgres\n**Database version:** 9.5\n**Sequelize version:** 3.23.4\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/6572/comments",
+    "author": "SuperManifolds",
+    "comments": [
+      {
+        "user": "felixfbecker",
+        "created_at": "2016-09-09T06:51:59Z",
+        "body": "You need to tell sequelize under which alias you want to have your expression. I believe the syntax is\n\n``` js\nUsers.findAndCountAll({\n        where: { },\n        attributes: [\n          'id',\n          'createdAt',\n          'updatedAt',\n          [db.cast(db.col('nicknames'), 'text[]'), 'nicknames']\n        ]\n})\n```\n\nbut please refer to the docs\n"
+      },
+      {
+        "user": "SuperManifolds",
+        "created_at": "2016-09-10T18:50:26Z",
+        "body": "Worked! Can't believe I missed that, thank you so much.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must ensure Sequelize includes aliased/casted fields in non-raw query results",
+      "Must maintain Sequelize's object mapping functionality without requiring raw mode",
+      "Must demonstrate proper attribute aliasing syntax for computed expressions",
+      "Solution must work with Sequelize v3.x type handling"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:22:47"
+    }
+  },
+  {
+    "number": 2282,
+    "title": "How to disconnect from DB?",
+    "created_at": "2014-09-15T04:40:49Z",
+    "closed_at": "2014-09-15T05:51:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/sequelize/sequelize/issues/2282",
+    "body": "Hi! I'm being incredibly cheap and running a mysql+node project on heroku.  The super cheap DB option has a hard limit of 10 connections to mysql.  Heroku often \"suspends\" applications when they aren't in use, but that doesn't disconnect the sequelize client from mysql.  I can catch the `SIGTERM` and call a disconnect when the app is \"suspending\", but how would I disconnect the client?\n",
+    "comments_url": "https://api.github.com/repos/sequelize/sequelize/issues/2282/comments",
+    "author": "evantahler",
+    "comments": [
+      {
+        "user": "mickhansen",
+        "created_at": "2014-09-15T05:51:09Z",
+        "body": "`sequelize.close()` is available on 2.0.0-dev13 and up i believe.\n"
+      },
+      {
+        "user": "janmeier",
+        "created_at": "2014-09-15T05:56:52Z",
+        "body": "Do however note that there is no equivalent reconnect method so you won't be able to use that particular instance again \n"
+      },
+      {
+        "user": "evantahler",
+        "created_at": "2014-09-15T21:30:17Z",
+        "body": "Thanks for the info! My desire is to have a \"clean\" shutdown where all connections my app has open can be closed, and `sequelize.close()` is exactly what I need.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a method to cleanly close all active database connections during application shutdown",
+      "Works with process termination signals like SIGTERM",
+      "Does not require maintaining connection state for future reconnects"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:24:35"
+    }
+  }
+]

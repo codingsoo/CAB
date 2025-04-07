@@ -1,0 +1,935 @@
+[
+  {
+    "number": 116,
+    "title": "A question for usage in multiple-bounce raytracing",
+    "created_at": "2025-02-14T12:38:07Z",
+    "closed_at": "2025-02-14T15:52:16Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/116",
+    "body": "Hello Jacco,\n\nI am using tinybvh for raytracing meshes that represent the surface of a fluid. It works very well (and it is 5x to 10x faster than my naive AABB !)\n\nIn my usage case, there might be multiple bounces and refractions. So I have a question:\n \n- is it possible to ignore a specific primitive in the traversal ? For instance, when I raytrace my surface, each time I encounter an intersection with a facet (say f), I am launching a refracted ray, and I would like to ignore the intersections with f when intersecting this refracted ray with the mesh (for now I am moving the origin of the ray slightly along the facet's normal and it works, but it is not super elegant). Same thing for computing shadow rays.\n\nBest,\n-- Bruno\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/116/comments",
+    "author": "BrunoLevy",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-14T14:47:35Z",
+        "body": "Hello Bruno,\n\nI am glad you find tinybvh useful! Depending on how many rays you need to trace, you may benefit from using ````::BuildHQ````, ````::Optimize```` and/or different BVH layouts: ````BVH4_CPU```` seems to be best for many ray distributions.\n\nThat being said: Offsetting a ray is in fact the commonly used solution to avoid self-intersections at t=0. However, the offset is typically not made along the normal, but in the ray direction. Ignoring a single primitive doesn't resolve all cases, e.g. when a hit is exactly on a shared edge.\n\nThe offset magnitude is best chosen as 1e-7 times the extent of the scene for float32. In some rare cases, for grazing rays offsetting in the ray direction is not sufficient. It can then be beneficial to lerp between an offset in the ray direction D and an offset along the normal N using ````sqr(dot(N,D))```` as the lerp factor.  "
+      },
+      {
+        "user": "BrunoLevy",
+        "created_at": "2025-02-14T15:37:09Z",
+        "body": "Awesome ! Thank you Jacco !\nYour lib is a gem, easy to use, excellent perf, love it !"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-14T15:52:05Z",
+        "body": "That's great to hear! And thanks for the BlueSky post!"
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "title": "BVHBase is a public base class with a public, non-virtual destructor.",
+    "created_at": "2025-02-13T18:31:45Z",
+    "closed_at": "2025-02-13T18:35:53Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/115",
+    "body": "Currently, calling `delete` on a pointer to `BVHBase` is legal.  But of course, it won't work because the destructor is non-virtual.  Choices: make `~BVHBase()` protected, so that calling `delete` on a pointer to it is caught at compile time, or else virtual.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/115/comments",
+    "author": "csc14gg",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T18:35:53Z",
+        "body": "That makes sense; done! Will be in the next push."
+      },
+      {
+        "user": "csc14gg",
+        "created_at": "2025-02-14T18:03:06Z",
+        "body": "The current version does not have a change for this.  Personally, I think this should be polymorphic (an abstract class), with virtual functions for the most used functions. "
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-14T18:24:51Z",
+        "body": "The change is too small for its own push.\nPolymorphy is not suitable here; tinybvh is performance-oriented. Vtables are inefficient."
+      },
+      {
+        "user": "csc14gg",
+        "created_at": "2025-02-15T02:27:36Z",
+        "body": "Sounds good.  I'd make the constructors and destructor all protected then."
+      }
+    ]
+  },
+  {
+    "number": 113,
+    "title": "Merging BLASes",
+    "created_at": "2025-02-13T15:40:15Z",
+    "closed_at": "2025-02-13T21:54:15Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/113",
+    "body": "I have a potentially pretty niche/weird feature request.\nHaving the ability to bake a TLAS into a large BLAS.\n\nFor example if I had a scene with only static geometry without many different instances it could be beneficial to skip using a TLAS entirely and just use a prebaked BLAS for the entire scene.\n\nI can do this myself by duplicating geometry and applying their transforms and building a large BLAS manually, but I though that maybe this was something tinybvh could do (maybe more efficiently too as the BLASes are already built). Though it would require allocating vertex data which I guess doesn't fit the library.\n\nMaybe this doesn't make any sense and I should keep a TLAS for these types of scenes anyway?",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/113/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T18:04:22Z",
+        "body": "Well this would generally yield better ray tracing performance; traversing from TLAS to BLAS has some overhead. However, api-wise this is complex.. Also note that the presence of BLASes does not help here: These have their AABBs transformed, while the collapsed / merged 'monolithic' BVH would have a single coordinate system. I think it's best to handle this at the application level."
+      },
+      {
+        "user": "NogginBops",
+        "created_at": "2025-02-13T21:54:15Z",
+        "body": "That's fair, I though I would open an issue anyway. Thanks for your input."
+      }
+    ]
+  },
+  {
+    "number": 112,
+    "title": "Fix missing functions for custom double vectors. And allow the use of explicit constructors for float to vector.",
+    "created_at": "2025-02-13T10:57:23Z",
+    "closed_at": "2025-02-13T15:30:00Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/112",
+    "body": "This PR does two things.\r\n1. It fixes a few missing `bvhdbl3` that happen to be on the wrong side of an ifdef.\r\n2. It allows `bvhvec3` and `bvhdbl3` to use `explicit bvhvec3(const float a)` constructors (I do this in my custom math library.)\r\n\r\nI understand if the explicit ctor change isn't something you want to do. But I think the double vector functions should be fixed.\r\n\r\nI also tried to match the code style that I saw, might not have done it perfectly though.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/112/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T12:16:49Z",
+        "body": "It's obviously a matter of taste, but I would rather not bring in the explicit constructors. I did move the #ifdef, see last push."
+      },
+      {
+        "user": "NogginBops",
+        "created_at": "2025-02-13T12:28:47Z",
+        "body": "That is fair.\r\nI just found it to be useful as I had some issues where floats were implicitly casted to vectors where I didn't want them to.\r\nBut I can easily maintain a version of the code that allows me to use explicit constructors so it's not that big of a problem."
+      }
+    ]
+  },
+  {
+    "number": 109,
+    "title": "TLAS IsOccluded doesn't handle BVBH4_CPU layout correctly",
+    "created_at": "2025-02-12T19:24:30Z",
+    "closed_at": "2025-02-13T10:01:57Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/109",
+    "body": "The `IsOccluded` function doesn't do the same BLAS layout check that `Intersect` does. This causes a crash when trying to use `IsOccluded` on a TLAS of BVH4_CPU BLASes\n\n`Intersect`:\n```c++\n// 2. Traverse BLAS with the transformed ray\n// Note: Valid BVH layout options for BLASses are the regular BVH layout,\n// the AVX-optimized BVH_SOA layout and the wide BVH4_CPU layout. If all\n// BLASses are of the same layout this reduces to nearly zero cost for\n// a small set of predictable branches.\nassert( blas->layout == LAYOUT_BVH || blas->layout == LAYOUT_BVH4_CPU || blas->layout == LAYOUT_BVH_SOA );\nif (blas->layout == LAYOUT_BVH)\n{\n    // regular (triangle) BVH traversal\n    tmp.rD = tinybvh_safercp( tmp.D );\n    cost += ((BVH*)blas)->Intersect( tmp );\n}\nelse\n{\n    tmp.rD = tinybvh_safercp( tmp.D );\n    if (blas->layout == LAYOUT_BVH4_CPU) cost += ((BVH4_CPU*)blas)->Intersect( tmp );\n    else if (blas->layout == LAYOUT_BVH_SOA) cost += ((BVH_SoA*)blas)->Intersect( tmp );\n}\n```\n\n`IsOccluded`:\n```c++\n// 2. Traverse BLAS with the transformed ray\nif (blas->IsOccluded( tmp )) return true;\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/109/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-12T19:59:08Z",
+        "body": "This was indeed missing, apologies. The correct behavior has now been added and is available in the dev branch. A test scenario is provided in tiny_bvh_anim.cpp, which now traces shadow rays to a point light in a scene with a TLAS, a BVH with custom geometry and a BVH in the BVH4_CPU layout. \n\nCan you confirm that this now works properly on your end as well?"
+      },
+      {
+        "user": "NogginBops",
+        "created_at": "2025-02-13T10:01:57Z",
+        "body": "Yeah it works, I made the same workaround as in your fix. I've updated to your version and it works."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-13T10:26:49Z",
+        "body": "Nice, thanks for confirming!"
+      }
+    ]
+  },
+  {
+    "number": 108,
+    "title": "BVH4_CPU doesn't set ray.hit.inst correctly when part of a TLAS",
+    "created_at": "2025-02-12T17:22:36Z",
+    "closed_at": "2025-02-12T18:25:24Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/108",
+    "body": "Looking at the source it seems that `IntersectCompactTri` sets `inst` to 0. Changing this to `ray.instIdx` fixes the issue. Fixing the issue for the compact inst + prim representation should also be pretty simple.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/108/comments",
+    "author": "NogginBops",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-12T18:25:24Z",
+        "body": "Thank you for your report. By chance this was also reported by another user and fixed last night. The update is available in the dev branch."
+      }
+    ]
+  },
+  {
+    "number": 106,
+    "title": "Fix compilation on clang",
+    "created_at": "2025-02-11T13:37:53Z",
+    "closed_at": "2025-02-11T13:38:48Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/106",
+    "body": "This PR fixes issue #105 by not assuming msvc is used when `_MSC_VER` is defined. This is not always the case and should be enforced by checking `!defined(__clang__)`.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/106/comments",
+    "author": "JasondeWolff",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-11T13:38:56Z",
+        "body": "Thanks Jason!"
+      }
+    ]
+  },
+  {
+    "number": 105,
+    "title": "Compilation on clang fails",
+    "created_at": "2025-02-11T13:34:11Z",
+    "closed_at": "2025-02-11T13:39:40Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/105",
+    "body": "Compilation using clang fails, building the minimal example using:\n`clang -std=c++20 -mavx tiny_bvh_minimal.cpp -o tiny_bvh_minimal`\n\nwill output:\n```\nIn file included from tiny_bvh_minimal.cpp:4:\n.\\tiny_bvh.h:4168:9: error: member reference base type 'const __m128' (vector of 4 'float' values) is not a structure or\n      union\n 4168 |         return LANE( a, 0 ) * LANE( a, 1 ) + LANE( a, 1 ) * LANE( a, 2 ) + LANE( a, 2 ) * LANE( a, 3 );\n      |                ^~~~~~~~~~~~\n.\\tiny_bvh.h:4156:20: note: expanded from macro 'LANE'\n 4156 | #define LANE(a,b) a.m128_f32[b]\n      |                   ~^~~~~~~~~\n.\\tiny_bvh.h:4168:24: error: member reference base type 'const __m128' (vector of 4 'float' values) is not a structure\n      or union\n 4168 |         return LANE( a, 0 ) * LANE( a, 1 ) + LANE( a, 1 ) * LANE( a, 2 ) + LANE( a, 2 ) * LANE( a, 3 );\n      |                               ^~~~~~~~~~~~\n.\\tiny_bvh.h:4156:20: note: expanded from macro 'LANE'\n 4156 | #define LANE(a,b) a.m128_f32[b]\n      |                   ~^~~~~~~~~\n.\\tiny_bvh.h:4168:39: error: member reference base type 'const __m128' (vector of 4 'float' values) is not a structure\n      or union\n 4168 |         return LANE( a, 0 ) * LANE( a, 1 ) + LANE( a, 1 ) * LANE( a, 2 ) + LANE( a, 2 ) * LANE( a, 3 );\n```\n\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/105/comments",
+    "author": "JasondeWolff",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-11T13:39:29Z",
+        "body": "Fixed with PR #106, thanks!"
+      }
+    ]
+  },
+  {
+    "number": 104,
+    "title": "Building TLAS on top of CWBVH?",
+    "created_at": "2025-02-10T07:44:04Z",
+    "closed_at": "2025-02-11T08:25:02Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/104",
+    "body": "Hi, I'm very new to BVH construction and software raytracing.\n\nI was wondering why CWBVH seem to only support geometry, and doesn't seem to have constructor to take in BlasInstances?\nIs this not a good idea?\n\nThere's this Unity-based path tracer TrueTrace that seems to be using CWBVH for both BLAS and TLAS, so I think it's possible.\n\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/104/comments",
+    "author": "stuw-u",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-10T08:11:49Z",
+        "body": "It's possible, and in some cases it may be a good idea, e.g. when the number of BLAS nodes is very high. In other cases I think the CWBVH is not the best choice, for two reasons:\n1. The bounds stored in a CWBVH are approximate, to keep the node structure small (80 bytes). This leads to some 'false positives'. For BLAS traversal this is a trade-off that pays off, but I am not sure this will also be the case for the TLAS.\n2. Construction of a CWBVH involves several steps: Building a BVH, collapsing it to an 8-wide MBVH and then finally converting that to CWBVH. Since a TLAS is typically rebuilt per frame, this may be objectionable overhead that is probably not compensated by the theoretically faster traversal of the TLAS.\n\nBut I admit: There are several assumptions in there that I can't support with experimental evidence; you could give it a try and feed 'dummy triangles' that span up the AABBs of your BLASInstances to try it out."
+      },
+      {
+        "user": "stuw-u",
+        "created_at": "2025-02-10T16:33:09Z",
+        "body": "This is very insightful, thank you.\nI had assumed about the longer build time but I had forgotten about the approximation part.\n\nTo be honest, I haven't tried tinyBVH yet. I decided to port parts of it to Unity Burst for fun and as a learning experience, so any performance difference I'd notice on my side probably wouldn't translate well on your side, so I'll probably won't bother with experimental evidence for the time being.\n\nI know for the sake of this project you made the assumption that CPU are often underutilized in games, so you opted for CPU TLAS building every frame. On top of TLAS CWBVH testing, I think there's some testing to be done on whether building the TLAS every N frame with refitting inbetween could be a better idea in certain case. Maybe GPU refitting for both TLAS and BLAS (for skinned rendered) and is also more viable in certain case? (but would be out of the scope of this project).\n\n\nFeel free to close this issue now if you want, or leave it open until we do more benchmarks."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-11T08:25:02Z",
+        "body": "TLAS refitting can work, but really only for huge TLASes: Refitting typically degrades BVH quality, which you really don't want for a TLAS. It's all about the sum of costs though; if rebuilding the TLAS takes longer than tracing rays using a refitted one, then refitting is better. :)\n\nI agree that refitting should happen on the GPU. Refitting on GPU will be faster than the transfer of node data from host to device so there really is no point in doing it on the CPU, unless you have a use for the BVH on the CPU (e.g. for object picking, AI, physics).\n\nThe purpose of tinybvh is not fully clear by the way. It could be that it improves frame time one day by better utilizing the CPU, but frankly, that may be far fetched. ;) Right now I guess the main goal is to serve as an open knowledge base for all things BVH. It's also being used educationally, and on platforms that can't use RTX (yet). We'll see where it goes."
+      }
+    ]
+  },
+  {
+    "number": 102,
+    "title": "Mark all functions `inline`",
+    "created_at": "2025-02-04T19:38:54Z",
+    "closed_at": "2025-02-05T08:27:30Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/102",
+    "body": "1. Corrects multiply defined symbol linker errors when including tiny_bvh.h in more than one CPP file.\r\n2. Replace `static inline` with just `inline` for the functions declared that way, since `static` has no semantic meaning with `inline` also declared.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/102/comments",
+    "author": "csc14gg",
+    "comments": [
+      {
+        "user": "csc14gg",
+        "created_at": "2025-02-04T20:40:44Z",
+        "body": "@jbikker ready for review, thanks!"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-02-05T08:28:33Z",
+        "body": "Looking good, merged! Welcome aboard as contributor."
+      }
+    ]
+  },
+  {
+    "number": 95,
+    "title": "Compile error for BVH_SoA::Intersect and BVH4_CPU::Intersect when BVH_USEAVX is not defined",
+    "created_at": "2025-01-25T17:15:54Z",
+    "closed_at": "2025-01-25T17:51:02Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/95",
+    "body": "The implementation for these methods is in the BVH_USEAVX section, and cause undefined reference errors when BVH_USEAVX is not defined.\n\nI don't need the intersect methods myself, so dummy implementations for the #ifndef BVH_USEAVX case would be good for me.\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/95/comments",
+    "author": "brendan-duncan",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-25T17:51:02Z",
+        "body": "This is now resolved; the fix has been pushed to main."
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "tiny_bvh_speedtest crashes on ARM Mac",
+    "created_at": "2025-01-09T15:12:12Z",
+    "closed_at": "2025-01-09T15:53:32Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/84",
+    "body": "Tried main and dev branches - same result. Here is the stacktrace. Looks like maybe bvhNode list is empty, as debugger highlighted the assignment to root.leftFirst. The other demos work fine.\r\n\r\n```\r\nLoading triangle data (0 tris).\r\nBVH construction speed\r\nwarming caches...\r\nProcess 93514 stopped\r\n* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0xc)\r\n    frame #0: 0x0000000100004b1c tiny_bvh_speedtest`tinybvh::BVH::PrepareBuild(this=0x0000600001b70080, vertices=0x000000016fdfe3c8, indices=0x0000000000000000, prims=0) at tiny_bvh.h:1386:17\r\n   1383\t\tverts = vertices, idxCount = triCount = primCount;\r\n   1384\t\t// prepare fragments\r\n   1385\t\tBVHNode& root = bvhNode[0];\r\n-> 1386\t\troot.leftFirst = 0, root.triCount = triCount, root.aabbMin = bvhvec3( BVH_FAR ), root.aabbMax = bvhvec3( -BVH_FAR );\r\n   1387\t\tif (!indices)\r\n   1388\t\t{\r\n   1389\t\t\tFATAL_ERROR_IF( vertices.count == 0, \"BVH::PrepareBuild( .. ), primCount == 0.\" );\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/84/comments",
+    "author": "fxtech",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-09T15:26:31Z",
+        "body": "Looks like it didn't manage to load the scene file. Perhaps a working directory issue?"
+      },
+      {
+        "user": "fxtech",
+        "created_at": "2025-01-09T15:53:32Z",
+        "body": "That's exactly what it was. Thank you!"
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "Optionally disable WASM SIMD",
+    "created_at": "2025-01-08T15:31:44Z",
+    "closed_at": "2025-01-09T09:22:40Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/82",
+    "body": "This is a wonderful library, it's great seeing your progression with it!\r\n\r\nAn issue I have to work around is that our version of Emscripten doesn't include the simd headers. My workaround is to add a \"TINYBVH_NO_SIMD\" define check before including imintrin.h for wasm.\r\n\r\n```\r\n#ifndef TINYBVH_NO_SIMD\r\n#if defined(__x86_64__) || defined(_M_X64) || defined(__wasm_simd128__) || defined(__wasm_relaxed_simd__)\r\n#define BVH_USEAVX\r\n#include \"immintrin.h\" // for __m128 and __m256\r\n#elif defined(__aarch64__) || defined(_M_ARM64)\r\n#define BVH_USENEON\r\n#include \"arm_neon.h\"\r\n#endif\r\n#endif // TINYBVH_NO_SIMD\r\n```\r\n\r\nThen I can define TINYBVH_NO_SIMD before including tiny_bvh.h to disable wasm simd.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/82/comments",
+    "author": "brendan-duncan",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-09T09:22:40Z",
+        "body": "This is a nice and simple way to fix the WASM issue. I added your modification to tinybvh; it will show up in the dev branch shortly."
+      }
+    ]
+  },
+  {
+    "number": 80,
+    "title": "[INCOMPLETE] - Indexed BVH traversal requires indices. ",
+    "created_at": "2025-01-04T06:42:40Z",
+    "closed_at": "2025-01-07T14:20:31Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/80",
+    "body": "The current code base appears to correctly build a BVH over indexed triangles.\r\nHowever, it cannot possibly traverse such a BVH with the current traversal functions; every triangle intersection requires access to the original vertices, but vertex indices are not stored anywhere. \r\nTwo options to remedy this:\r\n1. Add specialized 'indexed' traversal functions (that's a lot of code)\r\n2. During build, 'un-index' the data (that's a lot of data, and it destroys the expected link between supplied and used data).\r\nThe first option seems to be the best, perhaps it can be added in a templated way to avoid code explosion.\r\n ",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/80/comments",
+    "author": "jbikker",
+    "comments": [
+      {
+        "user": "TheSFReader",
+        "created_at": "2025-01-06T07:50:45Z",
+        "body": "From a performance point of view, and for static content, the second one seems more efficient at traversal since the (duplicated) vertices would be more localized in memory and better for cache access. But it sure doesn't work as well for a dynamic scene.\r\n\r\n\r\n(brainstorming ideas here...)\r\nIs it possible to have two variants of the leaf / Triangles intersection ? One working on indexed vertices, the other on \"continuous\" ? Or to add an optional \"unindex\" stage to the  leaf intersection, where the indexed vertices data is copied to a local memory zone before using the optimized local intersection tests. If you have space in the leaf node for the vertices data and an additional \"unindexed\" boolean, you can probably temporarily store the indexes in their place and de-index at runtime at intersection time? \r\n\r\n"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-06T08:02:27Z",
+        "body": "Yeah I think it will be best to grab the provided index array, store it with the BVH (just like the verts) and if it's non-zero, use an alternative intersector. That will be slower, but that's a convenience trade-off for the using application. Duplicating the vertices would be the fastest option indeed, but that is a decision the app should make imo.\r\nSo I like the specialized leaf/tri code best so far. That will be quite a bit of extra code, perhaps it can be supported for a limited set of BVH layouts initially."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2025-01-07T14:20:31Z",
+        "body": "I think this is now resolved. v1.2.1 has an indexed test case (see tiny_bvh_fenster.cpp), builds correctly, and traverses depending on the presence of the vertex index array. This adds a (fully predictable) if-statement for each leaf, which seems acceptable. The build also succeeds for SBVH (BuildHQ), which uses the indices in ClipFrag (again at the cost of an if-statement). Traversal should work for all layouts; the layouts that specifically access the vertices have been fitted with the necessary modifications. Closing the issue. :)"
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "2 minor fixes for compiling gpu sample under Linux..",
+    "created_at": "2024-12-24T00:46:51Z",
+    "closed_at": "2024-12-26T11:07:49Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/73",
+    "body": "Hi,\r\ncompiling tiny_bvh_gpu.cpp sample:\r\ng++ -std=c++20 -mavx -Ofast tiny_bvh_gpu.cpp -o tiny_bvh_gpu -I /usr/include/CL -lX11 -lOpenCL\r\ngets 2 errors on Linux:\r\n\r\n1)tiny_ocl.h:658:22: error: ‘_stricmp’ was not declared in this scope; did you mean ‘strncmp’?\r\n\r\n2)tiny_bvh_gpu.cpp:73:9: error: reference to ‘generate’ is ambiguous\r\ntiny_bvh_gpu.cpp:161:9: error: reference to ‘generate’ is ambiguous\r\ntiny_bvh_gpu.cpp:162:9: error: reference to ‘generate’ is ambiguous\r\n\r\n\r\nfirst one fixed:\r\n```\r\n-               if (!_stricmp( file, loadedKernels[i]->sourceFile ))\r\n+               if (!strcasecmp( file, loadedKernels[i]->sourceFile ))\r\n\r\n```\r\nsecond one I replace variable name \"generate\" with \"generate2\" in the 3 cases is in code and it works..\r\nit's due to some \"thing\" in GCC 14:\r\n/usr/include/c++/14/bits/stl_algo.h:4344:5: note: candidates are: ‘template<class _FIter, class _Generator> constexpr void std::generate(_FIter, _FIter, _Generator)’\r\n 4344 |     generate(_ForwardIterator __first, _ForwardIterator __last,\r\n\r\nso please rename \"generate\" to another name..\r\n\r\ntested that fix and works ok on RTX 4070..\r\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/73/comments",
+    "author": "oscarbg",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-26T11:07:49Z",
+        "body": "Thank you for that. Is that \"-lOpenCL\" using some package on Linux? I suppose you can't simply use the Windows library?\r\nChanges have been made; they should now be available in the dev branch."
+      }
+    ]
+  },
+  {
+    "number": 71,
+    "title": "native_recip and fast_normalize",
+    "created_at": "2024-12-20T12:28:43Z",
+    "closed_at": "2024-12-20T12:33:45Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/71",
+    "body": "These are OpenCL functions that might speed up the code a bit. Especially in hemisphere function.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/71/comments",
+    "author": "benanil",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-20T12:33:42Z",
+        "body": "Indeed! Thanks. :)"
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "please make releases",
+    "created_at": "2024-12-19T07:38:44Z",
+    "closed_at": "2024-12-20T10:23:58Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/70",
+    "body": "for just download and run exes.\r\nw/o compiling or so",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/70/comments",
+    "author": "tigrazone",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-19T09:39:39Z",
+        "body": "What would be the use case for this?\r\nTinybvh is not intended as an end-user product, and the code examples are provided only to demonstrate how it could be integrated in your own programs."
+      },
+      {
+        "user": "tigrazone",
+        "created_at": "2024-12-19T09:54:33Z",
+        "body": "Yes I need these code examples compiled"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-20T10:23:57Z",
+        "body": "I'm sorry, closing this issue; tinybvh really isn't a stand-alone product."
+      }
+    ]
+  },
+  {
+    "number": 67,
+    "title": "Crashes with CWBVH usage",
+    "created_at": "2024-12-17T20:39:12Z",
+    "closed_at": "2024-12-18T07:38:25Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/67",
+    "body": "When I build a CWBVH it crashes because allocatedBlocks is uninitialized so its value can be greater than spaceNeeded and no allocation of bvh8Data/bvh8Tris occurs. \r\n\r\nSecond problem is when I create a BVH8 and then build a CWBVH by using ConvertFrom when I go to free them, freeing both results in a crash. At first glance it looks like this is because the copy of BVH8 is not a deep copy so its two structs holding the same pointer to bvh8Node and then it gets freed twice when bvh8 is destructed.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/67/comments",
+    "author": "andr3wmac",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T07:38:25Z",
+        "body": "This should be fixed in the latest commit on the dev branch, can you verify? The data was indeed not zeroed. Regarding the second problem: I am not sure what you encountered, perhaps it is related to the first issue; The CWBVH is not using data from bvh8, since it needs a specific format for both nodes and tris."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T14:18:42Z",
+        "body": "Second issue was actually an issue too, sorry for dismissing that too soon. This should now be resolved: tinybvh now keeps track of ownership of bvhs and prevents duplicated deletion."
+      },
+      {
+        "user": "andr3wmac",
+        "created_at": "2024-12-18T19:17:48Z",
+        "body": "Np, just tested the latest and it looks like everything is working great 👍 thanks for the quick fixes."
+      }
+    ]
+  },
+  {
+    "number": 66,
+    "title": "Using custom allocation functions broke with the API rework",
+    "created_at": "2024-12-17T18:33:14Z",
+    "closed_at": "2024-12-18T08:56:50Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/66",
+    "body": "Thanks a lot for this great piece of software - After the last version I unfortunately have a crash because the library doesn't use the provided context to override the allocations functions anymore.\r\n\r\n~~~\r\ntinybvh::BVH4_CPU blas;\r\nblas.context = myContext;\r\nblas.Build( vertices, triangleCount );\r\n~~~\r\n\r\nThis internally will create more temporary Bvh structures which use the default memory context. Either the context needs to be copied, or maybe change the api to always pass the context into functions that require memory operations. \r\n\r\nI fixed it for my by setting the context member of both BVH structs on the way.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/66/comments",
+    "author": "jkoenen",
+    "comments": [
+      {
+        "user": "DavidPeicho",
+        "created_at": "2024-12-17T19:05:39Z",
+        "body": "Wouldn't it make sense to have a way to set a global allocator instead? Or do you build multiple BVH with different allocators?"
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-17T19:07:13Z",
+        "body": "I would prefer to pass it as a parameter because it simplifies the situation in multi-threaded situations (Where different threads potentially use different heaps) "
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T07:08:58Z",
+        "body": "This should be fixed in the dev branch now: The context that you pass to each of the specialized / derived layouts is now propagated to the intermediate formats. It's a simple fix, but it is a bit hard for me to verify; can you confirm it works properly? After that I will close this issue."
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-18T08:54:12Z",
+        "body": "Yes, that works for me - thank you for the quick fix"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T08:56:50Z",
+        "body": "Thanks for confirming; case closed."
+      }
+    ]
+  },
+  {
+    "number": 62,
+    "title": "Fix a memory leak, Window title API, Update camera controls",
+    "created_at": "2024-12-16T11:38:09Z",
+    "closed_at": "2024-12-16T15:07:44Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/62",
+    "body": "Added a window title change to the fenster API and use it to output minimal output (Tested only on Windows, supposedly works on other targets too) \r\nUpdated the camera controls for the view direction changes",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/62/comments",
+    "author": "TheSFReader",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-16T11:40:14Z",
+        "body": "There's a compile error on Mac (problem with printf_s). But this looks quite useful!"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-16T15:07:34Z",
+        "body": "Excellent choice. I think the related warnings were suppressed already. ;)"
+      }
+    ]
+  },
+  {
+    "number": 58,
+    "title": "Fixed memory leak in tiny_bvh_fenster",
+    "created_at": "2024-12-13T16:36:05Z",
+    "closed_at": "2024-12-13T18:15:26Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/58",
+    "body": "Depth buffer never got released in ``Tick()``",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/58/comments",
+    "author": "Sven-vh",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-13T18:14:48Z",
+        "body": "Thanks, merged."
+      }
+    ]
+  },
+  {
+    "number": 56,
+    "title": "Replace OpenMP with cpp11 threads",
+    "created_at": "2024-12-12T22:32:34Z",
+    "closed_at": "2024-12-13T07:09:20Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/56",
+    "body": "This removes the OpenMP parallelism directives and introduces parallelism based on C++11 threads. I have checked the benchmark results, and the timings for the parallel runs were more or less the same.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/56/comments",
+    "author": "aytekaman",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-13T07:09:16Z",
+        "body": "That looks good, thanks! This should greatly reduce the trouble MacOS users were having with running the code on multiple cores."
+      }
+    ]
+  },
+  {
+    "number": 55,
+    "title": "Fix tile rendering",
+    "created_at": "2024-12-12T09:54:50Z",
+    "closed_at": "2024-12-12T19:41:40Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/55",
+    "body": "This one fixes the rendering of the first k tiles where k = number of threads. (tested this on Windows and it works nicely, will test it on MacOS as well)",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/55/comments",
+    "author": "aytekaman",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-12T19:41:19Z",
+        "body": "Ah, I didn't see that. :)"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-12T19:43:52Z",
+        "body": "Question: Speedtest also uses some threading, via OpenMP. Could you apply the same fix here?"
+      },
+      {
+        "user": "aytekaman",
+        "created_at": "2024-12-12T20:18:38Z",
+        "body": "Sure, I’ll send a PR soon."
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "Allow custom vector types to be used with tinybvh.",
+    "created_at": "2024-12-07T15:19:53Z",
+    "closed_at": "2024-12-07T15:52:54Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/40",
+    "body": "The built in vector types for tinybvh work great, but converting between these vectors and other math library vectors is cumbersome.\r\n\r\nThis PR hides the tinybvh vector types behind an ifndef guard, allowing library users to override the vector types with their own (see comment in PR). \r\n\r\nAs long as the supplied vector types size and alignment is the same as tinybvh's, performance should not be impacted.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/40/comments",
+    "author": "nemjit001",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-07T15:52:50Z",
+        "body": "This is great, I didn't know that was possible! This has some more requirements than just alignment and size, but nothing exotic so it should indeed be a breeze to overrule the vector types this way. With the existing types as backup, I don't see why we should not have this. Thanks. :) "
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "Add bvhvec4slice to Build()/BuildHQ()",
+    "created_at": "2024-12-07T13:03:05Z",
+    "closed_at": "2024-12-07T14:44:35Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/39",
+    "body": "Sorry for the drive by cleanup, I have a plugin to remove trailing whitespaces, didn't realize since it autoruns on save :) If you want I can eventually revert those changes.\r\n\r\nWould be great to add bound checks to the slice in debug mode. Haven't done that yet. Should we add a `DEBUG` define?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/39/comments",
+    "author": "DavidPeicho",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-07T14:44:29Z",
+        "body": "That looks good! For the new 'fast builder' this will be trivial to include as well, and for the AVX / NEON builders the slices can simply be union'ed with __m128 or the NEON equivalent.\r\nDon't worry about the spaces, I will see if Visual Studio can delete those automatically as well. I use a code standard template, but deleting trailing spaces appears to be missing from it.\r\nThis does bring up two follow-up 'issues':\r\n1. The bvhvec4 requirement is really just there for the AVX and NEON builders. Perhaps this will make more sense to the user if it is exclusively enforced for those; ::Build can then simply take bvhvec3 slices.\r\n2. I see your nice auto-documentation comment and realize I need this everywhere now. :)\r\nIs it proper etiquette on Github if I create issues like that for myself (or others, if they beat me to it, I guess)?"
+      },
+      {
+        "user": "DavidPeicho",
+        "created_at": "2024-12-07T15:08:28Z",
+        "body": "1. Makes perfect sense yes. We should just keep a separate API for those, and indeed accept `bvhvec3` then for `Build`.\r\n2. Don't know if there is a \"proper\" way, whatever you like the most. I like to create issues, label them, and assign them yes\r\n\r\nif we create slices for other types, like `bvhvec3`, we should think about just creating a template `slice` type. I know you probably have converns about template, but we could explicitly instantiate them for  the types we use (vec3/vec4?)"
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "Use enum classes",
+    "created_at": "2024-12-05T22:35:46Z",
+    "closed_at": "2024-12-07T12:57:49Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/38",
+    "body": "Pretty useful to have the enum size defined, especially for FFI safety. I guess that's not backward compatible tho.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/38/comments",
+    "author": "DavidPeicho",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-06T06:32:15Z",
+        "body": "This compiles on mac but not on g++. Can you take a look?\r\nAlso, can you make the type 32-bit instead of 8-bit? Unless there is a specific reason to have 8-bit here; the smaller types pose a (minor) performance risk."
+      },
+      {
+        "user": "DavidPeicho",
+        "created_at": "2024-12-07T12:34:48Z",
+        "body": "I did rebase and make the branch of `dev`, didn't realize there was such a branch at first. I guess we need the tests on dev first before merging yes 🙏"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-07T12:57:46Z",
+        "body": "Looking good, merged!"
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "Afra intersections for NEON",
+    "created_at": "2024-12-04T14:10:18Z",
+    "closed_at": "2024-12-04T14:21:56Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/37",
+    "body": "Can anybody test this with ARM 64 device?",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/37/comments",
+    "author": "benanil",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-04T14:21:51Z",
+        "body": "Probably easiest if I merge this as-is. I may be able to test this on a 64-bit Raspberry Pi 400 tomorrow."
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "Q: Recommended BVH node layout/",
+    "created_at": "2024-12-04T12:35:49Z",
+    "closed_at": "2024-12-04T12:58:58Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/36",
+    "body": "What is the recommended BVH node layout for BLAS and TLAS levels?\r\n\r\nWhat are the guidelines?",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/36/comments",
+    "author": "ib00",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-04T12:47:23Z",
+        "body": "There is some information in the README.md, but not really a recommendation. This information should ultimately end up in the wiki. In short:\r\n\r\n* WALD_32BYTE is what the builders produce: a 2-wide BVH with a compact node layout. This is also the default for Intersect calls and should get you decent performance with no overhead caused by any BVH conversion or optimization.\r\n* If you expect to trace lots of rays, you can convert the 2-wide BVH into a ALT_SOA. This is a quick conversion; after this, tracing rays will be a bit faster. Run speedtest to get an idea of the speed benefit on your machine.\r\n* For even more rays, you can convert the 2-wide BVH to a 4-wide BVH (BVH4_BASIC), and then to a BVH4_AFRA. So, two conversions. This gets you the format that is currently the fastest option in tiny_bvh, at the expense of more conversion work.\r\n* If you're serious about performance, there is one more option. Convert to VERBOSE, then optimize the BVH. Convert it back to WALD_32BYTE. The optimized tree will be substantially better, and can still be converted to BVH4_AFRA. The optimization takes a while though - this will improve in a future version of the library, but it will never be free.\r\n\r\nOn the GPU other options exist. The basic GPU layout is AILA_LAINE, which is quickly obtained by converting WALD_32BYTE. Faster options (that take longer to convert to) are BVH4_GPU and the ultimate format, CWBVH. You will find that CWBVH is often not the fastest option for primary rays (which are very coherent) but it should do relatively well on reflected rays.\r\n\r\nHope this helps!"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-04T12:48:46Z",
+        "body": "For TLAS you can probably just use WALD_32BYTE on CPU and AILA_LANE on GPU. Traversal should not spend too much time in the TLAS; since it is typically rebuilt each frame build time becomes the bottleneck. Keep it simple."
+      },
+      {
+        "user": "ib00",
+        "created_at": "2024-12-04T12:53:04Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "title": "Changes to the fenster project",
+    "created_at": "2024-12-01T12:07:44Z",
+    "closed_at": "2024-12-01T14:22:57Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/32",
+    "body": "Minor correction to the tiny_bvh.h file (correct steps computations in the Intersect_Afra function)\r\nIn speedtest, use same scene loading as fenster to check the scene data in two directories\r\nMinimize changes to the external fenster.h file\r\nUpdate fenster project to use fenster inputs management (should be multi-platform instead of only win32)\r\n",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/32/comments",
+    "author": "TheSFReader",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-01T14:22:52Z",
+        "body": "Good changes, I think, especially the keyboard handling, which is much better this way of course. Perhaps I will move back some stuff to fenster.h to keep the 'application' short: Fenster is not really being maintained so I don't anticipate the need to update it in the future. With that in mind I prefer a shorter main application."
+      }
+    ]
+  },
+  {
+    "number": 27,
+    "title": "Simplified aligned memory functions for Emscripten",
+    "created_at": "2024-11-22T23:56:09Z",
+    "closed_at": "2024-11-23T07:45:53Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/27",
+    "body": "As gcc and clang are now making the size a multiple of the alignment, the 3 targets can be simplified into 1",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/27/comments",
+    "author": "maniatic0",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-23T07:45:48Z",
+        "body": "Agreed, much nicer this way."
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "Adds the possibility to use user-defined allocation functions in tinybvh",
+    "created_at": "2024-11-17T11:44:38Z",
+    "closed_at": "2024-11-18T10:24:40Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/23",
+    "body": "Adds a struct BVHContext that contains function pointers to possibly user-defined allocation functions.\r\nRemoves macros and add default malloc/free functions per platform.\r\nFor now, done only for the tinybvh library but I think it should also be done for the tinyocl one(?).\r\n\r\nThis allows users to manage the memory allocations themselves.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/23/comments",
+    "author": "tcantenot",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-18T09:18:01Z",
+        "body": "I added some comments, can you please let me know you opinion on those? The functionality obviously is an improvement for the libraries so this should definitely be added, thanks for initiating this!"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-18T10:24:37Z",
+        "body": "I am going to merge this and do some renames, we can always discuss the details later."
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "Excellant project! Can I use it for simple distance querying?",
+    "created_at": "2024-11-17T05:54:42Z",
+    "closed_at": "2024-11-18T12:21:11Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/22",
+    "body": "I'm not very familiar with computer graphics, but I know that bvh is often related to shortest distance computation.\r\n\r\nI wonder if there is currently code in the project that can be used directly to calculate the shortest distance from a point to a triangular discrete mesh. And where should I start reading to try it out.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/22/comments",
+    "author": "metorm",
+    "comments": [
+      {
+        "user": "TheSFReader",
+        "created_at": "2024-11-17T14:58:52Z",
+        "body": "As far as I understand the code here (No expert or anything), there us no code that does shortest distance from a point to a triangular discrete mesh in the current code base, and I think it will probably not be since the author's attention and intention seems to be mainly on ray tracing applications.\r\n\r\nI also don't know if/how the heuristic used to build the BVH is optimum for that shortest distance search.\r\n\r\nHowever, it's probably not realy difficult to write traversal/intersection code using tinybvh as a basis."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-18T12:21:08Z",
+        "body": "Indeed! I can definitely imagine using this for applications other than ray tracing, and I will be happy to accept pull requests for traversal code!"
+      }
+    ]
+  },
+  {
+    "number": 21,
+    "title": "Fixed Sponza loading in EMSCRIPTEN",
+    "created_at": "2024-11-15T22:24:34Z",
+    "closed_at": "2024-11-16T11:14:26Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/21",
+    "body": "I added a fix to load Sponza in the browser. It embeds the binary into the wasm and loads it in the virtual filesystem.  For C++ all of this is invisible..\r\n\r\n```\r\ntiny_bvh version 0.8.3 performance statistics (emcc 3.1 build)\r\n----------------------------------------------------------------\r\nLoading triangle data (262267 tris).\r\nBVH construction speed\r\nwarming caches...\r\n- reference builder:  463.07ms for  262267 triangles - 501326 nodes, SAH=214.22\r\n- fast AVX builder:   211.15ms for  262267 triangles - 500482 nodes, SAH=212.78\r\nBVH traversal speed\r\n- CPU, coherent,   basic 2-way layout, ST:   4482.8ms for   7.68M rays =>   1.71MRay/s\r\n- CPU, coherent,   alt 2-way layout,   ST:   4105.7ms for   7.68M rays =>   1.87MRay/s\r\n- CPU, coherent,   soa 2-way layout,   ST:   3937.2ms for   7.68M rays =>   1.95MRay/s\r\n- CPU, coherent,   basic 2-way layout, MT:    837.0ms for   7.68M rays =>   9.18MRay/s\r\n- CPU, coherent,   2-way, packets,     MT:    193.5ms for   7.68M rays =>  39.68MRay/s\r\n- CPU, coherent,   2-way, packets/SSE, MT:    144.8ms for   7.68M rays =>  53.04MRay/s\r\nOptimizing BVH, regular...   done (12.34s). New: 501325 nodes, SAH=181.85\r\n- CPU, coherent,   2-way optimized,    ST:   3047.6ms for   7.68M rays =>   2.52MRay/s\r\n- CPU, incoherent, basic 2-way layout, MT:   1011.5ms for   7.68M rays =>   7.59MRay/s\r\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/21/comments",
+    "author": "maniatic0",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-16T11:14:29Z",
+        "body": "Thanks, merged!"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "cmake: build all executables",
+    "created_at": "2024-11-09T14:20:09Z",
+    "closed_at": "2024-11-09T14:35:51Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/17",
+    "body": "My attempt of enabling CMake to build all executables.\r\n\r\nI am far from a CMake expert. I tried to make it as explicit and simple as possible to read/follow.\r\n\r\nOnly `tiny_bvh_test` is actually run, but this should greatly increase the chance of catching build-breaking changes on CI.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/17/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-09T14:35:53Z",
+        "body": "Thanks! Looks good to me, not an expert either. :)"
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "Test the AVX builder too.",
+    "created_at": "2024-11-09T14:10:10Z",
+    "closed_at": "2024-11-09T14:57:57Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/16",
+    "body": "This greatly increases the chance of catching breakage.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/16/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "eloj",
+        "created_at": "2024-11-09T14:23:10Z",
+        "body": "CI fails because the Fragment alignment issue on linux is now caught.\r\n\r\n```console\r\nTest project /home/runner/work/tinybvh/tinybvh/build\r\n    Start 1: tiny_bvh_test\r\n1/1 Test #1: tiny_bvh_test ....................***Exception: SegFault  0.22 sec\r\n```"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-09T14:47:35Z",
+        "body": "I don't think this is needed; the speedtest utility already builds both with and without AVX so this should be covered already."
+      },
+      {
+        "user": "eloj",
+        "created_at": "2024-11-09T14:49:41Z",
+        "body": "That only covers build-issues, not run-time issues though. This is the only executable that is currently run by CI, and you probably don't want to run speedtest there(?)"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-09T14:56:50Z",
+        "body": "Good point."
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "title": "Align Fragment allocation.",
+    "created_at": "2024-11-08T21:54:49Z",
+    "closed_at": "2024-11-09T07:40:06Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/14",
+    "body": "Not doing so results in immediate crashes on Linux. Exclude MSVC since it apparently works anyway (larger default alignment?).\r\n\r\nThere are a myriad ways to do this. Perhaps it'd be cleaner to change the new[]/delete[] to one of the existing aligned allocation macros, or add ones for arrays specifically.\r\n\r\nJust doing `struct ALIGNED( 32 ) Fragment` works too, but I imagine this may waste more memory(?)",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/14/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-09T07:39:56Z",
+        "body": "This can (and should) simply be done with the existing MALLOC_ALIGNED, no need for new macros here. "
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-09T07:40:53Z",
+        "body": "I am in the middle of some changes, will publish a fix with the next commit."
+      }
+    ]
+  },
+  {
+    "number": 12,
+    "title": "Add compilation command for macOS",
+    "created_at": "2024-11-03T12:29:00Z",
+    "closed_at": "2024-11-03T13:33:31Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/12",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/12/comments",
+    "author": "mathsyouth",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-03T13:33:00Z",
+        "body": "Thanks for the macOS command!"
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "tiny_bvh_fenster: Output frame times to stderr.",
+    "created_at": "2024-11-03T05:57:40Z",
+    "closed_at": "2024-11-03T07:08:38Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/11",
+    "body": "```console\r\n$ ./tiny_bvh_fenster\r\nFrame 1 time: 1363 ms, avg: 1363.00 ms\r\nFrame 2 time: 1356 ms, avg: 1359.50 ms\r\nFrame 3 time: 1361 ms, avg: 1360.00 ms\r\nFrame 4 time: 1324 ms, avg: 1351.00 ms\r\nFrame 5 time: 1324 ms, avg: 1345.60 ms\r\nFrame 6 time: 1319 ms, avg: 1341.17 ms\r\nFrame 7 time: 1334 ms, avg: 1340.14 ms\r\n...\r\n```\r\n\r\nAlternatively it could be moved into the run-loop of `fenster.h`, but there's only one use now so...",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/11/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "eloj",
+        "created_at": "2024-11-03T07:08:38Z",
+        "body": "Again I didn't catch that you were already working on this."
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-03T13:41:00Z",
+        "body": "I want to add a fourth source just for profiling, which will be text-only but it will use the same set of rays as the fenster renderer. Tracing the rays is already from a buffer; this way I can easily do accurate timing:\r\n* Run it once or twice to warm the caches\r\n* Run it three times and average to get a good estimate of performance\r\n* Run it three times with OpenMP to get threaded performance.\r\nOnce this is in place I can start adding more advanced BVH algorithms; the profiling tool will then serve to show the gains (and build performance cost) of each approach."
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "Remove explicit casts.",
+    "created_at": "2024-11-02T21:20:47Z",
+    "closed_at": "2024-11-03T13:35:57Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/10",
+    "body": "The code gen isn't _exactly_ the same before-and-after, but it's very minor. Some timings in the post after this.\r\n\r\nThe GCC diff is less clean and slightly worse-looking, but the clang one looks okay to me.\r\n\r\nI understand if you prefer the casting in the end.\r\n\r\n(Before this example was updated, I got it bit-exact by using adding a conversion function[^1] to the `TriVertex` type.\r\nI imagine it would be possible to do the same directly on the `bvhvec4`, but that's a more intrusive change.)\r\n\r\n[^1]: i.e `operator bvhvec3&() const { return *(bvhvec3*)(this); }`\r\n\r\n```diff\r\n$ diff -u asm-orig-clang++-19-tiny_bvh_fenster.s asm-new-clang++-19-tiny_bvh_fenster.s \r\n--- asm-orig-clang++-19-tiny_bvh_fenster.s\t2024-11-02 22:15:59.183094736 +0100\r\n+++ asm-new-clang++-19-tiny_bvh_fenster.s\t2024-11-02 22:16:11.761182138 +0100\r\n@@ -735,27 +735,24 @@\r\n \tmovslq\t%r10d, %r11\r\n \tshlq\t$4, %r10\r\n \tshlq\t$4, %r11\r\n-\tvmovss\t4(%r10,%rcx), %xmm7             # xmm7 = mem[0],zero,zero,zero\r\n-\tvmovss\t8(%r10,%rcx), %xmm8             # xmm8 = mem[0],zero,zero,zero\r\n-\tvmovss\t(%r10,%rcx), %xmm6              # xmm6 = mem[0],zero,zero,zero\r\n-\tvmovss\t24(%r11,%rcx), %xmm11           # xmm11 = mem[0],zero,zero,zero\r\n-\tvmovss\t36(%r11,%rcx), %xmm13           # xmm13 = mem[0],zero,zero,zero\r\n-\tvmovss\t16(%r11,%rcx), %xmm9            # xmm9 = mem[0],zero,zero,zero\r\n-\tvmovss\t20(%r11,%rcx), %xmm10           # xmm10 = mem[0],zero,zero,zero\r\n-\tvmovss\t32(%r11,%rcx), %xmm12           # xmm12 = mem[0],zero,zero,zero\r\n-\tvmovss\t40(%r11,%rcx), %xmm14           # xmm14 = mem[0],zero,zero,zero\r\n-\tvsubss\t%xmm8, %xmm11, %xmm11\r\n-\tvsubss\t%xmm7, %xmm13, %xmm13\r\n-\tvsubss\t%xmm7, %xmm10, %xmm10\r\n-\tvsubss\t%xmm6, %xmm9, %xmm9\r\n-\tvsubss\t%xmm6, %xmm12, %xmm12\r\n-\tvsubss\t%xmm8, %xmm14, %xmm7\r\n-\tvmulss\t%xmm11, %xmm13, %xmm6\r\n-\tvmulss\t%xmm10, %xmm12, %xmm8\r\n+\tvmovsd\t(%r10,%rcx), %xmm6              # xmm6 = mem[0],zero\r\n+\tvmovss\t8(%r10,%rcx), %xmm11            # xmm11 = mem[0],zero,zero,zero\r\n+\tvmovsd\t16(%r11,%rcx), %xmm7            # xmm7 = mem[0],zero\r\n+\tvmovsd\t32(%r11,%rcx), %xmm8            # xmm8 = mem[0],zero\r\n+\tvsubps\t%xmm6, %xmm7, %xmm9\r\n+\tvmovss\t24(%r11,%rcx), %xmm7            # xmm7 = mem[0],zero,zero,zero\r\n+\tvsubps\t%xmm6, %xmm8, %xmm8\r\n+\tvmovss\t40(%r11,%rcx), %xmm6            # xmm6 = mem[0],zero,zero,zero\r\n+\tvmovshdup\t%xmm8, %xmm13           # xmm13 = xmm8[1,1,3,3]\r\n+\tvmovshdup\t%xmm9, %xmm10           # xmm10 = xmm9[1,1,3,3]\r\n+\tvsubss\t%xmm11, %xmm7, %xmm12\r\n+\tvsubss\t%xmm11, %xmm6, %xmm7\r\n+\tvmulss\t%xmm12, %xmm13, %xmm6\r\n \tvfmsub231ss\t%xmm7, %xmm10, %xmm6    # xmm6 = (xmm10 * xmm7) - xmm6\r\n \tvmulss\t%xmm7, %xmm9, %xmm7\r\n+\tvfmsub231ss\t%xmm12, %xmm8, %xmm7    # xmm7 = (xmm8 * xmm12) - xmm7\r\n+\tvmulss\t%xmm10, %xmm8, %xmm8\r\n \tvfmsub231ss\t%xmm13, %xmm9, %xmm8    # xmm8 = (xmm9 * xmm13) - xmm8\r\n-\tvfmsub231ss\t%xmm11, %xmm12, %xmm7   # xmm7 = (xmm12 * xmm11) - xmm7\r\n \tvmulss\t%xmm7, %xmm7, %xmm9\r\n \tvfmadd231ss\t%xmm6, %xmm6, %xmm9     # xmm9 = (xmm6 * xmm6) + xmm9\r\n \tvfmadd231ss\t%xmm8, %xmm8, %xmm9     # xmm9 = (xmm8 * xmm8) + xmm9\r\n```",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/10/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "eloj",
+        "created_at": "2024-11-03T06:10:03Z",
+        "body": "Ran the matrix of clang++-19 and GCC 14.2 before and after this change using the timing branch (#11), no special prep: \r\n\r\n```\r\nbefore-gcc.txt:Frame 8 time: 1529 ms, avg: 1531.00 ms\r\nafter-gcc.txt:Frame 8 time: 1531 ms, avg: 1529.00 ms\r\nbefore-clang.txt:Frame 8 time: 1352 ms, avg: 1348.75 ms\r\nafter-clang.txt:Frame 8 time: 1339 ms, avg: 1339.38 ms\r\n```"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-03T13:35:53Z",
+        "body": "Removing the casts is fine and makes the code more compact and clear. Originally I had that TriVertex thing in there but that was silly, bvhvec4 is just fine and has automatic conversion to and from bvhvec3."
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "Fix header namespace closure",
+    "created_at": "2024-11-02T02:15:47Z",
+    "closed_at": "2024-11-02T12:05:27Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/pull/8",
+    "body": "Only relevant when TINYBVH_IMPLEMENTATION isn't defined",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/8/comments",
+    "author": "stephomi",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-02T12:05:33Z",
+        "body": "Thanks for the fix. :)"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "The need for CI",
+    "created_at": "2024-10-31T22:20:24Z",
+    "closed_at": "2024-11-01T06:41:22Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/6",
+    "body": "I think it's going to be almost impossible to maintain this and not break it for 'alternative' platforms/compilers, without some sort of CI.\r\n\r\nI have some limited experience setting up github workflows, and would be willing to make an attempt, if such a PR would be acceptable (after the usual review of course).",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/6/comments",
+    "author": "eloj",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-11-01T06:43:45Z",
+        "body": "Jefferson Amstutz just made a PR for this. This is outside my field of expertise but since his additions do not involve modifications to tiny_bvh.h I blindly (but gratefully) accepted it."
+      }
+    ]
+  }
+]

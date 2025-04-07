@@ -1,0 +1,2348 @@
+[
+  {
+    "number": 896,
+    "title": "[Discussion] Is there any way to release memory after separating is done??",
+    "created_at": "2024-03-17T12:00:36Z",
+    "closed_at": "2024-04-29T11:31:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/896",
+    "body": "I need to process multiple audio files in a loop.\r\nI've been unable to find a solution to ensure that memory is properly released after the separation task is completed.\r\nI'd greatly appreciate any insights, suggestions, or experiences.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/896/comments",
+    "author": "hijam-git",
+    "comments": [
+      {
+        "user": "dkrystki",
+        "created_at": "2024-04-23T17:16:14Z",
+        "body": "I solved it by running separator jobs in a worker process.\r\nExited process releases all the memory.\r\n\r\n```\r\ndef target():\r\n    separator = Separator('spleeter:2stems')\r\n    separator.separate_to_file(input_file, output_file, duration=None)\r\n    \r\nproc = Process(target=target)\r\nproc.start()\r\nproc.join()\r\n"
+      },
+      {
+        "user": "hijam-git",
+        "created_at": "2024-04-29T11:31:24Z",
+        "body": "Thank You,\r\nlater I used multiprocessing.process"
+      }
+    ]
+  },
+  {
+    "number": 885,
+    "title": "[Discussion] your question",
+    "created_at": "2023-12-18T15:38:00Z",
+    "closed_at": "2023-12-18T15:56:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/885",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\ni'd like to know there is no more --stft-backend or -B option to specify the utilization of either tensorflow in gpu or librosa in cpu for the purpose of conducting  stft calculations?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/885/comments",
+    "author": "Echoinsraht5",
+    "comments": [
+      {
+        "user": "d-dawg78",
+        "created_at": "2023-12-18T15:56:57Z",
+        "body": "Hi, yes this parameter has been deprecated. We used to have it because TF's stft calculations were much slower on CPU than librosa. However, this is not the case anymore, and having both librosa and TF dependencies makes managing the package much more complicated."
+      }
+    ]
+  },
+  {
+    "number": 795,
+    "title": "[Discussion] How do i Uninstall Spleeter?",
+    "created_at": "2022-10-05T15:56:08Z",
+    "closed_at": "2022-10-07T09:58:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/795",
+    "body": "I've been trying to uninstall spleeter for a while, since i want to have more space on my drive",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/795/comments",
+    "author": "Axis4s",
+    "comments": [
+      {
+        "user": "d-dawg78",
+        "created_at": "2022-10-07T09:58:17Z",
+        "body": "`python -m pip uninstall spleeter`"
+      }
+    ]
+  },
+  {
+    "number": 784,
+    "title": "[Discussion] how does changing F from 1024 to 1536 affects the upper frequency processed (since the model was trained at 1024)?",
+    "created_at": "2022-08-31T15:31:09Z",
+    "closed_at": "2022-09-02T13:08:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/784",
+    "body": "Hey guys, so after spending a LOT of time reading the other issues/posts here, the source code, the research papers and viewing the model I really can't understand how you can process more than 11025 Hz just by modifying the F parameter from 1024 to 1536 (or 2048 to process all of them).\r\n\r\nThe network is based on a U-Net which in turn is based on convolutions - which by their definition are FIXED. More specifically your inputs are 512 (time steps/hops - the T) x 1024 (bins in the FFT - the F) x 2 (channels) and the output is the same shape (the masks). So, even if you set F to 2048 you can only input a 1024-bin spectrogram to the model and also get a 1024 spectrogram back. Is the model somehow dynamic in this regard and also accepts/outputs 2048? If so, how/where? (in the source code I could not find it) I have read something about the model accepting multiples of 64 (or 128) for T (the time step) but can't figure it out how you can achieve something similar using F.\r\n\r\nSo, while I am familiar with both DSP (including STFT, windowing, reconstruction, ratio-masks, etc) and ML/DNN stuff this is still something I can't understand and I have the feeling that it's either something simple I'm missing or I may be getting more stupid with age :)\r\n\r\nIf someone can enlighten me on this I would really appreciate it\r\n\r\nP.S. I know (and understand) about the mask extending (btw, it sounds a lot better if you use the average from the last/top 25% bins instead of all of them - it greatly reduces the artefacts/interferences) but I only care about the other solution in the FAQ - the changing of the F parameter\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/784/comments",
+    "author": "netv1",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2022-09-02T13:08:47Z",
+        "body": "Hi @netv1,\r\nActually, the inputs of spleeter pre-trained models are computed from spectrograms that are computed with a 4096-sample window on signal sampled @44.1kHz. Then, only the low-frequency part of the spectrogram, up to frequency bin F, is provided as input to the model. \r\nThe models were trained with F=512 (which corresponds to ~11kHz), and then the inputs were 512x1024 matrices. \r\nAs the model is fully convolutional, you can actually change the size of the input at inference time. For instance, if you choose F=1024, then you'll input a 1024x1024 matrix into the model, and the first dimension of the output of all the layers will be doubled, which will just result in doubling the first dimension of the output. There is only a constraint for the downsampling/upsampling layers of the network which require that both dimensions of the input are multiple of 2^6 (6 being the number of layers). So the models are perfectly able to take as input any matrix that fits this constraint.\r\nThe question you may then ask is about the ability of the model to output correct separation masks on frequency bands it was not trained for. It turned out that the models do a pretty decent job in those bands which is not totally surprising as you may have similar frequency patterns in those bands as the ones in bands they were trained on, though the explanation for this is not perfectly clear :).\r\n"
+      }
+    ]
+  },
+  {
+    "number": 778,
+    "title": "[Discussion] how to process only accompaniment without vocal ?",
+    "created_at": "2022-07-04T05:39:35Z",
+    "closed_at": "2022-07-08T09:01:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/778",
+    "body": "hi guys \r\ni want only get accompaniment and not vocal\r\nI think this will reduce the processing time\r\nDo any of you have any idea?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/778/comments",
+    "author": "abosaqer",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2022-07-08T08:58:34Z",
+        "body": "Hi @abosaqer,\r\nSpleeter works by estimating time-frequency masks for each instrument to be separated. To estimate those masks, it needs to estimate model spectrograms for each instrument: for instance, when you perform accompaniment/vocal separation, spleeter needs to estimate a model spectrogram for both the accompaniment and the vocal part.\r\nSo even if you only need the accompaniment, you'll need to have a forward pass in the full accompaniment + vocal model which is the most computationally intensive part.\r\nYou can save a bit of computation on 1) inverse Fourier transform of the vocal part that you don't need to compute if you only need the accompaniment 2) not exporting the vocal file. Those are not supported by spleeter as is and you'll need to tweak a bit the code."
+      }
+    ]
+  },
+  {
+    "number": 758,
+    "title": "尝试过后发现高跟鞋走路的声音、鸟叫的声音还是分离不开呢，是哪里不对吗？",
+    "created_at": "2022-04-28T13:44:08Z",
+    "closed_at": "2022-05-10T05:45:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/758",
+    "body": "尝试过后发现高跟鞋走路的声音、鸟叫的声音还是分离不开呢，是哪里不对吗？2/4/5stems都尝试过了，包括送入spleeter之前将音频采样率转到44.1kHz，还是过滤不掉这些不想要的声音。",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/758/comments",
+    "author": "DidaDidaDidaD",
+    "comments": [
+      {
+        "user": "DidaDidaDidaD",
+        "created_at": "2022-04-29T04:07:57Z",
+        "body": "还是缺少鸟鸣和高跟鞋的训练数据？没人来解答一下吗"
+      },
+      {
+        "user": "DidaDidaDidaD",
+        "created_at": "2022-04-30T08:35:34Z",
+        "body": "来银啊"
+      },
+      {
+        "user": "xszqxszq",
+        "created_at": "2022-05-06T03:17:41Z",
+        "body": "You'd better use English, otherwise it is normal to receive no response as most people here are not Chinese."
+      },
+      {
+        "user": "xszqxszq",
+        "created_at": "2022-05-06T03:19:24Z",
+        "body": "Pretrained models are not expected to do such separation, therefore you should train by yourself."
+      },
+      {
+        "user": "DidaDidaDidaD",
+        "created_at": "2022-05-10T05:45:05Z",
+        "body": "> Pretrained models are not expected to do such separation, therefore you should train by yourself.\r\n\r\nThanks for your reply"
+      }
+    ]
+  },
+  {
+    "number": 723,
+    "title": "Downloading Pretrain models to all folders ",
+    "created_at": "2022-02-03T11:47:01Z",
+    "closed_at": "2022-02-03T14:01:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/723",
+    "body": "I have some file in **C:/Users/myfile.mp3 and D:/myfile.mp3 and E:/myfile.mp3** when i try to split it by command prompt like C:\\Users>**spleeter separate -f {filename}/{filename}-{instrument}.{codec} -c \"mp3\" -b \"128\" -o output  -p spleeter:2stems-16kHz -i \"myfile.mp3\"**\r\nD:\\>**spleeter separate -f {filename}/{filename}-{instrument}.{codec} -c \"mp3\" -b \"128\" -o output  -p spleeter:2stems-16kHz -i \"myfile.mp3\"**\r\nE:\\>**spleeter separate -f {filename}/{filename}-{instrument}.{codec} -c \"mp3\" -b \"128\" -o output  -p spleeter:2stems-16kHz -i \"myfile.mp3\"**\r\n\r\n spleeter is downloading pretrain models to all folders like C:/Users/pretrainmodel, D:/pretrainmodel and E:/pretrainmodel so how to avoid/override or link it to one folder like C:/User/pretrainmodels only. using command prompt to working with spleeter",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/723/comments",
+    "author": "iamsudheerkabeer",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2022-02-03T14:00:54Z",
+        "body": "Hi @sudheervdm,\r\nyou can set the `MODEL_PATH` env variable to the folder where you want to store the model, so that `spleeter` will always look in this folder to retrieve the model (or will download it in this folder at the first call).\r\nAlso, be aware that a single call to spleeter with multiple files to separate is more efficient than multiple calls."
+      },
+      {
+        "user": "iamsudheerkabeer",
+        "created_at": "2022-02-03T14:29:28Z",
+        "body": "> Hi @sudheervdm, you can set the `MODEL_PATH` env variable to the folder where you want to store the model, so that `spleeter` will always look in this folder to retrieve the model (or will download it in this folder at the first call). Also, be aware that a single call to spleeter with multiple files to separate is more efficient than multiple calls.\r\n@romi1502 \r\nThanks for your Quick Reply. in my case i  am using command prompt version in my windows system. and also i was installed the python directly and run pip install spleeter for install spleeter in my system. so can you a little bit more explain abouyt your answer. thanks in advance\r\n"
+      },
+      {
+        "user": "iamsudheerkabeer",
+        "created_at": "2022-02-03T14:48:27Z",
+        "body": "@romi1502 Thanks and I Solve the issue. Added ENV as you mentioned in my system environment variable Love You buddy "
+      }
+    ]
+  },
+  {
+    "number": 710,
+    "title": "How to recombine voice and accompany",
+    "created_at": "2022-01-14T09:32:59Z",
+    "closed_at": "2022-01-18T12:05:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/710",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/710/comments",
+    "author": "Cgxdgfcd",
+    "comments": [
+      {
+        "user": "djhashh",
+        "created_at": "2022-01-31T05:03:03Z",
+        "body": "A mixing console or daw?"
+      }
+    ]
+  },
+  {
+    "number": 706,
+    "title": "[Discussion] Can I train a model to separate different types of instruments? ",
+    "created_at": "2022-01-07T17:57:23Z",
+    "closed_at": "2022-01-11T14:27:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/706",
+    "body": "Is this code specific to Vocals, Drums, Bass, Accompaniment or can I train the model to extract different track types? Such as Electric Guitar, Synths, Pads, etc? \r\n\r\nI have a few use cases in mind but the first I'd focus on is splitting drum loops up by different percussion types. So Kick, Snare, High Hats, Pitched drums (Toms, Congos, etc), FX, etc. \r\n\r\nI can easily make a data set of millions of loop variations that I can use train the model. I'm just not sure if the code does anything that is specific to the type of sound being extracted. ",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/706/comments",
+    "author": "go-dustin",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2022-01-11T14:19:15Z",
+        "body": "Hi @go-dustin,\r\nyou can definitely try to separate other instruments than the one of the pre-trainer spleeter models. If the instruments you want to separate have clearly different features (e.g kick vs snare), that should work quite well.\r\n"
+      },
+      {
+        "user": "go-dustin",
+        "created_at": "2022-01-11T14:27:01Z",
+        "body": "Thanks @romi1502 this is a very exciting prospect. I believe a good use case for musicians is to split drum loops into their constituent parts, so the parts can be edited individually. I'll report back my findings and provide examples. "
+      }
+    ]
+  },
+  {
+    "number": 700,
+    "title": "GPU performance in spleeter",
+    "created_at": "2021-12-27T13:55:35Z",
+    "closed_at": "2022-01-06T18:36:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/700",
+    "body": "Hi @romi1502\r\nWhen i am running spleeter latest version\r\n\r\nhere is my debug result, when running spleeter library\r\n\r\nINFO:tensorflow:Using config: {'_model_dir': 'pretrained_models/4stems', '_tf_random_seed': None, '_save_summary_steps': 100, '_save_checkpoints_steps': None, '_save_checkpoints_secs': 600, '_session_config': gpu_options {\r\nper_process_gpu_memory_fraction: 0.7\r\n}\r\n, '_keep_checkpoint_max': 5, '_keep_checkpoint_every_n_hours': 10000, '_log_step_count_steps': 100, '_train_distribute': None, '_device_fn': None, '_protocol': None, '_eval_distribute': None, '_experimental_distribute': None, '_experimental_max_worker_delay_secs': None, '_session_creation_timeout_secs': 7200, '_checkpoint_save_graph_def': True, '_service': None, '_cluster_spec': ClusterSpec({}), '_task_type': 'worker', '_task_id': 0, '_global_id_in_cluster': 0, '_master': '', '_evaluation_master': '', '_is_chief': True, '_num_ps_replicas': 0, '_num_worker_replicas': 1}\r\nWARNING:tensorflow:From /var/www/env1/lib/python3.7/site-packages/spleeter/separator.py:149: calling DatasetV2.from_generator (from tensorflow.python.data.ops.dataset_ops) with output_types is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nUse output_signature instead\r\nWARNING:tensorflow:From /var/www/env1/lib/python3.7/site-packages/spleeter/separator.py:149: calling DatasetV2.from_generator (from tensorflow.python.data.ops.dataset_ops) with output_shapes is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nUse output_signature instead\r\nINFO:tensorflow:Calling model_fn.\r\nINFO:tensorflow:Apply unet for vocals_spectrogram\r\nWARNING:tensorflow:From /var/www/env1/lib/python3.7/site-packages/tensorflow/python/keras/layers/normalization.py:534: _colocate_with (from tensorflow.python.framework.ops) is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nColocations handled automatically by placer.\r\nINFO:tensorflow:Apply unet for drums_spectrogram\r\nINFO:tensorflow:Apply unet for bass_spectrogram\r\nINFO:tensorflow:Apply unet for other_spectrogram\r\nINFO:tensorflow:Done calling model_fn.\r\nINFO:tensorflow:Graph was finalized.\r\nINFO:tensorflow:Restoring parameters from pretrained_models/4stems/model\r\nINFO:tensorflow:Running local_init_op.\r\nINFO:tensorflow:Done running local_init_op.\r\nDEBUG:spleeter:Writing file output5/temp11/vocals.wav\r\nDEBUG:spleeter:Writing file output5/temp11/drums.wav\r\nDEBUG:spleeter:Writing file output5/temp11/bass.wav\r\nDEBUG:spleeter:Writing file output5/temp11/other.wav\r\nINFO:spleeter:File output5/temp11/vocals.wav written succesfully\r\nINFO:spleeter:File output5/temp11/drums.wav written succesfully\r\nINFO:spleeter:File output5/temp11/bass.wav written succesfully\r\nINFO:spleeter:File output5/temp11/other.wav written succesfully\r\nTotal Time taken in seconds 13\r\n\r\nis that, how is suppose to work or am I missing something because when i am seeing my gpu utilization goes upto 77%\r\n\r\nreferenced #695 \r\n\r\nand also, has spleeter-gpu library deprecated ? #690\r\n\r\ncan you share benchmarking on running spleeter using gpu, If yes, Please provide here\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/700/comments",
+    "author": "Chitvan-baish",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2022-01-06T18:36:52Z",
+        "body": "Hi @Chitvan-baish,\r\n\r\nSo first, you need to know that if you're using the CLI, each time you're running the command, it will load the model again and includes the overhead. If you want to avoid the overhead, either separate all the file you want to separate with a single call to the CLI tool or use the python API, create a single `Separator` object and call the `separate` or `separate_to_file` method as many times as you wish.\r\nSecond, yes, `spleeter-gpu` is deprecated.\r\n\r\nFinally, I've just done this very simple benchmark on a GTX1080, in a ipython console:\r\n``` \r\nIn [1]: from spleeter.separator import Separator\r\n\r\nIn [2]: separator = Separator('spleeter:4stems')\r\n\r\nIn [3]: separator.separate_to_file('audio_5min.wav', '/tmp') #First separation is longer as it involves model loading/compilation\r\n\r\nIn [4]: %timeit separator.separate_to_file('audio_5min.wav', '/tmp')\r\n2.73 s ± 42.9 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)\r\n```\r\n\r\nAs you can see, the 5 minute file is on average separated in ~2.7s."
+      }
+    ]
+  },
+  {
+    "number": 691,
+    "title": "[Discussion] Has anyone managed to get this working on m1 max with apple's new metal-optimised tf?",
+    "created_at": "2021-12-18T09:43:25Z",
+    "closed_at": "2021-12-22T18:22:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/691",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nAs per above .. thx",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/691/comments",
+    "author": "cris-pin",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-12-22T18:22:13Z",
+        "body": "Hi @cris-pin \r\nIt seems that @argsnd managed to do it: he reported his install steps in issue #696.\r\nWe'll update spleeter doc soon to provide such instructions."
+      }
+    ]
+  },
+  {
+    "number": 690,
+    "title": "Hello , Can anyone share me requirements to run spleeter-gpu on GPU server . Including CuDa , Cudnn and tensorflow  version",
+    "created_at": "2021-12-13T07:53:26Z",
+    "closed_at": "2021-12-23T13:33:46Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/690",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/690/comments",
+    "author": "ravi35663",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-12-23T13:33:46Z",
+        "body": "Hi @ravi35663\r\nyou should no longer use `spleeter-gpu` that is deprecated and just use `spleeter` that support GPU.\r\nWith a proper install of CUDA 11.2 and CuDNN 8, the latest version of `spleeter` (2.3.0, that depends on tensorflow 2.5) should run on GPU.\r\nI've just tested it on a GTX 1080 with Driver 460.84 and CUDA 11.2."
+      },
+      {
+        "user": "ravi35663",
+        "created_at": "2021-12-24T06:24:55Z",
+        "body": "Hello @romi1502 \r\nPlease shared benchmarking that you have mentioned with these details\r\n\r\n"
+      },
+      {
+        "user": "DevOps-Hestabit-1",
+        "created_at": "2021-12-27T10:09:31Z",
+        "body": "> GTX 1080\r\n\r\nDo you have any benchmarking on this, If yes, please share with me\r\n"
+      },
+      {
+        "user": "DevOps-Hestabit-1",
+        "created_at": "2021-12-27T10:32:32Z",
+        "body": "is that, spleeter-gpu library deprecated ?\r\n"
+      }
+    ]
+  },
+  {
+    "number": 669,
+    "title": "train 2stems in musdb18",
+    "created_at": "2021-10-12T06:41:21Z",
+    "closed_at": "2021-10-15T09:32:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/669",
+    "body": "i train 2stems in musdb18，json set \"instrument_list\": [\"vocals\", \"accompaniment\"]，when i train, output\r\n\"INFO:spleeter:Start model training\r\nTraceback (most recent call last):\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1375, in _do_call\r\n    return fn(*args)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1360, in _run_fn\r\n    target_list, run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1453, in _call_tf_sessionrun\r\n    run_metadata)\r\ntensorflow.python.framework.errors_impl.OutOfRangeError: End of sequence\r\n         [[{{node IteratorGetNext}}]]\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1514, in _train_with_estimator_spec\r\n    _, loss = mon_sess.run([estimator_spec.train_op, estimator_spec.loss])\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 779, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1284, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1385, in run\r\n    raise six.reraise(*original_exc_info)\r\n  File \"/usr/local/lib/python3.6/dist-packages/six.py\", line 703, in reraise\r\n    raise value\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1370, in run\r\n    return self._sess.run(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1443, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1201, in run\r\n    return self._sess.run(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 968, in run\r\n    run_metadata_ptr)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1191, in _run\r\n    feed_dict_tensor, options, run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1369, in _do_run\r\n    run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1394, in _do_call\r\n    raise type(e)(node_def, op, message)\r\ntensorflow.python.framework.errors_impl.OutOfRangeError: End of sequence\r\n         [[node IteratorGetNext (defined at usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/util.py:61) ]]\r\n\r\nErrors may have originated from an input operation.\r\nInput Source operations connected to node IteratorGetNext:\r\n IteratorV2 (defined at usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/util.py:59)\r\n\r\nOriginal stack trace for 'IteratorGetNext':\r\n  File \"usr/lib/python3.6/runpy.py\", line 193, in _run_module_as_main\r\n    \"__main__\", mod_spec)\r\n  File \"usr/lib/python3.6/runpy.py\", line 85, in _run_code\r\n    exec(code, run_globals)\r\n  File \"mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 263, in <module>\r\n    entrypoint()\r\n  File \"mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 257, in entrypoint\r\n    spleeter()\r\n  File \"usr/local/lib/python3.6/dist-packages/typer/main.py\", line 214, in __call__\r\n    return get_command(self)(*args, **kwargs)\r\n  File \"usr/local/lib/python3.6/dist-packages/click/core.py\", line 829, in __call__\r\n    return self.main(*args, **kwargs)\r\n  File \"usr/local/lib/python3.6/dist-packages/click/core.py\", line 782, in main\r\n    rv = self.invoke(ctx)\r\n  File \"usr/local/lib/python3.6/dist-packages/click/core.py\", line 1259, in invoke\r\n    return _process_result(sub_ctx.command.invoke(sub_ctx))\r\n  File \"usr/local/lib/python3.6/dist-packages/click/core.py\", line 1066, in invoke\r\n    return ctx.invoke(self.callback, **ctx.params)\r\n  File \"usr/local/lib/python3.6/dist-packages/click/core.py\", line 610, in invoke\r\n    return callback(*args, **kwargs)\r\n  File \"usr/local/lib/python3.6/dist-packages/typer/main.py\", line 497, in wrapper\r\n    return callback(**use_params)  # type: ignore\r\n  File \"mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 90, in train\r\n    tf.estimator.train_and_evaluate(estimator, train_spec, evaluation_spec)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 505, in train_and_evaluate\r\n    return executor.run()\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 646, in run\r\n    return self.run_local()\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 747, in run_local\r\n    saving_listeners=saving_listeners)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 349, in train\r\n    loss = self._train_model(input_fn, hooks, saving_listeners)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1175, in _train_model\r\n    return self._train_model_default(input_fn, hooks, saving_listeners)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1201, in _train_model_default\r\n    self._get_features_and_labels_from_input_fn(input_fn, ModeKeys.TRAIN))\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1037, in _get_features_and_labels_from_input_fn\r\n    self._call_input_fn(input_fn, mode))\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/util.py\", line 61, in parse_input_fn_result\r\n    result = iterator.get_next()\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow/python/data/ops/iterator_ops.py\", line 420, in get_next\r\n    name=name)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow/python/ops/gen_dataset_ops.py\", line 2750, in iterator_get_next\r\n    output_shapes=output_shapes, name=name)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow/python/framework/op_def_library.py\", line 750, in _apply_op_helper\r\n    attrs=attr_protos, op_def=op_def)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow/python/framework/ops.py\", line 3565, in _create_op_internal\r\n    op_def=op_def)\r\n  File \"usr/local/lib/python3.6/dist-packages/tensorflow/python/framework/ops.py\", line 2045, in __init__\r\n    self._traceback = tf_stack.extract_stack_for_node(self._c_op)\r\n\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1375, in _do_call\r\n    return fn(*args)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1360, in _run_fn\r\n    target_list, run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1453, in _call_tf_sessionrun\r\n    run_metadata)\r\ntensorflow.python.framework.errors_impl.InvalidArgumentError: Type mismatch: actual float vs. expect uint8\r\n         [[{{node args_13}}]]\r\n         [[IteratorGetNext]]\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/usr/lib/python3.6/runpy.py\", line 193, in _run_module_as_main\r\n    \"__main__\", mod_spec)\r\n  File \"/usr/lib/python3.6/runpy.py\", line 85, in _run_code\r\n    exec(code, run_globals)\r\n  File \"/mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 263, in <module>\r\n    entrypoint()\r\n  File \"/mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 257, in entrypoint\r\n    spleeter()\r\n  File \"/usr/local/lib/python3.6/dist-packages/typer/main.py\", line 214, in __call__\r\n    return get_command(self)(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/click/core.py\", line 829, in __call__\r\n    return self.main(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/click/core.py\", line 782, in main\r\n    rv = self.invoke(ctx)\r\n  File \"/usr/local/lib/python3.6/dist-packages/click/core.py\", line 1259, in invoke\r\n    return _process_result(sub_ctx.command.invoke(sub_ctx))\r\n  File \"/usr/local/lib/python3.6/dist-packages/click/core.py\", line 1066, in invoke\r\n    return ctx.invoke(self.callback, **ctx.params)\r\n  File \"/usr/local/lib/python3.6/dist-packages/click/core.py\", line 610, in invoke\r\n    return callback(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/typer/main.py\", line 497, in wrapper\r\n    return callback(**use_params)  # type: ignore\r\n  File \"/mnt/Audio_separation/new/spleeter/spleeter/__main__.py\", line 90, in train\r\n    tf.estimator.train_and_evaluate(estimator, train_spec, evaluation_spec)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 505, in train_and_evaluate\r\n    return executor.run()\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 646, in run\r\n    return self.run_local()\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 747, in run_local\r\n    saving_listeners=saving_listeners)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 349, in train\r\n    loss = self._train_model(input_fn, hooks, saving_listeners)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1175, in _train_model\r\n    return self._train_model_default(input_fn, hooks, saving_listeners)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1208, in _train_model_default\r\n    saving_listeners)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1515, in _train_with_estimator_spec\r\n    any_step_done = True\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 886, in __exit__\r\n    self._close_internal(exception_type)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 919, in _close_internal\r\n    h.end(self._coordinated_creator.tf_sess)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/basic_session_run_hooks.py\", line 609, in end\r\n    l.end(session, last_step)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 567, in end\r\n    self._evaluate(global_step_value)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 573, in _evaluate\r\n    self._evaluator.evaluate_and_export())\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/training.py\", line 955, in evaluate_and_export\r\n    hooks=self._eval_spec.hooks)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 467, in evaluate\r\n    name=name)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 510, in _actual_eval\r\n    return _evaluate()\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 499, in _evaluate\r\n    output_dir=self.eval_dir(name))\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow_estimator/python/estimator/estimator.py\", line 1647, in _evaluate_run\r\n    config=self._session_config)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/evaluation.py\", line 272, in _evaluate_once\r\n    session.run(eval_ops, feed_dict)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 779, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1284, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1385, in run\r\n    raise six.reraise(*original_exc_info)\r\n  File \"/usr/local/lib/python3.6/dist-packages/six.py\", line 703, in reraise\r\n    raise value\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1370, in run\r\n    return self._sess.run(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1443, in run\r\n    run_metadata=run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/training/monitored_session.py\", line 1201, in run\r\n    return self._sess.run(*args, **kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 968, in run\r\n    run_metadata_ptr)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1191, in _run\r\n    feed_dict_tensor, options, run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1369, in _do_run\r\n    run_metadata)\r\n  File \"/usr/local/lib/python3.6/dist-packages/tensorflow/python/client/session.py\", line 1394, in _do_call\r\n    raise type(e)(node_def, op, message)\r\ntensorflow.python.framework.errors_impl.InvalidArgumentError: Type mismatch: actual float vs. expect uint8\r\n         [[{{node args_13}}]]\r\n         [[IteratorGetNext]]\r\n\"\r\ni  wonder what the reason is,thanks u",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/669/comments",
+    "author": "mrlihellohorld",
+    "comments": [
+      {
+        "user": "iufuXin",
+        "created_at": "2024-10-11T11:37:57Z",
+        "body": "@mrlihellohorld 我也遇到了同样的问题，请问是怎么回事？"
+      }
+    ]
+  },
+  {
+    "number": 666,
+    "title": "ERROR:spleeter:ffmpeg binary not found[Discussion] your question",
+    "created_at": "2021-09-24T07:38:01Z",
+    "closed_at": "2021-10-14T10:22:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/666",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nERROR:spleeter:ffmpeg binary not found",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/666/comments",
+    "author": "ayan0074",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-10-14T10:22:43Z",
+        "body": "Hi @ayan0074 \r\nAs the question lacks detail, and the error you report seems quite self-explanatory (ffmpeg needs to be installed, which can be done for instance with conda on any platform : `conda install ffmpeg`), I'll close this issue. Feel free to reopen with more details if needed."
+      },
+      {
+        "user": "izut",
+        "created_at": "2023-07-21T00:46:05Z",
+        "body": "try: \r\n`\r\n$ ffmpeg\r\n`\r\nif got \r\n`\r\n-bash: ffmpeg: command not found\r\n`\r\nyou need install ffmpeg first!\r\n\r\nmac: brew install ffmpeg\r\n\r\ndeiban: apt-get install ffmpeg\r\n\r\ncentos: yum install ffmpeg ffmpeg-devel \r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 644,
+    "title": "to get help for using spleeter",
+    "created_at": "2021-07-25T07:05:55Z",
+    "closed_at": "2021-08-24T14:08:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/644",
+    "body": "i also try / and // and \"\" around file address.It is not working, what am i doing wrong.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/644/comments",
+    "author": "TheOneCrew",
+    "comments": [
+      {
+        "user": "Joldiges",
+        "created_at": "2021-07-25T18:10:34Z",
+        "body": "\"Not working\" is only of the worst phrases in asking for help.\r\nPlease give more details.  In what way is it not working?  Any error messages?"
+      },
+      {
+        "user": "a122760",
+        "created_at": "2021-08-05T12:15:06Z",
+        "body": "> i also try / and // and \"\" around file address.It is not working, what am i doing wrong.\r\n\r\nAlthough you are very vague, I guess I probably know what you are talking about; this is caused by a bug in line 527 of \"dataset.py\", you can set the configuration file like this: \"training_cache\": \"exp/training_cache\", \"validation_cache\":\"exp/validation_cache\"."
+      }
+    ]
+  },
+  {
+    "number": 632,
+    "title": "UnsatisfiableError: The following specifications were found to be incompatible with the existing python installation in your environment:[Discussion] your question",
+    "created_at": "2021-06-21T12:53:24Z",
+    "closed_at": "2021-07-16T09:26:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/632",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nHi, I am upgrading the version of tensorflow from 1.14.0 to a value greater than or equal to 2.2 in Anaconda navigator's environment \"tsa_course\", but I am getting this error:\r\n\r\nUnsatisfiableError: The following specifications were found to be incompatible with the existing python installation in your environment\r\nargon2-cffi -> python[version='>=2.7,<2.8.0a0|>=3.5,<3.6.0a0']\r\nbleach -> python[version='>=3.8,<3.9.0a0|>=3.9,<3.10.0a0']\r\ngrpcio -> python[version='>=2.7,<2.8.0a0']\r\nh5py -> python[version='<3']\r\nhtml5lib=1.0.1 -> python[version='>=3.8,<3.9.0a0|>=3.9,<3.10.0a0']\r\n And the list goes on....\r\n\r\nCurrent system: Python 3.7.2, Windows 10, Cython 0.29.23\r\n\r\nCan anyone help me update the version of tensorflow in my tsa_course environment",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/632/comments",
+    "author": "surajk150741",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-07-16T09:26:19Z",
+        "body": "Hi @surajk150741,\r\nThis does not seem to be a spleeter related issue, but a tensorflow one, so I suggest you report it on the appropriate github repository."
+      }
+    ]
+  },
+  {
+    "number": 619,
+    "title": "[Discussion] Isolating guitars?",
+    "created_at": "2021-05-06T17:27:56Z",
+    "closed_at": "2021-05-18T17:09:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/619",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nAwesome project!\r\n\r\nI think it'd be awesome to also have a way to isolate guitar tracks.\r\n\r\nFound some related discussions:\r\n\r\n- #3 \r\n- #62 \r\n- #551 \r\n\r\nRight now it works perfectly with the Bass track.\r\n\r\nAssuming Bass usually has a relatively \"low frequency\" in terms of the sound not sure if that helps the model to detect it's a Bass sound in the frequency domain(if FFT is used)(trying to make sense, but not sure I'm understanding this at all).\r\n\r\nWonder is it possible to (\"easily\") isolate the Lead/Rhythm guitar for rock songs?\r\n\r\n### Update\r\n\r\nIt seems using 5 stems and the \"other\" track contains the guitar tracks for a rock song that I tried.\r\n\r\nThough the \"volume\" of the sound doesn't sound consistent.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/619/comments",
+    "author": "ibigbug",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-05-18T17:09:17Z",
+        "body": "Hi @ibigbug\r\nindeed it would be awesome. We actually tried to train 5 stems models were the fifth stem was guitar instead of piano before releasing spleeter, but we got quite unsatisfactory results. We won't have time to work on new models in the near future, but you can also try to train your own model to separate guitar if you have appropriate data.\r\n\r\nRegarding your \"volume\" issue, note that stems should sum up to the mix, so if the volume of a stem seems quite different from the volume in the mix, this is probably because the corresponding instrument was not properly separated and part of it should remain in the other stems."
+      }
+    ]
+  },
+  {
+    "number": 606,
+    "title": "docker: Error response from daemon: Unknown runtime specified nvidia.[Discussion] your question",
+    "created_at": "2021-04-07T09:51:38Z",
+    "closed_at": "2021-05-18T16:53:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/606",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI want to use GPU\r\nso I  run ：docker run --runtime=nvidia -v $(pwd)/output:/output deezer/spleeter-gpu separate -o /output -i audio_example.mp3\r\n\r\nhave an error:docker: Error response from daemon: Unknown runtime specified nvidia.[Discussion] your question",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/606/comments",
+    "author": "hjing100",
+    "comments": [
+      {
+        "user": "hjing100",
+        "created_at": "2021-04-08T09:01:43Z",
+        "body": "docker: Error response from daemon: manifest for deezer/spleeter-gpu:latest not found: manifest unknown: manifest unknown."
+      },
+      {
+        "user": "mogita",
+        "created_at": "2021-04-15T04:32:32Z",
+        "body": "Similarly, specifying `deezer/spleeter` for \"docker run\" command showed the same error."
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2021-04-15T14:13:42Z",
+        "body": "Hi @hjing100,\r\nI couldn't reproduce your issue on a GPU-equipped computer (with driver version 430.14 and CUDA Version 10.2).\r\nThe message seems to say that you don't have a proper nvidia/CUDA install on your computer. You need to have a NVIDIA compatible GPU on the computer and to have a proper CUDA install to run spleeter on GPU.\r\nIf you do have a CUDA install, it may be an issue with the version of the driver or of CUDA. Make sure to have CUDA 10.1 or more and a compatible driver version.\r\nIf you still get an error, try to match the versions with the ones I tried.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 600,
+    "title": "Cannot find reference 'get_default_audio_adapter' in 'adapter.py' ",
+    "created_at": "2021-03-30T01:03:18Z",
+    "closed_at": "2021-04-02T13:42:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/600",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nfrom spleeter.audio.adapter import get_default_audio_adapter but my IDE reported that the reference cannot be found",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/600/comments",
+    "author": "cong-x-p",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-04-02T13:42:00Z",
+        "body": "Hi @cong-x-p,\r\nthe `get_default_audio_adapter` function was indeed removed from a previous version. \r\nTo get a default audio adapter, you now should call the `default` class method of AudioAdapter:\r\n\r\n```python\r\nfrom spleeter.audio.adapter import AudioAdapter\r\ndefault_adapter = AudioAdapter.default()\r\n```\r\n\r\nIf there is some part of documentation that still mention the former `get_default_audio_adapter`, let us know, we'll try to fix it."
+      }
+    ]
+  },
+  {
+    "number": 596,
+    "title": "[Discussion] How do you change the file path format for separated track outputs?",
+    "created_at": "2021-03-11T22:09:08Z",
+    "closed_at": "2021-03-12T14:19:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/596",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI am hoping to change the path where files are saved when I call the python API's separate_to_file(). I want to save files such that their path is /destination/trackname_instrument.wav instead of the default /destination/trackname/instrument.wav. I have been trying to pass the optional filename_format parameter, but I am not sure how to use it correctly. The \"Exported filename format\" section of the wiki still says \"To be documented\".",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/596/comments",
+    "author": "carter-king",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-03-12T14:19:31Z",
+        "body": "Hi @carter-king,\r\nindeed, you need to use the filename_format parameter:\r\n```python\r\nfrom spleeter.separator import Separator\r\nseparator = Separator(\"spleeter:2stems\")\r\nseparator.separate_to_file(\"/path/to/audio.mp3\",  \"/path/to/output\",  filename_format=\"{filename}_{instrument}.{codec}\")\r\n```\r\n\r\nYou can user the keyword `filename` (input file name), `instrument` (name of the instrument), `foldername` (name of the folder the input file is in) and `codec` between curly brackets within the formatting string.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 558,
+    "title": "What does this mean?",
+    "created_at": "2021-01-13T02:25:49Z",
+    "closed_at": "2021-01-29T13:28:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/558",
+    "body": "I'm not a programmer or anything so this will probably come across as an obvious question. \r\n\r\nI have gotten everything installed and I'm a femtometer away from getting spleeter to work.\r\n\r\nBut what does this mean?? \r\n\r\n  _FILES...  List of input audio file path  [required]_\r\n\r\nI seem to be using the other commands properly I just have no idea what to type in for that. every time I try anything it says:\r\n\r\n_Error: Invalid value for 'FILES...': File 'audio_example.mp3' does not exist._ \r\n\r\nAnything helps I'm so close to getting this I think It hurts\r\n\r\n\r\n\r\n ",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/558/comments",
+    "author": "Laikanoosh",
+    "comments": [
+      {
+        "user": "IvanGH2",
+        "created_at": "2021-01-15T07:53:31Z",
+        "body": "I'm assuming you're looking to separate audio_example into stems. Let's say that audio_example.mp3 is present in C:\\test directory. Then, in cmd navigate to C:\\test\r\n\r\nc:\\>cd c:\\test \r\n\r\nand then call spleeter separate \r\n\r\nc:\\test>spleeter separate audio_example.mp3 -o stems\r\n\r\nIf everything goes OK, you should now see the stems in the C:\\test\\stems\\audio_example folder.\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 551,
+    "title": "isolating a guitar solo",
+    "created_at": "2021-01-07T16:49:43Z",
+    "closed_at": "2021-01-08T13:21:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/551",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nGoal is to create a track without the guitar solo.\r\nWould spleeter have the ability to isolate a guitar solo from a song if a training track was created consisting of just the actual guitar solo (performed and recorded by me as well as possible)?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/551/comments",
+    "author": "yamtssfa",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-01-08T13:21:35Z",
+        "body": "Hi @yamtssfa,\r\nthank you for your question.\r\nIsolating a guitar solo is quite hard per se, because the system needs to be able to distinguish what can be considered as a solo and what cannot and then to be able to predict the role of the guitar within the track.\r\nThe released for spleeter, based on U-nets, were not trained to perform such a task and I doubt they would be able to it well if properly trained. But the only way to check is to try :).\r\nIf you want to train such a system, you will need much more than a single isolated solo guitar and backing track."
+      }
+    ]
+  },
+  {
+    "number": 547,
+    "title": "[Discussion] Using spleeter for dialog separation",
+    "created_at": "2021-01-03T02:23:38Z",
+    "closed_at": "2021-01-08T13:24:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/547",
+    "body": "What would be the best way to go about using spleeter for dialog separation? Specifically, isolation of dialog in noisy or unfriendly contexts (i.e. lots of background noise).\r\n\r\nHave located training info in manual - hopefully this will shed some light.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/547/comments",
+    "author": "edwar64896",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2021-01-08T13:24:47Z",
+        "body": "Hi @edwar64896\r\nHave you tried to use straightforwardly the pretrained models on noisy dialogs?\r\nI think they could actually do a fair job at isolating speech.\r\nDepending on your application, you may need to train your own on model, and then to do that you'll need a dataset of clean dialogs with isolate noise."
+      }
+    ]
+  },
+  {
+    "number": 528,
+    "title": "A question about the length of separation of audio files",
+    "created_at": "2020-12-07T09:29:54Z",
+    "closed_at": "2020-12-07T17:13:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/528",
+    "body": "Excuse me.why do I use a 20 minute audio file,but output is two  10 minute audio files,when I use 2stems model.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/528/comments",
+    "author": "mtz1992",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-12-07T17:13:42Z",
+        "body": "The maximal duration of the input to be processed can be set with the `-d` option (expressed in seconds):\r\n```bash \r\nspleeter separate -i input_audio_file.wav -d 300 \r\n```\r\nThe default duration is set to 600s (10 minutes), which is why you get 10 minute audio outputs. \r\nYou can set it with a higher value but be aware that it may require quite a lot of RAM and produce Out Of Memory errors.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 526,
+    "title": "[Discussion] Is it possible to use GPU with Spleeter Python API without conda?",
+    "created_at": "2020-12-03T16:52:43Z",
+    "closed_at": "2020-12-03T17:20:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/526",
+    "body": "Hello all,\r\n\r\nI'm using Spleeter Python API to separate audio signals in many stems. Is it possible to use GPU for separations without conda or docker image?\r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/526/comments",
+    "author": "Tiago622",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-12-03T17:20:34Z",
+        "body": "Hello @Tiago622,\r\nyes it is possible (at least on linux, almost sure it won't work on MacOS, and not sure about Windows). \r\nYou need to be sure to have:\r\n- ffmpeg installed.\r\n- a Nvidia GPU with drivers installed.\r\n- CUDA 10.1 (a more recent version should do it too).\r\n- python (3.6, 3.7 or 3.8) and pip.\r\n\r\nThen `pip install spleeter` and you should then be able to run spleeter on GPU.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 525,
+    "title": "2 stems vs 2 stems-finetune",
+    "created_at": "2020-12-02T21:08:08Z",
+    "closed_at": "2020-12-03T08:57:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/525",
+    "body": "Hi.\r\nCould you explain the \r\ndifference between 2stems and \r\n2stems-Finetune.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/525/comments",
+    "author": "MABMW",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-12-03T08:57:22Z",
+        "body": "Hi @MABMW,\r\nthe `2stems-finetune` model is the same as the `2stems` one, but contains extra parameter of the optimizer that makes possible to continue training of the model on your own dataset out of the box. \r\n`2stems-finetune` is then larger but contains only additional information for training.\r\nSo if you're only using spleeter for performing separation and not for training, you can stick to `2stems`."
+      }
+    ]
+  },
+  {
+    "number": 519,
+    "title": "[Discussion] How does the LSTM work in this project?",
+    "created_at": "2020-11-17T04:44:28Z",
+    "closed_at": "2020-11-17T10:02:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/519",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI went through the source code but I'm still quite confused what is the point of LSTM in the model. Thanks in advance if you can give me a clue about it.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/519/comments",
+    "author": "221294583",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-11-17T10:02:10Z",
+        "body": "Hi @221294583 \r\nThe LSTM model was just put in the code as a pedagogical example of an alternative model that could be used for training (we do not provide trained models based on this one)."
+      }
+    ]
+  },
+  {
+    "number": 510,
+    "title": "the question of the audio separate time",
+    "created_at": "2020-11-04T09:24:32Z",
+    "closed_at": "2020-11-04T10:06:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/510",
+    "body": "Excuse me, is the separated audio file just the first ten minutes of audio?\r\nWhat to do if the original audio is longer than ten minutes？\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/510/comments",
+    "author": "mtz1992",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-11-04T10:06:33Z",
+        "body": "Hi @mtz1992,\r\nAs already mentioned in several issues (such as #274 ), 10 min (600s) is just the default value of the `--duration` parameter of the `spleeter separate` command. \r\nIt can be set to any value, but be aware that you may encounter memory issues if trying to separate too big files."
+      },
+      {
+        "user": "mtz1992",
+        "created_at": "2020-11-04T11:07:25Z",
+        "body": "ok.I get it. Thank you very much"
+      }
+    ]
+  },
+  {
+    "number": 507,
+    "title": "[Discussion] Separation based on chunk by chunk input waveform data does not seem to work!",
+    "created_at": "2020-10-12T14:17:48Z",
+    "closed_at": "2020-10-13T07:54:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/507",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nHi,\r\nI am trying to do 2stems separation by using \"separator.separate(waveform)\" API. \r\nWhen i call this API with complete waveform of input wav file, 2stems separation is perfect (output vocals.wav & accompaniment.wav proper).\r\nBut if i call this API with 4096 samples of same input wav file in a loop till end of file and accumulate the predicted vocals & accompaniment outputs, the vocals output found to contain lot of music (meaning separation is not proper).\r\n\r\n#Code snippet\r\nfrom spleeter.audio.adapter import get_default_audio_adapter\r\n\r\naudio_loader = get_default_audio_adapter()\r\nsample_rate = 44100\r\nwaveform, _ = audio_loader.load('/path/to/audio/file', sample_rate=sample_rate)\r\n\r\nbuffer = 4096\r\nsamples_total = len(waveform)\r\nsamples_wrote = 0\r\n\r\nwhile samples_wrote < samples_total:\r\n\t#check if the buffer is not exceeding total samples\r\n\tif buffer > (samples_total - samples_wrote):\r\n\t\tbuffer = samples_total - samples_wrote\r\n\tblock = waveform[samples_wrote : (samples_wrote + buffer),]\r\n\tprediction = separator.separate(block)\r\n\r\n\r\nI am trying to implement a sample application to do 2stems separation in run time chunk by chunk.\r\nBut separation is not proper. Don't know whether spleeter supports this type of provision.\r\nIf yes, don't where is the mistake or how to use spleeter API to achieve it.\r\n\r\nIt would be highly helpful if someone could help me or assist me with some information.\r\n\r\nThank you so much!",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/507/comments",
+    "author": "racko1",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-10-13T07:54:50Z",
+        "body": "Hi @racko1.\r\nThe behaviour you get with short buffers is not surprising. The model needs context for separating properly and may behave incorrectly at the border. With a buffer of 4096 (which is very short), you only have a single frame of STFT to process and then have almost no temporal context to perform separation.\r\nAlso be aware, that the default model (spleeter:<N>stems) will actually perform separation on 12s long segment even if you provide a shorter buffer (zero-padding the buffer to 12s), which will result in a very inefficient separation (both in terms of separation performance and in terms of speed). To change the size of the segment, you have to tweak the `T` parameter in the config. The smaller possible value is `64`  which corresponds to roughly 1.5s, so it is useless to try to perform separation on smaller buffer.\r\n\r\nI guess you'd like to perform realtime on-the-fly separation which spleeter was not designed for.  Some compromise for doing it are discussed in issue #276 .\r\n"
+      },
+      {
+        "user": "racko1",
+        "created_at": "2020-10-13T11:22:25Z",
+        "body": "Got it!\r\nThank you so much."
+      },
+      {
+        "user": "jeromeDms",
+        "created_at": "2021-04-30T11:31:44Z",
+        "body": "I'm also searching to separate using chunks, did you find something @racko1  ?\r\nThanks"
+      }
+    ]
+  },
+  {
+    "number": 489,
+    "title": "[Discussion] How to get around ERROR: Package 'spleeter' requires a different Python: 3.8.2 not in '>=3.6, <3.8'?",
+    "created_at": "2020-09-05T15:33:40Z",
+    "closed_at": "2020-09-07T07:00:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/489",
+    "body": "I tried installing this again since it's been awhile.\r\nBut I am still getting this error.\r\n\"ERROR: Package 'spleeter' requires a different Python: 3.8.2 not in '>=3.6, <3.8'\"\r\nHow do I get around this? I'm on Ubuntu 20.04 btw.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/489/comments",
+    "author": "CHJ85",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-09-07T07:00:48Z",
+        "body": "Spleeter is not compatible with python 3.8 yet (as tensorflow 1.15 which is a needed dependency is also not compatible).\r\nWe should release a compatible version soon. In the meantime, you have to use python 3.6 or 3.7. \r\nThe easiest way to do this without messing things in your main python installation is to use a virtual env in conda:\r\n```python\r\nconda create -n py37 python=3.7\r\nconda activate 3.7\r\npip install spleeter\r\n```"
+      },
+      {
+        "user": "CHJ85",
+        "created_at": "2020-09-09T01:18:25Z",
+        "body": "I tried to install conda and do it that way, but it wouldn't work.\r\nI'll just wait for the next version then.\r\nThanks for your response."
+      },
+      {
+        "user": "expectopatronum",
+        "created_at": "2020-09-09T07:11:21Z",
+        "body": "It should be:\r\n```python\r\nconda create -n py37 python=3.7\r\nconda activate py37\r\npip install spleeter\r\n```\r\n\r\n"
+      },
+      {
+        "user": "CHJ85",
+        "created_at": "2020-09-09T09:44:35Z",
+        "body": "Right. I cannot find conda in the package manager, so I'm not sure what version ofconda I need to install.\r\nI tried the version from pip but that one wasn't compatible.\r\nSo like I said, I'll be waiting for the next version of Spleeter."
+      }
+    ]
+  },
+  {
+    "number": 479,
+    "title": "Mp3 Format separate_to_file method API documentation",
+    "created_at": "2020-08-21T12:53:55Z",
+    "closed_at": "2020-08-24T08:01:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/479",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nhello,\r\ni am trying to separate my tracks and export the stems to .mp3 instead of .wav with the separate_to_file method.\r\nAnyone figured it out?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/479/comments",
+    "author": "gnai",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-08-24T08:01:13Z",
+        "body": "You have a `codec` option in the `separate_to_file` method that makes it possible (and a `bitrate` option to set the bitrate):\r\n```bash\r\nfrom spleeter.separator import Separator\r\nseparator = Separator('spleeter:2stems')\r\nseparator.separate_to_file(\"/path/to/input/audio/file.wav\", \"/output/path\", codec=\"mp3\", bitrate=\"128k\")\r\n```\r\n"
+      }
+    ]
+  },
+  {
+    "number": 470,
+    "title": "[Discussion] conda install takes forever to solve dependencies",
+    "created_at": "2020-08-13T21:32:47Z",
+    "closed_at": "2021-02-12T14:44:54Z",
+    "labels": [
+      "question",
+      "inactive"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/470",
+    "body": "Hi is there a special version of conda to be used. I seem to install  packages via conda , in ubuntu 18.04 but \r\n`conda install -c conda-forge spleeter` takes hours to solve dependencies and fails. I was wondering if anyone was facing the same issue ? (ubuntu 18.04 OS)",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/470/comments",
+    "author": "basicvisual",
+    "comments": [
+      {
+        "user": "darrenwinslow",
+        "created_at": "2020-08-18T18:58:50Z",
+        "body": "I have the same issue on macOS (10.15.6) and it still fails."
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2020-08-21T11:24:24Z",
+        "body": "I can't reproduce your issue neither on macOS (10.14.6) nor on debian 10.\r\nCan you try installing spleeter in a minimal conda environment? \r\nSuch as:\r\n```bash\r\nconda create -n spleeter -c conda-forge spleeter\r\nconda activate spleeter\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 447,
+    "title": "Is the requirements.txt missing on master?",
+    "created_at": "2020-07-09T12:05:07Z",
+    "closed_at": "2020-07-09T12:14:53Z",
+    "labels": [
+      "bug",
+      "good first issue",
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/447",
+    "body": "There is no  \"requirements.txt\" under master branch.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/447/comments",
+    "author": "DocRace",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2020-07-09T12:14:53Z",
+        "body": "Yes, we recently moved our CI from CircleCI to Github action and we removed the `requirements.txt` file during the process, leaving the dependency listing into the `setup.py`. We will maybe restore requirements later and integrate it directly into the packaging. Feel free to submit a pull request if you need it quickly :)"
+      },
+      {
+        "user": "dmd",
+        "created_at": "2020-07-26T16:11:47Z",
+        "body": "`readme.md` still refers to `requirements.txt`"
+      }
+    ]
+  },
+  {
+    "number": 434,
+    "title": "[Discussion] Why files outputted by splitter is three times bigger than initial file? ",
+    "created_at": "2020-06-26T12:44:48Z",
+    "closed_at": "2020-06-26T13:45:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/434",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nThanks for the awesome project guys. I am wondering why outputted files are much bigger than the initial file?\r\nFor example, my initial file was 9mb and the vocal I got after processing 36mb.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/434/comments",
+    "author": "Werter12",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-06-26T13:45:41Z",
+        "body": "Hi @Werter12,\r\nThere are several reasons for the output files having a bigger size than the input one's:\r\n- the audio codec/bitrate is not the same: Spleeter outputs wav/PCM 16 bits with 44.1kHz sampling rate by default (so a bit rate of 1440kbps). So if your input is mp3 or aac @320kpbs, then the output files will be 4.5x bigger than the input. you can set the output audio codec with the `-c` option and the output audio bitrate with the `-b` option.\r\n- the input file is mono: then Spleeter will actually start by converting it to stereo, process the file as stereo and output stereo files (so 2x bigger than input)."
+      },
+      {
+        "user": "Werter12",
+        "created_at": "2020-06-26T14:30:34Z",
+        "body": "@romi1502 Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 406,
+    "title": "Tensorflow 2,0 doesnot support tf.contrib sfft",
+    "created_at": "2020-05-30T18:20:19Z",
+    "closed_at": "2020-06-08T15:30:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/406",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nthe updated tensorflow 2.x does not support the ones in tf 1.15\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/406/comments",
+    "author": "patricphinehas",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-06-08T15:30:18Z",
+        "body": "Hi @patricphinehas , \r\n\r\nthe `contrib.signal` module in TF1 has been integrated to TF2, so basically all stft functions should now be directly in `tf.signal` in TF2. Note that we haven't migrated yet."
+      }
+    ]
+  },
+  {
+    "number": 404,
+    "title": "[Discussion] Will higher cpu cores and ram speed up spleeter?",
+    "created_at": "2020-05-29T04:20:18Z",
+    "closed_at": "2020-05-29T07:48:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/404",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI currently have a quad core with 8gb ram and it gets stuck with spleeter. Will using for example an 8 core cpu with 16gb ram make it faster or it wont make a difference?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/404/comments",
+    "author": "Scylla2020",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-05-29T07:48:27Z",
+        "body": "Having more RAM won't make spleeter faster but can help processing longer files.\r\nHaving a 8 core instead of a 4 core should make spleeter a bit faster (especially for the tensorflow part) but the best way to have a significative speed improvement is to process files on a (CUDA compatible) GPU instead of CPU."
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2020-05-29T08:03:30Z",
+        "body": "So approximately how much speedup could i get  if I went with a RTX 2080 Ti gpu in this case? Will it be very significant? "
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-06-01T23:19:07Z",
+        "body": "@Scylla2020 Yes. Very significant.\r\nHow much more significant.\r\nTry to process a 3 minute song and tell me how many seconds it takes.\r\nMy RTX2080 does it in ~7 seconds."
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2020-06-02T04:36:04Z",
+        "body": "Ok great thanks! I decided to just get an entry level, RX550 will see how that goes in a couple weeks"
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2020-06-02T04:52:54Z",
+        "body": "How many cores are you using. Just seen spleeter docs say they used a Gtx 1080 with a 3min song taking 1.5sec on a 32 core cpu. "
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-06-02T11:59:46Z",
+        "body": "I have a few different machines, my main one has an i9-9900k (8 core)+ RTX2080.\r\n\r\n\r\nThese are my results\r\n\r\n**Model**: 5 stem\r\n\r\n**Subject**: ~3 min song\r\n\r\n**GPU**\r\nModel load time: 5.98 s\r\nSong spleet time:  2.27 s\r\n\r\n**CPU**\r\nModel load time: 6.90 s\r\nSong spleet time: 25.41 s\r\n\r\nSo the GPU gives about 10x faster processing.\r\n\r\nFor anyone out there that wants to do benchmarking, here's my script:\r\n\r\n```\r\nimport sys\r\nimport os\r\nimport sys\r\n\r\nimport time\r\n\r\nimport warnings\r\nwarnings.filterwarnings('ignore')\r\n\r\n\r\n\r\n\r\nstart = time.time()\r\nfrom spleeter.separator import Separator\r\n\r\ncount = 0\r\navg = 0\r\n\r\ndef doOnce():\r\n    global count\r\n    global avg\r\n\r\n    count += 0\r\n    print('Run ' + str(count))\r\n    start = time.time()\r\n    separator.separate_to_file('./1.mp3', destination='output', synchronous=True)\r\n    end = time.time()\r\n    elapsed = end - start\r\n    print('Song completion time: ' + str(elapsed))\r\n    avg += elapsed\r\n\r\nif __name__ == '__main__':\r\n    print('Benchmark')\r\n\r\n    separator = Separator('spleeter:5stems')\r\n    end = time.time()\r\n    elapsed = end - start\r\n    print('Model loading time: ' + str(elapsed))\r\n\r\n    doOnce()\r\n    doOnce()\r\n    doOnce()\r\n    doOnce()\r\n    doOnce()\r\n    \r\n    avg = avg/5\r\n    print('Avarage (sec): ' + str(avg))\r\n```\r\n\r\nUsage:\r\n\r\n- Place a file called `1.mp3` in same folder as the script\r\n- Open Anaconda shell\r\n- Activate your environment\r\n- Run `python -m benchmark`\r\n- Wait until script executes"
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2020-06-06T14:26:11Z",
+        "body": "Cool thanks for the detail!"
+      }
+    ]
+  },
+  {
+    "number": 388,
+    "title": "[Discussion] Output in FLAC or other formats",
+    "created_at": "2020-05-22T12:33:33Z",
+    "closed_at": "2020-05-22T12:37:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/388",
+    "body": "Hi,\r\nI was wondering if it is possible to to export the output files in other formats than WMA. I would be interested in having the files as FLAC, is it already possible to do so ?\r\n\r\nI thank you in advance for your time and comprehension towards my request.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/388/comments",
+    "author": "leops95",
+    "comments": [
+      {
+        "user": "leops95",
+        "created_at": "2020-05-22T12:34:28Z",
+        "body": "Whoops the files are in .wav and not .wma"
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2020-05-22T12:37:25Z",
+        "body": "Hi @leops95,\r\nyes it is possible to export as `flac` using the `-c`option, as mentioned in the help (`spleeter separate -h`): \r\n```\r\n-c {wav,mp3,ogg,m4a,wma,flac}, --codec {wav,mp3,ogg,m4a,wma,flac}\r\n                        Audio codec to be used for the separated output\r\n```"
+      },
+      {
+        "user": "leops95",
+        "created_at": "2020-05-22T12:51:52Z",
+        "body": "Thanks it worked !"
+      }
+    ]
+  },
+  {
+    "number": 371,
+    "title": "[Discussion] How does the validation work?",
+    "created_at": "2020-05-13T16:32:03Z",
+    "closed_at": "2020-05-22T13:01:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/371",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nHi all, \r\n\r\nI've decided to train my own model, but just need some clarification on the train.csv vs. validation.csv. \r\n\r\nThey have different files in it and the validation is significantly smaller. \r\n\r\nIs Spleeter training a model using the train.csv and then taking some other, similar (not the same) data/music and comparing it? If so, this means that none of the data can be shared between the two csv files, correct? \r\n\r\nSo as a simple example, I could use the first 3 Foo Fighters Albums to train a model, and their most recent one to validate? ",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/371/comments",
+    "author": "JavaShipped",
+    "comments": [
+      {
+        "user": "dankwartrustow",
+        "created_at": "2020-05-13T18:03:00Z",
+        "body": "<!--\n/* Font Definitions */\n@font-face\n\t{font-family:\"Cambria Math\";\n\tpanose-1:2 4 5 3 5 4 6 3 2 4;}\n@font-face\n\t{font-family:Calibri;\n\tpanose-1:2 15 5 2 2 2 4 3 2 4;}\n/* Style Definitions */\np.MsoNormal, li.MsoNormal, div.MsoNormal\n\t{margin:0in;\n\tmargin-bottom:.0001pt;\n\tfont-size:11.0pt;\n\tfont-family:\"Calibri\",sans-serif;}\na:link, span.MsoHyperlink\n\t{mso-style-priority:99;\n\tcolor:blue;\n\ttext-decoration:underline;}\n.MsoChpDefault\n\t{mso-style-type:export-only;}\n@page WordSection1\n\t{size:8.5in 11.0in;\n\tmargin:1.0in 1.0in 1.0in 1.0in;}\ndiv.WordSection1\n\t{page:WordSection1;}\n-->I can only comment on your third question:  A model’s ability to recognize the individual patterns in the albums from its dataset will be governed by how similar or dissimilar the new information it is receiving is.  In other words, music that has been mixed similarly will produce the best results. If you check the production information and find variations between albums, it could be because they were using different production houses and equalized their records differently. Reading up on how equalization works could help you in your task – but I’d be interested to know how this works out for you.   From: JavaShippedSent: Wednesday, May 13, 2020 9:32 AMTo: deezer/spleeterCc: SubscribedSubject: [deezer/spleeter] [Discussion] How does the validation work? (#371) Hi all,I've decided to train my own model, but just need some clarification on the train.csv vs. validation.csv.They have different files in it and the validation is significantly smaller.Is Spleeter training a model using the train.csv and then taking some other, similar (not the same) data/music and comparing it? If so, this means that none of the data can be shared between the two csv files, correct?So as a simple example, I could use the first 3 Foo Fighters Albums to train a model, and their most recent one to validate?—You are receiving this because you are subscribed to this thread.Reply to this email directly, view it on GitHub, or unsubscribe. "
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2020-05-22T13:01:49Z",
+        "body": "Hi @JavaShipped \r\n> Is Spleeter training a model using the train.csv and then taking some other, similar (not the same) data/music and comparing it?\r\n\r\nSpleeter does train the model using the train.csv and then regularly computes some metrics on the validation.csv. The metrics on the validation.csv aim at monitoring the ability of the model to generalize to unseen data (so it has to be different data). Checking these metrics can help detecting possible overfitting of the model.\r\nThis is a very common setup in general machine learning.\r\n\r\n> If so, this means that none of the data can be shared between the two csv files, correct?\r\n\r\nExactly, otherwise, you won't monitor the ability of your model to generalize to unseen data.\r\n\r\n> So as a simple example, I could use the first 3 Foo Fighters Albums to train a model, and their most recent one to validate?\r\n\r\nWell if your goal is only to separate Foo fighters songs in the end, it may be sufficient. \r\nBut, if you want your model being able to generalize to other bands (with other singers, other musicians, recording in other studios...), you'll need to put other bands song in the validation set to monitor it.\r\nSo it is also usually recommended to ensure that no artists appears both in the training set and the validation dataset (and the same for the test set), to avoid over optimistic metrics. By the way, this is not only valid for source separation but for any machine learning task. See for instance \"A Closer Look On Artist Filters For Musical Genre Classification\". Arthur Flexer, ISMIR 2007.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 369,
+    "title": "[Discussion] Can't get Spleeter to install",
+    "created_at": "2020-05-10T07:55:35Z",
+    "closed_at": "2020-05-10T12:33:38Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/369",
+    "body": "Hello everyone. I'm running on Windows 10, and no matter what I try, Spleeter will NOT install with anaconda. I followed a quick YouTube tutorial and followed the instructions. I installed Python, downloaded the Spleeter zip from here, and extracted it into a folder named \"spleeter\" directly in my C:\\ directory. I've used the conda spleeter install command, and keep getting a file directory error. I've tried deleting the spleeter folder, and cloning it using the command on the spleeter page here, again keep getting the same errors. I tried everything on the main page here and no matter what I do, my anaconda prompt just reads errors. Can anyone help me out?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/369/comments",
+    "author": "Nipppi",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-05-10T12:33:37Z",
+        "body": "Hi @Nipppi \r\n\r\nPlease use the full issue (bug) template to help us help you. There is no way we can know what is going on without some basic info such as which error you get.\r\n\r\nI'm closing this but feel free to open a bug issue and fill in all  fields."
+      }
+    ]
+  },
+  {
+    "number": 366,
+    "title": "[Discussion] Command line works but not api? Spleeter-GPU",
+    "created_at": "2020-05-08T22:28:57Z",
+    "closed_at": "2020-05-11T15:15:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/366",
+    "body": "This boggles my mind, has anyone had similar experience?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/366/comments",
+    "author": "aidv",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-05-10T12:37:44Z",
+        "body": "@aidv  what do you mean by API does not work ?"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-05-11T00:17:35Z",
+        "body": "I tried using the API in my python code, it eventually worked.\r\n\r\nIt worked well with the GPU too.\r\n\r\nBut now all of a sudden the GPU utilization stopped and Spleeter is using the CPU.\r\n\r\nI changed absolutely nothing.\r\n\r\nI just can't catch a break with this 🤦🏻‍♂️"
+      }
+    ]
+  },
+  {
+    "number": 348,
+    "title": "[Discussion] Difference between librosa and tensorflow for stft_backend?",
+    "created_at": "2020-04-26T21:08:28Z",
+    "closed_at": "2020-04-27T08:09:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/348",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nAt a high level, what are the differences between the two backends?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/348/comments",
+    "author": "JeffreyCA",
+    "comments": [
+      {
+        "user": "alreadytaikeune",
+        "created_at": "2020-04-27T08:09:36Z",
+        "body": "Librosa is another library completely separate from tensorflow. When using librosa as the stft backend, all the stft computations are done by librosa and not tensorflow, meaning that we chop the tensorflow graph and use different stubs were instead of feeding waveforms and leaving all the processing to tensorflow, we feed spectrograms (and also get spectrograms back).\r\nThe reason we do that is that we have noticed that the stft operations as implemented by tensorflow on CPU were extremely slow and very memory consuming. It is still the best option on GPU though, hence why we wanted to provide an alternative when executing on CPU."
+      },
+      {
+        "user": "Saxamos",
+        "created_at": "2020-06-29T13:43:13Z",
+        "body": "By \"best option on GPU\" you mean that the split quality will be higher with tensorflow?"
+      }
+    ]
+  },
+  {
+    "number": 325,
+    "title": "[Discussion] Python 3.8 support?",
+    "created_at": "2020-04-14T10:44:53Z",
+    "closed_at": "2020-04-14T10:49:14Z",
+    "labels": [
+      "question",
+      "wontfix"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/325",
+    "body": "Ubuntu 20.04 LTS is around the corner and it will come pre-installed with Python 3.8. Is there any plans to support Python 3.8 in Spleeter?\r\n\r\nThanks.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/325/comments",
+    "author": "Tantawi",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2020-04-14T10:49:13Z",
+        "body": "Hi, we do not support Python 3.8 as the version of Tensorflow we are using do not currently support Python 3.8. You can use a virtual env, a Conda env, or a Docker image with Python 3.6 or 3.7 instead."
+      }
+    ]
+  },
+  {
+    "number": 304,
+    "title": "[Discussion] How to finetune “2stems-finetune” model with \"F\":1536",
+    "created_at": "2020-03-27T03:38:16Z",
+    "closed_at": "2020-04-02T09:14:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/304",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nGrettings. I tried trainning from checkpoint from \"2stems-finetune\" model, with my own vocals-accompaniment dataset(44.1khz, stereo). \r\n\r\nIt works fine with \"F\":1024. Though reports error when I raise \"F\" to higher value like 1536. the error info as follows:\r\n\r\n    (0) Invalid argument: assertion failed: [Need value.shape >= size, got ] [624 3072 2] [512 4608 2]\r\n         [[{{node random_crop/Assert/Assert}}]]\r\n         [[IteratorGetNext]]\r\n         [[IteratorGetNext/_2768]]\r\n    (1) Invalid argument: assertion failed: [Need value.shape >= size, got ] [624 3072 2] [512 4608 2]\r\n\r\n\r\nIt seems that the \"2stem-finetune\" itself is trained on \"F\":1024, is there any way I can finetune it with higher \"F\" value, so I can take advantage of the information above 11khz from my own datasets?\r\n\r\nAny idea appreciated!\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/304/comments",
+    "author": "blackpaintedman",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-04-02T09:14:36Z",
+        "body": "Hi @blackpaintedman \r\nI've got no problems fine tuning the 2 stems model with various value of F (1536, 1024). I think it is related to dataset caching.  \r\nIf you change F, you must recompute the cache otherwise, if you change from 1024 to 1536, it will generate such a wrong shape Error. \r\n\r\nFor recomputing the cache you can either erase it (check the value of the field `training_cache` and `validation_cache` to know where it is located) or change the value of `training_cache` and `validation_cache` in your config file."
+      }
+    ]
+  },
+  {
+    "number": 301,
+    "title": "[Discussion] Latest update news?",
+    "created_at": "2020-03-24T17:28:08Z",
+    "closed_at": "2020-03-28T01:07:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/301",
+    "body": "Anyone care to explain what improvements TF 1.15 brings to Spleeter?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/301/comments",
+    "author": "aidv",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-03-27T15:08:46Z",
+        "body": "Hi @aidv \r\n\r\nMostly we incremented for security reasons, since 1.15 patches a vulnerability that was reported to us."
+      }
+    ]
+  },
+  {
+    "number": 300,
+    "title": "Error in training",
+    "created_at": "2020-03-23T11:59:56Z",
+    "closed_at": "2020-03-30T10:43:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/300",
+    "body": "Hello,\r\n\r\nI'm getting an error \"NotImplementedError: Cannot convert a symbolic Tensor (transpose_1:0) to a numpy array.\" while training the spleeter.\r\n\r\nI am using Google colab environment while training.\r\nSteps to reproduce:\r\n\r\nStep 1: pip install spleeter\r\nStep 2: !spleeter train -p 'base_config.json' -d '/content/drive/My Drive/Training data/'\r\n\r\nErrors:\r\n--------------------------\r\nFile \"/usr/local/lib/python3.6/dist-packages/spleeter/__main__.py\", line 46, in main\r\n    entrypoint(arguments, params)\r\n  File \"/usr/local/lib/python3.6/dist-packages/spleeter/commands/train.py\", line 98, in entrypoint\r\n    evaluation_spec)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/training.py\", line 473, in train_and_evaluate\r\n    return executor.run()\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/training.py\", line 613, in run\r\n    return self.run_local()\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/training.py\", line 714, in run_local\r\n    saving_listeners=saving_listeners)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/estimator.py\", line 370, in train\r\n    loss = self._train_model(input_fn, hooks, saving_listeners)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/estimator.py\", line 1161, in _train_model\r\n    return self._train_model_default(input_fn, hooks, saving_listeners)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/estimator.py\", line 1188, in _train_model_default\r\n    input_fn, ModeKeys.TRAIN))\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/estimator.py\", line 1025, in _get_features_and_labels_from_input_fn\r\n    self._call_input_fn(input_fn, mode))\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_estimator/python/estimator/estimator.py\", line 1116, in _call_input_fn\r\n    return input_fn(**kwargs)\r\n  File \"/usr/local/lib/python3.6/dist-packages/spleeter/dataset.py\", line 78, in get_training_dataset\r\n    wait_for_cache=False)\r\n  File \"/usr/local/lib/python3.6/dist-packages/spleeter/dataset.py\", line 399, in build\r\n    .map(instrument.compute_spectrogram, num_parallel_calls=N)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/data/ops/dataset_ops.py\", line 1913, in map\r\n    self, map_func, num_parallel_calls, preserve_cardinality=False))\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/data/ops/dataset_ops.py\", line 3472, in __init__\r\n    use_legacy_function=use_legacy_function)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/data/ops/dataset_ops.py\", line 2713, in __init__\r\n    self._function = wrapper_fn._get_concrete_function_internal()\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/eager/function.py\", line 1853, in _get_concrete_function_internal\r\n    *args, **kwargs)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/eager/function.py\", line 1847, in _get_concrete_function_internal_garbage_collected\r\n    graph_function, _, _ = self._maybe_define_function(args, kwargs)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/eager/function.py\", line 2147, in _maybe_define_function\r\n    graph_function = self._create_graph_function(args, kwargs)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/eager/function.py\", line 2038, in _create_graph_function\r\n    capture_by_value=self._capture_by_value),\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/framework/func_graph.py\", line 915, in func_graph_from_py_func\r\n    func_outputs = python_func(*func_args, **func_kwargs)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/data/ops/dataset_ops.py\", line 2707, in wrapper_fn\r\n    ret = _wrapper_helper(*args)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/data/ops/dataset_ops.py\", line 2652, in _wrapper_helper\r\n    ret = autograph.tf_convert(func, ag_ctx)(*nested_args)\r\n  File \"/tensorflow-1.15.0/python3.6/tensorflow_core/python/autograph/impl/api.py\", line 237, in wrapper\r\n    raise e.ag_error_metadata.to_exception(e)\r\nNotImplementedError: in converted code:\r\n\r\n    /usr/local/lib/python3.6/dist-packages/spleeter/dataset.py:134 compute_spectrogram  *\r\n        return dict(sample, **{\r\n    /usr/local/lib/python3.6/dist-packages/spleeter/audio/spectrogram.py:47 compute_spectrogram_tf  *\r\n        return np.abs(stft_tensor) ** spec_exponent\r\n    /tensorflow-1.15.0/python3.6/tensorflow_core/python/framework/ops.py:736 __array__\r\n        \" array.\".format(self.name))\r\n\r\n    NotImplementedError: Cannot convert a symbolic Tensor (transpose_1:0) to a numpy array.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/300/comments",
+    "author": "abulhasanat",
+    "comments": [
+      {
+        "user": "abulhasanat",
+        "created_at": "2020-03-30T10:43:35Z",
+        "body": "I could able to run the code after I change the below code:\r\n/usr/local/lib/python3.6/dist-packages/spleeter/audio/spectrogram.py:47 compute_spectrogram_tf  *\r\nI cahnged    return np.abs(stft_tensor) ** spec_exponent \r\nto\r\nreturn tf.abs(stft_tensor) ** spec_exponent \r\n\r\n"
+      },
+      {
+        "user": "RonaldBoc",
+        "created_at": "2021-02-19T17:02:39Z",
+        "body": "where did you change the code? "
+      },
+      {
+        "user": "abulhasanat",
+        "created_at": "2021-02-21T09:42:12Z",
+        "body": "All over the project, just did find and replace."
+      }
+    ]
+  },
+  {
+    "number": 279,
+    "title": "Pandas Error",
+    "created_at": "2020-02-24T16:20:14Z",
+    "closed_at": "2020-02-25T10:34:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/279",
+    "body": "Hi,\r\n\r\nI'm trying to follow the examples shown on the README file with:\r\n\r\n`\r\nspleeter separate -i myfile.wav -p spleeter:2stems -o output\r\n\r\nbut keep getting and error msg:\r\n\r\n`\r\nfrom pandas.core.indexers import check_array_indexer\r\nImportError: cannot import name 'check_array_indexer' from 'pandas.core.indexers' (/home/eli/anaconda3/lib/python3.7/site-packages/pandas/core/indexers.py)\r\n`\r\n`\r\nAny idea why this is happening?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/279/comments",
+    "author": "eliwilner",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-02-25T10:34:16Z",
+        "body": "Hi @eliwilner \r\n\r\nPlease use the \"bug\" issue template for this kind of problems instead of the \"question\" one. We need more info on your setup in order to help you."
+      },
+      {
+        "user": "IvanKonevJr",
+        "created_at": "2020-02-28T08:51:05Z",
+        "body": "at me also get error:\r\n```\r\nWorkstation:~/prediction$ python3.8 demo.py\r\nTraceback (most recent call last):\r\n  File \"demo.py\", line 1, in <module>\r\n    import pandas as pd\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/__init__.py\", line 55, in <module>\r\n    from pandas.core.api import (\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/core/api.py\", line 5, in <module>\r\n    from pandas.core.arrays.integer import (\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/core/arrays/__init__.py\", line 13, in <module>\r\n    from .sparse import SparseArray  # noqa: F401\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/core/arrays/sparse/__init__.py\", line 3, in <module>\r\n    from pandas.core.arrays.sparse.accessor import SparseAccessor, SparseFrameAccessor\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/core/arrays/sparse/accessor.py\", line 10, in <module>\r\n    from pandas.core.arrays.sparse.array import SparseArray\r\n  File \"/home/monster/.local/lib/python3.8/site-packages/pandas/core/arrays/sparse/array.py\", line 46, in <module>\r\n    from pandas.core.indexers import check_array_indexer\r\nImportError: cannot import name 'check_array_indexer' from 'pandas.core.indexers' (/home/monster/.local/lib/python3.8/site-packages/pandas/core/indexers.py)\r\n```"
+      },
+      {
+        "user": "VivianCheng228",
+        "created_at": "2020-04-07T06:59:30Z",
+        "body": "Same problem"
+      },
+      {
+        "user": "sarthak405",
+        "created_at": "2020-04-07T12:47:41Z",
+        "body": "Facing same problem."
+      },
+      {
+        "user": "shikharsingla",
+        "created_at": "2020-04-07T17:27:54Z",
+        "body": "same problem"
+      },
+      {
+        "user": "DB2799",
+        "created_at": "2020-04-08T01:58:48Z",
+        "body": "anyone fix this - i have the same issue and i'm new to python\r\n"
+      },
+      {
+        "user": "duhaime",
+        "created_at": "2020-04-08T22:37:34Z",
+        "body": "I fixed this with:\r\n```\r\npip install pandas==1.0.1\r\n```"
+      },
+      {
+        "user": "ugursoysal",
+        "created_at": "2020-04-11T17:32:09Z",
+        "body": "```\r\nfrom pandas.core.indexers import check_array_indexer\r\nImportError: cannot import name 'check_array_indexer' from 'pandas.core.indexers' (/usr/local/lib/python3.7/site-packages/pandas/core/indexers.py)\r\n```\r\n\r\nI've tried with panda version 1.0.1 and 1.0.3, still getting the same error in Heroku environment.\r\n\r\nedit: Using miniconda dockerfile solved my problem for deploying the app to Heroku."
+      },
+      {
+        "user": "qrzhang",
+        "created_at": "2020-06-30T17:15:09Z",
+        "body": "I fixed this with:\r\n```\r\nconda update pandas\r\n```"
+      },
+      {
+        "user": "IvanKonevJr",
+        "created_at": "2020-07-01T04:08:33Z",
+        "body": "> I fixed this with:\r\n> \r\n> ```\r\n> conda update pandas\r\n> ```\r\n\r\nOh thank you!!!"
+      },
+      {
+        "user": "ganapathymanian",
+        "created_at": "2020-11-21T13:04:26Z",
+        "body": "> I fixed this with:\r\n> \r\n> ```\r\n> pip install pandas==1.0.1\r\n> ```\r\n\r\nThanks, it worked with pandas==1.0.1"
+      },
+      {
+        "user": "wenchengxucool",
+        "created_at": "2021-08-19T05:04:18Z",
+        "body": "pip install pandas==1.3.2 --user"
+      },
+      {
+        "user": "LatifB",
+        "created_at": "2021-08-20T19:45:19Z",
+        "body": "> I fixed this with:\r\n> \r\n> ```\r\n> conda update pandas\r\n> ```\r\n\r\nThis didn't work for me. Instead, I deactivated the anaconda environment and updated using pip. And somehow it fixed for me."
+      }
+    ]
+  },
+  {
+    "number": 274,
+    "title": "[Discussion] Maximal song length 10min, is there a reason?",
+    "created_at": "2020-02-21T04:44:30Z",
+    "closed_at": "2020-02-24T14:53:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/274",
+    "body": "I converted a song (medley) of ~15min long. The split tracks are exact 10min long. Is there a reason?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/274/comments",
+    "author": "bigboss97",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2020-02-24T14:53:09Z",
+        "body": "To avoid memory issues, the default maximum duration of separation is 10min, but it can be set to any duration using the `-d` option:\r\n```bash\r\nspleeter separate -i my_15min_audio.wav -d 600\r\n```\r\nJust be aware, that processing long files is very memory intensive and can cause OOM errors."
+      }
+    ]
+  },
+  {
+    "number": 264,
+    "title": "wav output length is way smaller to mp3 input",
+    "created_at": "2020-02-08T08:57:59Z",
+    "closed_at": "2020-02-20T17:30:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/264",
+    "body": "is there any way for the input mp3 length gets the same output length on wav format?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/264/comments",
+    "author": "glennford49",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-02-08T14:08:36Z",
+        "body": "Hi @glennford49 \r\n\r\nNot sure to understand what happens, can you give more details about your setup, the exact command you launch and what's the output length difference is ?"
+      },
+      {
+        "user": "glennford49",
+        "created_at": "2020-02-08T14:27:01Z",
+        "body": "I figured it out... it has a limit of 10 minutes only on separations task,  i've tried 19 minutes audio input , it outputs only 10 minutes on 4 stems and 2 stems, thanks for your response"
+      },
+      {
+        "user": "thrfdth",
+        "created_at": "2020-02-13T13:43:25Z",
+        "body": "I've also come across the same issue. Is there any way other than splitting audio by 10 minutes?"
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-02-18T14:43:10Z",
+        "body": "yes there is, using the Python API"
+      }
+    ]
+  },
+  {
+    "number": 262,
+    "title": "Tensorflow-gpu - Not having luck with conda",
+    "created_at": "2020-02-07T22:10:46Z",
+    "closed_at": "2020-02-08T14:06:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/262",
+    "body": "Hi All,\r\n\r\nI am not having any luck with Tensorflow and spleeter-gpu.  Training is not workking.  \r\n\r\nI have completely removed spleeter and installed tensorflow-gpu version 1.14 using pip.\r\nI have installed CUDA 10.0\r\nI have installed cuDNN 7.4.2 \r\n\r\nthis is the combination to use as indicated by the tensor flow website.\r\n\r\nI have gone through some tensorflow tutorials with the above set-up and proved that the GPU is detected by TF and is used.\r\n\r\nNow some questions, probably more for the deezer guys if they can add any detail.\r\n\r\nIn the installation section of the wiki it says that spleeter-gpu is not available using pip.  I was under the impression that if tensorflow detected a GPU it would use it.  I have installed spleeter using pip and it indeed ignores the GPU.\r\n\r\nWhat needs to be changed in spleeter to use the GPU features of tensorflow?  I have never built packages for conda or pip so is this something done within the package manager?\r\n\r\nWhen trying to debug what was happening with conda, i simply added \"print\" statements to see where in the code it was having issues.  It was within a tensorflow function \r\n\r\nestimator.train_and_evaluate\r\n\r\nwhich is where i suspected the issue was and why i needed to confirm that tensorflow could see the GPU.\r\n\r\nSo i know I can change the source code installed by pip / conda.  Where in the code do i need to focus on getting spleeter to use the GPU?\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/262/comments",
+    "author": "stickyninja3",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-02-08T14:06:47Z",
+        "body": "Hi @stickyninja3 \r\n\r\nThe `pip install` method with tensorflow-gpu seems to sometimes work and sometimes not. We're not able to fully understand what goes wrong but there's nothing to change in the code as it is. The issue is with the installation process.\r\nThis is why we advise to use either the `conda` or the `docker` versions where we do control what happens."
+      }
+    ]
+  },
+  {
+    "number": 258,
+    "title": "Tensorflow/stream_executor/cuda/cuda_dnn.cc:329 Could not create cudnn handle",
+    "created_at": "2020-02-03T22:22:19Z",
+    "closed_at": "2020-02-06T20:30:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/258",
+    "body": "I have been getting the above error when running the train command.  Spleeter is running on a Windows 10 laptop core i7 gen 9.  With a nvidia geforce gtx 1660 ti.  A friend has lent me their gaming laptop to do these experiments.\r\n\r\nI have installed CUDA toolset 10.0 (i have also tried with 10.1 and 10.2).\r\nI have copied the cuDNN files as described by the nvidia documentation.\r\nI installed Anaconda3\r\n\r\nspleeter was installed using conda (conda install -c conda-forge spleeter-gpu)\r\n\r\nThe separation works fine, and runs in a few seconds.\r\n\r\nThis is something to do with the CUDA installation, but I am not sure where to look.  Anyone out there who has this working any pointers would be grateful. \r\n\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/258/comments",
+    "author": "stickyninja3",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2020-02-04T17:21:42Z",
+        "body": "1. Try restarting your computer\r\n2. Try a shorter audio"
+      },
+      {
+        "user": "stickyninja3",
+        "created_at": "2020-02-04T18:42:40Z",
+        "body": "I have restarted the computer a few times.  I even added the AllowMemoryGrowth flag, but that didn't work.  As people have this working out of the tin, it can't be that.\r\n\r\nI am having the issue with the training.  So not sure what you mean by shorter audio.\r\n\r\nWhat steps did you take to get this working?"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-02-06T04:17:41Z",
+        "body": "@stickyninja3 If the audio is 2 minutes, use a 1 minute audio. If that doesn't work, try a 30 second audio.\r\n\r\nThe steps I mentioned have solved most of my problems."
+      }
+    ]
+  },
+  {
+    "number": 255,
+    "title": "OMP: Warning #190: Forking a process while a parallel region is active is potentially unsafe.",
+    "created_at": "2020-02-01T23:23:13Z",
+    "closed_at": "2020-02-03T11:40:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/255",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\n\r\nHI All,\r\n\r\nI am currently running a training session on spleeter on the musdb18 dataset.  My thinking being get this working first before i attempt my own training set.\r\n\r\nInstalled using conda\r\nI am running on a Mac Pro 5,1 (mid 2010) - 128Gb memory - running High Sierra 10.13.6\r\nI also have a nvidia GeForce GTX 980\r\nI have the CUDA drivers installed\r\n\r\nI know that tensorflow doesn't support GPU on Mac, so have installed the normal version.\r\n\r\nI am getting the following message throughout the processing.\r\n\r\nOMP: Warning #190: Forking a process while a parallel region is active is potentially unsafe.\r\nOMP: Warning #190: Forking a process while a parallel region is active is potentially unsafe.\r\nOMP: Warning #190: Forking a process while a parallel region is active is potentially unsafe.\r\n\r\nIs this message coming from TensorFlow or Spleeter?  Also what does it actually mean?\r\n\r\nIt is still running at the moment, so hopefully will get an idea of how long it will take to train without the use of a GPU.  Of course, if someone knows how to get the GPU working in the above it would be great to know how to do this as well.\r\n\r\nAny info would be great.\r\n\r\nThanks,\r\nAlec",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/255/comments",
+    "author": "stickyninja3",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2020-02-02T09:50:49Z",
+        "body": "I don't think GPU acceleration is supported on Mac. It's been mentioned before.\r\nAnd depending on how large the dataset is, it probably will take several days on the CPU.\r\n\r\nA way to calculate a time estimation is to time how many steps it progresses for 10 seconds, divide that by 10, then you get how many steps per seconds. Once you have steps per second, you simply divide total steps with steps per seconds, and you get total seconds it should take to complete training."
+      },
+      {
+        "user": "stickyninja3",
+        "created_at": "2020-02-02T13:39:03Z",
+        "body": "Thanks,\r\n\r\nIts the full musdb18 file set, so 150 songs.  Just checked now, and it is still running, though it does seem to have stopped loading and processing chunks.  Then checkpoint file is updating (last updated an hour ago).  it is up to model.ckpt-2700.index . Does anyone know what number this gets upto.\r\n\r\nI will keep people updated as it does appear to be doing something....."
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-02-03T00:04:49Z",
+        "body": "Like I said. It's probably going to take days or even weeks."
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-02-03T02:05:47Z",
+        "body": "I'm training a 100 file dataset on my RTX 2080 and it's taking about 3 hours to complete.\r\nYou are training on a 2010 Mac Pro using the CPU. So, yeah... A few weeks at least... If not months."
+      },
+      {
+        "user": "stickyninja3",
+        "created_at": "2020-02-03T08:30:17Z",
+        "body": "Hi,\r\n\r\nThanks for the calculations above.  I am assuming that the \"number\" in the model.ckpt-XXXX.data-00000-of-00001 needs to get to the max steps defined in the JSON.  If so, it looks like it will take about 20 days.\r\n\r\nI have stopped the process and restarted using a small sub set of files.  10 for training and 5 for validation.  The processing is just the same as for the large dataset.  This doesn't make sense to me.  I would have thought the processing time would be dependent on the number of training files.  It doesn't appear to.\r\n\r\nI have googled and found a blog on getting GPU processing working on tensorflow with a mac.  I am going to attempt and see if this can be done, otherwise looks like i am going to have to go down the PC route.\r\n\r\nThanks for your responses so far.  They have been helpful.\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-02-03T08:37:02Z",
+        "body": "The model file is not important. Just open the JSON config file and look at \"max steps\" or whatever it's called and use that for the formula\r\n\r\nI do not know how the underlying technology works, but for me it takes roughly 3.5 hours training using 100 files with 10 files for validation on an RTX 2080.\r\n\r\nInstead of going the PC route, consider the cloud route using Google Cloud, AWS, Azure, or any other service.\r\n\r\nIf I had an nVidia V100 card my estimate tells me it would take less than a minute to train using my 100 files.\r\n\r\nI have yet to use a cloud service for this."
+      },
+      {
+        "user": "stickyninja3",
+        "created_at": "2020-02-03T11:40:34Z",
+        "body": "Thanks for your input, i'll close this issue now.  Building tensorflow to use GPU looks complicated.  I will see how far i get."
+      }
+    ]
+  },
+  {
+    "number": 254,
+    "title": "Change pip to pip3 on pip installation wiki page",
+    "created_at": "2020-01-29T18:15:05Z",
+    "closed_at": "2020-02-08T13:55:38Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/254",
+    "body": "This is confusing for non-python developers I lost 5 minutes figuring out my environment. Why not to show precise information there?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/254/comments",
+    "author": "POMATu",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-02-08T13:55:38Z",
+        "body": "Hi @POMATu \r\n\r\nPython2 is deprecated now, so most system's default `python` is now Python3 and we  clearly state that `spleeter` requires python3"
+      }
+    ]
+  },
+  {
+    "number": 244,
+    "title": "Some music sounds \"muddy\", is this due to Spleeter or is this just how sound works",
+    "created_at": "2020-01-25T04:41:46Z",
+    "closed_at": "2020-01-27T16:36:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/244",
+    "body": "When Spleeter separates stuff, sometimes areas can sound muddy or like something's \"missing\", even compared to an original instrumental version of the song, something just seems off, is this due to Spleeter not being able to pick things out and leaving artifacts, or is this just how sound works, like certain frequencies get cut out and no matter how good neural networks get, there will always be a \"dirty\" sound to them if that makes sense. \r\n\r\nLike the piano stem for example, sometimes it sounds really warped when it's isolated (and normally the rest of the song would have a lot of other instruments playing as well), would this be a thing that could eventually sound good, clear, and consistent with improvements to spleeter or is this something that will never be fixable.\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/244/comments",
+    "author": "Waffled-II",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2020-01-27T09:52:27Z",
+        "body": "AI doesn't \"pick things out\", it imagines what it thinks it should sound like.\r\n\r\nThe artifacts you hear is essentially the results of the AI imagining what it should sound like based on it's training.\r\n\r\nThe way I think it works is the neural network is a correlation machine. It correlates all different frequencies with each other, so when a combination of frequencies and their amplitude at a specific moment in time are present, it imagines that paino should sound like \"this\" and vocals should sound like \"that\".\r\n\r\nI'm still new to ML but that's my impression of it."
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-27T16:36:41Z",
+        "body": "Hi @Waffled-II \r\n\r\nSeparation is never perfect and what you are referring to is called `separation artefacts` and is indeed a byproduct of spleeter. "
+      }
+    ]
+  },
+  {
+    "number": 232,
+    "title": "Mixerrog",
+    "created_at": "2020-01-13T19:26:54Z",
+    "closed_at": "2020-01-13T22:21:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/232",
+    "body": "## Description\r\n\r\n<!-- Describe your feature request here. -->Spleeter Training Files?\r\n\r\n## Additional information\r\n\r\n<!-- Add any additional description -->Discordance mentioned the BEAN dataset, that contains:\r\n\r\n24,097 songs\r\n79 hours of audio stems\r\nmajority of pop/rock songs\r\n\r\nIs it being used by the latest Spleeter version or is there a way to download & use it for the training files if not?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/232/comments",
+    "author": "Mixerrog",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-13T22:21:45Z",
+        "body": "We cannot share the dataset but the pre-trained model shipped with the latest version of spleeter are using it yes."
+      }
+    ]
+  },
+  {
+    "number": 230,
+    "title": "[Discussion] Allocation  exceeds 10% of system memory",
+    "created_at": "2020-01-10T18:35:04Z",
+    "closed_at": "2020-01-17T14:15:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/230",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI get this error using spleeter with Quart  \r\nAllocation of 572063744 exceeds 10% of system memory\r\nkilled \r\nI am using billiard instead of multiprocessing ",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/230/comments",
+    "author": "osvaldo1963",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-17T14:15:30Z",
+        "body": "Hi @osvaldo1963 \r\n\r\nPlease use the bug issue template so we can see how to help you."
+      }
+    ]
+  },
+  {
+    "number": 228,
+    "title": "[Question] Training error",
+    "created_at": "2020-01-10T08:23:24Z",
+    "closed_at": "2020-04-05T12:35:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/228",
+    "body": "I looked at your wiki and saw that it was possible to train a new model with our own data. I have went about setting up everything that the wiki states, but the furthest I can get is this error message:\r\n\r\n> TypeError: x and y must have the same dtype, got tf.string != tf.int32\r\n\r\nThe command I am executing is\r\n\r\n> spleeter train -p musdb_config.json -d D:\\spleeter\r\n\r\nMy config file is as follows:\r\n\r\n> {\r\n>     \"train_csv\": \"musdb_train.csv\",\r\n>     \"validation_csv\": \"musdb_validation.csv\",\r\n>     \"model_dir\": \"musdb_model\",\r\n>     \"mix_name\": \"mix\",\r\n>     \"instrument_list\": [\"synth\", \"drums\", \"guitar\"],\r\n>     \"sample_rate\":44100,\r\n>     \"frame_length\":4096,\r\n>     \"frame_step\":1024,\r\n>     \"T\":512,\r\n>     \"F\":1024,\r\n>     \"n_channels\":2,\r\n>     \"n_chunks_per_song\":1,\r\n>     \"separation_exponent\":2,\r\n>     \"mask_extension\":\"zeros\",\r\n>     \"learning_rate\": 1e-4,\r\n>     \"batch_size\":4,\r\n>     \"training_cache\":\"cache/training\",\r\n>     \"validation_cache\":\"cache/validation\",\r\n>     \"train_max_steps\": 100000,\r\n>     \"throttle_secs\":600,\r\n>     \"random_seed\":3,\r\n>     \"save_checkpoints_steps\":300,\r\n>     \"save_summary_steps\":5,\r\n>     \"model\":{\r\n>         \"type\":\"unet.unet\",\r\n>         \"params\":{\r\n>                \"conv_activation\":\"ELU\",\r\n>                \"deconv_activation\":\"ELU\"\r\n>         }\r\n>     }\r\n> }\r\n\r\nBoth my .csv are in correct format\r\n\r\n> drums_path,guitar_path,synth_path,mix_path,duration\r\n> train/christmas2drums.wav,train/christmas2guitar.wav,train/christmas2synth.wav,train/christmas2.wav,205.872‬\r\n\r\nI have no idea what I am doing wrong, I wish there was a step-by-step tutorial on training our own models. Also, I am using the most latest version of spleeter-gpu installed by conda\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/228/comments",
+    "author": "cheffplayer",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2020-01-10T19:46:40Z",
+        "body": "You're not the only one having issues with training, I do too, and it seems like the Spleeter dev team has no interest in helping the community :/"
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-27T09:20:55Z",
+        "body": "Hi @cheffplayer \r\n\r\nIt's not easy for us to help you if you don't provide the details we ask for in the Bug issue template, namely : what is the platform you use? how did you install spleeter ? what exact code are you running to get this message ?"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2020-06-22T22:18:12Z",
+        "body": "@cheffplayer did you manage to solve this?"
+      },
+      {
+        "user": "johndpope",
+        "created_at": "2022-02-04T04:30:40Z",
+        "body": "double check your validation csv - when I put 1 line in it with the same values as train.csv - it worked.\r\n(also make sure there's no errors thrown while training - you need all the dependencies installed. conda install -c conda-forge ffmpeg libsndfile )"
+      }
+    ]
+  },
+  {
+    "number": 227,
+    "title": "24bit audio",
+    "created_at": "2020-01-07T21:15:48Z",
+    "closed_at": "2020-01-13T12:56:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/227",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nJust a quick question.  I have noticed 2 things when running spleeter.  1. the limit on the frequency (upto 11k, and i will have a play with the 16k models soon), which i have been reading about in the wiki.\r\n\r\nWhat about 24bit audio.  I have also noticed that the files get converted to 16bit rather than retaining the full 24bits.  The bitrate option is that only for lossy compression?\r\n\r\nIf i wanted to go to 24bit, what do i need to change in the code to do this?\r\n\r\nThanks,\r\nAlec\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/227/comments",
+    "author": "stickyninja3",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-13T12:56:39Z",
+        "body": "Hi @stickyninja3 \r\n\r\nYou can probably tweak the output a bit in the code to modify the bitrate (passing it as an argument to ffmpeg). You should not expect too much of it though, as any difference would probably be hard to notice over the separation artefacts.\r\n"
+      },
+      {
+        "user": "faroit",
+        "created_at": "2020-05-02T13:29:19Z",
+        "body": "@stickyninja3 you can just pass the `codec=pcm_s24le` to write as 24bit files"
+      }
+    ]
+  },
+  {
+    "number": 221,
+    "title": "[Discussion] Anyone had success in updating source to work using AMD GPU on MacBook Pro w/ PlaidML",
+    "created_at": "2020-01-04T11:33:47Z",
+    "closed_at": "2020-01-08T14:57:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/221",
+    "body": "Anyone had success in updating source to work using AMD GPU on MacBook Pro w/ PlaidML?\r\n\r\nI can get custom model training/inference to work via CPU perfectly fine on macbook, but could not get it to use the built in AMD GPU. I tried installing python plaidML and updating source to adjust tensorflow inits to use the plaidML GPU link. This didn't work! and unfortunately I no longer have my code adjustments.\r\n\r\nHas anyone else tried this? Am I missing something? \r\n\r\nThanks!\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/221/comments",
+    "author": "rayanarman",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-01-08T14:57:25Z",
+        "body": "Hi @rayanarman \r\n\r\nSince we use tensorflow and Cuda underneath, there's no way you will get that running on non-NVIDIA devices easily.. unless your card support a valid CUDA install that's simply not possible."
+      }
+    ]
+  },
+  {
+    "number": 209,
+    "title": "[Discussion] I wanna convert checkpoint to .pb file",
+    "created_at": "2019-12-29T04:15:10Z",
+    "closed_at": "2019-12-29T06:46:12Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/209",
+    "body": "Hi,\r\nI wanna convert checkpoint to .pb file.\r\nI checked \"[Discussion] Using Spleeter pretrained tensorflow models directly #155\", but I cannot understand...\r\n\r\n>You can use the following snippet to create the event file. model_file is something like 2stems/model.data-00000-of-00001, and log_dir is the directory where to write the event file.\r\n```\r\nwith session.Session(graph=ops.Graph()) as sess:\r\n    with gfile.FastGFile(model_file, \"rb\") as f:\r\n      graph_def = graph_pb2.GraphDef()\r\n      graph_def.ParseFromString(f.read())\r\n      importer.import_graph_def(graph_def)\r\n\r\n    pb_visual_writer = summary.FileWriter(log_dir)\r\n    pb_visual_writer.add_graph(sess.graph) \r\n```\r\n\r\nWhere is the graph_pb2?\r\n\r\nplease reply me🙇🏻‍♀️",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/209/comments",
+    "author": "kno3a87",
+    "comments": [
+      {
+        "user": "kno3a87",
+        "created_at": "2019-12-29T05:03:08Z",
+        "body": "In the first place, where are you saving in checkpoint format?"
+      },
+      {
+        "user": "atharvashirude",
+        "created_at": "2020-06-12T19:52:57Z",
+        "body": "Did you find any solution?\r\n"
+      }
+    ]
+  },
+  {
+    "number": 208,
+    "title": "Installing the new 16 khz cutoff Spletter 1.49?",
+    "created_at": "2019-12-28T15:33:45Z",
+    "closed_at": "2019-12-30T14:57:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/208",
+    "body": "Are new stems-16kHz folders installed when this is done?\r\n\r\nAlso, what & how are the newer finetune training models being used?\r\n\r\nIs there a way to convert the output stems to mono channel flac files?\r\n\r\nThanks, Roger\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/208/comments",
+    "author": "Mixerrog",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2019-12-29T09:26:59Z",
+        "body": "First do\r\n`conda remove spleeter`\r\nfollowed by\r\n`conda install -c conda-forge spleeter`"
+      }
+    ]
+  },
+  {
+    "number": 205,
+    "title": "[Discussion] about the softmax final layer",
+    "created_at": "2019-12-27T15:24:39Z",
+    "closed_at": "2019-12-27T15:57:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/205",
+    "body": "Hi,\r\n\r\nIs the final softmax layer some idea you came up with, or did you see this elsewhere ?\r\n\r\nit looks like a pretty cool idea and seems to help, I wonder if it's published somewhere\r\n\r\nbest",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/205/comments",
+    "author": "aliutkus",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2019-12-27T15:57:14Z",
+        "body": "Hi @aliutkus,\r\nI don't remember having seen the idea anywhere in the literature but it seems so obvious that someone has probably already done it somewhere. We actually only use the softmax layer on the 5 stems model. It seemed that it helped the piano model converging (otherwise, it was very usual that the model got stuck in a local minimum). I'm not fully convinced it improves separation results though. We can talk about this more in details offline :)."
+      }
+    ]
+  },
+  {
+    "number": 202,
+    "title": "[Discussion] What are the recommended CPU and memory？",
+    "created_at": "2019-12-27T04:24:06Z",
+    "closed_at": "2020-04-05T12:38:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/202",
+    "body": "What are the recommended CPU and memory？\r\n\r\nConventional processing music files， Example：filename-》MP3，7bm",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/202/comments",
+    "author": "yoorxee",
+    "comments": [
+      {
+        "user": "kiratdeluxe",
+        "created_at": "2020-02-11T11:13:25Z",
+        "body": "for 2stems, 8gb and for 4 and 5 more i don't know exactly . i have to buy more now to be safe i have bought 32gb."
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2020-04-05T12:38:14Z",
+        "body": "Closing this issue for now.\r\n\r\nFor the record, it's very hard to predict how much computing and memory resources are needed, depending on your system, and the installation method it will have a rather large impact.\r\n\r\nIn the latests version (1.5) we implement a different backend to load the audio, which often results in a much reduced memory footprint."
+      }
+    ]
+  },
+  {
+    "number": 190,
+    "title": "[Discussion] Questions regarding pre-trained models",
+    "created_at": "2019-12-19T03:02:50Z",
+    "closed_at": "2019-12-30T16:04:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/190",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nSo, first of all, thanks for releasing this!\r\nThis is a super amazing project that I hope to see improve in the future.\r\n\r\nI'm opening this issue because I read that newer pre-trained models were gonna be released soon, and I was wondering if it'll happen in the near future or if this is gonna be kept like this. Seeing that only one commit has been done (to the README file) over in 23 days, I was wondering if this is gonna be worked on in the future.\r\n\r\nAgain, thanks a lot for the effort you've all put into this amazing project.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/190/comments",
+    "author": "NickAcPT",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-12-30T16:04:53Z",
+        "body": "Hi @NickAcPT \r\n\r\nThanks for your message.We've just released new models allowing higher frequencies to be generated (in version 1.4.9) but we cannot guarantee that newer models will be released on a regular basis."
+      }
+    ]
+  },
+  {
+    "number": 187,
+    "title": "[Discussion] your question: confuse about GPU when Itry to train the model .",
+    "created_at": "2019-12-17T11:49:40Z",
+    "closed_at": "2019-12-30T10:12:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/187",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nthe command is :CUDA_VISIBLE_DEVICES='1' python __main__.py train -p /home/tae/spleeter_master/configs/4stems/base_config.json -d /home/tae/musdb18hq ,  using the tensorflow-gpu,But the utilization ratio is zero.How can I use the GPU to train my own model through the __main()__?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/187/comments",
+    "author": "DaerTaeKook",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-12-30T10:12:13Z",
+        "body": "Hi, please use the issue template with all your setup info so that we can help"
+      }
+    ]
+  },
+  {
+    "number": 176,
+    "title": "[Discussion] Just want to say THANK YOU for the GOOD work",
+    "created_at": "2019-12-09T23:39:46Z",
+    "closed_at": "2020-01-13T13:07:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/176",
+    "body": "I don't know how long spleeter has been around. I just found it few days ago. I was totally amazed! I've never heard such clean result before. GREAT JOB!\r\nTHANK YOU to all the developers involved.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/176/comments",
+    "author": "bigboss97",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-12-11T13:43:02Z",
+        "body": "Thanks !"
+      }
+    ]
+  },
+  {
+    "number": 168,
+    "title": "[Discussion] Output format parameter",
+    "created_at": "2019-12-08T03:43:22Z",
+    "closed_at": "2019-12-08T09:42:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/168",
+    "body": "Hi,\r\n\r\nIs there an option for specifying the output format (e.g. mp3 instead of wav) using the command line tool?\r\n\r\nRegards,",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/168/comments",
+    "author": "demiantres",
+    "comments": [
+      {
+        "user": "Donavin97",
+        "created_at": "2019-12-08T06:35:51Z",
+        "body": "Hi. Yes, the output format can be specified with the option -c. E.G. -c mp3. Hope that helps.\n\nSent from my iPhone\n\n> On 08 Dec 2019, at 5:43 AM, demiantres <notifications@github.com> wrote:\n> \n> Hi,\n> \n> Is there an option for specifying the output format (e.g. mp3 instead of wav) using the command line tool?\n> \n> Regards,\n> \n> —\n> You are receiving this because you are subscribed to this thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "demiantres",
+        "created_at": "2019-12-08T09:42:43Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 161,
+    "title": "[Discussion] No GPU stress",
+    "created_at": "2019-12-05T04:16:41Z",
+    "closed_at": "2019-12-18T14:58:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/161",
+    "body": "Curious as to why activity monitor on Windows tells me that my GPU is barely used during `spleeter-gpu`.\r\n\r\nI know for a fact that `spleeter-gpu` is running because my spleeter sessions complete A LOT faster now compared to when I run `spleeter-cpu`.\r\n\r\nUsage: 3%\r\nDedicated GPU-Memory: 0,7 / 8,0 GB\r\nGPU-Memory: 0,8 / 16,0 GB\r\nShared GPU-Memory: 0,1 / 8,0 GB\r\n\r\nWhy is this happening?\r\nHow can I take advantage of this?\r\n\r\nCould on-board graphics be involved here?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/161/comments",
+    "author": "aidv",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-12-18T14:58:25Z",
+        "body": "Since you have OOM in your Gpu's on another issue I assume this has been solved :)"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-12-18T15:03:51Z",
+        "body": "@mmoussallam yes. I forgot to close and refer to the other post. Thanks for closing"
+      }
+    ]
+  },
+  {
+    "number": 160,
+    "title": "Please help with custom dataset",
+    "created_at": "2019-12-04T23:09:09Z",
+    "closed_at": "2020-01-11T21:48:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/160",
+    "body": "Hi,\r\n\r\nI am writing to get some help.\r\nI tryed to use `spleeter train` with with a dataset of electronic music samples, each one with a duration of 8 seconds.\r\n\r\nWhen I try to use the model obtained by train, to separate some electronic song, all outputs sound exactly the same.\r\n\r\nMaybe it is due to the fact I used only 18 samples to feed the training?\r\n\r\nI launched it with command\r\n\r\n```bash\r\nspleeter train -p musdb_config.json -d .\r\n```\r\n\r\nwith this *musdb_config.json*\r\n\r\n```json\r\n{\r\n    \"train_csv\": \"configs/musdb_train.csv\",\r\n    \"validation_csv\": \"configs/musdb_validation.csv\",\r\n    \"model_dir\": \"musdb_model5\",\r\n    \"mix_name\": \"mix\",\r\n    \"instrument_list\": [\"vocals\", \"drums\", \"bass\", \"other\"],\r\n    \"sample_rate\":44100,\r\n    \"frame_length\":4096,\r\n    \"frame_step\":1024,\r\n    \"T\":512,\r\n    \"F\":1024,\r\n    \"n_channels\":2,\r\n    \"n_chunks_per_song\":1,\r\n    \"separation_exponent\":2,\r\n    \"mask_extension\":\"zeros\",\r\n    \"learning_rate\": 1e-4,\r\n    \"batch_size\":4,\r\n    \"training_cache\":\"cache/training\",\r\n    \"validation_cache\":\"cache/validation\",\r\n    \"train_max_steps\": 100000,\r\n    \"throttle_secs\":600,\r\n    \"random_seed\":3,\r\n    \"save_checkpoints_steps\":300,\r\n    \"save_summary_steps\":5,\r\n    \"model\":{\r\n        \"type\":\"unet.unet\",\r\n        \"params\":{\r\n               \"conv_activation\":\"ELU\",\r\n               \"deconv_activation\":\"ELU\"\r\n        }\r\n    }\r\n}\r\n```\r\n\r\nwhere I have CSV files\r\n\r\n```bash\r\n$ ls configs/\r\nmusdb_train.csv      musdb_validation.csv\r\n```\r\n\r\nwith the following content respectively\r\n\r\n```csv\r\nmix_path,vocals_path,drums_path,bass_path,other_path,duration\r\ntrain/Set__2/mixture.wav,train/Set__2/vocals.wav,train/Set__2/drums.wav,train/Set__2/bass.wav,train/Set__2/other.wav,8.0\r\ntrain/Set__3/mixture.wav,train/Set__3/vocals.wav,train/Set__3/drums.wav,train/Set__3/bass.wav,train/Set__3/other.wav,8.0\r\ntrain/Set__4/mixture.wav,train/Set__4/vocals.wav,train/Set__4/drums.wav,train/Set__4/bass.wav,train/Set__4/other.wav,8.0\r\ntrain/Set__5/mixture.wav,train/Set__5/vocals.wav,train/Set__5/drums.wav,train/Set__5/bass.wav,train/Set__5/other.wav,8.0\r\ntrain/Set__6/mixture.wav,train/Set__6/vocals.wav,train/Set__6/drums.wav,train/Set__6/bass.wav,train/Set__6/other.wav,8.0\r\ntrain/Set__7/mixture.wav,train/Set__7/vocals.wav,train/Set__7/drums.wav,train/Set__7/bass.wav,train/Set__7/other.wav,8.0\r\ntrain/Set__11/mixture.wav,train/Set__11/vocals.wav,train/Set__11/drums.wav,train/Set__11/bass.wav,train/Set__11/other.wav,8.0\r\ntrain/Set__12/mixture.wav,train/Set__12/vocals.wav,train/Set__12/drums.wav,train/Set__12/bass.wav,train/Set__12/other.wav,8.0\r\ntrain/Set__13/mixture.wav,train/Set__13/vocals.wav,train/Set__13/drums.wav,train/Set__13/bass.wav,train/Set__13/other.wav,8.0\r\ntrain/Set__14/mixture.wav,train/Set__14/vocals.wav,train/Set__14/drums.wav,train/Set__14/bass.wav,train/Set__14/other.wav,8.0\r\ntrain/Set__15/mixture.wav,train/Set__11/vocals.wav,train/Set__11/drums.wav,train/Set__11/bass.wav,train/Set__11/other.wav,8.0\r\ntrain/Set__16/mixture.wav,train/Set__11/vocals.wav,train/Set__11/drums.wav,train/Set__11/bass.wav,train/Set__11/other.wav,8.0\r\ntrain/Set__17/mixture.wav,train/Set__11/vocals.wav,train/Set__11/drums.wav,train/Set__11/bass.wav,train/Set__11/other.wav,8.0\r\ntrain/Set__18/mixture.wav,train/Set__11/vocals.wav,train/Set__11/drums.wav,train/Set__11/bass.wav,train/Set__11/other.wav,8.0\r\n```\r\n\r\nand\r\n\r\n```\r\ntrain/Set__10/mixture.wav,train/Set__10/vocals.wav,train/Set__10/drums.wav,train/Set__10/bass.wav,train/Set__10/other.wav,8.0\r\ntrain/Set__1/mixture.wav,train/Set__1/vocals.wav,train/Set__1/drums.wav,train/Set__1/bass.wav,train/Set__1/other.wav,8.0\r\ntrain/Set__9/mixture.wav,train/Set__9/vocals.wav,train/Set__9/drums.wav,train/Set__9/bass.wav,train/Set__9/other.wav,9.0\r\ntrain/Set__8/mixture.wav,train/Set__8/vocals.wav,train/Set__8/drums.wav,train/Set__8/bass.wav,train/Set__8/other.wav,8.0\r\n```\r\n\r\nIt produces a **musdb_model5** folder\r\n\r\n```bash\r\n$ ls musdb_model5\r\ncheckpoint                                    model.ckpt-0.data-00000-of-00001\r\neval                                          model.ckpt-0.index\r\nevents.out.tfevents.1575482863.darkstar.local model.ckpt-0.meta\r\ngraph.pbtxt\r\n```\r\n\r\nThat I move into **pretrained_models** folder\r\n\r\n```bash\r\n$ mv musdb_model5/ pretrained_models/\r\n```\r\n\r\nThen I try to separate an audio file, for example\r\n\r\n```bash\r\n$ spleeter separate --verbose -i ~/Downloads/AI/Songs_Mp3/05To_Be_Sliced.mp3  -p ./musdb_config.json -o audio_output/\r\n```\r\n\r\nAnd it outputs files\r\n\r\n```\r\n $ ls audio_output/05To_Be_Sliced/\r\nbass.wav   drums.wav  other.wav  vocals.wav\r\n```\r\n\r\nand all sounds the same, it looks like it did not separated the audio. It just output 4 files with the same sounds as the original.\r\n\r\nI expected to separate input audio into 4 different files.\r\n\r\nAny hint?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/160/comments",
+    "author": "fibo",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-12-11T13:33:42Z",
+        "body": "Hi there, can you share the output of your `spleeter separate` command please ? when all output tracks are the same it usually means the model has not been found."
+      },
+      {
+        "user": "fibo",
+        "created_at": "2019-12-12T09:05:38Z",
+        "body": "Hi @mmoussallam , sure here it is\r\n\r\n```\r\nspleeter separate --verbose -i ~/Downloads/AI/Songs_Mp3/05To_Be_Sliced.mp3  -p ./musdb_config.json -o audio_output/\r\nINFO:tensorflow:Using config: {'_model_dir': 'pretrained_models/musdb_model5', '_tf_random_seed': None, '_save_summary_steps': 100, '_save_checkpoints_steps': None, '_save_checkpoints_secs': 600, '_session_config': gpu_options {\r\n  per_process_gpu_memory_fraction: 0.7\r\n}\r\n, '_keep_checkpoint_max': 5, '_keep_checkpoint_every_n_hours': 10000, '_log_step_count_steps': 100, '_train_distribute': None, '_device_fn': None, '_protocol': None, '_eval_distribute': None, '_experimental_distribute': None, '_experimental_max_worker_delay_secs': None, '_service': None, '_cluster_spec': <tensorflow.python.training.server_lib.ClusterSpec object at 0x1c436ac390>, '_task_type': 'worker', '_task_id': 0, '_global_id_in_cluster': 0, '_master': '', '_evaluation_master': '', '_is_chief': True, '_num_ps_replicas': 0, '_num_worker_replicas': 1}\r\nINFO:tensorflow:Calling model_fn.\r\nWARNING:tensorflow:From /opt/anaconda3/lib/python3.7/site-packages/spleeter/model/functions/unet.py:28: The name tf.keras.initializers.he_uniform is deprecated. Please use tf.compat.v1.keras.initializers.he_uniform instead.\r\n\r\nINFO:tensorflow:Apply unet for vocals_spectrogram\r\nINFO:tensorflow:Apply unet for drums_spectrogram\r\nINFO:tensorflow:Apply unet for bass_spectrogram\r\nINFO:tensorflow:Apply unet for other_spectrogram\r\nINFO:tensorflow:Done calling model_fn.\r\nWARNING:tensorflow:From /opt/anaconda3/lib/python3.7/site-packages/tensorflow/python/saved_model/signature_def_utils_impl.py:201: build_tensor_info (from tensorflow.python.saved_model.utils_impl) is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nThis function will only be available through the v1 compatibility library as tf.compat.v1.saved_model.utils.build_tensor_info or tf.compat.v1.saved_model.build_tensor_info.\r\nINFO:tensorflow:Signatures INCLUDED in export for Classify: None\r\nINFO:tensorflow:Signatures INCLUDED in export for Regress: None\r\nINFO:tensorflow:Signatures INCLUDED in export for Predict: ['serving_default']\r\nINFO:tensorflow:Signatures INCLUDED in export for Train: None\r\nINFO:tensorflow:Signatures INCLUDED in export for Eval: None\r\nWARNING:tensorflow:From /opt/anaconda3/lib/python3.7/site-packages/tensorflow/python/training/saver.py:1276: checkpoint_exists (from tensorflow.python.training.checkpoint_management) is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nUse standard file APIs to check for files with this prefix.\r\nINFO:tensorflow:Restoring parameters from pretrained_models/musdb_model5/model.ckpt-0\r\nINFO:tensorflow:Assets added to graph.\r\nINFO:tensorflow:No assets to write.\r\nINFO:tensorflow:SavedModel written to: /var/folders/m6/6v_smcbd7j70074yk0k8sn3m0000gn/T/serving/temp-b'1576141423'/saved_model.pb\r\nWARNING:tensorflow:From /opt/anaconda3/lib/python3.7/site-packages/tensorflow/contrib/predictor/saved_model_predictor.py:153: load (from tensorflow.python.saved_model.loader_impl) is deprecated and will be removed in a future version.\r\nInstructions for updating:\r\nThis function will only be available through the v1 compatibility library as tf.compat.v1.saved_model.loader.load or tf.compat.v1.saved_model.load. There will be a new function for importing SavedModels in Tensorflow 2.0.\r\nINFO:tensorflow:Restoring parameters from /var/folders/m6/6v_smcbd7j70074yk0k8sn3m0000gn/T/serving/1576141423/variables/variables\r\nDEBUG:spleeter:Writing file audio_output/05To_Be_Sliced/vocals.wav\r\nDEBUG:spleeter:Writing file audio_output/05To_Be_Sliced/bass.wav\r\nDEBUG:spleeter:Writing file audio_output/05To_Be_Sliced/other.wav\r\nDEBUG:spleeter:Writing file audio_output/05To_Be_Sliced/drums.wav\r\nINFO:spleeter:File audio_output/05To_Be_Sliced/bass.wav written\r\nINFO:spleeter:File audio_output/05To_Be_Sliced/other.wav written\r\nINFO:spleeter:File audio_output/05To_Be_Sliced/drums.wav written\r\nINFO:spleeter:File audio_output/05To_Be_Sliced/vocals.wav written\r\n```\r\n\r\nAnd I am in a user folder where I see files\r\n\r\n```\r\nls pretrained_models/musdb_model5/\r\ncheckpoint                                    model.ckpt-0.data-00000-of-00001\r\neval                                          model.ckpt-0.index\r\nevents.out.tfevents.1575482863.darkstar.local model.ckpt-0.meta\r\n```\r\n\r\nShould I put the model in some spleeter system folder?\r\n"
+      },
+      {
+        "user": "fibo",
+        "created_at": "2020-01-11T21:48:37Z",
+        "body": "any update on this?"
+      },
+      {
+        "user": "JavaShipped",
+        "created_at": "2020-05-21T23:14:38Z",
+        "body": "Did you ever solve this? I'm having the same issue - I'm not sure how I actually use my trained model!"
+      },
+      {
+        "user": "androidfan415",
+        "created_at": "2020-07-31T18:12:57Z",
+        "body": "put in the path to the custom model config file you created as the `p` argument \r\n`spleeter separate -i song.mp3 -p <path_to_spleeter>/configs/custom/model_config.json `\r\n"
+      }
+    ]
+  },
+  {
+    "number": 156,
+    "title": "[Discussion] What's the difference between Xstems and Xstems-finetune models ?",
+    "created_at": "2019-12-01T19:36:00Z",
+    "closed_at": "2019-12-02T13:20:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/156",
+    "body": "The github release links to 2 versions for each steams model (2/4/5) : Xstems and Xstems-finetune.\r\nWhat's the difference between the 2 kind of models, and how/why would you use one over the other ?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/156/comments",
+    "author": "divideconcept",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2019-12-02T13:20:04Z",
+        "body": "The Xstems-finetune contains extra optimizer parameters that makes it possible to continue training on your own data (fine-tune the model with your own data). Other than that, they are the same as the Xstems models.\r\nIf you just want to perform separation, the Xstems-finetune models are useless as the extra optimizer parameters won't be used (and the model files are quite bigger)."
+      }
+    ]
+  },
+  {
+    "number": 143,
+    "title": "Is  this only for stereo audio? can i use for mono audio too?",
+    "created_at": "2019-11-28T07:10:45Z",
+    "closed_at": "2019-11-28T08:57:02Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/143",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/143/comments",
+    "author": "rameezrehman83",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2019-11-28T08:57:02Z",
+        "body": "The model only processes stereo audio files, but you should be able to input a mono file: it should be converted to stereo (the single channel is duplicated) and then processed by spleeter that will output a stereo file. "
+      }
+    ]
+  },
+  {
+    "number": 138,
+    "title": "[Discussion] How to correctly set bitrate?",
+    "created_at": "2019-11-26T13:02:18Z",
+    "closed_at": "2019-12-03T13:37:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/138",
+    "body": "I have set command in order to have vocal and accomaniment in flac format, at a bitrate of 320kbps in 'output' destination folder.\r\nWhat I wrote:\r\n\r\n`spleeter separate -i 'songName.flac' -p spleeter:2stems -c flac -b 320k -o output`\r\n\r\nWhat i get is two flac files (ok), but with higher bitrate than the one request by parameter `-b 320k`\r\n\r\nIs there something wrong in wrinting the command? How should the bitrate parameter be written? (there's no explanation on that by reading the manual)",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/138/comments",
+    "author": "Alessandro1996",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-26T13:13:02Z",
+        "body": "Hi Alessandro,\r\n\r\nFlac is a lossless compression format and it's output bitrate depends on the audio that you are compressing (you can think of it as zip on audio files), therefore setting a target bitrate in this case does not make sense and the parameter is ignored by ffmpeg at the encoding step. "
+      },
+      {
+        "user": "Alessandro1996",
+        "created_at": "2019-11-26T13:27:43Z",
+        "body": "Hi mmoussallam,\r\nThank you for the answer.\r\nSo for each lossless input file (flac, wav, ...) there's no way to set output's bitrate, am I right? "
+      },
+      {
+        "user": "boltomli",
+        "created_at": "2019-11-28T14:23:42Z",
+        "body": "For cases such as PCM wave, the bitrate is actually calculated by other parameters, like sampling rate, bit depth and channels. Multiply all together, probably. It's not an independent variable."
+      }
+    ]
+  },
+  {
+    "number": 135,
+    "title": "[Discussion] How can I override the save to file step?",
+    "created_at": "2019-11-25T04:06:22Z",
+    "closed_at": "2019-11-25T14:22:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/135",
+    "body": "<!-- Please respect the title [Discussion] tag. -->I've been trying to process multiple files at once using the separate_to_file function and would like to be able to specify a name for each file every loop instead of the default names of accompaniment and vocals.. Is there a way to do this, maybe a function I can override? I tried to just rename the files once they are created but the separate process that creates them doesn't seem to shut off afterwards so access to modify the file gets denied. Trying to kill the corresponding process terminates my script which is not ideal for my use case as I would like to integrate an interface. Thanks  \r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/135/comments",
+    "author": "Scylla2020",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-25T14:22:31Z",
+        "body": "You can use the recently introduced `filename_format` parameter while allow you to provide a Python formattable string."
+      }
+    ]
+  },
+  {
+    "number": 132,
+    "title": "Documentation for \"F\" parameter in config file?",
+    "created_at": "2019-11-24T03:26:50Z",
+    "closed_at": "2019-11-25T14:23:29Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/132",
+    "body": "From what I read, the F parameter in the config file sets the max frequency for training. I have not been able to find any documentation for this. The closest I could find is this description:\r\n\r\n> Number of frequency bins to be processed (frequency above F are note processed)\r\n\r\nCan you direct me to some documentation about this, or describe to me how to set the parameter?\r\nFor example, if my training stems go to 22000 Hz, what value would I put in F to train all the way up to 22000? My goal is to create a model that can then separate files up to 22000 Hz. \r\n\r\nAm I on the right or wrong track?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/132/comments",
+    "author": "DAW-GUN",
+    "comments": [
+      {
+        "user": "romi1502",
+        "created_at": "2019-11-25T14:15:52Z",
+        "body": "The `F` parameter is used to reduce the input spectrograms size (and thus memory footprint and computation time) at the training stage. The frequency dimension of the input spectrograms (and thus of the target spectrogram) is truncated at `F`, and thus the model only learn until `F`\r\n\r\nNote that if you perform training with the provided U-net architecture, the downsampling/upsampling structure of the model requires that `F` is a power of `2` (actually there are other values that could fit, but I don't want to go into details here).\r\n\r\nSo then, if you your spectrogram uses 4096 sample long windows, the number of frequency bins of your spectrogram (output of the STFT) will be `2049` and then you can choose `F=2048`(you'll then have almost fullband until 22050Hz), or `F=1024` (half-band, until about 11KHz), or anything lower that is a power of two.\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 128,
+    "title": "[Discussion] anyway to change bitrate of the output files?",
+    "created_at": "2019-11-23T05:42:19Z",
+    "closed_at": "2019-11-25T14:15:43Z",
+    "labels": [
+      "question",
+      "RTMP"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/128",
+    "body": "Whenever I use songs from the base FLAC/WAV, no matter what, the stems always come out as a really low bit rate. I've tried messing with a few config files and as far as I know there's no command to change it. Would there be a specific way/file to modify to do this?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/128/comments",
+    "author": "Waffled-II",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-25T14:15:43Z",
+        "body": "Use the -b parameter with separate command. "
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "[Bug] Minor code error in Wiki",
+    "created_at": "2019-11-22T03:33:09Z",
+    "closed_at": "2019-11-22T09:15:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/124",
+    "body": "Not quite a bug, but there is an error in the wiki's \"API Reference\" section:\r\nUnder the header \"RAW waveform based separation\" the first line of example code is `from spleeter.utils.audio.adapter import get_default_audio_adapter`\r\nThere is no module named `spleeter.utils.audio` --- this code should instead be `from spleeter.audio.adapter import get_default_audio_adapter`",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/124/comments",
+    "author": "jkeast",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-22T09:15:11Z",
+        "body": "Yes, we just deployed a new version with some API changes yesterday. We would update the documentation accordingly ASAP :) "
+      }
+    ]
+  },
+  {
+    "number": 122,
+    "title": "Distributing/combining training?",
+    "created_at": "2019-11-21T16:59:22Z",
+    "closed_at": "2020-04-05T12:40:38Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/122",
+    "body": "Is there a way to have multiple users train different sets of stems and then later combine their efforts into one model?\r\n",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/122/comments",
+    "author": "DAW-GUN",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-21T22:12:35Z",
+        "body": "Theoretically you could train a single model sequentially,  each user training on its data at a time and then passing on to the other to \"continue\" the training. \r\n\r\nIn a more distributed fashion, if you have N models trained independently on various sets, you could use ensembling techniques to average the spectrograms they produce. But there are no guarantee it would perform better."
+      },
+      {
+        "user": "DAW-GUN",
+        "created_at": "2019-11-22T03:26:18Z",
+        "body": "Thanks for your feedback. Any thoughts as to how that can be done using the command line? Or can you suggest where I can find the info? I looked at the documentation and couldn't figure out how to do it."
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-26T11:54:13Z",
+        "body": "That's definitely not something you can do with the command line, you'll have to dig into the python API to do that."
+      },
+      {
+        "user": "DAW-GUN",
+        "created_at": "2019-11-26T17:37:08Z",
+        "body": "Sorry - I was too specific. Instead, can you give me an example of what you were thinking of when you said, \"Theoretically you could train a single model sequentially, each user training on its data at a time and then passing on to the other to \"continue\" the training.\" ?"
+      }
+    ]
+  },
+  {
+    "number": 119,
+    "title": "[Discussion] Another formats for example",
+    "created_at": "2019-11-21T11:39:55Z",
+    "closed_at": "2019-11-21T13:23:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/119",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nCan I use WAV, AIFF, FLAC as example files?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/119/comments",
+    "author": "Gr33nEyes",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-21T13:23:41Z",
+        "body": "You can use any audio format that would be supported by ``ffmpeg``. We currently support export with following codec :\r\n\r\n- WAV\r\n- MP3\r\n- OGG\r\n- M4A\r\n- WMA\r\n- FLAC\r\n"
+      },
+      {
+        "user": "redbar0n",
+        "created_at": "2021-05-23T14:38:03Z",
+        "body": "@Faylixe when using a codec such as M4A, would it be the same as spleeter exporting to WAV and then using ffmpeg to convert (lossily) to M4A? Or does spleeter export directly to M4A without loss?"
+      }
+    ]
+  },
+  {
+    "number": 118,
+    "title": "[Discussion] How many examples do I need for training new models",
+    "created_at": "2019-11-21T02:37:46Z",
+    "closed_at": "2020-01-13T13:13:04Z",
+    "labels": [
+      "question",
+      "training"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/118",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI only have a basic understanding of machine learning but just interested to know the minimum number of examples I need to train a new model? \r\n\r\nAlso, suppose I have already used spleeter to produce a 1000 acapellas, and I already have the corresponding studio acapellas, can I then go ahead and train it on these so that I could try and remove the imperfections on any other random diy acapellas?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/118/comments",
+    "author": "Scylla2020",
+    "comments": [
+      {
+        "user": "aidv",
+        "created_at": "2019-11-24T16:14:42Z",
+        "body": "It seems like the musDB dataset only contains around 150 songs, so if you have a thousand songs, you have roughly 7 times more."
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2019-11-25T03:42:46Z",
+        "body": "Oh okay I see, cool."
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2019-11-25T06:02:47Z",
+        "body": "@aidv Is there any significant benefit on using more songs for training?"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-11-25T06:11:18Z",
+        "body": "@Scylla2020 Yes. \r\n\r\nOverly simplified description: If your dataset is too small or much of it is the same, there's a high risk of overfitting.\r\nOverfitting basically means that the AI learns how to do replicate that specific dataset really well.\r\nIronically that's a good way of compressing data using AI, but not necessarily the correct way.\r\n\r\nAnyways, I'm actually surprized that the MusDB dataset only contains 150 songs.\r\n\r\nI want to believe that I'm wrong aobut that to be honest, it just seems unreasonable.\r\n\r\nBut hey, AI does what AI does. It's amazing.\r\n\r\n**EDIT:** Anyone has ML experience, please correct me if I'm wrong."
+      },
+      {
+        "user": "discordance",
+        "created_at": "2019-11-25T19:49:37Z",
+        "body": "Does anybody know if the pre-trained models provided via Github release have been trained using the MusDB dataset and its 150 songs, or if it was trained on a way larger dataset ? Could not find any info about the training setup of these pre-trained models.\r\n\r\n**EDIT:** From the paper: \r\n\r\n> The models were trained on Deezer internal datasets.\r\n\r\n**EDIT 2:** Used the BEAN dataset, that contains:\r\n- 24,097 songs\r\n- 79 hours of audio stems\r\n- majority of pop/rock songs\r\n"
+      },
+      {
+        "user": "ravi-annaswamy",
+        "created_at": "2019-11-26T01:01:05Z",
+        "body": "It was trained using 20000+ songs \nPl see pdf of paper linked on read me\n\nWith AI or ml data becomes program\nThat is the various situations present in the data become program conditions and solutions \n\nso model trained on 20,000 songs can be several orders of magnitude accurate than the model trained on 150 songs\n\nSent from my iPhone\n\n> On Nov 25, 2019, at 2:49 PM, anunge <notifications@github.com> wrote:\n> \n> Does anybody know if the pre-trained models provided via Github release have been trained using the MusDB dataset and its 150 songs, or if it was trained on a way larger dataset ? Could not find any info about the training setup of these pre-trained models.\n> \n> —\n> You are receiving this because you are subscribed to this thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-11-26T01:12:09Z",
+        "body": "I knew it. It didn't make sense for only 150 songs to produce results like that."
+      },
+      {
+        "user": "ravi-annaswamy",
+        "created_at": "2019-11-26T01:16:31Z",
+        "body": "Having said that 150 songs contain hundreds of thousands of learning situations since short snippets are spectrogrammed and learned\n\nSo systems trained on 150 songs in diverse genres can learn quite a lot as seen in open unmix benchmark\n\nBut systems learning from\nMillions of situations get way better provided architecture allows that learning\n\nRavi\n\nSent from my iPhone\n\n> On Nov 25, 2019, at 8:12 PM, aidv <notifications@github.com> wrote:\n> \n> I knew it. It didn't make sense for only 150 songs to produce results like that.\n> \n> —\n> You are receiving this because you commented.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-11-26T01:19:07Z",
+        "body": "@ravi-annaswamy Oh I see. So a small dataset with varying data can give similar if not equal results as a _larger_ dataset, BUT, a large dataset will nonetheless give better results no matter what."
+      },
+      {
+        "user": "ravi-annaswamy",
+        "created_at": "2019-11-26T03:12:58Z",
+        "body": "I would not put it that way.\n\nA large dataset of 10000 jazz standards may not be as effective as 150 songs selected across pop rock jazz and world music. Because ability to discriminate voice or stem instruments against varying backgrounds is not in the jazz only training set.\n\n10000 songs selected across pop and rock vs\n150 songs across pop and rock will definitely be better is all I said.\n\nSent from my iPhone\n\n> On Nov 25, 2019, at 8:19 PM, aidv <notifications@github.com> wrote:\n> \n> @ravi-annaswamy Oh I see. So a small dataset with varying data can give similar if not equal results as a larger dataset, BUT, a large dataset will nonetheless give better results no matter what.\n> \n> —\n> You are receiving this because you were mentioned.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "Scylla2020",
+        "created_at": "2019-11-26T07:36:06Z",
+        "body": "@ravi-annaswamy Will I be correct to say that currently, after any sort of training with thousands of examples the results can never be completely perfect even if you throw in a song that was used as part of the training?,due to how the neural networks work, "
+      },
+      {
+        "user": "iskyd",
+        "created_at": "2019-11-26T09:43:04Z",
+        "body": "The number of songs doesn't correspond to the number of the examples in the training set. You can use as training set just a part of the song with all its informations. Of course you will have for the same songs different informations that can be considered as a training set, for example the intro, the verse, the chorus and so on. You can also apply some sort of distortion to the data so that you automatically create new feature without collecting more songs / parts of the songs.\r\n\r\nWhat @aidv said about overfitting is not correct. Overfitting is a problem \"caused\" by the number of the feature and not by the number of the examples in the training set (in this case the sound taken from a song). Instead increasing the number of the training set, if you suffer of high variance (overfitting), is likely to help a lot your algorithm. \r\nIn order to verify that you can plot the learning curve and see what happens. \r\nIncreasing the number of the feature didn't help only if you suffer of high bias (underfitting).  "
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-11-27T00:39:29Z",
+        "body": "Thank you for giving a more in depth explanation to all of this.\r\n\r\nSo what I'm taking away from this is, and please correct me if I'm wrong: We could technically have 1000 songs, process them through 5 different effects, and each effect having 4 different settings, giving us 20000 different samples to use in our dataset."
+      },
+      {
+        "user": "iskyd",
+        "created_at": "2019-11-27T07:25:07Z",
+        "body": "That's what distortion is about. You obviously want to apply some distortion that could then be present in the songs you want to split."
+      },
+      {
+        "user": "Mixerrog",
+        "created_at": "2020-01-13T17:13:26Z",
+        "body": "Discordance mentioned the BEAN dataset, that contains:\r\n\r\n    24,097 songs\r\n    79 hours of audio stems\r\n    majority of pop/rock songs\r\nIs it being used by the latest Spleeter version or is there a way to download &use it for the training files if not?\r\n\r\nThanks, Roger"
+      },
+      {
+        "user": "Mixerrog",
+        "created_at": "2020-01-13T17:45:45Z",
+        "body": " Sorry I am late getting to this but could you please answer this --- \n\nDiscordance mentioned the BEAN dataset, that contains:24,097 songs\n79 hours of audio stems\nmajority of pop/rock songs\n\nIs it being used by the latest Spleeter version or is there a way to download &use it for the training files if not?\n\nThanks, Roger\n\n\n    On Monday, January 13, 2020, 7:13:21 AM CST, Moussallam <notifications@github.com> wrote:  \n \n \nClosed #118.\n\n—\nYou are receiving this because you are subscribed to this thread.\nReply to this email directly, view it on GitHub, or unsubscribe.\n  "
+      }
+    ]
+  },
+  {
+    "number": 116,
+    "title": "[Discussion] FileNotFoundError When Trying to Train",
+    "created_at": "2019-11-18T22:43:11Z",
+    "closed_at": "2019-11-19T00:34:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/116",
+    "body": "### **Steps:**\r\n\r\n1. Installed using anaconda\r\n2. Run as: spleeter train -p sirens_config.json -d sirens_train.csv\r\n3.  FileNotFoundError: [Errno 2] File b'configs/sirens_train.csv' does not exist: b'configs/sirens_train.csv'\r\n\r\nsirens _train.csv definitely exists so I'm not sure what the issue is. any help would be great thanks!",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/116/comments",
+    "author": "clockworkred458",
+    "comments": [
+      {
+        "user": "BowennCAI",
+        "created_at": "2020-01-23T09:38:13Z",
+        "body": "So you've had solution? I met the same problem."
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "title": "[Discussion] High CPU load",
+    "created_at": "2019-11-18T12:17:52Z",
+    "closed_at": "2019-11-19T15:09:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/115",
+    "body": "I'm running Spleeter using `spleeter-gpu`and it causes extremely high CPU load when running 3 instances of Spleeter at once.\r\n\r\nWould anyone care to explain why this is happening?\r\n\r\nI'm sure it's not a bug or anything, I'm just curious as to why it's happening.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/115/comments",
+    "author": "aidv",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-19T15:09:20Z",
+        "body": "Definitively not a bug. Spleeter is a high computation process, and the GPU version will only performs Tensorflow GPU related computation into the GPU device, other operation are performed into CPU (such as audio loading, processing, model loading, etc, etc, etc), it also use multiprocessing for track writing to disk. No surprise it is burning a CPU is you run three instance of it."
+      },
+      {
+        "user": "aidv",
+        "created_at": "2019-11-19T15:12:45Z",
+        "body": "Makes sense. Thanks for clarifying.\r\n\r\nSo basically, even though the GPU might be used, it's not necessarily where the actual splitting occurs, hence the high CPU load?"
+      },
+      {
+        "user": "deseipel",
+        "created_at": "2022-02-13T23:12:43Z",
+        "body": "I see it max out my CPU just using one instance.  Granted its only for a few seconds.  But it takes out the audio while I'm livestreaming.  \r\n\r\nWindows 10\r\nProcessor\tIntel(R) Core(TM) i7-10700F CPU @ 2.90GHz, 2904 Mhz, 8 Core(s), 16 Logical Processor(s)\r\nGeForce RTX 3060 12GB RAM"
+      }
+    ]
+  },
+  {
+    "number": 102,
+    "title": "[Discussion] Can't install Spleeter using pip in MacOS 10.13.6",
+    "created_at": "2019-11-15T22:47:20Z",
+    "closed_at": "2019-11-19T14:46:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/102",
+    "body": "When I try to install spleeter using `pip install spleeter`, it prints out:\r\n\r\n```\r\nERROR: Could not find a version that satisfies the requirement spleeter (from versions: none)\r\n```",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/102/comments",
+    "author": "MacStevins",
+    "comments": [
+      {
+        "user": "TardisPeanut",
+        "created_at": "2019-11-16T08:52:53Z",
+        "body": "Yeah same problem here in Windows as well"
+      },
+      {
+        "user": "JustJayIGuess",
+        "created_at": "2019-11-16T10:05:29Z",
+        "body": "I was having the same problem. Uninstalled python 3.8 and installed 3.7.5 instead. Worked then, not sure why"
+      },
+      {
+        "user": "tuancuong92",
+        "created_at": "2019-11-17T10:26:22Z",
+        "body": "These steps are worked for me:\r\n1. brew install ffmpeg (also install python 3.7.5)\r\n2. pip3 install spleeter"
+      },
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-19T14:46:38Z",
+        "body": "Only Python 3.6 and 3.7 version are supported by now. "
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "title": "[Bug] Different audio duration after wave to mp3",
+    "created_at": "2019-11-14T17:33:40Z",
+    "closed_at": "2019-11-14T22:41:33Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/96",
+    "body": "After converting the input mp3 file to wave the duration changes:\r\n\r\n```\r\n(.env) ip-192-168-23-184:spleeter loretoparisi$ ffprobe -i output/test/vocals.mp3 \r\nffprobe version 4.0 Copyright (c) 2007-2018 the FFmpeg developers\r\n  built with Apple LLVM version 9.1.0 (clang-902.0.39.1)\r\n  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.0 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags= --host-ldflags= --enable-gpl --enable-libmp3lame --enable-libx264 --enable-libxvid --enable-opencl --enable-videotoolbox --disable-lzma\r\n  libavutil      56. 14.100 / 56. 14.100\r\n  libavcodec     58. 18.100 / 58. 18.100\r\n  libavformat    58. 12.100 / 58. 12.100\r\n  libavdevice    58.  3.100 / 58.  3.100\r\n  libavfilter     7. 16.100 /  7. 16.100\r\n  libavresample   4.  0.  0 /  4.  0.  0\r\n  libswscale      5.  1.100 /  5.  1.100\r\n  libswresample   3.  1.100 /  3.  1.100\r\n  libpostproc    55.  1.100 / 55.  1.100\r\nInput #0, mp3, from 'output/test/vocals.mp3':\r\n  Metadata:\r\n    encoder         : Lavf58.12.100\r\n  **Duration: 00:03:27.78, start: 0.025057, bitrate: 128 kb/s**\r\n    Stream #0:0: Audio: mp3, 44100 Hz, stereo, fltp, 128 kb/s\r\n    Metadata:\r\n      encoder         : Lavc58.18\r\n```\r\n\r\nwhile the wave file was\r\n\r\n```\r\n(.env) ip-192-168-23-184:spleeter loretoparisi$ ffprobe -i output/test/vocals.wav \r\nffprobe version 4.0 Copyright (c) 2007-2018 the FFmpeg developers\r\n  built with Apple LLVM version 9.1.0 (clang-902.0.39.1)\r\n  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.0 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags= --host-ldflags= --enable-gpl --enable-libmp3lame --enable-libx264 --enable-libxvid --enable-opencl --enable-videotoolbox --disable-lzma\r\n  libavutil      56. 14.100 / 56. 14.100\r\n  libavcodec     58. 18.100 / 58. 18.100\r\n  libavformat    58. 12.100 / 58. 12.100\r\n  libavdevice    58.  3.100 / 58.  3.100\r\n  libavfilter     7. 16.100 /  7. 16.100\r\n  libavresample   4.  0.  0 /  4.  0.  0\r\n  libswscale      5.  1.100 /  5.  1.100\r\n  libswresample   3.  1.100 /  3.  1.100\r\n  libpostproc    55.  1.100 / 55.  1.100\r\nInput #0, wav, from 'output/test/vocals.wav':\r\n  Metadata:\r\n    encoder         : Lavf58.12.100\r\n  Duration: 00:03:27.75, bitrate: 1411 kb/s\r\n    Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 44100 Hz, 2 channels, s16, 1411 kb/s\r\n```",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/96/comments",
+    "author": "loretoparisi",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-14T17:36:57Z",
+        "body": "_Spleeter_ export separated tracks using `wav` audio format but you can directly export into `mp3` codec using `-c mp3` parameter."
+      },
+      {
+        "user": "loretoparisi",
+        "created_at": "2019-11-14T17:41:01Z",
+        "body": "@Faylixe yes I know, but I'm using the wave signal directly\r\n\r\n```python\r\nfor instrument, waveform in sample.items():\r\nvocals = sample['vocals']\r\n...\r\n```\r\n\r\nthe time series here in `vocals`, when loaded like into `librosa` has a different duration than the input file:\r\n\r\n```python\r\nvocals = vocals.reshape(2,-2)\r\nvocals = librosa.resample(vocals, sample_rate, 22050)\r\nsample_rate = 22050\r\nvocals = librosa.core.to_mono(vocals)\r\naudio_duration = np.round(librosa.get_duration(y=vocals, sr=sample_rate), 2)\r\n```\r\n\r\nthe `audio_duration` is wrong."
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-14T22:41:33Z",
+        "body": "Small variations of duration between WAV and MP3 versions of a signal are not uncommon and are probably just the result of some padding of zeroes to fit the length to a multiple of the MDCT size.\r\n\r\nAnyway this is not related to spleeter."
+      }
+    ]
+  },
+  {
+    "number": 89,
+    "title": "[Discussion] Train using GPU",
+    "created_at": "2019-11-14T06:11:07Z",
+    "closed_at": "2019-11-14T15:37:27Z",
+    "labels": [
+      "question",
+      "RTMP"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/89",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nI want train using **GPU**. I do `conda activate spleeter-cpu` and `spleeter train -p configs/jazz_config.json -d ./configs/train`.\r\nAm I doing it right?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/89/comments",
+    "author": "kno3a87",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-14T15:37:27Z",
+        "body": "> I want train using **GPU**. I do `conda activate spleeter-cpu` and `spleeter train -p configs/jazz_config.json -d ./configs/train`.\r\n> Am I doing it right?\r\n\r\nWell, as the name suggest. `spleeter-cpu` environment use `CPU`. You need to use the provided `spleeter-gpu` environment instead."
+      },
+      {
+        "user": "kno3a87",
+        "created_at": "2019-12-17T03:26:48Z",
+        "body": "Sorry, I have only `/home/ubuntu/anaconda3/envs/spleeter-cpu`..."
+      }
+    ]
+  },
+  {
+    "number": 78,
+    "title": "[Discussion] Processing generated waveforms in python",
+    "created_at": "2019-11-12T15:01:21Z",
+    "closed_at": "2019-11-14T07:11:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/78",
+    "body": "I am using spleeter inside a python project and I want to work with the seperated waveforms.\r\n\r\nWhen I, for example, have this code:\r\n```\r\nseparator = Separator(\"spleeter:2\")\r\n    \r\naudio_loader = get_default_audio_adapter()\r\nsample_rate = 44100\r\nwaveform, _ = audio_loader.load(file, sample_rate=sample_rate)\r\n\r\nprediction = separator.separate(waveform)\r\n```\r\nI am able to get the seperated waveforms as a dict of arrays. However, I want to treat the seperated waveforms as files (without saving them to the filesystem). Specificly, I want to send them over a HTTP connection, but idealy not as arrays but as base64 encoded mp3s.\r\n\r\nIs it possible to convert these waveforms to an usable format without writing them to the filesystem? I cannot find a way to convert them into mp3/base64.\r\n\r\nI know `audio_loader.load` returns the waveforms as well but even after looking into the code I cannot to find a way to deal with these files.\r\n\r\nSorry if this is obvious and I overlook something. Best regards!",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/78/comments",
+    "author": "Carnageous",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-14T07:11:33Z",
+        "body": "Why not saving waveform to temporary file that would act as buffer ? \r\n\r\nOtherwise you need anyway to convert the waveform represented as a NumPy array into the target audio codec bytes to send it as in-memory audio file. You need to check dedicated Python library to do so which is out of the _Spleeter_ scope.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "[Discussion] A Fool On The Hill : Flute and Voice indistinguishable ",
+    "created_at": "2019-11-10T20:06:41Z",
+    "closed_at": "2019-11-20T16:52:03Z",
+    "labels": [
+      "enhancement",
+      "question",
+      "model",
+      "training",
+      "evaluation"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/76",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nSpleeter is great.\r\nTry to split voice and music from \"A Fool On The Hill\" from The Beatles. You'll notice that Spleeter is not able to separate the flute from the voice.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/76/comments",
+    "author": "citron",
+    "comments": [
+      {
+        "user": "johndpope",
+        "created_at": "2019-11-10T21:30:42Z",
+        "body": "If you can produce enough training data / here’s a flute / here’s voice  (here’s a different voice)/ you can achieve this. Note this edge case is going to show up everywhere that’s note drums / base / voice / piano.  "
+      },
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-20T16:52:03Z",
+        "body": "Indeed some instruments are harder to distinguish than other and flute/voice can be such as case."
+      }
+    ]
+  },
+  {
+    "number": 75,
+    "title": "[Discussion] Training to split other types of stems",
+    "created_at": "2019-11-10T17:16:39Z",
+    "closed_at": "2019-11-14T07:03:35Z",
+    "labels": [
+      "question",
+      "model",
+      "training",
+      "evaluation",
+      "RTMP"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/75",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nJust installed and used this tool, and am frankly amazed, but I have an idea that it could be used for.\r\n\r\nA lot of BMX (and I assume skateboard) videos use uncleared music and often get removed when uploaded, instead of uploading with no sound, being able to extract the sound of the bike/skateboard and then upload would be great. I could supply the sounds for training, how much would i need to supply, and how do I build the model?",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/75/comments",
+    "author": "evamedia",
+    "comments": [
+      {
+        "user": "johndpope",
+        "created_at": "2019-11-10T21:33:46Z",
+        "body": "If you fast forward to end result / the owner still has to reupload with adjusted sounds (presumably they already have video minus added sound track) / (or are you planning to post to your own channel?) either way / probably not going to be very fruitful / you mostly going to end up with the copyrighted song layer out in parts."
+      },
+      {
+        "user": "evamedia",
+        "created_at": "2019-11-11T15:52:32Z",
+        "body": "I already post to my own website (bmxmdb.com) after receiving permission from the video creators, I've been asked specifically not to upload some due to uncleared music, but if I could remove that from the files I already have I could post them. Some of these video's are 20 years old, so little chance of the video minus the sound track existing.\r\n\r\n>you mostly going to end up with the copyrighted song layer out in parts.\r\n\r\nNot sure I get you, I don't want any of the music, just the bike sounds\r\n\r\n"
+      },
+      {
+        "user": "johndpope",
+        "created_at": "2019-11-11T20:54:55Z",
+        "body": "If you have same song / you can subtract the wave forms to cancel out song. \r\nIt’s how they make acapella tracks from instrumental pieces."
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "About pretrained models",
+    "created_at": "2019-11-10T04:41:46Z",
+    "closed_at": "2019-11-14T22:50:13Z",
+    "labels": [
+      "question",
+      "model",
+      "training"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/72",
+    "body": "<!-- Please respect the title [Discussion] tag. -->\r\nHow many steps you trained models for 2stems/4stems. Are you train the model using the config file which you provided? I trained 2stems model myself using default config file and musdb18 dataset, but can't get clean vocals output.",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/72/comments",
+    "author": "DickyQi",
+    "comments": [
+      {
+        "user": "mmoussallam",
+        "created_at": "2019-11-14T22:50:13Z",
+        "body": "See the discussion in #81 "
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "Feature request: export to MIDI",
+    "created_at": "2019-11-03T11:41:13Z",
+    "closed_at": "2019-11-05T12:44:36Z",
+    "labels": [
+      "question",
+      "wontfix"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/11",
+    "body": "Thanks for the great work you've done guys !",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/11/comments",
+    "author": "samber",
+    "comments": [
+      {
+        "user": "Faylixe",
+        "created_at": "2019-11-05T12:44:36Z",
+        "body": "Sorry but this won't happen. Transposing audio signal to MIDI is a research task we won't cover :)"
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Train a model with only electric guitar?",
+    "created_at": "2019-11-01T18:19:03Z",
+    "closed_at": "2019-11-20T10:18:49Z",
+    "labels": [
+      "question",
+      "model"
+    ],
+    "url": "https://github.com/deezer/spleeter/issues/3",
+    "body": "Hello there!\r\nI would like to know if it's possible to train a model, but only using the electric guitar files on the MUSDB dataset?\r\n\r\nAlso, this Spleeter is awesome!\r\n\r\nThank you very much!",
+    "comments_url": "https://api.github.com/repos/deezer/spleeter/issues/3/comments",
+    "author": "brunobulgaron",
+    "comments": [
+      {
+        "user": "yamtssfa",
+        "created_at": "2019-11-06T19:01:01Z",
+        "body": "Yes it would be great to be able to make guitar hero type tracks"
+      },
+      {
+        "user": "vandorb12",
+        "created_at": "2019-11-08T05:03:50Z",
+        "body": "I think this would be extremely difficult to pull off. Tambre and pitch of an electric guitar is so varied from genre to genre, as well as attack and sustain that it would not be parsed cleanly like piano or vocal. I could see this done for clean acoustic guitar, just not rock/heavily effected and distorted electric guitars.\r\nBut what do I know? I'm just a random person on the internet."
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2019-11-13T16:44:13Z",
+        "body": "The MUSDB dataset has no electric guitar track (only vocals, drums, bass and other).\r\nThen, for training such a model, you first need to find a dataset with such isolated tracks.\r\nAs mentioned by @vandorb12, separating guitar tracks may be quite more challenging.\r\n"
+      },
+      {
+        "user": "brunobulgaron",
+        "created_at": "2019-11-13T17:58:54Z",
+        "body": "First of all, thank you all for replying. I really appreciate it!\r\n\r\nIf I were to train a model based on a dataset of isolated electric guitars, you guys have an idea of how many tracks I would have to use to get a good model to play around?\r\nThanks!"
+      },
+      {
+        "user": "romi1502",
+        "created_at": "2019-11-15T10:32:30Z",
+        "body": "@brunobulgaron,\r\nI don't really have a answer for you. For training a deep learning model you usually need a lot (I don't really have a number for defining \"a lot\" :) ) of data, and you need to ensure that the data are diverse enough. \r\nTraining a model with thousands samples of the same guitar played in the same amp by the same guitarist will probably results to a model that generalize much less than if it was trained on hundreds of samples various guitars played on various amp by various guitarists.\r\n"
+      }
+    ]
+  }
+]

@@ -1,0 +1,1754 @@
+[
+  {
+    "number": 6728,
+    "title": "60x Slowdown Using Concurrency",
+    "created_at": "2024-11-22T09:25:13Z",
+    "closed_at": "2024-11-26T14:58:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6728",
+    "body": "## Description\n<!-- A clear description of the bug -->\nThere seems to be a clear issue related to how `lightgbm` handles resource sharing. When restricting the number of cores associated with a process, the runtime increases significantly.\n\nIn the example provided below, the run time using all cores (0-15) is about 1.821 seconds. When restricting the process to all cores but one (0 - 14), the runtime increases to 109.31 seconds; more than a 60x increase. This only happens if the resource restriction is done from within the Python script. If the affinity is set beforehand using `taskset -c 0-14` the runtime is approximately the same, 1.796 seconds.\n\nThis makes training multiple `lightgbm` models in parallel undesirable, at least if the subprocesses are called from within a Python script. As this a common pattern of implementing concurrency, this appears to be a limitation which can hopefully be easily addressed and fixed.\n\nThanks!\n\n## Reproducible example\n<!-- Minimal code that exhibits this behavior -->\n\n**lgbm_affinity.py**\n```python\nimport argparse\nimport lightgbm as lgb\nimport numpy as np\nimport os\n\nnp.random.seed(42)\n\n\ndef main(use_setaffinity: bool = False, use_taskset: bool = False):\n\n    n = os.cpu_count()\n\n    # Set affinity using ``os.sched_setaffinity``\n    if use_setaffinity:\n        os.sched_setaffinity(0, set(range(n - 1)))\n        os.environ['OMP_NUM_THREADS'] = str(n - 1)  # Added after suggestion\n\n    # Set affinity using ``taskset``\n    if use_taskset:\n        pid = os.getpid()\n        command = f\"taskset -cp 0-{n - 2} {pid}\"\n        os.system(command)\n        os.environ['OMP_NUM_THREADS'] = str(n - 1)  # Added after suggestion\n\n    # Generate a data set\n    nrows, ncols = 1_000, 10\n    X = np.random.normal(size=(nrows, ncols))\n    y = X @ np.random.normal(size=ncols) + np.random.normal(size=nrows)\n\n    lgb_train = lgb.Dataset(X, y)\n\n    # Train model\n    params = {\n        \"objective\": \"regression\",\n        \"metric\": \"rmse\",\n        \"num_leaves\": 31,  # the default value\n        \"learning_rate\": 0.05,\n        \"feature_fraction\": 0.9,\n        \"bagging_fraction\": 0.8,\n        \"bagging_freq\": 5,\n        \"verbose\": 0\n    }\n    lgb.train(params, lgb_train)\n\n\nif __name__ == \"__main__\":\n\n    parser = argparse.ArgumentParser()\n\n    parser.add_argument(\n        \"--use-setaffinity\", \n        dest=\"use_setaffinity\", \n        action=\"store_true\",\n    )\n\n    parser.add_argument(\n        \"--use-taskset\", \n        dest=\"use_taskset\", \n        action=\"store_true\",\n    )\n\n    args = parser.parse_args()\n    main(**vars(args))\n```\n\n**lgbm_affinity.sh**\n```bash\ntime python lgbm_affinity.py > /dev/null 2>&1\ntime python lgbm_affinity.py  --use-setaffinity > /dev/null 2>&1\ntime python lgbm_affinity.py  --use-taskset > /dev/null 2>&1\ntime taskset -c 0-14 python lgbm_affinity.py > /dev/null 2>&1\n```\n\n**Output**\n```\n# Using all cores\nreal    0m1.821s\nuser    0m4.394s\nsys     0m0.178s\n\n# Using ``set_affinity`` from within the process\nreal    1m49.313s\nuser    25m44.344s\nsys     0m1.109s\n\n# Using ``taskset`` from within the process\nreal    1m48.820s\nuser    25m54.104s\nsys     0m0.959s\n\n# Using ``taskset`` before initializing the process\nreal    0m1.796s\nuser    0m4.135s\nsys     0m0.203s\n```\n\n## Environment info\n\nLightGBM version or commit hash:\n\n```\nliblightgbm  4.5.0    cpu_h155599f_3  conda-forge\nlightgbm     4.5.0    cpu_py_3        conda-forge\n```\n\nCommand(s) you used to install LightGBM\n\n```shell\nmicromamba install lightgbm\n```\n\n<!-- Put any additional environment information here -->\n\nOther used packages:\n```\nnumpy     1.26.4   py312heda63a1_0  conda-forge\n```\n\nThe example was run on an AWS instance (`ml.m5.4xlarge`) with 16 cores.\n\n## Additional Comments\n<!-- What else should we know? -->\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6728/comments",
+    "author": "JohanLoknaQC",
+    "comments": [
+      {
+        "user": "jmoralez",
+        "created_at": "2024-11-22T17:56:20Z",
+        "body": "Hey @JohanLoknaQC, thanks for using LightGBM.\n\nBy default LightGBM uses all available threads on the machine unless you tell it otherwise. So in your examples you're submitting n tasks and assigning only n - 1 threads, so they have to fight each other to execute them. I think the easiest way to fix this is by doing something like `os.environ['OMP_NUM_THREADS'] = str(n-1)`, that way you tell LightGBM to use the number of threads that you've limited the process to have."
+      },
+      {
+        "user": "JohanLoknaQC",
+        "created_at": "2024-11-25T12:03:35Z",
+        "body": "Thanks a lot for the answer! However, after adding the suggested fix (see code above) the run-times remains virtually unchanged. It does seem like something else might be causing this additional run-time."
+      },
+      {
+        "user": "jmoralez",
+        "created_at": "2024-11-25T15:15:10Z",
+        "body": "Sorry, I think that only works if provided through the command line. Can you please set the `num_threads` argument instead? e.g.\n\n```python\n    params = {\n        \"objective\": \"regression\",\n        \"metric\": \"rmse\",\n        \"num_leaves\": 31,  # the default value\n        \"learning_rate\": 0.05,\n        \"feature_fraction\": 0.9,\n        \"bagging_fraction\": 0.8,\n        \"bagging_freq\": 5,\n        \"verbose\": 0,\n        \"num_threads\": n - 1,  # <- set this\n    }\n```"
+      },
+      {
+        "user": "JohanLoknaQC",
+        "created_at": "2024-11-26T14:58:21Z",
+        "body": "Thank you very much - this solved this issue.\n\nJust for reference, it also worked when the affinities were set quite arbitrarily, e.g. `3-12`. It therefore seems to a quite general solution. 👍 "
+      }
+    ]
+  },
+  {
+    "number": 6660,
+    "title": "[dask] `FutureCancelledError` when training DaskLGBMClassifier on databricks",
+    "created_at": "2024-10-01T15:15:59Z",
+    "closed_at": "2024-12-14T04:04:02Z",
+    "labels": [
+      "question",
+      "awaiting response",
+      "dask"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6660",
+    "body": "## Description\r\nWhen trying to train a DaskLGBMClassifier using `dask-databricks`, I seem to run into the error `FutureCancelledError: operator.itemgetter(1)-aedec8478dd062943dfc5db591c68b4c cancelled for reason: unknown.` no matter what I do. Databricks assistant/chatGPT thought it might be due to partitioning of the training data but I've tried massively reducing or decreasing the number of partitions and all that changes is how quickly it fails. \r\n\r\n## Reproducible example\r\n\r\n```python\r\nimport lightgbm.dask as lgb_dask\r\nfrom lightgbm import DaskLGBMClassifier\r\nimport dask_databricks\r\nimport dask.dataframe as dd\r\n\r\nclient = dask_databricks.get_client()\r\n\r\ntrain_ddf = dd.read_parquet(train_filepath, storage_options=storage_options).repartition(npartitions=320)\r\neval_ddf = dd.read_parquet(eval_filepath, storage_options=storage_options).repartition(npartitions=320)\r\n#have played with lots of different partitioning strategies\r\n\r\n#cast categorical features as categorical types, categorize in the training data, apply that categorization to the eval data\r\ntrain_ddf[categorical_features] = train_dff[categorical_features].astype('category').categorize()\r\ncategory_mappings = {col: train_ddf[col].cat.categories for col in categorical_columns}#hold onto this guy for making predictions on unseen data\r\neval_ddf[categorical_features] = eval_dff[categorical_features].astype('category')\r\nfor col in categorical_columns:\r\n  eval_ddf[col] = eval_ddf[col].cat.set_categories(category_mappings[col])\r\n\r\nclf = DaskLGBMClassifier(\r\n    client=client,\r\n    objective=\"binary\",\r\n    max_depth=-1,\r\n    num_leaves=5000,\r\n    metric=\"binary_logloss\",\r\n    boosting_type=\"gbdt\"\r\n)\r\n\r\nclf.fit(\r\n    X=train_ddf[features], \r\n    y=train_ddf['target'], \r\n    eval_set=[(eval_ddf[features], eval_ddf['target'])],\r\n    eval_names=['eval'],\r\n\r\n)\r\n```\r\n\r\n## Environment info\r\n\r\nLightgbm 4.5.0, just installed via a `!pip install lightgbm` at the top of the notebook\r\n\r\nI'm using databricks runtime 15.4 LTS, with the following init script:\r\n\r\n```shell\r\n#!/bin/bash\r\n\r\n# Install Dask + Dask Databricks\r\n/databricks/python/bin/pip install --upgrade xgboost s3fs dask[complete] dask-databricks \"numpy==1.*\"\r\n\r\n# Start Dask cluster components\r\ndask databricks run\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6660/comments",
+    "author": "gdubs89",
+    "comments": [
+      {
+        "user": "jmoralez",
+        "created_at": "2024-11-12T17:49:31Z",
+        "body": "Hey @gdubs89, thanks for using LightGBM.\n\nIs it possible for you to install LightGBM on the cluster? Running it at the top of the notebook installs it on the driver, but every executor needs to have it, so that may be the reason.\nAnother thing that would help is if you're able to access the logs from the executors, those may have the exact error."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-12-14T04:04:02Z",
+        "body": "This issue has been automatically closed because it has been awaiting a response for too long. When you have time to to work with the maintainers to resolve this issue, please post a new comment and it will be re-opened. If the issue has been locked for editing by the time you return to it, please open a new issue and reference this one. Thank you for taking the time to improve LightGBM!"
+      }
+    ]
+  },
+  {
+    "number": 6460,
+    "title": "Any suggestions for predicting all values to be 0?",
+    "created_at": "2024-05-19T02:53:25Z",
+    "closed_at": "2024-05-19T04:51:32Z",
+    "labels": [
+      "question",
+      "awaiting response"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6460",
+    "body": "I'm working on the stock return prediction task, when I use the logarithmic return as the label, the model predicts that the value is close to 0, and when it is changed to the original value, the model can predict normally; What are the possible reasons for this?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6460/comments",
+    "author": "MatthewZhuang",
+    "comments": [
+      {
+        "user": "jameslamb",
+        "created_at": "2024-05-19T03:11:37Z",
+        "body": "Thanks for using LightGBM.\r\n\r\nCan you share a minimal, reproducible example showing this behavior? I don't quite understand what you're asking."
+      }
+    ]
+  },
+  {
+    "number": 6408,
+    "title": "score belong to different target classes. class 0 when init_score is given else 1",
+    "created_at": "2024-04-05T17:58:16Z",
+    "closed_at": "2024-04-22T16:44:12Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6408",
+    "body": "## Description\r\nI am trying to train a LGBMClassfier with init_score for rare event prediction(CTR). Close to 99% of data is 0 and 1% of data is 1. \r\nFrom the documentation it is not clear for which class init_score is expected. \r\nIf I give init_score while training the model, lightgbm assumes 0 to be positive event and generate raw_score for 0. \r\nIf I don't give init_score while training the model, lightgbm assumes 1 to be positive event and generate raw_score for 1. \r\n\r\n## Reproducible example\r\n\r\nparams['metric'] = 'binary_logloss'\r\nclf4 = lgb.LGBMClassifier(n_jobs=-1)\r\nclf4.fit(X=df[catf + numf], y = df.clicks, sample_weight=df.weight.values,  categorical_feature=catf, init_score = init_score)\r\n\r\n## Environment info\r\n\r\nLightGBM version or commit hash: Lightgbm version: '4.3.0'\r\n\r\nIs there any way to force Lightgbm to generate the score for 1 instead of 0. ",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6408/comments",
+    "author": "i-plusplus",
+    "comments": [
+      {
+        "user": "jmoralez",
+        "created_at": "2024-04-16T00:37:46Z",
+        "body": "Hey @i-plusplus, thanks for using LightGBM. On binary classification the init score is expected to be given for the positive class.\r\n\r\n> If I give init_score while training the model, lightgbm assumes 0 to be positive event and generate raw_score for 0.\r\n\r\nCan you provide a small, reproducible example of that? Your example is missing the data, parameters, weights, etc."
+      },
+      {
+        "user": "i-plusplus",
+        "created_at": "2024-04-22T08:42:27Z",
+        "body": "Thanks for the response @jmoralez . \r\n\r\nIt was not the issue in lightgbm. It was a issue the way I was converting the values. Sorry about this. "
+      }
+    ]
+  },
+  {
+    "number": 6343,
+    "title": "LGBM_BoosterCreateFromModelfile crash on Android device",
+    "created_at": "2024-02-26T11:19:40Z",
+    "closed_at": "2024-05-24T04:03:25Z",
+    "labels": [
+      "question",
+      "awaiting response"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6343",
+    "body": "## Description\r\nWe are running LightGBM on Android devices, sometimes the following crash occurs in `LGBM_BoosterCreateFromModelfile` method:\r\n\r\n```\r\nbacktrace:\r\n      #00 pc 000000000003ee9c  ../com.android.runtime/lib64/bionic/libc.so (_Unwind_SetGR+76) (BuildId: )\r\n      #01 pc 000000000000a604  /system/lib64/libxxx.so (__gxx_personality_v0+336) (BuildId: )\r\n      #02 pc 000000000042b164  /system/lib64/lib_lightgbm.so\r\n```\r\n\r\n## Reproducible example\r\n\r\nOccasional crashes.\r\n\r\n```cpp\r\nALOGD(\"LGBM_BoosterCreateFromModelfile begin\"); // \r\nresult = LGBM_BoosterCreateFromModelfile(filename, &p, &handle);\r\nALOGD(\"LGBM_BoosterCreateFromModelfile end\"); // when crashed, no this line\r\n```\r\n\r\n## Environment info\r\n\r\nLightGBM version or commit hash: d78b6bc2fdf96c87e3cb61f2d497a962e3270c91\r\n\r\n\r\n## Additional Comments\r\nWe guess that an exception occurred in `API_BEGIN()` and `API_END()`.\r\n\r\n```\r\nint LGBM_BoosterCreateFromModelfile(\r\n  const char* filename,\r\n  int* out_num_iterations,\r\n  BoosterHandle* out) {\r\n  API_BEGIN();\r\n  auto ret = std::unique_ptr<Booster>(new Booster(filename));\r\n  *out_num_iterations = ret->GetBoosting()->GetCurrentIteration();\r\n  *out = ret.release();\r\n  API_END();\r\n}\r\n```\r\n\r\nIf any additional information is required please contact me. Thanks.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6343/comments",
+    "author": "BurjalHou",
+    "comments": [
+      {
+        "user": "jameslamb",
+        "created_at": "2024-04-24T02:10:34Z",
+        "body": "Thanks for using LightGBM.\r\n\r\nWe don't test deployment to mobile operating systems but can try to help here. To do that, we need more information.\r\n\r\n1. Could you provide the model file as a text file attachment here?\r\n2. Is it possible to upgrade to a newer version of LightGBM? The version you're using is from September 1, 2022 ... there have been many fixes and improvements since then.\r\n3. Can you please provide the exact commands you used to build LightGBM?"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-05-24T04:03:25Z",
+        "body": "This issue has been automatically closed because it has been awaiting a response for too long. When you have time to to work with the maintainers to resolve this issue, please post a new comment and it will be re-opened. If the issue has been locked for editing by the time you return to it, please open a new issue and reference this one. Thank you for taking the time to improve LightGBM!"
+      }
+    ]
+  },
+  {
+    "number": 6338,
+    "title": "By using sample weight, why multiply a constant changed the model ?",
+    "created_at": "2024-02-23T08:50:34Z",
+    "closed_at": "2024-03-27T04:03:06Z",
+    "labels": [
+      "question",
+      "awaiting response"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6338",
+    "body": "## Description\r\nHi,\r\n\r\nI am using LightGBM to train a model and setting reg_lambda and reg_alpha both to 0, while choosing regression as the objective function. Then, based on my own logic, I generated sample weights. I have tested two scenarios: one using sample_weight and the other using sample_weight multiplied by 0.9999. However, there is a noticeable difference in the training results between these two cases. According to my understanding, if reg_lambda and reg_alpha are set to 0, multiplying sample_weight by a constant should not change the training results.\r\n\r\nCould someone help me with this? Thanks.\r\n\r\n\r\n\r\n\r\n\r\n## Reproducible example\r\n<!-- Minimal code that exhibits this behavior -->\r\n\r\n## Environment info\r\n\r\nLightGBM version or commit hash:\r\n\r\nCommand(s) you used to install LightGBM\r\n\r\n```shell\r\n\r\n```\r\n\r\n<!-- Put any additional environment information here -->\r\n\r\n\r\n## Additional Comments\r\n<!-- What else should we know? -->\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6338/comments",
+    "author": "dtss316",
+    "comments": [
+      {
+        "user": "jameslamb",
+        "created_at": "2024-02-25T23:18:06Z",
+        "body": "Thanks for using LightGBM.\r\n\r\n1. what version are you using?\r\n2. how did you install it (exact commands)?\r\n3. what programming language are you using?\r\n4. can you provide a minimal, reproducible example showing exactly how you're using LightGBM?"
+      },
+      {
+        "user": "shiyu1994",
+        "created_at": "2024-02-26T03:32:58Z",
+        "body": "It is possible that multiplying 0.99999 causes a difference in the gradient accumulation process. Though theoretically this should have no effect on the predicted values, but practically floating-point numbers have a finite precision. Multiplying a series of numbers by 0.99999, summing them up together, and dividing them by 0.99999 will not necessarily returns the same results as the original summation of these numbers."
+      },
+      {
+        "user": "shiyu1994",
+        "created_at": "2024-02-26T03:33:43Z",
+        "body": "But again, the difference should be minor. If you encounter large difference in result, then providing more details or a reproducible example could be very helpful for us to identify the problem."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-03-27T04:03:05Z",
+        "body": "This issue has been automatically closed because it has been awaiting a response for too long. When you have time to to work with the maintainers to resolve this issue, please post a new comment and it will be re-opened. If the issue has been locked for editing by the time you return to it, please open a new issue and reference this one. Thank you for taking the time to improve LightGBM!"
+      }
+    ]
+  },
+  {
+    "number": 6275,
+    "title": "Hyperparameter tuning for an LGBM classifier",
+    "created_at": "2024-01-15T12:53:44Z",
+    "closed_at": "2024-02-20T04:04:09Z",
+    "labels": [
+      "question",
+      "awaiting response"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/6275",
+    "body": "## Description\r\nHi, so this isn't as much of a bug as a question I have about LGBM. I am tuning hyperparameters with 3-fold cross validation for an LGBM classifier on a dataset that has about 2 million samples with 100 features. My question is this. I can basically let n_estimators grow very very large (say about 5000) while making the learning rate get small (say about 0.001), while decreasing my cv negative log-likelihood. What's going on here? \r\n\r\nI have tried searching online about advice on LGBM hyperparameter tuning, but the advice seems to be generic and doesn't match what I'm looking for. I guess I'd like to know if anyone has come across this issue with LGBM before? \r\n\r\n## Reproducible example\r\n<!-- Minimal code that exhibits this behavior -->\r\n\r\n## Environment info\r\n\r\nLightGBM version or commit hash:\r\n\r\nCommand(s) you used to install LightGBM\r\n\r\n```shell\r\n\r\n```\r\n\r\n<!-- Put any additional environment information here -->\r\n\r\n\r\n## Additional Comments\r\n<!-- What else should we know? -->\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/6275/comments",
+    "author": "dblim",
+    "comments": [
+      {
+        "user": "jameslamb",
+        "created_at": "2024-01-16T15:55:58Z",
+        "body": "Thanks for using LightGBM.\r\n\r\n>  I can basically let n_estimators grow very very large (say about 5000) while making the learning rate get small (say about 0.001), while decreasing my cv negative log-likelihood. What's going on here?\r\n\r\nI'm sorry but I don't understand the question. Can you please provide a minimal, reproducible example that demonstrates what behavior you're seeing and explains how it differs from what you expected?"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-02-20T04:04:08Z",
+        "body": "This issue has been automatically closed because it has been awaiting a response for too long. When you have time to to work with the maintainers to resolve this issue, please post a new comment and it will be re-opened. If the issue has been locked for editing by the time you return to it, please open a new issue and reference this one. Thank you for taking the time to improve LightGBM!"
+      }
+    ]
+  },
+  {
+    "number": 5693,
+    "title": "device=cuda_exp is slower than device=cuda on lightgbm.cv",
+    "created_at": "2023-01-31T15:50:14Z",
+    "closed_at": "2024-05-26T04:03:11Z",
+    "labels": [
+      "question",
+      "awaiting response"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/5693",
+    "body": "## Edit 2023-02-09\r\n\r\nI tried a simplified case without using RFECV in a followup-comment, and the issue is reproducible just using `lightgbm.cv`. \r\n\r\n## Description\r\nI built two different versions of lightgbm - the first with `cuda_exp` and the second with `cuda`.\r\n\r\nI do feature selection with `sklearn.RFECV`.\r\n\r\nI instantiate a lightgbm.LGBMRegressor, and `N` times I call\r\n`RFECV(model, n_jobs=None, ...)`, each time with a slightly different subset of the training data (simply selecting a subset of 95% of the data each call).\r\n\r\nThe idea behind performing several (e.g. 25) RFECV-runs is to eliminate variability in the returned selected features.\r\n\r\nThe result is a collections.Counter object that counts how many times each feature was selected out of the `N` runs.\r\n\r\nThe issue is that `device=\"cuda_exp\"` is much slower than `device=\"cuda\"`.\r\n\r\nSpecifically, if I import the module compiled with `cuda_exp`, both `device=\"cuda_exp\"` and `device=\"gpu\"` are much slower than\r\nwhat they are if I import the module compiled with the older `cuda`.\r\n\r\n## Reproducible example\r\n\r\nSee code at the end of the post\r\n\r\n## Environment info\r\n\r\nLightGBM version or commit hash:\r\n\r\nCommand(s) you used to install LightGBM\r\n\r\n```\r\n# Clone / copy two instances of the repository, one for cuda and one for cuda_exp.\r\n```\r\n```\r\n# cuda\r\ncd build\r\ncmake -DUSE_GPU=1 -DUSE_CUDA=1 -DUSE_CUDA_EXP=0 -DOpenCL_LIBRARY=/usr/local/cuda-12.0/lib64/libOpenCL.so -DOpenCL_INCLUDE_DIR=/usr/local/cuda/include/ ..\r\nmake -j8\r\ncd ../python-package/\r\npython3 setup.py install --precompile\r\n# move the base directory of the installed package to the new name `lightgbm_cuda`\r\n# (This is highly nonstandard, though appears to serve the purpose of simplifying comparisons of the two libraries here).\r\n```\r\n```\r\n# cuda_exp\r\ncd build\r\ncmake -DUSE_GPU=1 -DUSE_CUDA=0 -DUSE_CUDA_EXP=1 -DOpenCL_LIBRARY=/usr/local/cuda-12.0/lib64/libOpenCL.so -DOpenCL_INCLUDE_DIR=/usr/local/cuda/include/ ..\r\nmake -j8\r\ncd ../python-package/\r\npython3 setup.py install --precompile\r\n# move the base directory of the installed package to the new name `lightgbm_cuda_exp`\r\n# (This is highly nonstandard, though appears to serve the purpose of simplifying comparisons of the two libraries here).\r\n```\r\n\r\n<!-- Put any additional environment information here -->\r\ncommit: 9954bc42311653a02d0d3de110168c82a2312306\r\n\r\n* sklearn-1.2.0\r\n* pandas-1.5.2\r\n* numpy-1.21.5\r\n* python-3.9.7\r\n\r\nHardware:\r\n* AMD Ryzen 7 5800H\r\n* NVIDIA GeForce RTX 3060 Laptop GPU [6 GB vram]\r\n* 16 GB of memory\r\n\r\n## Code to run a particular model\r\n\r\nPlease note that the dataset below is 100% bogus. I unfortunately cannot share the real dataset. I made a lazy attempt to make the example-dataset below have the same number of features and rows and approximate range/collection of values as the real dataset.\r\n\r\nTo run a model, pass in one of the options: `cuda`, `cuda_gpu`, `cuda_exp`, `cuda_exp_gpu`, `cpu`.\r\n\r\nThe invocation will produce a logfile with the time it took to run it. I have included a log file from my own invocations below.\r\n\r\n```\r\nfrom sklearn.feature_selection import RFECV\r\nfrom sklearn.model_selection import train_test_split\r\n\r\nfrom datetime import datetime, timedelta\r\nimport sys\r\nimport time\r\nimport numpy as np\r\nimport pandas as pd\r\n\r\nfrom collections import Counter\r\n\r\nif sys.argv[1] == \"cuda\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"cuda\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_gpu\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"gpu\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cpu\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"cpu\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_exp\":\r\n    import lightgbm_cuda_exp as lightgbm\r\n    DEVICE=\"cuda_exp\"\r\n    print(f\"Using lightgbm_cuda_exp with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_exp_gpu\":\r\n    import lightgbm_cuda_exp as lightgbm\r\n    DEVICE=\"gpu\"\r\n    print(f\"Using lightgbm_cuda_exp with DEVICE={DEVICE}\")\r\n\r\n#elif sys.argv[1] == \"cuda_exp_cpu\":\r\n#    import lightgbm_cuda_exp as lightgbm\r\n#    DEVICE=\"cpu\"\r\n#    print(f\"Using lightgbm_cuda_exp with DEVICE={DEVICE}\")\r\n\r\nelse:\r\n    raise Exception(\"arg should be one of: cuda, cuda_gpu, cuda_exp, cuda_exp_gpu, cpu\")\r\n\r\nARG = sys.argv[1]\r\n\r\nnp.random.seed(1)\r\nN_continuous = 110\r\nN_indicators = 65\r\n\r\nansi_underline = \"\\033[96m\"\r\nansi_green = \"\\033[92m\"\r\nansi_end = \"\\033[0m\"\r\n\r\ndef get_data():\r\n    \"\"\"construct a demo dataset with approximately the same shape and format\"\"\"\r\n    index = pd.date_range(\r\n        datetime(2019, 6, 1),\r\n        datetime(2022, 6, 1),\r\n        freq=\"H\",\r\n    )\r\n\r\n    columns = []\r\n    for i in range(N_continuous):\r\n        if i%2 == 0:\r\n            col = np.random.uniform(low=0, high=1000, size=len(index))\r\n        else:\r\n            col = np.random.normal(0, 1, size=len(index))\r\n        columns.append(col.ravel())\r\n\r\n    for i in range(N_indicators):\r\n        col = np.random.choice([0, 1], size=len(index))\r\n        columns.append(col.ravel())\r\n\r\n    df = pd.concat([pd.Series(x) for x in columns], axis=1)\r\n    target = pd.Series(np.random.uniform(low=0, high=2000, size=len(index)))\r\n\r\n    return df.astype(np.float32), target.astype(np.float32)\r\n\r\n\r\ndef feature_select_step(model, train_X, train_y):\r\n    \"\"\"run one instance of feature selection on one training set\"\"\"\r\n    selector = RFECV(model, n_jobs=None, step=1, verbose=False, cv=2)\r\n    selector.fit(\r\n        train_X,\r\n        train_y.ravel(),\r\n    )\r\n    cols = train_X.loc[:, selector.support_].columns\r\n    return cols\r\n\r\ndef run_aggregated_feature_select(train_X, train_y):\r\n    \"\"\"run feature selection successively and aggregate the resulting columns in a Counter\"\"\"\r\n    model = lightgbm.LGBMRegressor(\r\n        random_state=1,\r\n        #n_estimators=24,\r\n        #num_leaves=16,\r\n        objective=\"regression_l1\",\r\n        metrics=\"l2\", # cuda_exp raises warnings with l1\r\n        n_estimators=50,\r\n        num_leaves=64,\r\n        max_bin=63,\r\n        device=DEVICE,\r\n        #gpu_use_dp=True,\r\n        gpu_platform_id=0,\r\n        gpu_device_id=0,\r\n        num_thread=28,\r\n        verbose=0,\r\n    )\r\n    agg = []\r\n    times = []\r\n\r\n    print(ansi_underline + \"\\nRunning feature select for model: \" + repr(model) + ansi_end)\r\n\r\n    # how many feature selections to run (only do one in the minimal example/demo)\r\n    N = 1\r\n    t0 = time.time()\r\n    for random_state in range(10, 10+N):\r\n        print(ansi_green + f\"train_test_split(random state={random_state})\" + ansi_end)\r\n        # arbitrarily exclude 5% of the rows to introduce some variability\r\n        # these excluded rows are not used at all for the current iteration\r\n        tts_train_X, _____, tts_train_y, _____ = train_test_split(train_X, train_y, test_size=0.05, random_state=random_state)\r\n        cols = feature_select_step(model, tts_train_X, tts_train_y)\r\n        agg.append(cols)\r\n        tn = time.time()\r\n        print(\"TIME:\", tn-t0)\r\n        times.append(tn-t0)\r\n        t0 = tn\r\n    C = Counter()\r\n    for index in agg:\r\n        C.update(index)\r\n\r\n    with open(\"lightgbm_perf_test.log\", \"a\") as f:\r\n        f.write(f\"{ARG}[{DEVICE}]: {times}, {model}\\n\\n\")\r\n\r\n    return C\r\n\r\nif __name__ == '__main__':\r\n    train_X, train_y = get_data()\r\n    run_aggregated_feature_select(train_X, train_y)\r\n```\r\n\r\n\r\n## Timing results\r\n\r\nBelow, each record is one execution of the above program. The identifier `ARG[DEVICE]` serves to show which library was imported, and which device was passed. The number after it is the time in seconds, and following the time is a textual representation of the model that was fitted.\r\n\r\nFor `cpu` the library is the older cuda (no runs were performed with `device=\"cpu\"` on the cuda_exp-library).\r\n\r\n```\r\ncuda[cuda]: [88.90170121192932], LGBMRegressor(device='cuda', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncuda_gpu[gpu]: [124.41583967208862], LGBMRegressor(device='gpu', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncuda_exp[cuda_exp]: [331.1839654445648], LGBMRegressor(device='cuda_exp', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncuda_exp_gpu[gpu]: [172.52361226081848], LGBMRegressor(device='gpu', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncpu[cpu]: [77.27314162254333], LGBMRegressor(device='cpu', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\n# Perform three more runs to replicate the results above\r\ncuda_exp_gpu[gpu]: [169.93835926055908], LGBMRegressor(device='gpu', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncuda_gpu[gpu]: [122.16611576080322], LGBMRegressor(device='gpu', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n\r\ncuda[cuda]: [89.40578246116638], LGBMRegressor(device='cuda', gpu_device_id=0, gpu_platform_id=0, max_bin=63,\r\n              metrics='l2', n_estimators=50, num_leaves=64, num_thread=28,\r\n              objective='regression_l1', random_state=1, verbose=0)\r\n```\r\n\r\nI note that CPU is faster in this case, though cuda_exp is almost 4x as slow as cuda. \r\n\r\nIs this caused by cuda_exp having higher overhead than cuda? \r\n\r\nI tried some tweaking of the suggested options like using double precision, changing metric from l1 to l2 to perform compute on the gpu, tweaking max bins, and trying to get rid of sparseness-warnings thrown by some models:\r\n```\r\n[LightGBM] [Warning] CUDA currently requires double precision calculations.\r\n[LightGBM] [Warning] Using sparse features with CUDA is currently not supported.\r\n```\r\nI had no luck with improving the performance of cuda_exp doing this.\r\n\r\nLastly, I would be inclined to agree that RFECV may interact poorly with CUDA/GPU-computing.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/5693/comments",
+    "author": "ninist",
+    "comments": [
+      {
+        "user": "ninist",
+        "created_at": "2023-02-09T11:49:32Z",
+        "body": "I was able to reproduce this for just plain `lightgbm.cv` without sklearn. \r\n\r\nWith `device=\"cuda_exp\"`, the `lightgbm.cv` call takes 1.9s while with `device=\"cuda\"` it takes 0.9s\r\n\r\nThis is on commit 9954bc42311653a02d0d3de110168c82a2312306 just before `cuda_exp` was made standard and `cuda` removed. \r\n\r\n```\r\nfrom datetime import datetime\r\nimport sys\r\nimport time\r\nimport numpy as np\r\nimport pandas as pd\r\n\r\nif sys.argv[1] == \"cuda\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"cuda\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_gpu\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"gpu\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cpu\":\r\n    import lightgbm_cuda as lightgbm\r\n    DEVICE=\"cpu\"\r\n    print(f\"Using lightgbm_cuda with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cpu_exp\":\r\n    import lightgbm_cuda_exp as lightgbm\r\n    DEVICE=\"cpu\"\r\n    print(f\"Using lightgbm_cuda_Exp with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_exp\":\r\n    import lightgbm_cuda_exp as lightgbm\r\n    DEVICE=\"cuda_exp\"\r\n    print(f\"Using lightgbm_cuda_exp with DEVICE={DEVICE}\")\r\n\r\nelif sys.argv[1] == \"cuda_exp_gpu\":\r\n    import lightgbm_cuda_exp as lightgbm\r\n    DEVICE=\"gpu\"\r\n    print(f\"Using lightgbm_cuda_exp with DEVICE={DEVICE}\")\r\n\r\nelse:\r\n    raise Exception(\"arg should be one of: cuda, cuda_gpu, cpu, cpu_exp, cuda_exp, cuda_exp_gpu\")\r\n\r\nARG = sys.argv[1]\r\n\r\nnp.random.seed(1)\r\nN_continuous = 110\r\nN_indicators = 65\r\n\r\nansi_underline = \"\\033[96m\"\r\nansi_green = \"\\033[92m\"\r\nansi_end = \"\\033[0m\"\r\n\r\ndef get_data():\r\n    \"\"\"construct a demo dataset with approximately the same shape and format\"\"\"\r\n    index = pd.date_range(\r\n        datetime(2019, 6, 1),\r\n        datetime(2022, 10, 20),\r\n        freq=\"H\",\r\n    )\r\n\r\n    columns = []\r\n    for i in range(N_continuous):\r\n        if i%2 == 0:\r\n            col = np.random.uniform(low=0, high=1000, size=len(index))\r\n        else:\r\n            col = np.random.normal(0, 1, size=len(index))\r\n        columns.append(col.ravel())\r\n\r\n    for i in range(N_indicators):\r\n        col = np.random.choice([0, 1], size=len(index))\r\n        columns.append(col.ravel())\r\n\r\n    df = pd.concat([pd.Series(x) for x in columns], axis=1)\r\n    target = pd.Series(np.random.uniform(low=0, high=2000, size=len(index)))\r\n\r\n    df = df.astype(np.float32)\r\n    df.index = index\r\n    target = target.astype(np.float32)\r\n    target.index = df.index\r\n\r\n    dataset = lightgbm.Dataset(df, target)\r\n    return dataset\r\n\r\ndef run_lightgbm(dataset):\r\n    \"\"\"run lightgbm.cv once\"\"\"\r\n\r\n    print(ansi_underline + \"\\nRunning feature select for model: \" + ansi_end)\r\n\r\n    params = {\r\n        'random_state': 1,\r\n        #n_estimators=24,\r\n        #num_leaves=16,\r\n        'objective': 'regression_l1',\r\n        'metrics': 'regression_l2', # cuda_exp raises warnings with l1 as opposed to l2\r\n        #'n_estimators': 96, # num boosting rounds\r\n        'num_leaves': 64,\r\n        'max_depth': 15, # XXX\r\n        'max_bin': 63, # XXX\r\n        'device': DEVICE, # gpu cpu cuda cuda_exp\r\n        #'gpu_use_dp': True,\r\n        #gpu_platform_id=0,\r\n        #gpu_device_id=0,\r\n        'verbose': 0,\r\n    }\r\n    if DEVICE in ['cuda', 'cuda_exp']:\r\n        params['is_enable_sparse'] = False\r\n\r\n\r\n    t0 = time.time()\r\n    model = lightgbm.cv(\r\n        params=params,\r\n        train_set=dataset,\r\n        num_boost_round=99999999,\r\n        shuffle=False,\r\n        stratified=False, # regression does not permit stratified\r\n        callbacks=[lightgbm.early_stopping(20, verbose=False), lightgbm.log_evaluation(1)],\r\n        eval_train_metric=False,\r\n        seed=2,\r\n    )\r\n    tn = time.time()\r\n    print(\"TIME:\", tn-t0)\r\n    time_taken = tn-t0\r\n\r\n    with open(\"lightgbm_cv_perf_test.log\", \"a\") as f:\r\n        f.write(f\"{ARG}[{DEVICE}]: {time_taken}, {model}\\n\\n\")\r\n\r\nif __name__ == '__main__':\r\n    dataset = get_data()\r\n    run_lightgbm(dataset)\r\n```"
+      },
+      {
+        "user": "shiyu1994",
+        "created_at": "2023-02-10T07:38:39Z",
+        "body": "@ninist Thanks for the detailed benchmarking. I think cross validation requires more rounds of data loading. Currently the data loading part for `cuda_exp` is not carefully optimized. And that maybe the cause why overall time is much slower.\r\n\r\nIs the training time of `cuda_exp` still slower than `cuda` without CV?"
+      },
+      {
+        "user": "ninist",
+        "created_at": "2023-02-10T12:27:40Z",
+        "body": "> Is the training time of `cuda_exp` still slower than `cuda` without CV?\r\n\r\nYes, still the same outcome of `cuda_exp` being slower with just `lightgbm.train`. \r\n\r\n```\r\n    model = lightgbm.train(\r\n        params=params,\r\n        train_set=dataset_train,\r\n        num_boost_round=99999999,\r\n        callbacks=[lightgbm.early_stopping(20, verbose=False), lightgbm.log_evaluation(1)],\r\n        valid_sets=dataset_val,\r\n    )\r\n```\r\n\r\n```\r\n    train_X = df[df.index <= val_date]\r\n    train_y = target[target.index <= val_date]\r\n    val_X = df[df.index >= val_date]\r\n    val_y = target[target.index >= val_date]\r\n\r\n    dataset_params = {\"feature_pre_filter\": False}\r\n    dataset_train = lightgbm.Dataset(train_X, train_y, params=dataset_params)\r\n    dataset_val = lightgbm.Dataset(val_X, val_y, params=dataset_params)\r\n```\r\n```\r\n175 features\r\n\r\n>>> dataset_train.num_data()\r\n20929\r\n>>> dataset_val.num_data()\r\n8761\r\n```\r\n`cuda` 0.275s vs `cuda_exp` 0.615s \r\n(`cpu` with 8 threads is slightly faster than `cuda`)\r\n\r\n## Larger training data\r\n\r\nI tried changing the start year of the range from 2019 to 1800 to see if more training data changes the outcome (1940641 rows now) -- still the same outcome.\r\n\r\n`cuda` 5.356s vs `cuda_exp` 20.255s\r\n(`cpu` with 8 threads is now 1-2s slower than `cuda` but much faster than `cuda_exp`)"
+      },
+      {
+        "user": "jameslamb",
+        "created_at": "2024-04-25T05:01:38Z",
+        "body": "Sorry for the long delay in response.\r\n\r\nThe implementation that used to be called `cuda` has been removed, and the one that used to be called `cuda_exp` is now called `cuda`. LightGBM now only has a single CUDA implementation: #5677.\r\n\r\nThat implementation has also received significant improvements in the 14 months since there was last activity on this discussion, including:\r\n\r\n* #6028\r\n* #5933\r\n* #5924\r\n\r\nCould you please try again, and hopefully with a smaller reproducible example?\r\n\r\nI'm marking this `awaiting response`, which means it'll automatically be closed in 30 days. If you notice other performance issues with the CUDA implementation here in the future, please open new issues with minimal, reproducible examples, and we'll try to help."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-05-26T04:03:10Z",
+        "body": "This issue has been automatically closed because it has been awaiting a response for too long. When you have time to to work with the maintainers to resolve this issue, please post a new comment and it will be re-opened. If the issue has been locked for editing by the time you return to it, please open a new issue and reference this one. Thank you for taking the time to improve LightGBM!"
+      }
+    ]
+  },
+  {
+    "number": 3010,
+    "title": "Some clarifications for the algorithm",
+    "created_at": "2020-04-21T19:17:08Z",
+    "closed_at": "2020-04-22T04:08:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/3010",
+    "body": "1. Exclusive feature bundling has a notion of \"joining features that rarely take on non-zero values simultaneously\". What does \"nonzero\" mean in the context of joining 2 continuous variables? I'd imagine continuous variables are actually nonzero most of the time in most dataset. Is \"zero\" set to some mean value or would continuous features just not be bundled?\r\n\r\n2. How do we expect EFB to behave when the features are dense and there are few exclusive sets? Will bundling still occur?\r\n\r\n3. The algorithm seems to allow a small fraction of conflicts in feature bundling, how are conflicts handled? Are they set to 0 by default or the value of one feature is ignored or something else?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/3010/comments",
+    "author": "shenkev",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2020-04-22T01:54:09Z",
+        "body": "1. EFB is used in the sparse data, which contains many zero/nan values. And in our implementation, we use `most_freq_bin` (the bucketed int value with most data) as \"zero\" to perform bundling. Therefore, EFB may work for dense data with many repeated values.\r\n2. The EFB is always used. It may cannot find the bundle for dense data. \r\n3. The feature value in the conflicting row will be treated is zero/most_freq_bin."
+      }
+    ]
+  },
+  {
+    "number": 2905,
+    "title": "Should you scale min_data_in_leaf with the dataset size?",
+    "created_at": "2020-03-13T21:10:09Z",
+    "closed_at": "2020-04-13T23:02:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2905",
+    "body": "I'm hyperparameter tuning on a dataset that has 100k samples. Once I found the best parameters (including min_data_in_leaf), I train on a dataset with 1M samples (10x larger).\r\n\r\nTheoretically should I scale min_data_in_leaf to 10x what it was during hyperparameter tuning or keep it the same?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2905/comments",
+    "author": "shenkev",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2020-03-21T10:23:57Z",
+        "body": "In my own experience, the performance with large `min_data_in_leaf` is not good, for it may cause under-fitting. \r\n"
+      }
+    ]
+  },
+  {
+    "number": 2892,
+    "title": "How can I use LightGBM Ranker if I have many documents for a query and only label below 31 are allowed",
+    "created_at": "2020-03-09T11:43:58Z",
+    "closed_at": "2020-04-02T15:25:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2892",
+    "body": "I have some samples (~5000) with their features, and I want to rank them in terms of a score. I have already built a regression model that directly predicts the score, but I still want to try the learning to rank methods, so I turned to the LightGBM Ranker.\r\n\r\nSince LightGBM Ranker only accepts label value below 31, I have to group the scores into several categories, 1 to 4 for example. After training, the Ranker is able to rank samples and achieves a nice NDCG@20 score, but it is unable to rank items within the same group.\r\n\r\nMy problem is somewhat like one query v.s. ~5000 documents, seems a bit different from the ordinary IR problems. It would be perfect if the Ranker accepts the full order or actual scores of my samples as labels, but I don't know how to achieve this. Some posts suggest using the label_gain parameter, but I can't find any documentation on how to set it properly.\r\n\r\nI am new to the ranking models, please help. Thanks!",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2892/comments",
+    "author": "tomleung1996",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2020-03-09T13:04:19Z",
+        "body": "firstly, you can set `label_gain` to adapt the range of your label. If the range of label is `[0, k)`, you should set k values to it.\r\n\r\nsecondly, you can rank the samples in the same group, you can just sort them by the prediction scores. maybe I mis-understand how you do it, I assume that you put all docs into one query, with label 1~4. \r\n"
+      },
+      {
+        "user": "tomleung1996",
+        "created_at": "2020-03-09T13:09:33Z",
+        "body": "> firstly, you can set `label_gain` to adapt the range of your label. If the range of label is `[0, k)`, you should set k values to it.\r\n> \r\n> secondly, you can rank the samples in the same group, you can just sort them by the prediction scores. maybe I mis-understand how you do it, I assume that you put all docs into one query, with label 1~4.\r\n\r\nYes, I put all docs into one query with label 1 to 4. They have another actual score, so docs that have the same label still vary in their actual scores, I am wondering how to deal with this kind of situation. \r\n\r\nAs you suggested, should I set the `label_gain` to [0 ... 5000] and give every document a distinct label? \r\n\r\nThanks!"
+      },
+      {
+        "user": "tomleung1996",
+        "created_at": "2020-03-09T13:20:05Z",
+        "body": "Maybe I didn't explain my problem well. I grouped my docs that have actual scores into 4 groups to train the LightGBM Ranker, but docs in the same group actually have different scores and should be properly ordered according to that score. I couldn't group them into 5000 groups because the Ranker only accepts labels below 31, so I don't know what to do to deal with this. "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2020-03-09T13:31:19Z",
+        "body": "in ranking problems, we usually focus on the top docs. So a comment solution to label the most \"bad\" docs to one label, like `0`. \r\nIf you really need to rank all 5000 docs, maybe it is better to use regression, or the pair-wise ranking. "
+      },
+      {
+        "user": "tomleung1996",
+        "created_at": "2020-03-09T13:34:49Z",
+        "body": "> in ranking problems, we usually focus on the top docs. So a comment solution to label the most \"bad\" docs to one label, like `0`.\r\n> If you really need to rank all 5000 docs, maybe it is better to use regression, or the pair-wise ranking.\r\n\r\nThanks for your advice!\r\n\r\nI have already built a regression model and want to make a comparison between it and the LTR model, since it is also a kind of ranking problem. Does LightGBM Ranker support pair-wise ranking? I suppose it is list-wise by default, right?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2020-03-10T01:39:20Z",
+        "body": "we don't support pair-wise ranking, but you can construct the pair by yourself."
+      },
+      {
+        "user": "tomleung1996",
+        "created_at": "2020-03-10T01:55:16Z",
+        "body": "> we don't support pair-wise ranking, but you can construct the pair by yourself.\r\n\r\nSo I can make C(5000,2) groups, which are consist of 2 documents, right? "
+      }
+    ]
+  },
+  {
+    "number": 2661,
+    "title": "LightGBM very slow on AWS but not locally",
+    "created_at": "2020-01-03T13:17:31Z",
+    "closed_at": "2020-01-10T14:53:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2661",
+    "body": "I have a i7 9700 CPU @ 3.00GHz on my local ubuntu machine and I am able to tune and train my LightGBM model in around 5 hours. When I repeat the procedure on an AWS EC2 instance, c5.12xlarge, I see a significantly slower training time and it can take up to 20 hours to complete the tuning procedure.\r\n\r\nThe dataset I use has around 20 features and 2 million rows and this is the parameter I use for the model:\r\n\r\n```\r\n model_params = {\"boosting_type\": \"gbdt\",\r\n                 \"num_threads\": 16,\r\n                 \"colsample_bytree\": 0.51,\r\n                 \"importance_type\": \"split\",\r\n                 \"learning_rate\": 0.1,\r\n                 \"max_depth\": -1,\r\n                 \"min_child_samples\": 35,\r\n                 \"min_child_weight\": 0.001,\r\n                 \"min_split_gain\": 0.11,\r\n                 \"n_estimators\": 5000,\r\n                 \"num_leaves\": 412,\r\n                 \"objective\": \"regression_l1\",\r\n                 \"random_state\": 1337,\r\n                 \"reg_alpha\": 0.3,\r\n                 \"reg_lambda\": 3.5,\r\n                 \"subsample\": 0.59,\r\n                 \"subsample_for_bin\": 200000,\r\n                 \"subsample_freq\": 0,\r\n                 \"verbose\": -1}\r\n```\r\n\r\nWhat should I do to increase the performance on AWS?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2661/comments",
+    "author": "lpolisi",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2020-01-03T13:24:35Z",
+        "body": "Not familiar with aws. You can check 1. Number of threads, explicitly set it to the number of cores; 2. Numa. LightGBM is not numa-aware, if the VM is multi-sockets, you may downgrade it to the single-socket, or set the number of threads to the cores of one socket."
+      }
+    ]
+  },
+  {
+    "number": 2657,
+    "title": "What do GPU and CPU do in LightGBM?",
+    "created_at": "2019-12-30T14:37:52Z",
+    "closed_at": "2020-01-02T03:05:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2657",
+    "body": "When I use GPU in LightGBM, I am confused about what GPU exactly does in LightGBM? Would GPU only be used to accelerate the process of building the feature histograms, or it would also be used in constructing the tree, classification, and evaluation?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2657/comments",
+    "author": "sandrawing",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2020-01-02T03:05:36Z",
+        "body": "GPU is only used for accelerating histogram construction now."
+      }
+    ]
+  },
+  {
+    "number": 2553,
+    "title": "how lgb.Dataset reference work and how data value affect bin construction",
+    "created_at": "2019-11-08T07:46:44Z",
+    "closed_at": "2019-11-15T19:03:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2553",
+    "body": ">First Question\r\nwhen I contruct a valid set binary file, It's clear that I should set reference as a contructed-train-binary-file. But I'm wondering how \"reference\" work here. \r\n1. whether use same num of bin count?\r\n2. same bin cut thresholds for every feature in validset construnction? \r\n\r\n\r\n>Second Question\r\nAfter bins constructed, raw values of features are replaced by the index of bins. But during the calculation of leafouts or infogain, it only uses  the bin indices or uses something like mean-rawvalue-withinbin? I mean if I have two trainsets, and the order of data is the same, but the  value is not same,  I still could get same constructed binary dataset and same boosting results(keep every train param the same)?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2553/comments",
+    "author": "aprilffff",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-11-08T16:33:42Z",
+        "body": "there is a \"bin mapper\", which stores how to map the continues floating values to discrete bins, in the dataset. Set reference will use the reference's (usually trainset) bin mapper to construct the valid set.\r\n\r\nFor the information gain, only the order of feature matters, since the features values only decide the cut point,  and don't be taken account into information gain calculation."
+      }
+    ]
+  },
+  {
+    "number": 2519,
+    "title": "Different scale of sample weight cause different accuracy.",
+    "created_at": "2019-10-21T09:42:15Z",
+    "closed_at": "2019-10-21T12:21:59Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2519",
+    "body": "I'm using lightgbm in a regression task. Could anyone tell me that why I get very different result when I just change the sample weight to different scale? \r\n\r\nFor example, \r\ncase #1: all the sample weight are 1/N (N is the number of samples),\r\ncase #2: all the sample weight are 1,\r\nand the result of case #1 has a big gap with case #2. \r\n\r\nMany thanks for any reply!",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2519/comments",
+    "author": "LaughingGo",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-10-21T12:21:48Z",
+        "body": "Please refer to #905."
+      }
+    ]
+  },
+  {
+    "number": 2508,
+    "title": "Results vary depending on sorting method",
+    "created_at": "2019-10-14T16:47:09Z",
+    "closed_at": "2019-10-15T11:04:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2508",
+    "body": "Hi,\r\nI'm working on a classification problem where each observation is series of approx 90 features in a given moment of time. All observations are independent.\r\nI noticed that, if I sort my data in ascending order (say, for year) before prediction, I get a result different from what I'd get sorting in descending.\r\nIs this the diserable behaviour? I don't recall this issue happening in the past.\r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2508/comments",
+    "author": "arnonbruno",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-10-15T11:04:57Z",
+        "body": "@arnonbruno yeah, it is desirable.\r\n\r\nFirstly, if you used `bagging`, which uses sub-rows in each iteration, the results will be different.\r\nsecondly, the floating-point sum-up will cause the different sum-up results when using different sum-up order.\r\nFinally, LightGBM will use a sub-sampled set (refer to parameter `bin_construct_sample_cnt` to construct \"bin mapper\", when the`bin_construct_sample_cnt` is smaller than your #data, the bin mapper may is different."
+      }
+    ]
+  },
+  {
+    "number": 2438,
+    "title": "Is there a way to config min_sample_weight_in_leaf during model training for Binary Classification?",
+    "created_at": "2019-09-24T06:25:46Z",
+    "closed_at": "2019-09-24T11:59:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2438",
+    "body": "Question:\r\nI am using LGBMClassifier and sample_weight to train a binary classification model. I have a problem to deal with overfitting when sample_weight is small.\r\n\r\nIt seems to me that min_data_in_leaf does not consider sample_weight. So, the question is: how to stop the tree to split if the sum of sample_weights in the leaf is small than a value (e.g. 100)\r\n\r\nCould anyone please help?\r\n\r\nExample Code: \r\n------\r\n    inputs_df = pd.DataFrame([[1, 5, 400],\r\n                              [1, 5, 600],\r\n                              [1, 2, 50],\r\n                              [1, 2, 50],\r\n                              [2, 3, 10],\r\n                              [2, 3, 40],\r\n                              [3, 4, 2],\r\n                              [3, 4, 1]], columns=['feature1', 'feature2', 'weights'])\r\n    outputs = [1, 0, 1, 0, 1, 0, 1, 0]\r\n    features = ['feature1', 'feature2']\r\n\r\n    hyper_params = {\"min_data_in_leaf\": 0, \"max_depth\": -1, \"objective\": \"binary\", \"boosting_type\": \"gbdt\", \"n_estimators\": 10, \"lambda_l2\": 0.0, \"learning_rate\": 1.0, \"num_leaves\": 31}\r\n\r\n    model = lgb.LGBMClassifier(**hyper_params)\r\n    model.fit(inputs_df[features],\r\n              outputs,\r\n              sample_weight=inputs_df['weights'].values,\r\n              eval_metric='binary_logloss',\r\n              feature_name=features,\r\n              categorical_feature=features)\r\n\r\n------\r\n\r\n## Environment info\r\n\r\nOperating System: MacBookPro\r\n\r\nCPU/GPU model: CPU\r\n\r\nC++/Python/R version: Python 3.6.8\r\n\r\nLightGBM version or commit hash: 2.2.3\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2438/comments",
+    "author": "xuyannus",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-24T11:59:01Z",
+        "body": "you can use `min_child_weight`"
+      },
+      {
+        "user": "xuyannus",
+        "created_at": "2019-09-24T14:01:18Z",
+        "body": "@guolinke the document says min_child_weight  is the same with min_sum_hessian. I am confused on what exactly does it do. any suggestions? After a quick example, it tells me that min_child_weight is not working as expected. "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-24T23:41:22Z",
+        "body": "It is similar to the min_data, but use the second order gradients, and consider the sample weight. In regression, it equals to min_data. "
+      },
+      {
+        "user": "xuyannus",
+        "created_at": "2019-09-25T01:28:46Z",
+        "body": "thanks, @guolinke back to the question: how to stop the tree to split if the sum of sample_weights in the leaf is small than a value (e.g. 100). I am not sure how should I set up min_child_weight in a binary classification problem. should I use: min_child_weight = 100, or something else. \r\n\r\nPS: thanks a lot for your fast reply,. "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-25T01:58:20Z",
+        "body": "The second order gradient is p(1-p) in binary objective. So it is hard to have a accurate value for your need. You can base on the distribution of your data, and estimate a reasonable value "
+      }
+    ]
+  },
+  {
+    "number": 2433,
+    "title": "Question about refit",
+    "created_at": "2019-09-23T07:00:46Z",
+    "closed_at": "2019-09-23T10:17:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2433",
+    "body": "Hi,\r\nI am now applying the refit method on my pre-trained model(model A) with new data (model B after). However, it performs worse than model A on a valid dataset. I know it could happen, but is it possible to tune the parameters during refitting to get a better result? Or my question also can be explained as Should I use the very same parameters during refitting?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2433/comments",
+    "author": "PsLiKrypt",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-23T07:26:20Z",
+        "body": "could you provide the code about how you do it?\r\nIt model B is tested over \"new data\", you should be better than model A.\r\nBut for valid data, it is hard to say. if it is closer to data of the pretrain, the refit could not improve it."
+      },
+      {
+        "user": "PsLiKrypt",
+        "created_at": "2019-09-23T07:47:52Z",
+        "body": "Thanks for replying!\r\nWell, I use the CLI version of lightgbm so it's hard to provide the code. In more details, I train model A over 7 days data, say, Sep.15 to Sep.21, model A, which will be used during Sep.22 all day.\r\nEvery hours I can collect realtime brand new data. Now I want to  update it within Sep.22. Since 'refit' is quit faster than just retraining a new model over 7 plus half days data, if I do this in the middle of Sep.22, I try using the data from half of Sep.22 to refit the model A to get model B. Another half data is my valid data, and I calculate AUC(in turn AUC_A, AUC_B).  Parameters in configure files are the same except 'task'.\r\nThe result is, AUC_B is smaller than AUC_A.  \r\nDo you have any advice to help me flip this result? :)"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-23T08:54:15Z",
+        "body": "I feel like the distribution of two halves (let us donate them to p and q) in one day is much different.\r\nSo it is possible the model B is fit to p. So I think a more reasonable usage is to update it per day, not per half day."
+      },
+      {
+        "user": "PsLiKrypt",
+        "created_at": "2019-09-23T09:47:02Z",
+        "body": "> I feel like the distribution of two halves (let us donate them to p and q) in one day is much different.\r\n> So it is possible the model B is fit to p. So I think a more reasonable usage is to update it per day, not per half day.\r\n\r\nI guess you are right. \r\nNow I only have a small question. Can I change some parameters when refitting? Or I should keep them to be the same."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-23T10:16:26Z",
+        "body": "I think the only parameter in refit is refit_decay. Others are not used."
+      },
+      {
+        "user": "PsLiKrypt",
+        "created_at": "2019-09-23T10:17:41Z",
+        "body": "Thanks! That helps a lot."
+      }
+    ]
+  },
+  {
+    "number": 2423,
+    "title": "Correctness of Hessians and Gradients",
+    "created_at": "2019-09-19T08:39:39Z",
+    "closed_at": "2019-09-23T14:15:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2423",
+    "body": "From my understanding, for binary objective without sample weight and class weight, we should have (like in xgboost) : gradient = (p - y), hessian = p * (1 - p)\r\n\r\nBut, in light-gbm we have : gradient = x, hessian = abs(x) * (1 - abs(x)), where x = -y/(1+e^(y*score))\r\n\r\nCan someone please help me figure out how these two are similar or work similarly?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2423/comments",
+    "author": "keyurja",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-23T14:15:32Z",
+        "body": "y is 1 or -1, so x equals to p - y"
+      }
+    ]
+  },
+  {
+    "number": 2411,
+    "title": "Unreliable categorical groups",
+    "created_at": "2019-09-15T10:06:41Z",
+    "closed_at": "2019-09-23T12:26:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2411",
+    "body": "I am dealing with a classification problem with categorical features. While doing so I have encountered a strange situation. I have trimmed down the situation to a base case.\r\n \r\n1.Say I have 100M rows with 1 feature having more than 1M categories. The actual target rate of this categories can range from 0 to 1.  \r\n\r\n2.While predicting on the train dataset itself I observed there are categories with (say ~500 count and 0 target)  and the prediction is coming to be close to the mean target of the train data\r\n\r\n3.It could be because of regularisation or the categorical split. I reduced the regularisation to practically zero and it was still similar\r\n\r\n4.So it appeared it might be how the categorical splits have been made for the feature. What I did was I created 1 tree with say 150 nodes and with max_cat_thresold=150 and boosting_from_average=True, so that I can broadly check the categorical splits. (right now the split cannot be accessed from python interface )\r\n\r\n5.I predicted the leaf index and calculated the target rate for each leaf index. There were almost 150 leaves so I can assume categorical histogram has got ~150 bins.\r\n\r\n6.Coming to the observations\r\n\r\n- There was a leaf(say L) with almost 50-60% of data with target rate almost same as the overall data\r\n- There were leaves with ~200-300 counts and 0 target rate. So bins were made for these.\r\n- However there was a significant number of categories(say C) with ~ 500 count and 0 target being clubbed in leaf L and thereby predicting average value for those\r\n\r\nMy question is why these categories are not being combined with 0 target rate bins. I wanted to upload the data over here, however the size is very big and the issue is less significant for lower volume of data. However I can give clarification of any questions if needed.\r\n\r\nI am using server and it has got memory of 256GB.\r\n\r\n@guolinke any help is really appreciated.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2411/comments",
+    "author": "nirupamkar",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-15T15:28:14Z",
+        "body": "I think you misunderstood the categorical split algorithm.\r\nThere is no \"merge bins\" for categorical features, all categories are unique, except the long tail (the last 1% sorted by frequence) will be in the one bin. \r\nTherefore, in your case, with `max_cat_thresold=150`, only 300 (two side scanning, the first 150 and the last 150) are evaluated in categorical splits. And as a result, the categorical without counts=500 may be in the middle and be ignored. \r\n\r\nFor the categorical features with many categories, I recommender to use the target encoding outside of GBDT."
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-15T16:07:52Z",
+        "body": "@guolinke thanks for the quick reply. Really appreciate it. I misunderstood  the algorithm of categorical split of lgb. However if i put cat threshold=150, so there will be 1 bin with more than 1 category and rest will be having single category. Please confirm this.\r\nNow if I put num_leaves=150, I am getting around 148 leaves with most having more than 1 categories. Am I missing something?"
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-15T16:40:53Z",
+        "body": "@guolinke probably the earlier post is wrong. It orders the categories by (G/(H+cat_smooth)) and then try to find best split from first 150 categories and last 150 categories.  \r\nIf optimum split is found at say 80th index, for next split 81-231 and last 150 categories will be tested.\r\nSo how many bins will be there at the end? As I am seeing lots of categories falling under 1 bin, is there any way to stop that?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-15T16:46:39Z",
+        "body": "I think you still misunderstood it. \r\n1. max cat threshold don't mean to merge categories to bigger categories. It is the number categories will be considered for one leaf split. For example, when set it to 1, the split will only consider the one vs rest splits; if set it to 2, it is one vs rest or two vs rest; and so on.\r\n2. LightGBM will sort the categories according to its dynamic encoding value (regards to gradient and hessian) and only considere the largest max_cat_threshold and the smallest max_cat_threshold categories."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-15T16:51:50Z",
+        "body": "Did you mean there are many one vs rest splits? "
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-15T17:37:19Z",
+        "body": "Ok things got confused a bit. \r\n1.The categorical histogram bins are created before the tree building right?\r\n2.\"It is the number categories will be considered for one leaf split.\"- do you mean bin or split?\r\n3.First lgb will sort categories by frequency and put all categories coming in last(say this is Cat_last) 1% in a bin, right?\r\n4.Then lgb will sort categories by gradient/(hessisan +cat_smooth)?\r\n5.Could you please elaborate \"only considere the largest max_cat_threshold and the smallest max_cat_threshold categories.\"\r\n\r\nFirst of all I was putting num_leaves= very large value, depth=-1 and built 1 tree and predicted leaf index. 1 of the leaves was having quite a large number of categories with Cat_last. \r\nDoes it mean there was a bin of the feature with this many categories? Even if I increase the num_leaves it does not decrease after a large value. Any way to avoid it?"
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-15T20:27:57Z",
+        "body": "Is there a role of \"bin_construct_sample_cnt\" for creating bins for categorical features?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-16T02:38:01Z",
+        "body": "@nirupamkar \r\n1. yeah, the bin is pre-allocated, and fixed in tree growing.\r\n2. on each splits, the number of bins (almost equal to categories, except the long-tailed bin) will be considered.\r\n3. No, the merged of long-tailed categories is at the bin constructed stage, no the tree growing stage. \r\n4. yeah, the sorted is over categorical bins.\r\n5. the split finding is a two side scanning: 1) from the largest to the smallest; 2) from the smallest to the largest. the largest and smallest regard to the gradient/(hessisan +cat_smooth). As we limit the `max_cat_threshold`, one side scanning may is not sufficient. Although two-side scanning still cannot cover all categories, but it may find the better splits than one side scanning.\r\n6. yeah, it will always have leaves with rest categories, since there are all k-vs-rest splits. The only way to avoid this is to use the categorical features with fewer categories.\r\n7. `bin_construct_sample_cnt` is also used for categorical features. It will sample the subrows for the bin construction. "
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-16T06:23:20Z",
+        "body": "@guolinke \r\nThanks for the detailed reply. I think the entire discrepancy is with bin_construct_sample_cnt. As I have a feature with long tail and the default value of bin_construct_sample_cnt  as 200000 makes things more complicated. For example with 1M categories with 100M rows, there is a chance, it will put those categories(say row count~ 500) to the long tail bin.\r\n1. If count is less than cat_smooth is it pushed to cat_last? If so is this count based on sampled data?\r\n2. Can max_bin be used to control categorical histogram bins?\r\n3. What I am seeing is for certain categories even if the actual target rate is zero without any regularization the prediction is still larger than 0 (say around 0.003-0.005). The leaf output is \r\n-ThresholdL1(sum_gradients, l1) / (sum_hessians + l2) (if max_delta_step=0). For classification \r\n-  Gradient= p - y\r\n-  Hessian=  p*(1-p)\r\nPls confirm above. As p goes to zero, the denominator value will increase without any regularization. Is is the reason for final probability being a bit too high? \r\n4.Is during prediction a new category comes in, does it go to cat_last? I think if there is no split with the explicit condition of categories being in cat_last, it will be always combined with bins that include cat_last."
+      },
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-09-16T11:31:46Z",
+        "body": "@guolinke Thanks for all the help. Any pointer to my last question?\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-09-16T15:11:54Z",
+        "body": "1. the count is for the data in the current leaf. the sampled data is only used in bin construction.\r\n2. no, max_bin only for numerical features.\r\n3. the p is the prediction of the previous trees, so it is 0.5 (`sigmoid(0)`) on the first tree. So your assumption is wrong. It may cause by the `kEpsilon` in the sum_hessians.\r\n4. it behaviors like the cat_last. And cat_last will not be chosen as the `cat_splits`.  "
+      }
+    ]
+  },
+  {
+    "number": 2361,
+    "title": "Does LightGBM support jetson TX and nano?",
+    "created_at": "2019-08-28T04:06:34Z",
+    "closed_at": "2019-08-28T11:36:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2361",
+    "body": "Does LightGBM support jetson TX and nano?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2361/comments",
+    "author": "lk1983823",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-08-28T05:04:26Z",
+        "body": "officially no support. But you try to compile on it by yourself."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-28T11:49:47Z",
+        "body": "@lk1983823 It will be cool if you report results in #1129."
+      }
+    ]
+  },
+  {
+    "number": 2343,
+    "title": "Question of categorical features",
+    "created_at": "2019-08-20T14:36:45Z",
+    "closed_at": "2019-08-30T10:43:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2343",
+    "body": "@guolinke \r\n1.is there any way to directly access the grouping of categorical features?\r\n2.If the init score is given the optimum spilt for categorical/numerical feature will be a function of \"residual error\" or the original error?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2343/comments",
+    "author": "nirupamkar",
+    "comments": [
+      {
+        "user": "nirupamkar",
+        "created_at": "2019-08-24T20:00:44Z",
+        "body": "@StrikerRUS @guolinke any help on this?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-08-24T23:27:38Z",
+        "body": "@nirupamkar \r\n1. you can access by cpp code.\r\n2. the split is always based on `residual`.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 2265,
+    "title": "OverflowError when training with 100k+ iterations",
+    "created_at": "2019-07-15T06:20:31Z",
+    "closed_at": "2019-08-01T06:02:22Z",
+    "labels": [
+      "question",
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2265",
+    "body": "## Environment info\r\n\r\nOperating System: Windows 7 SP2 (and same issue on macOS 10.13.6 but it crashes python kernel without any message)\r\n\r\nCPU/GPU model: CPU\r\n\r\nC++/Python/R version: Python 3.6\r\n\r\nLightGBM version or commit hash: 2.2.3 (and 2.2.0)\r\n\r\n## Error message\r\nWhen training lightgbm with more than 100,000 iterations, the model can finish training (still enough memory) but fail when it try to exit the training process.\r\n```\r\n[358000]\ttraining's mape: 0.000139252\r\n[360000]\ttraining's mape: 0.00013805\r\n[362000]\ttraining's mape: 0.000136836\r\n[364000]\ttraining's mape: 0.000135664\r\n[366000]\ttraining's mape: 0.000134525\r\n---------------------------------------------------------------------------\r\nOverflowError                             Traceback (most recent call last)\r\n<ipython-input-22-f940fa105e9d> in <module>()\r\n     11 \r\n     12 # train model\r\n---> 13 model = lgb.train(params, lgb_train, valid_sets=lgb_train, **lgb_other_params)\r\n     14 \r\n     15 y_pred = model.predict(df_test[cols_feats])\r\n\r\nc:\\python36\\lib\\site-packages\\lightgbm\\engine.py in train(params, train_set, num_boost_round, valid_sets, valid_names, fobj, feval, init_model, feature_name, categorical_feature, early_stopping_rounds, evals_result, verbose_eval, learning_rates, keep_training_booster, callbacks)\r\n    240         booster.best_score[dataset_name][eval_name] = score\r\n    241     if not keep_training_booster:\r\n--> 242         booster.model_from_string(booster.model_to_string(), False).free_dataset()\r\n    243     return booster\r\n    244 \r\n\r\nc:\\python36\\lib\\site-packages\\lightgbm\\basic.py in model_to_string(self, num_iteration, start_iteration)\r\n   2096         # if buffer length is not long enough, re-allocate a buffer\r\n   2097         if actual_len > buffer_len:\r\n-> 2098             string_buffer = ctypes.create_string_buffer(actual_len)\r\n   2099             ptr_string_buffer = ctypes.c_char_p(*[ctypes.addressof(string_buffer)])\r\n   2100             _safe_call(_LIB.LGBM_BoosterSaveModelToString(\r\n\r\nc:\\python36\\lib\\ctypes\\__init__.py in create_string_buffer(init, size)\r\n     58         return buf\r\n     59     elif isinstance(init, int):\r\n---> 60         buftype = c_char * init\r\n     61         buf = buftype()\r\n     62         return buf\r\n\r\nOverflowError: The '_length_' attribute is too large\r\n```\r\nHowever, if I set the `keep_training_booster=True`, it can finish the entire training without problem. So this seems to happen only when Lightgbm is trying to turn the model into a string before removing it.\r\n## Reproducible examples\r\n\r\nYou can try with any regression problem with ~50,000 samples and 150 features, and train it with ~300,000 iterations but small learning rate like 0.001.\r\n```\r\nparams = {\r\n    'boosting_type': 'gbdt', 'task': 'train', 'objective': 'mse', 'metric': 'mse',\r\n    'feature_fraction': 0.9, 'learning_rate': 0.001, 'num_leaves': 255,\r\n}\r\nlgb_other_params = {'num_boost_round': 366000, 'verbose_eval': 2000}\r\nlgb_train = lgb.Dataset(df_train[cols_feats], df_train[col_target]).construct()\r\nmodel = lgb.train(params, lgb_train, valid_sets=lgb_train, **lgb_other_params)\r\n```\r\nwhere `df_train` in our case has about 50,000 samples and 150 features and it still fit in our 16GB memory during training. But only fail when exiting the training with `keep_training_booster=False`.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2265/comments",
+    "author": "louis925",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-07-15T07:35:08Z",
+        "body": "```\r\nc:\\python36\\lib\\ctypes\\__init__.py in create_string_buffer(init, size)\r\n     58         return buf\r\n     59     elif isinstance(init, int):\r\n---> 60         buftype = c_char * init\r\n     61         buf = buftype()\r\n     62         return buf\r\n\r\nOverflowError: The '_length_' attribute is too large\r\n```\r\nIt seems this error is caused by ctypes..."
+      },
+      {
+        "user": "louis925",
+        "created_at": "2019-07-15T20:24:11Z",
+        "body": "Just curious. Do you think it is possible to bypass the `model_from_string(booster.model_to_string())` part? Because I noticed the lightgbm model spent lots of time trying to convert the model to string (which can only use 1 thread) before crashing in this case."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-07-16T02:45:13Z",
+        "body": "keep_training_booster=True is the only solution for now."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-07-24T10:35:01Z",
+        "body": "@guolinke Do you think that this issue is fixable? "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-07-24T11:43:43Z",
+        "body": "There could be a work around, for example, returning multiple small strings and concat them outside ctypes.\r\nA quick fix is, use a file to save/restore model, instead of string."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T17:11:20Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 2187,
+    "title": "Extracting decision path",
+    "created_at": "2019-05-22T12:21:34Z",
+    "closed_at": "2019-08-01T03:05:26Z",
+    "labels": [
+      "question",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2187",
+    "body": "Hi all,\r\n\r\nI was wondering if it is possible to extract the decision path for a specific sample.\r\nIf this is not possible. Does anyone know how I can extract the splits used for a specific sample? \r\n\r\nThanks in advance!",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2187/comments",
+    "author": "Sebber123",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T17:01:40Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 2042,
+    "title": "order of columns and rows",
+    "created_at": "2019-03-09T13:29:31Z",
+    "closed_at": "2019-03-10T02:07:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2042",
+    "body": "I use LightGBM via the scikit-learn API. Does the order of columns and/or rows in a DataFrame - _ceteris paribus_ - influence the results?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2042/comments",
+    "author": "gcelano",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-03-10T02:07:24Z",
+        "body": "@gcelano yes, it will have slight differences with different row/col orders. "
+      },
+      {
+        "user": "macyli01",
+        "created_at": "2019-05-10T03:50:35Z",
+        "body": "@guolinke  I've got a similar questions in relation to this issue. If I reorder the row in a dataFrame - ceteris paribus, would it produce different split points or the number of bins for a numerical features?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-05-10T06:04:19Z",
+        "body": "@macyli01 \r\nyeah, it will be slightly different, as the bin bucketed uses a sample set of data. And different row order will produce a different sample result."
+      }
+    ]
+  },
+  {
+    "number": 1950,
+    "title": "a question about lightgbm for lambdarank",
+    "created_at": "2019-01-16T08:18:43Z",
+    "closed_at": "2019-02-12T18:20:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1950",
+    "body": "In lightgbm, for lambdarank, we need cal ndcg for pairs.\r\n\r\nI saw the source code about it,\r\n\r\nin the function,\"void GetGradientsForOneQuery(...)\", lightgbm regular the ndcg by score distance,\r\n       // regular the delta_pair_NDCG by score distance\r\n        if (high_label != low_label && best_score != wrost_score) {\r\n          delta_pair_NDCG /= (0.01f + fabs(delta_score));\r\n        }\r\n\r\nI doubt about that, I have seen RankLib for lambdamart, it didn't do the regular.\r\n\r\nplease tell me, why lightgbm do that ? for what?\r\nI will appreciate it if you can give some citations about it.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1950/comments",
+    "author": "RobotZZZZZ",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2019-01-16T09:16:37Z",
+        "body": "@RobotZZZZZ this normalization is for different queries, to avoid the result dominated by query with large scores. "
+      },
+      {
+        "user": "RobotZZZZZ",
+        "created_at": "2019-01-16T10:41:37Z",
+        "body": "hi@guolinke ,\r\nso far as I know, ndcg is normalized dcg in range [0, 1]. why we need normalize again?\r\n\r\n\r\n"
+      },
+      {
+        "user": "RobotZZZZZ",
+        "created_at": "2019-01-16T11:42:50Z",
+        "body": "@guolinke I think about it. \r\nYou means, when training model, we don't want that training is dominated by query with large scores, maybe model is hard to rank them right. we want model focus on what it can do."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-01-16T15:06:15Z",
+        "body": "@RobotZZZZZ \r\nyeah, it is similar the `log` or `sqrt` trick for regression program, avoid the bad effect of outliers."
+      }
+    ]
+  },
+  {
+    "number": 1574,
+    "title": "PredictionEarlyStopInstance questions",
+    "created_at": "2018-08-07T17:12:01Z",
+    "closed_at": "2018-11-30T14:02:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1574",
+    "body": "In PredictionEarlyStopInstance CreateBinary\r\n1)\r\n`const auto margin = 2.0 * fabs(pred[0]);`\r\nWhy 2x?\r\n\r\n2)\r\n`if (margin > margin_threshold) {\r\n      return true;`\r\nAny recommendations about margin_threshold values?\r\nSomeone says use 1.5. But what physical meaning ?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1574/comments",
+    "author": "IbanezJS",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2018-08-21T10:06:26Z",
+        "body": "ping @guolinke "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-08-22T03:30:08Z",
+        "body": "refer to #550 and ping @cbecker "
+      }
+    ]
+  },
+  {
+    "number": 1554,
+    "title": "High accuracy variance with colsample_bytree and certain seeds",
+    "created_at": "2018-07-31T13:20:17Z",
+    "closed_at": "2018-08-24T10:46:56Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1554",
+    "body": "I am currently observing high variance in accuracy with using `colsample_bytree` and specific seeds. Changing the seed can change the accuracy by at least 10%. \r\n\r\nI am wondering how to tackle this issue. Not use feature sampling at all or maybe even use some form of bagging with different seeds?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1554/comments",
+    "author": "psinger",
+    "comments": [
+      {
+        "user": "bbennett36",
+        "created_at": "2018-08-02T21:20:33Z",
+        "body": "Well it could just be that the model is using a difference feature order every time you re run it. If you have a small number of iterations I would expect this to be the case. I would guess that the model itself is changing and it's not the different seed values that are effecting it.  \r\n  \r\nCould you post your code and parameters?"
+      },
+      {
+        "user": "psinger",
+        "created_at": "2018-08-03T10:59:27Z",
+        "body": "@bbennett36 Currently, I have two models with different number of iterations in Python defined as follows:\r\n\r\n`lgb.LGBMClassifier(objective=\"binary\", seed=42, n_jobs=4, boost_from_average=False, n_estimators=100, learning_rate=0.1, colsample_bytree=0.5, max_depth=-1, min_child_samples=200, num_leaves=255, scale_pos_weight=55)`\r\n\r\n`lgb.LGBMClassifier(objective=\"binary\", seed=42, n_jobs=4, boost_from_average=False, n_estimators=1000, learning_rate=0.02, colsample_bytree=0.5, max_depth=-1, min_child_samples=200, num_leaves=255, scale_pos_weight=70)`\r\n\r\nYou are totally correct that the variance is much higher for the 100 iteration model with different seeds. However, it is also imminent from the 1000 iteration model, specifically for test dataset, to a lesser extend on the cross validation results.\r\n\r\n\r\n"
+      },
+      {
+        "user": "bbennett36",
+        "created_at": "2018-08-03T12:30:10Z",
+        "body": "@psinger I would guess that its just overfitting based on those parameters. Try setting num_leaves=40, min_samples_leaf=50, and instead of using scale_pos_weight try setting is_unbalance=true. That will make the weights equal to the event rate. Scale_pos_weight=70 might be too high. I don't think ive ever went over like 10.  \r\n  \r\nLet me know if this helps your issue."
+      },
+      {
+        "user": "psinger",
+        "created_at": "2018-08-03T14:20:28Z",
+        "body": "@bbennett36 Thanks for help, but I have heavily unbalanced data and scaling it by 70 is not extreme at all in my case, `is_unbalance=True` nearly never works for me as it is scaling way too aggressively. "
+      },
+      {
+        "user": "bbennett36",
+        "created_at": "2018-08-03T15:53:03Z",
+        "body": "@psinger Gotcha.  I'm not sure what metric you're using but I'll usually use 'binary_logloss\" when dealing with unbalanced data. This will usually make the predictions closer to the actual event rate.  \r\n  \r\nAlso, early stopping rounds will help control overfitting too if you're not already using it"
+      },
+      {
+        "user": "psinger",
+        "created_at": "2018-08-06T08:37:45Z",
+        "body": "@bbennett36 My final goal is more in the direction of ranking. Also, early stopping stops way too early for my data at hand. I guess everything boils down to the fact that my data is quite problematic ;)"
+      },
+      {
+        "user": "Laurae2",
+        "created_at": "2018-08-13T18:48:44Z",
+        "body": "I've seen 30% accuracy variance with stratified cross-validation on a poorly made dataset, and 20% accuracy variance on a very unbalanced dataset (1:10000 ratio).\r\n\r\nWhen introducing very low column / row sampling ratios, make sure to increase significantly the number of boosting iterations. For a value of 0.02, I usually recommend at least 10,000 iterations (with a learning rate low enough to not overfit before 10,000 iterations).\r\n\r\nAnother issue when introducing such ratio is instability of early stopping, in that case cranking it to 500 or more is not uncommon (also with very high regularization, boosting tends to stop itself by building empty trees)."
+      },
+      {
+        "user": "psinger",
+        "created_at": "2018-08-13T19:03:15Z",
+        "body": "@Laurae2 Thanks! What do you see as very low column / row sampling ratios. What learning rate do you propose for 10,000 iterations? \r\n\r\nI am also wondering regarding what metric to choose for early stopping in highly unbalanced datasets where final goal is to achieve good ranking. My current perspective on this is that something like AUC does not work properly for early stopping then, and one might need to rely on logloss with, as you said, quite high number of steps."
+      },
+      {
+        "user": "Laurae2",
+        "created_at": "2018-08-15T18:01:00Z",
+        "body": "@psinger If we assume you use 0.3 for 100 iterations, try 0.003 (= 0.3 / (10000 / 100) ) for 10000 iterations.\r\n\r\nIf your final target is ranking, keep AUC as long as you are interested into \"top N\" predictions for your use case. AUC only cares about order. Otherwise, switch to logarithmic loss."
+      },
+      {
+        "user": "psinger",
+        "created_at": "2018-08-15T18:18:38Z",
+        "body": "@Laurae2 I am actually interested into top N predictions. Thanks for elaborations."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2018-08-24T10:40:11Z",
+        "body": "@psinger @Laurae2 Can we close this?"
+      }
+    ]
+  },
+  {
+    "number": 1392,
+    "title": "simple LightGBM fork questions",
+    "created_at": "2018-05-23T09:09:35Z",
+    "closed_at": "2018-06-12T23:53:05Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1392",
+    "body": "Hi there.\r\nI do LightGBM simplifications for my own purpose.\r\nThe restrictions are:\r\n-Single threaded. No network no OMP parallel\r\n-Features are all numeric without missing values (so Dataset is dense)\r\n-only binary and regression objectives\r\n-only single class label\r\n-optimized for prediction on streaming data (after training)\r\n\r\nThe main question is: So if there are no missing values in features then can i completly remove\r\n`default_bin` and `BinMapper::GetDefaultBin()` from code?\r\n\r\nThe Lines that bother me:\r\n1)`Dataset::FixHistogram`  `if (default_bin > 0)`\r\n2)`FeatureGroup` constructors `if (bin_mappers_[i]->GetDefaultBin() == 0) {\r\n        num_bin -= 1;\r\n      }`\r\n3)`FeatureGroup::PushData`  `if (bin == bin_mappers_[sub_feature_idx]->GetDefaultBin()) { return; }` and `if (bin_mappers_[sub_feature_idx]->GetDefaultBin() == 0) {\r\n      bin -= 1;\r\n    }`\r\n4)`DenseBinIterator` constructor `if (default_bin_ == 0) {\r\n      bias_ = 1;\r\n    } else {\r\n      bias_ = 0;\r\n    }`\r\n5)`DenseBin::Split` `if (default_bin == 0) {\r\n      th -= 1;\r\n      t_default_bin -= 1;\r\n    }`  and `if ((default_left && missing_type == MissingType::Zero) || (default_bin <= threshold && missing_type != MissingType::Zero)) {\r\n        default_indices = lte_indices;\r\n        default_count = &lte_count;\r\n      }`\r\n6)`HistogramPool::DynamicChangeSize`  `if (train_data->FeatureBinMapper(i)->GetDefaultBin() == 0) {\r\n          feature_metas_[i].bias = 1;\r\n        } else {\r\n          feature_metas_[i].bias = 0;\r\n        }`  and  `if (train_data->FeatureBinMapper(j)->GetDefaultBin() == 0) {\r\n          num_bin -= 1;\r\n        }`\r\nand so on\r\n\r\n\r\nCan you also suggest any other simplifications that i can made according to restictions above?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1392/comments",
+    "author": "IbanezJS",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-05-23T09:14:08Z",
+        "body": "@IbanezJS default bin is for the zero-value, not the missing value, so it cannot remove it. \r\n\r\nWe have a parameter to control missing value handle, it is named, `use_missing`. you can search it and find how to disable it from code. \r\n\r\n"
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-05-23T09:27:12Z",
+        "body": "@guolinke \r\nOk. What about io_config_.zero_as_missing ?\r\nDoes it relates to default_bin?\r\n\r\nthe concern is if features all numerical without \"missing values\" then why 0 must be special treated?\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-05-23T09:32:38Z",
+        "body": "@IbanezJS \r\nthe zero_as_missing is disabled by default. And default_bin doesn't relate to missing value handles.\r\n\r\nThe 0 will not be special treated in numerical data without missing values, if you didn't set zero_as_missing to true."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-05-23T09:39:41Z",
+        "body": "@guolinke i know that all))\r\nBut i still don't get why default_bin can't be removed from code if use_missing=false (in my case).\r\n\r\nConcrete code parts that depends on default_bin == 0:\r\n`bin -= 1;`  `num_bin -= 1;`  '{ feature_metas_[i].bias = 1; } else { feature_metas_[i].bias = 0; }'\r\n\r\nCan i remove it also?\r\n\r\n"
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-05-23T14:28:20Z",
+        "body": "@guolinke Ok. I will find out by myself and tell you later if is default_bin needed or not.\r\n\r\nNext question is can i remove `min_constraint` and `max_constraint` stuff if i dont need `monotone_constraints` for features ?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-05-24T03:20:09Z",
+        "body": "@IbanezJS yeah, you can remove the constraints."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-05-24T16:30:34Z",
+        "body": "@guolinke \r\nWhat is the main idea of FeatureGroup entity?\r\nDoes it relate to feature_fraction config parameter?\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-05-25T07:29:25Z",
+        "body": "It is used to merge these sparse features into much fewer dense features.\r\nThis can improve the speed of using high dimensional sparse datasets.\r\nrefer to the \"exclusive feature bundling\" idea in our paper."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-05-25T08:41:30Z",
+        "body": "@guolinke  thanks for explanation.\r\nSo if Dataset is completely dense i can remove `FeatureGroup` and all code relative to `enable_bundle` config parameter?\r\n\r\nAlso can you tell if there is chat channel where i can ask questions like this? To speed up my development process. \r\nLater on i will post on GitHub LightGbmNetCore .netcore version with restrictions mentioned above\r\n\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-05-25T12:49:57Z",
+        "body": "yeah, you can remove it if it is dense. \r\n\r\nIt is also interesting to have a performance comparison between the core version and full version. \r\n\r\nI think asking in here is the best option. I will check it regularly. \r\nYou also can email me directly if it is urgent. "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-06-12T23:53:04Z",
+        "body": "close now, but you can continue to ask questions in this thread."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-06-22T08:44:05Z",
+        "body": "@guolinke Hi!  What is the meaning of is_use_subset_ = true; in GBDT class ?\r\n\r\nI'm about this code:\r\n`const int group_threshold_usesubset = 100;\r\n    const int sparse_group_threshold_usesubset = train_data_->num_feature_groups() / 4;\r\n    if (average_bag_rate <= 0.5\r\n        && (train_data_->num_feature_groups() < group_threshold_usesubset || sparse_group < sparse_group_threshold_usesubset)) {\r\n      if (tmp_subset_ == nullptr || is_change_dataset) {\r\n        tmp_subset_.reset(new Dataset(bag_data_cnt_));\r\n        tmp_subset_->CopyFeatureMapperFrom(train_data_);\r\n      }\r\n      is_use_subset_ = true;\r\n      Log::Debug(\"Use subset for bagging\");\r\n    }`\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-06-22T09:21:47Z",
+        "body": "@IbanezJS \r\nIt is use to speed up the training with bagging. \r\nThis can reduce the cache-miss when using bagging."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-07-09T15:38:04Z",
+        "body": "@guolinke Hello !\r\n\r\nIn BinMapper::FindBin method there is a cycle:\r\n\r\n`for (int i = 1; i < num_sample_values; ++i) {\r\n      if (!Common::CheckDoubleEqualOrdered(values[i - 1], values[i])) {\r\n        if (values[i - 1] < 0.0f && values[i] > 0.0f) {\r\n          distinct_values.push_back(0.0f);\r\n          counts.push_back(zero_cnt);\r\n        }\r\n        distinct_values.push_back(values[i]);\r\n        counts.push_back(1);\r\n      } else {\r\n        // use the large value\r\n        distinct_values.back() = values[i];\r\n        ++counts.back();\r\n      }\r\n    }`\r\n\r\nI don't get why in \r\n` if (values[i - 1] < 0.0f && values[i] > 0.0f) {\r\n          distinct_values.push_back(0.0f);\r\n          counts.push_back(zero_cnt);\r\n        }`\r\nyou do `counts.push_back(zero_cnt);` and not `counts.push_back(1);` ???"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-07-09T15:57:29Z",
+        "body": "@IbanezJS the zeros are not in sample values, as a result, there is special treatment."
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-07-10T16:56:28Z",
+        "body": "@guolinke Yes. i've got it.\r\n\r\nAnother thing \r\n\r\nBinMapper::GreedyFindBin\r\nline\r\n`cur_cnt_inbin += counts[num_distinct_values - 1];`\r\n\r\nis useless\r\n\r\n"
+      },
+      {
+        "user": "IbanezJS",
+        "created_at": "2018-07-11T17:06:25Z",
+        "body": "@guolinke \r\nWhat is the main idea to devide samples in BinMapper::FindBin to LEFT_PART - ZEROS_PART - RIGHT_PART chuncks?\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-07-17T01:12:13Z",
+        "body": "@IbanezJS to special treatment for zeros, since there may be many zeros in real world data."
+      },
+      {
+        "user": "jettywang1020",
+        "created_at": "2019-05-15T07:19:10Z",
+        "body": "@guolinke \r\nHi there, I am doing LightGBM as well recently. For omp parallel version, it needs to find bin distributed if there are multi-machines and different machines will find bin for different features. So far it's clear. However why we need to gather all the global features according to global max_bin then restore features bins(code between line 909 to 954 in dataset_loader.cpp)? I am confused about it."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-05-15T07:28:16Z",
+        "body": "Hi @MrTuesday1020 ,\r\nIn data parallel, each worker needs to know all feature information, for they are needed to consturct local histogram (based on local data), and then sync-up for the global histogram."
+      }
+    ]
+  },
+  {
+    "number": 1228,
+    "title": "Comparing performance with and without Hessian?",
+    "created_at": "2018-02-04T09:50:56Z",
+    "closed_at": "2018-02-07T00:55:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1228",
+    "body": "I want to add docs for Hessian-less optimization for R, using LightGBM, what vector value should I use for the hessian?\r\n\r\nping @guolinke ",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1228/comments",
+    "author": "Laurae2",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-02-04T14:53:14Z",
+        "body": "the non-hessian solution require the post-fix of leave outputs. \r\nSo it cannot use custom grad/hess to achieve it now.\r\nYou can use current code (non-hessian) and the old code(with hessian) to compare."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-02-06T14:20:14Z",
+        "body": "@Laurae2 can we close this ? "
+      },
+      {
+        "user": "Laurae2",
+        "created_at": "2018-02-06T20:06:04Z",
+        "body": "@guolinke yes unless you think there is a way to get custom metrics to work with hessian-less optimization."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-02-07T00:55:08Z",
+        "body": "The cost is very big to support postfix in python/R package.\r\nI think it is also not needed due to it is not common.\r\n\r\nFor the comparison, you can just use different versions of LightGBM."
+      }
+    ]
+  },
+  {
+    "number": 4317,
+    "title": "Support ignoring some features during training on constructed dataset",
+    "created_at": "2021-05-24T06:42:38Z",
+    "closed_at": "2021-06-09T14:28:54Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/4317",
+    "body": "I want to get a subset of features from a contructed dataset because reconstructing the dataset is time-consuming. Is there any way to do this or any suggestion on how to modify the source code? \r\n\r\nAnother way is ignoring some features on constructed dataset, but this feature does not work on constructed dataset.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/4317/comments",
+    "author": "wangmn93",
+    "comments": [
+      {
+        "user": "shiyu1994",
+        "created_at": "2021-05-26T05:39:24Z",
+        "body": "@wangmn93 Thanks for using LightGBM. Currently LightGBM don't support extracting a subset of features from a constructed data. But I think there's a quick hack to do this.\r\n\r\nIn addition to `ignore_column`, which is used when constructing dataset, we can add a new parameter `ignore_column_training`, which is dedicated to ignore some features during training. Then we can parse `ignore_column_training` in the same way as `ignore_column`, and store it in the `config_` object. Then in `src/treelearner/serial_tree_learner.cpp`, we can set the `is_feature_used` according to `ignore_column_training` in the `SerialTreeLearner::FindBestSplits` method.\r\n\r\nIn this way, `ignore_column_training` is not involved in the dataset constructing process. Instead, it only affects the training process, and can be safely changed through setting `params` in the `lgb.train` method.\r\n\r\nIf you have any further problem about the implementation, or need any other help, please feel free to post here."
+      },
+      {
+        "user": "shiyu1994",
+        "created_at": "2021-05-26T05:41:20Z",
+        "body": "BTW, when setting `is_feature_used`, we should notice that `is_feature_used` uses the so called inner feature index of LightGBM, which is different from the real feature index in the input data. So we need to remap the real feature index specified by `ignore_column_training` to inner feature index through `train_data_->InnerFeatureIndex` method."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2021-06-09T14:28:54Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 4209,
+    "title": "Adding correlation metrics",
+    "created_at": "2021-04-21T06:01:09Z",
+    "closed_at": "2021-04-28T13:14:13Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/4209",
+    "body": "## Summary\r\n\r\nPearson R, CCC - could be used in regression.\r\n\r\nSpearman R, Kendall Tau, Kendall Tau Weighted - could be used in classification, as well as multiclassification (for ordinal targets) and ranking tasks.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/4209/comments",
+    "author": "glevv",
+    "comments": [
+      {
+        "user": "shiyu1994",
+        "created_at": "2021-04-22T05:27:38Z",
+        "body": "@GLevV Thanks! Yes. These metrics are useful in some cases. Would you like to contribute?"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2021-04-28T13:14:13Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 4002,
+    "title": "SHAP feature contribution for linear trees",
+    "created_at": "2021-02-19T14:00:22Z",
+    "closed_at": "2021-03-07T21:03:17Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/4002",
+    "body": "## Description\r\nWhen using linear_tree = TRUE and predict() with predcontrib = TRUE, the sum of the feature contributions does not equal the predicted value.\r\n\r\n## Reproducible example\r\nlibrary(lightgbm)\r\nx <- matrix(data = sample(rnorm(100L), size = 100L), ncol = 1L)\r\ny <- 2L * x + runif(nrow(x), 0L, 0.1)\r\n\r\nlgb_params_1 <- list(\r\n    objective = \"regression\"\r\n    , linear_tree = FALSE\r\n    , verbose = -1L\r\n    , metric = \"mse\"\r\n    , seed = 0L\r\n    , num_leaves = 2L\r\n    , bagging_freq = 1L\r\n    , subsample = 1.0\r\n)\r\n  \r\ndtrain <- lgb.Dataset(data = x, label = y)\r\nbst_lin_1 <- lgb.train(data = dtrain, nrounds = 10L, params = lgb_params_1, valids = list(\"train\" = dtrain))\r\n\r\nlgb_params_2 <- lgb_params_1\r\nlgb_params_2$linear_tree <- TRUE # this is the only parameter that has changed\r\ndtrain <- lgb.Dataset(data = x, label = y)\r\nbst_lin_2 <- lgb.train(data = dtrain, nrounds = 10L, params = lgb_params_2, valids = list(\"train\" = dtrain))\r\n\r\npred_1 <- predict(bst_lin_1, x, predcontrib = FALSE) # predict on model 1\r\npred_contrib_1 <- rowSums(predict(bst_lin_1, x, predcontrib = TRUE)) # predict on model 1 with feature contribs\r\ndiff_1 <- pred_1 - pred_contrib_1\r\nsd(diff_1) # very close to zero as expected \r\n\r\npred_2 <- predict(bst_lin_2, x, predcontrib = FALSE) # predict on model 2\r\npred_contrib_2 <- rowSums(predict(bst_lin_2, x, predcontrib = TRUE)) # predict on model 2 with feature contribs\r\ndiff_2 <- pred_2 - pred_contrib_2\r\nsd(diff_2) # not zero - rowSums do not total to predicted values\r\n\r\n## Environment info\r\nR version 4.0.2 (2020-06-22)\r\nPlatform: x86_64-pc-linux-gnu (64-bit)\r\nRunning under: Ubuntu 18.04.5 LTS\r\n\r\nMatrix products: default\r\nBLAS:   /usr/lib/x86_64-linux-gnu/openblas/libblas.so.3\r\nLAPACK: /usr/lib/x86_64-linux-gnu/libopenblasp-r0.2.20.so\r\n\r\nLightGBM installed from source (following R installation instructions), version 3.1.1.99\r\n\r\n## Additional Comments\r\nThis is possibly the same as issue  #3998\r\n\r\nI think that the lgb.model.dt.tree function might need some work as well as you might not want to show the constant leaf values in the output if linear_tree = TRUE.\r\n\r\nMany thanks\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/4002/comments",
+    "author": "SpeckledJim2",
+    "comments": [
+      {
+        "user": "btrotta",
+        "created_at": "2021-02-20T23:31:34Z",
+        "body": "@SpeckledJim2 feature contributions is not yet implemented for linear trees. I'll make a PR to update the docs to mention this.\r\n\r\nPull requests are welcome if anyone would like to work on implementing SHAP (i.e. predicting feature contributions) for linear trees.\r\n\r\nRegarding your other comment, I agree it's somewhat confusing to have both the constant leaf values and the linear coefficients in the output. But on the other hand, it might be worth keeping both since the constant values automatically get calculated even for linear trees (so it is no extra work to calculate them), and it gives us the option to recover the basic constant-value tree from the output. But I don't have a very strong view either way on this, comments from others are welcome."
+      },
+      {
+        "user": "SpeckledJim2",
+        "created_at": "2021-02-23T07:56:02Z",
+        "body": "Thanks for the reply, re tree output table, I agree that leaving the constant values in there makes sense as you get them \"for free\" anyway.  The extra thing to include I think would be the coefficients of the linear model for each leaf if possible, but it might not be something that has widespread use so I don't have a strong opinion on it either.\r\n\r\nRe feature contributions for linear models, I am happy to help test anything developed, but my skills are limited to R at the moment - but if there is a way to help there, do let me know."
+      },
+      {
+        "user": "btrotta",
+        "created_at": "2021-02-23T10:19:27Z",
+        "body": "@SpeckledJim2 the coefficients of the linear model are already available in the output of `save_model`. The relevant parts of the output are `num_features` (number of features used in the linear model for each leaf), `leaf_features` (index of the features used in each leaf's linear model), 'leaf_const' (constant terms of the linear models), and `leaf_coeff` (coefficients of the linear models). (Note that the first tree in the list always has constant models at the leaves, so it will not have linear coefficients, but the subsequent trees will.)"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2021-03-07T21:03:17Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 3707,
+    "title": "Different quantization techniques",
+    "created_at": "2021-01-02T10:22:47Z",
+    "closed_at": "2021-01-12T21:29:49Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/3707",
+    "body": "Is it possible to add different quantization techniques? As I understand most of GBDTs use quantiles to quantize data (like pd.qcut or KBinsDiscretizer(strategy='quantile')), but there are other options, like uniform quantization (like pd.cut or KBinsDiscretizer(strategy='uniform')). There are also other techniques in Catboost (like entropy minimization) and in 1d classification/clustering (like jenkins/natural/head-tails breaks), but they require fitting of additional parameters and could be time-wasteful unlike uniform and quantile strategies. \r\n\r\nThird option could be geometric intervals which is increasing intervals that could be used when distribution of the feature is skewed. It is also easy to compute and gives different to uniform and quantile strategies results.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/3707/comments",
+    "author": "glevv",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2021-01-12T21:29:49Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 3026,
+    "title": "Add Precision Recall AUC as an metric for binary classification",
+    "created_at": "2020-04-27T01:22:33Z",
+    "closed_at": "2020-09-23T13:51:41Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "metrics and objectives"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/3026",
+    "body": "\r\nFor binary classification problems, Precision Recall AUC (as opposed to ROC AUC) is a good metric for unbalanced data. Currently, I have to use a custom eval function even though I use logloss as the ojective function. As a result, both logloss and PR-AUC are used to stop training. (I use early_stopping_rounds= 25 to stop the iterations.)\r\n\r\nI would like to stop the iterations with just PR-AUC as the metric. Using custom eval function slows down the speed of LightGBM too. Additionally, XGBoost has PR-AUC as a metric. (They called it aucpr.) \r\n\r\nI propose that PR-AUC to be added as a built-in metric.\r\n\r\nMy workaround is as follows for the time being:\r\n\r\nmodel=lgb.train(params, lgb_train, \r\n                num_boost_round=2000,\r\n                valid_sets=[lgb_valid],\r\n                feval=f_pr_auc,\r\n                early_stopping_rounds=25,\r\n                verbose_eval=50)\r\n\r\ndef pr_auc(y_true, probas_pred):\r\n    p, r, _ = precision_recall_curve(y_true, probas_pred)\r\n    return auc(r, p)\r\n\r\ndef f_pr_auc(probas_pred, y_true):\r\n    probas_pred=sigmoid(probas_pred)\r\n    labels=y_true.get_label()\r\n    p, r, _ = precision_recall_curve(labels, probas_pred)\r\n    score=auc(r,p) \r\n    return \"pr_auc\", score, True\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/3026/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "btrotta",
+        "created_at": "2020-05-07T07:58:43Z",
+        "body": "Closed in favor of being in #2302. PR is welcome for this feature!"
+      },
+      {
+        "user": "btrotta",
+        "created_at": "2020-09-02T07:30:25Z",
+        "body": "Reopened since there is an active PR."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-09-23T13:51:41Z",
+        "body": "Closed via #3347."
+      }
+    ]
+  },
+  {
+    "number": 2789,
+    "title": "[feature request] accelerate the data loading from Python/R object",
+    "created_at": "2020-02-21T03:38:38Z",
+    "closed_at": "2020-02-29T16:45:44Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "efficiency"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2789",
+    "body": "refer to the code in `src/c_api.cpp` (`LGBM_BoosterPredictFor*` and `LGBM_DatasetCreateFrom*`).\r\nCurrently, the data are read by the function wrapper, which may produce some overheads.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2789/comments",
+    "author": "guolinke",
+    "comments": [
+      {
+        "user": "jameslamb",
+        "created_at": "2020-02-21T03:47:29Z",
+        "body": "@guolinke could you elaborate on this? I don't understand which part of `src/c_api.cpp` you are referring to."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2020-02-21T05:39:00Z",
+        "body": "@jameslamb \r\nrefer to `LGBM_BoosterPredictFor*` and `LGBM_DatasetCreateFrom*`"
+      },
+      {
+        "user": "jameslamb",
+        "created_at": "2020-02-23T04:02:58Z",
+        "body": "> @jameslamb\r\n> refer to `LGBM_BoosterPredictFor*` and `LGBM_DatasetCreateFrom*`\r\n\r\ngot it, thanks!"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-02-29T16:45:43Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 2786,
+    "title": "[feature request] continued accerelate ConstructHistogram",
+    "created_at": "2020-02-21T02:30:50Z",
+    "closed_at": "2020-02-29T16:46:34Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "efficiency"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2786",
+    "body": "`ConstructHistogram` (in `src\\io\\**_bin.hpp` and `src_io\\dataset.cpp`) is the most time-consuming part of LightGBM.\r\n\r\nThe speed here is mainly bounded by the memory bandwidth. \r\n\r\nThere are two construction algorithms:\r\n\r\n1. col-wise, which scans columns and constructs its corresponding histogram one-by-one\r\n    - Pros: better scalability in multi-threading. smaller memory consumption.\r\n    - Cons: redundancy memory access for gradients and hessians for each column needs one pass of them.\r\n\r\n2. row-wise, which scans the rows one-by-one, and constructs all feature histograms at once. \r\n    - Pros: sparse-aware and no redundancy memory access for gradients and hessians. \r\n    - Cons: poor scalability in multi-threading. larger memory consumption.\r\n\r\nCurrently, LightGBM implements them both, and automatically choose the faster one during run-time. \r\n\r\nMaybe there is a better algorithm and we can continue to explore it.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2786/comments",
+    "author": "guolinke",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-02-29T16:46:34Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      },
+      {
+        "user": "AyeChan378",
+        "created_at": "2020-07-02T15:19:19Z",
+        "body": "> `ConstructHistogram` (in `src\\io\\**_bin.hpp` and `src_io\\dataset.cpp`) is the most time-consuming part of LightGBM.\r\n> \r\n> The speed here is mainly bounded by the memory bandwidth.\r\n> \r\n> There are two construction algorithms:\r\n> \r\n> 1. col-wise, which scans columns and constructs its corresponding histogram one-by-one\r\n>    \r\n>    * Pros: better scalability in multi-threading. smaller memory consumption.\r\n>    * Cons: redundancy memory access for gradients and hessians for each column needs one pass of them.\r\n> 2. row-wise, which scans the rows one-by-one, and constructs all feature histograms at once.\r\n>    \r\n>    * Pros: sparse-aware and no redundancy memory access for gradients and hessians.\r\n>    * Cons: poor scalability in multi-threading. larger memory consumption.\r\n> \r\n> Currently, LightGBM implements them both, and automatically choose the faster one during run-time.\r\n> \r\n> Maybe there is a better algorithm and we can continue to explore it.\r\n\r\nThank you for saying so.Now, if you have a problem with termux then you can show us the error."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2020-11-13T01:21:05Z",
+        "body": "#3522 reduces the memory overhead for dense row-wise histograms, besides, it adjusts the block size and achieves a better speed-up. "
+      }
+    ]
+  },
+  {
+    "number": 2583,
+    "title": "Extremely randomized trees",
+    "created_at": "2019-11-21T04:39:44Z",
+    "closed_at": "2020-02-08T21:45:34Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "in progress"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2583",
+    "body": "The variety of mdels plays an important role in model ensemble. I tried some parameters such as \"colsample_bytree, colsample_bynode\" to make model more stable and different, but trees still grow by some criterion, resulting in the similar models. However, I tried the combination \"extratree+lgb\", and randomized tree could be used as the certain feature embeding tool  that improves model variety. So I suggest adding extremely randomized tree as base learner.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2583/comments",
+    "author": "joegaotao",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-12-20T01:57:53Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-01-06T14:28:48Z",
+        "body": "Opening as we have active PR for this feature: #2671."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-02-08T21:45:34Z",
+        "body": "Closed via #2671."
+      }
+    ]
+  },
+  {
+    "number": 2579,
+    "title": "Merge Dataset objects on condition that they hold same binmapper",
+    "created_at": "2019-11-19T07:02:03Z",
+    "closed_at": "2019-12-20T02:00:55Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2579",
+    "body": "## Summary\r\nneed a function to add more samples(lgb.Dataset) to another lgb.Dataset if they have same bin_mapper\r\n\r\n## Motivation\r\nI would like to retrain the model with train+valid data without reconstructing lgb.Dataset using huge raw data.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2579/comments",
+    "author": "aprilffff",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-12-20T02:00:55Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 2518,
+    "title": "Stop training branch of tree once a specific feature is used",
+    "created_at": "2019-10-20T07:01:41Z",
+    "closed_at": "2019-12-20T02:23:59Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/2518",
+    "body": "I am doing some multivariate time series experiments with only partially stationary data. The idea is this:\r\n\r\n1) First I introduce an additional feature which is monotonically increasing (but not strictly), e.g. an integer year_index assuming that I have several years of data.\r\n2) Then I want to train a gradient boosting model. However, as soon as the feature year_index would normally be used, I want to leave the current branch of the tree unchanged.\r\n\r\nThe reasoning behind this idea is that if there is no better feature than year_index, then we have already exploited all information which is useful for generalization of future data.\r\n\r\nIs it possible to achieve such an effect without changing the C++ code, e.g. by modifying a tree immediately after it has been created in a callback or with paramaters?",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/2518/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-12-20T02:22:27Z",
+        "body": "I suppose the described behavior can be achieved via a callback in which you dump a current model and search for a specific (allowed to be used only once) feature. Then you stop training in case of a successful search.\r\n\r\nHowever, I'm going to add this issue into our feature requests hub for neater out of the box solution. Let's see how demanded this feature is."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-12-20T02:23:59Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 1978,
+    "title": "include init_score in predict method",
+    "created_at": "2019-01-30T16:04:19Z",
+    "closed_at": "2019-08-01T03:05:05Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1978",
+    "body": "Actually it seems not possible to seamlessy include the `init_score ` in prediction. It would be nice the predict method to handle an init_score, if given. E.g. I am boosting a model with an apriori predictiction:\r\n\r\n1. using a general model to calculate base predictions in raw scale\r\n`\r\n#calculating initial raw score\r\nbase_fraud_raw= lgb_general_model.predict(X, raw_score=True)\r\n`\r\n\r\n2. then i (re)create train and test sets\r\n`\r\n#recreating train and test sets\r\nX_train, X_tmp, y_train, y_tmp, rw_train, rw_tmp = train_test_split(X, y,base_raw_score, test_size=0.3, stratify=y)\r\nX_valid, X_test, y_valid, y_test, rw_valid, rw_test = train_test_split(X_tmp, y_tmp,rw_tmp, test_size=0.5, stratify=y_tmp)\r\ndel X_tmp,y_tmp,rw_tmp\r\n`\r\n3. then I create the lgb Datasets and tune the model\r\n`\r\n#defining lgb Dataframes(s)\r\nlgb_full_categorical_predictors=binarized_predictors_generic+categorical_predictors_generic+binarized_predictors_30+categorical_predictors_30\r\nlgb_train_30 = lgb.Dataset(data=X_train.values, label=y_train.values, feature_name=X_train.columns.tolist(),categorical_feature=lgb_full_categorical_predictors, free_raw_data=False,init_score = rw_train)\r\nlgb_valid_30 = lgb.Dataset(data=X_valid.values, label=y_valid.values, reference=lgb_train,feature_name=X_valid.columns.tolist(),categorical_feature=lgb_full_categorical_predictors, free_raw_data=False,init_score = rw_valid)\r\nlgb_full_30= lgb.Dataset(data=X.values, label=y.values, reference=lgb_train,feature_name=X.columns.tolist(),categorical_feature=lgb_full_categorical_predictors, free_raw_data=False,init_score = base_raw_score)\r\n#tune the models\r\nlgb_model_30= lgb.train(params=lgb_general_params,train_set=lgb_train_30,valid_sets=[lgb_valid_30],early_stopping_rounds=10)\r\n`\r\n\r\n4. then I calculate predictions (using the raw scores)\r\n\r\n`\r\n#function to get probabilities from raw\r\ndef softmax(x):\r\n    \"\"\"Compute softmax values for each sets of scores in x.\"\"\"\r\n    e_x = np.exp(x)\r\n    out = e_x / (1+ e_x)\r\n    return out\r\n\r\n#predict using raw score\r\nraw_temp=lgb_model_30.predict(X_test, raw_score=True)+rw_test\r\nproba = softmax(raw_temp)\r\n\r\n#caculating performance\r\nmy_roc_auc_score= roc_auc_score(y_test,proba)\r\n`\r\n\r\nIf init_score could have been prodived as supplementary parameter to lgb_model_30.predict method, I wold have avoided the need to know the right transformation (what is in gamma regression, in poison one in box cox ones,...) and to performa the calculation in the probability scale manually.\r\n\r\nIs it possible to integrate init_score in the predict method.\r\n\r\nThis issue is related to #1778 and #1969 \r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1978/comments",
+    "author": "spedygiorgio",
+    "comments": [
+      {
+        "user": "alkodsi",
+        "created_at": "2019-05-09T20:33:15Z",
+        "body": "How do you integrate the init_score with prediction in regression (gamma, l1, l2) for now? "
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T17:03:18Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 1938,
+    "title": "lightgbm parameters by feature? ex: categoricals/high cardinality",
+    "created_at": "2019-01-05T16:36:10Z",
+    "closed_at": "2019-08-01T05:27:21Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1938",
+    "body": "Hi! is there any way/guidance available or planned feature to allow per column/feature parameterization, ex: categorical features? (on the possibility that different features can gain from different encoding params)\r\nthanks!",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1938/comments",
+    "author": "rquintino",
+    "comments": [
+      {
+        "user": "Laurae2",
+        "created_at": "2019-01-14T21:24:02Z",
+        "body": "ping @guolinke \r\n\r\nI think it's unlikely to be available. xgboost has the same (unresolved) issue as it requires a bunch of code changes."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-04-10T11:41:39Z",
+        "body": "ping @guolinke "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-04-11T03:24:57Z",
+        "body": "very sorry for the late response.\r\n@rquintino which parameters you think is needed for per-column parameterization?"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-04-24T12:00:02Z",
+        "body": "ping @rquintino "
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T16:20:45Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 1829,
+    "title": "Even when forced_splits is set, the threshold is chosen from the bin_upper_bounds.",
+    "created_at": "2018-11-07T08:58:28Z",
+    "closed_at": "2019-09-28T20:52:23Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1829",
+    "body": "In the lightgbm, each numerical variable is replaced with discrete bins, and the threshold for split is chosen from the upper bounds of bin(variable name `bin_upper_bounds`).\r\nEven when `forced_splits` is set, the lightgbm decides the threshold like that.\r\nAs a result, an unexpected result occurs.\r\n\r\n## Environment info\r\n\r\nOperating System:\r\nUbuntu 14.04.5 LTS, Trusty Tahr\r\n\r\nCPU/GPU model: \r\ncpu\r\nIntel(R) Core(TM) i7-6800K CPU @ 3.40GHz\r\n\r\nC++/Python/R version:\r\n\r\nPython 3.6.6 (default, Oct  9 2018, 12:34:16)\r\n[GCC 7.3.0] :: Anaconda, Inc. on linux\r\n\r\nlightgbm version : newest version (merged the commit until the commit  id ca4b6664c4823a7eaaa0(new version for master branch (#1824))\r\n\r\n## source\r\n\r\n```python\r\ndata = load_breast_cancer()\r\nx = data.data\r\ny = data.target\r\n\r\nnp.random.seed(0)\r\n# create a new feature that takes a value 0 or 1.\r\ndummy = np.random.randint(0, 2, size=len(x)) \r\n\r\nx = np.c_[dummy, x]\r\n\r\n# create json file that forces the tree to split by the dummy feature. threshold is 0.5.\r\ns = \"\"\"\r\n{\r\n    \"feature\": 0,\r\n    \"threshold\": 0.5,\r\n    \"left\": {\r\n    },\r\n    \"right\": {\r\n    }\r\n}\r\n\"\"\"\r\n\r\nwith open(\"forced_splits-0.json\", mode='w') as f:\r\n    f.write(s)\r\n\r\n# model training\r\nmodel = lgb.LGBMClassifier(random_state=42, forced_splits=\"forced_splits-0.json\", num_leaves=3)\r\nmodel.fit(x, y)\r\n\r\n# dump model\r\njson_obj = model.booster_.dump_model(1)\r\ntrees = json_obj['tree_info']\r\n\r\n# the first tree\r\ntree = trees[0]\r\n\r\ntree['tree_structure']\r\n```\r\n\r\n## result\r\nThe json output of the first decision tree is as follows:\r\n\r\n```\r\n{'split_index': 0,\r\n 'split_feature': 0,\r\n 'split_gain': 5.158199787139893,\r\n 'threshold': 1e+300,\r\n 'decision_type': '<=',\r\n 'default_left': True,\r\n 'missing_type': 'None',\r\n 'internal_value': 0,\r\n 'internal_count': 569,\r\n 'left_child': {'split_index': 1,\r\n  'split_feature': 24,\r\n  'split_gain': 57102.30078125,\r\n  'threshold': 700.6500000000001,\r\n  'decision_type': '<=',\r\n  'default_left': True,\r\n  'missing_type': 'None',\r\n  'internal_value': 0.204333,\r\n  'internal_count': 569,\r\n  'left_child': {'leaf_index': 0,\r\n   'leaf_value': 49.87522832525989,\r\n   'leaf_count': 296},\r\n  'right_child': {'leaf_index': 2,\r\n   'leaf_value': 0.36087350821712294,\r\n   'leaf_count': 273}},\r\n 'right_child': {'leaf_index': 1,\r\n  'leaf_value': 0.5021707657990948,\r\n  'leaf_count': 295}}\r\n```\r\n\r\nIn line 4, the threshold for split is 1e+300, not 0.5.\r\n\r\nI investigated the cause of the problem.\r\nThe threshold for split is chosen from `bin_upper_bounds`,  specifically, the minimum value that is greater than or equal to the `threshold` forced by  `forced_splits`.\r\nIn this case, `bin_upper_bounds = [1e-35, inf]`, so the value `inf` is chosen as a threshold for split.\r\nThat is because the minimum value in `[1e-35, inf]` that is greater than or equal to 0.5 is `inf`.\r\nAs a result, the lightgbm try to split the data using the threshold `inf`.\r\n\r\nI hope that the data is splitted by the 0.5 if the `threshold` is  set to 0.5 at `forced_splits`.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1829/comments",
+    "author": "AnchorBlues",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-11-25T03:28:14Z",
+        "body": "it is not trivial as the contents of force-splits json should be used in bin mapper finding algorithm. \r\n\r\nI think a better solution is to allow the pre-defined `bin_upper_bounds`. \r\n\r\n"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-05-06T11:13:12Z",
+        "body": "@guolinke Should anything be done before 2.2.4 release here?"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-06-06T10:59:30Z",
+        "body": "@guolinke "
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2019-08-01T05:20:30Z",
+        "body": "@StrikerRUS As it is not trivial and not very critical, I think we can do it after v2.2.4."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T16:22:21Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-09-12T14:21:25Z",
+        "body": "Reopening this as we have open PR."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-09-28T20:52:23Z",
+        "body": "Implemented in #2325."
+      }
+    ]
+  },
+  {
+    "number": 1286,
+    "title": "[hdfs] support parquet file",
+    "created_at": "2018-03-26T02:10:35Z",
+    "closed_at": "2019-08-01T03:04:51Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1286",
+    "body": "can it only read a single txtfile on hdfs ?\r\nit is suggested to support parquet file , generally we write file as parquet format from spark directly after feature project~",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1286/comments",
+    "author": "janelu9",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-03-28T02:28:37Z",
+        "body": "@janelu9 Sorry, it only supports text file now. "
+      },
+      {
+        "user": "imatiach-msft",
+        "created_at": "2019-08-01T16:58:51Z",
+        "body": "@janelu9 @guolinke \r\nyou can run lightgbm on mmlspark, which can handle parquet files when loaded into spark DataFrame"
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T17:04:23Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      },
+      {
+        "user": "imatiach-msft",
+        "created_at": "2019-08-01T17:19:33Z",
+        "body": "@StrikerRUS yep, I was just saying this requested feature already exists in mmlspark, which seems to fit the user's scenario above (running lightgbm on a parquet file from spark).  Since it exists it doesn't even need to be in #2302 and can be closed because it is an actual existing feature as opposed to a non-yet-existing requested feature."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T18:04:15Z",
+        "body": "@imatiach-msft Are you sure that this feature doesn't need to be implemented in pure LightGBM (like HDFS support), independently from mmlspark package?"
+      },
+      {
+        "user": "imatiach-msft",
+        "created_at": "2019-08-01T18:40:17Z",
+        "body": "@StrikerRUS it certainly could be, however with the use case from user: \"generally we write file as parquet format from spark \", it seems that running lightgbm in spark is the best solution.  Maybe we can leave the feature open, but with low priority (if there is a way to assign priorities to tasks)."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T18:46:45Z",
+        "body": "@imatiach-msft \r\n>  it seems that running lightgbm in spark is the best solution. \r\n\r\nAgree with you! I think we can re-open it in case of concrete request in the future."
+      }
+    ]
+  },
+  {
+    "number": 1272,
+    "title": "[R-package] add support for gamma/tweedie objective functions",
+    "created_at": "2018-03-18T11:09:36Z",
+    "closed_at": "2018-03-22T01:28:41Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "r-package"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1272",
+    "body": "Would be possible to support in the R pakage gamma and tweedie objective functions as it is in the python package?\r\n\r\n\r\nCurrently possible objective function are hardcoded in utils.R lgb.check.obj function:\r\n```\r\nlgb.check.obj <- function(params, obj) {\r\n\r\n  OBJECTIVES <- c(\"regression\", \"regression_l1\", \"regression_l2\", \"huber\", \"fair\", \"poisson\", \"binary\", \r\n\"lambdarank\", \"multiclass\")\r\n  \r\n...\r\n```\r\n\r\nUnfortunately adding gamma and tweedie there doesn't do the trick. \r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1272/comments",
+    "author": "miclegr",
+    "comments": [
+      {
+        "user": "guolinke",
+        "created_at": "2018-03-22T01:28:41Z",
+        "body": "fix in the latest commit."
+      },
+      {
+        "user": "miclegr",
+        "created_at": "2018-03-22T07:21:05Z",
+        "body": "Thank you!\r\nThat's really nice of you guys"
+      },
+      {
+        "user": "miclegr",
+        "created_at": "2018-03-22T07:47:48Z",
+        "body": "Fix is not working unfortunately, as I was mentioning adding gamma in the OBJECTIVES vector in lgb.check.obj function doesn't do the trick.\r\n\r\nReploducile Example:\r\n-----------------------\r\n\r\n```r\r\nlibrary(lightgbm)\r\n\r\n#Generate data\r\nset.seed(123)\r\nN <- 10000\r\nX1 <- rnorm(N, 0, 3)\r\nX2 <- rnorm(N, 50, 15)\r\nY <- rgamma(N,10)\r\ndata <- data.frame(X1, X2, Y)\r\n\r\n#Split test/train\r\ntrain_ind <- sample(seq_len(nrow(data)), size = 7000)\r\ntrain.x <- as.matrix(data[train_ind, c(\"X1\", \"X2\") ])\r\ntrain.y <- as.matrix(data[train_ind, \"Y\" ])\r\ntest.x <- as.matrix(data[-train_ind, c(\"X1\", \"X2\") ])\r\ntest.y <- as.matrix(data[-train_ind, \"Y\" ])\r\n\r\n#Fit data\r\ndtrain <- lgb.Dataset(train.x, label = train.y)\r\nmodel <- lgb.train(data = dtrain,\r\n                   objective = \"gamma\",\r\n                   alpha = 0.1,\r\n                   rounds = 1000,\r\n                   min_data = 1,\r\n                   learning_rate = .1,\r\n                   metric='gamma')\r\n```\r\n\r\nError\r\n-----\r\n[LightGBM] [Fatal] No object function provided\r\n\r\n"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2018-03-22T08:03:21Z",
+        "body": "Are you on the latest master code ? \r\nCan you try to clean the old package and reinstall ? "
+      },
+      {
+        "user": "AraneoA",
+        "created_at": "2018-03-22T11:18:54Z",
+        "body": "I was referred to this issue from #1281. This fixed quantile. I can also confirm that gamma is working as well.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 1139,
+    "title": "Metric Parameters: top-k error rate for multi-class classification?",
+    "created_at": "2017-12-25T05:58:02Z",
+    "closed_at": "2019-05-27T00:04:08Z",
+    "labels": [
+      "help wanted",
+      "feature request",
+      "metrics and objectives"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1139",
+    "body": "Is it possible to add this feature?\r\n\r\nI assume the current\r\n\r\nmulti_error, error rate for mulit-class classification\r\n\r\nis top-1 error rate.",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1139/comments",
+    "author": "mw66",
+    "comments": [
+      {
+        "user": "Laurae2",
+        "created_at": "2017-12-25T10:01:47Z",
+        "body": "It is feasible in R/Python wrappers, you can also contribute to add it in C++."
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-05-27T00:04:08Z",
+        "body": "Added in #2178."
+      }
+    ]
+  },
+  {
+    "number": 1038,
+    "title": "Subsampling rows with replacement",
+    "created_at": "2017-11-04T14:42:22Z",
+    "closed_at": "2020-03-18T17:53:22Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1038",
+    "body": "As far as I understand, the random forest (rf) mode differs from a genuine rf in three key aspects:\r\n\r\n1. Column subsampling is done per tree instead of per split. \r\n2. Row subsampling is done without replacement instead of with replacement. \r\n3. No OOB predictions\r\n\r\nHow realistic would it be to add a \"bagging_with_replacement\" option? If set to True, then the rows would be subsampled with replacement, mimicking the idea of bagging. This might even be an interesting option for non-rf application.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1038/comments",
+    "author": "mayer79",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2017-11-05T10:12:55Z",
+        "body": "Related issue #883."
+      },
+      {
+        "user": "mayer79",
+        "created_at": "2017-11-06T13:39:07Z",
+        "body": "`bootstrap` seems to be a suitable name. Any form of row subsampling would thus be required if either `bagging_fraction` < 1 **or** `bootstrap = True`."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-11-06T23:39:31Z",
+        "body": "It is not trivial to have this in the core algorithm. \r\nHowever, a simple solution is using weight, that is, giving weight 0 to the no-sampled data, 1 to the “one-sample” data, and k to the “k-sample” data...\r\nIt is easy to have this in python package, since you can change the weight on each iteration."
+      },
+      {
+        "user": "mayer79",
+        "created_at": "2017-11-07T08:01:21Z",
+        "body": "Good hint. I was actually not aware that case weights could be updated during training. The Poisson distribution with mean 1 will provide an efficient and approximately correct weight distribution."
+      },
+      {
+        "user": "mayer79",
+        "created_at": "2020-03-18T13:03:00Z",
+        "body": "I am reopening this as \r\n\r\n1. I am still interested in this feature in order to be able to emulate random forests. Together with the relatively new \"colsample_bynode\", it would be very close to a native random forest.\r\n\r\n2. Sampling with replacement should be computationally more efficient than without. "
+      },
+      {
+        "user": "StrikerRUS",
+        "created_at": "2020-03-18T17:53:22Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      },
+      {
+        "user": "rdbuf",
+        "created_at": "2020-06-10T19:49:36Z",
+        "body": "Hi @guolinke,\r\n> However, a simple solution is using weight, that is, giving weight 0 to the no-sampled data, 1 to the “one-sample” data, and k to the “k-sample” data...\r\n> It is easy to have this in python package, since you can change the weight on each iteration.\r\n\r\nI understand that this is an old and closed issue, but may I ask you to elaborate on this solution a little bit more? How can one change sample weights for each tree in the random forest?\r\n\r\nOne solution could be using callbacks I suppose, is it the only way?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2020-06-11T00:25:01Z",
+        "body": "hi @rdbuf , yeah, callback is the most convenient way to do this, I think. "
+      },
+      {
+        "user": "rdbuf",
+        "created_at": "2020-06-11T19:41:57Z",
+        "body": "I see, thanks :)"
+      }
+    ]
+  },
+  {
+    "number": 1021,
+    "title": "[python] refine categorical feature support",
+    "created_at": "2017-10-27T16:30:06Z",
+    "closed_at": "2019-08-01T05:09:35Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/1021",
+    "body": "to do list:\r\n\r\n- [ ] remove categorical features = 'auto' -> use None instead\r\n- [ ] let user confirm categorical features are set successfully: maybe add some debug level log? #893 (but do no use too much logging: #2157) \r\n- [ ] check train, valid, predict consistency\r\n- [ ] pandas category: #960 \r\n- [ ] auto convert string type or object type: #1020 \r\n- [ ] test_category.py\r\n\r\nsome other issues:\r\n- [x] #921  \r\n- [x] #994 ",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/1021/comments",
+    "author": "wxchan",
+    "comments": [
+      {
+        "user": "StrikerRUS",
+        "created_at": "2019-08-01T16:31:50Z",
+        "body": "Closed in favor of being in #2302. We decided to keep all feature requests in one place.\r\n\r\nWelcome to contribute this feature! Please re-open this issue (or post a comment if you are not a topic starter) if you are actively working on implementing this feature."
+      }
+    ]
+  },
+  {
+    "number": 466,
+    "title": "[Feature] Faster prediction by converting tree model into code",
+    "created_at": "2017-04-27T02:43:22Z",
+    "closed_at": "2017-05-05T06:02:47Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/466",
+    "body": "1. convert tree models into many ```if ... else ... ``` codes. \r\n2. multi-threading for tree models. So it is still very fast for prediction of one instance. ",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/466/comments",
+    "author": "guolinke",
+    "comments": [
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-27T06:16:17Z",
+        "body": "what are the possible values of \"decision_type\"?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-04-27T06:24:52Z",
+        "body": "@wxchan only consider 2 types now. \r\n"
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-27T07:23:51Z",
+        "body": "I wrote some python codes like below, it converts dumped trees into c++/java code:\r\n```\r\nmodel_json = gbm.dump_model()\r\n\r\ndef parseOneTree(root, index, array_type='double', return_type='double'):\r\n    def ifElse(node):\r\n        if 'leaf_index' in node:\r\n            return 'return ' + str(node['leaf_value']) + ';'\r\n        else:\r\n            condition = 'arr[' + str(node['split_feature']) + ']'\r\n            if node['decision_type'] == 'no_greater':\r\n                condition += ' <= ' + str(node['threshold'])\r\n            else:\r\n                condition += ' == ' + str(node['threshold'])\r\n            left = ifElse(node['left_child'])\r\n            right = ifElse(node['right_child'])\r\n            return 'if ( ' + condition + ' ) { ' + left + ' } else { ' + right + ' }'\r\n    return return_type + ' predictTree' + str(index) + '(' + array_type + '[] arr) { ' + ifElse(root) + ' }'\r\n\r\ndef parseAllTrees(trees, array_type='double', return_type='double'):\r\n    return '\\n\\n'.join([parseOneTree(tree['tree_structure'], idx, array_type, return_type) for idx, tree in enumerate(trees)]) \\\r\n        + '\\n\\n' + return_type + ' predict(' + array_type + '[] arr) { ' \\\r\n        + 'return ' + ' + '.join(['predictTree' + str(i) + '(arr)' for i in range(len(trees))]) + ';' \\\r\n        + '}'\r\n\r\nwith open('if.else', 'w+') as f:\r\n    f.write(parseAllTrees(model_json[\"tree_info\"]))\r\n```\r\n\r\nI made a simple test with java, the result code is as follow, the prediction result is same as inner predict function:\r\n```\r\ndouble predictTree0(double[] arr) { if ( arr[0] <= 0 ) { return -0.9431; } else { return -0.9431; } }\r\n\r\ndouble predictTree1(double[] arr) { if ( arr[13] <= -30.5 ) { if ( arr[21] <= 45.5 ) { if ( arr[22] <= 16.5 ) { if ( arr[9] <= 22.5 ) { if ( arr[6] <= 2.5 ) { if ( arr[23] <= 43.5 ) { if ( arr[15] <= -30.5 ) { return 0.638946; } else { if ( arr[13] <= -33.5 ) { if ( arr[22] <= -4.5 ) { if ( arr[21] <= 28.5 ) { return -0.0531971; } else { return -0.877039; } } else { return 0.397859; } } else { if ( arr[19] <= 6.5 ) { return -0.0255723; } else { return 1.23515; } } } } else { return 1.2543; } } else { if ( arr[3] <= 39.5 ) { if ( arr[7] <= -11.5 ) { if ( arr[17] <= -29.5 ) { return 1.14063; } else { if ( arr[9] <= 7.5 ) { return -0.132012; } else { return 0.877155; } } } else { if ( arr[17] <= -35.5 ) { return -1.04375; } else { return -0.169512; } } } else { return -0.961178; } } } else { return -0.233391; } } else { if ( arr[20] <= -23.5 ) { if ( arr[25] <= 30.5 ) { return -0.281633; } else { return 0.554298; } } else { if ( arr[0] <= 5.5 ) { if ( arr[3] <= 4.5 ) { if ( arr[26] <= 23.5 ) { return 0.575822; } else { return 1.45787; } } else { return 0.186044; } } else { if ( arr[23] <= -2.5 ) { if ( arr[11] <= 33.5 ) { if ( arr[25] <= 14.5 ) { return 0.597155; } else { return -0.420236; } } else { return 1.21965; } } else { return -0.242002; } } } } } else { if ( arr[5] <= 5.5 ) { return 0.128822; } else { return 1.07283; } } } else { if ( arr[25] <= 30.5 ) { if ( arr[19] <= -44.5 ) { return 0.238409; } else { if ( arr[4] <= 4.5 ) { if ( arr[24] <= -49.5 ) { return -0.958614; } else { if ( arr[24] <= -34.5 ) { return 0.289861; } else { return 0.0101188; } } } else { return -0.0913412; } } } else { return -0.122343; } } }\r\n\r\ndouble predictTree2(double[] arr) { if ( arr[14] <= 48.5 ) { if ( arr[13] <= -30.5 ) { if ( arr[21] <= 45.5 ) { if ( arr[3] <= 46.5 ) { return 0.0707513; } else { return -0.566098; } } else { return 0.617633; } } else { if ( arr[16] <= -25.5 ) { if ( arr[21] <= 19.5 ) { if ( arr[9] <= 6.5 ) { if ( arr[12] <= -45.5 ) { return 0.943692; } else { if ( arr[4] <= -8.5 ) { return 0.290743; } else { if ( arr[19] <= -23.5 ) { if ( arr[26] <= -8.5 ) { return -1.06871; } else { if ( arr[0] <= -0.5 ) { return -0.759557; } else { return 0.314001; } } } else { if ( arr[7] <= -41.5 ) { return 1.07732; } else { if ( arr[18] <= 30.5 ) { return 0.110816; } else { return -0.502498; } } } } } } else { if ( arr[5] <= 3.5 ) { return 0.105686; } else { if ( arr[11] <= 33.5 ) { return -0.548442; } else { if ( arr[4] <= 0.5 ) { return 1.04067; } else { return -0.412117; } } } } } else { if ( arr[16] <= -39.5 ) { if ( arr[8] <= 14.5 ) { if ( arr[8] <= 5.5 ) { if ( arr[4] <= 27.5 ) { return -0.224228; } else { return 0.725575; } } else { return 1.11628; } } else { return -0.430015; } } else { if ( arr[7] <= 30.5 ) { if ( arr[18] <= -2.5 ) { if ( arr[12] <= 27.5 ) { return -0.243358; } else { return 0.635237; } } else { return 0.534673; } } else { return 0.944614; } } } } else { if ( arr[25] <= -30.5 ) { if ( arr[4] <= 26.5 ) { if ( arr[13] <= -24.5 ) { return 0.692067; } else { if ( arr[26] <= -25.5 ) { return -0.127491; } else { return 0.190598; } } } else { if ( arr[26] <= 28.5 ) { return -0.100314; } else { return -0.796962; } } } else { return -0.0923691; } } } } else { if ( arr[26] <= -7.5 ) { return 0.931673; } else { return -0.00291374; } } }\r\n\r\ndouble predictTree3(double[] arr) { if ( arr[1] <= 48.5 ) { if ( arr[14] <= 48.5 ) { if ( arr[10] <= 29.5 ) { if ( arr[8] <= -46.5 ) { if ( arr[10] <= -24.5 ) { return 0.74522; } else { return 0.13412; } } else { if ( arr[4] <= -0.5 ) { if ( arr[5] <= -36.5 ) { if ( arr[23] <= -31.5 ) { return 0.787587; } else { if ( arr[8] <= -5.5 ) { if ( arr[5] <= -47.5 ) { return -0.226148; } else { if ( arr[15] <= -9.5 ) { return 0.148057; } else { return 1.12421; } } } else { if ( arr[2] <= -31.5 ) { return -0.656214; } else { if ( arr[0] <= -28.5 ) { return -0.520197; } else { return 0.383778; } } } } } else { if ( arr[23] <= -47.5 ) { return -0.449624; } else { if ( arr[16] <= 7.5 ) { return 0.106182; } else { return -0.0755566; } } } } else { if ( arr[14] <= 30.5 ) { return -0.102649; } else { if ( arr[5] <= -44.5 ) { return -0.522098; } else { return 0.171904; } } } } } else { if ( arr[2] <= -21.5 ) { if ( arr[20] <= 20.5 ) { return -0.419594; } else { if ( arr[21] <= -25.5 ) { return -0.734804; } else { if ( arr[8] <= -25.5 ) { return -0.503601; } else { return 0.584065; } } } } else { if ( arr[2] <= -3.5 ) { if ( arr[7] <= -38.5 ) { return -0.627834; } else { if ( arr[21] <= 5.5 ) { if ( arr[8] <= 1.5 ) { return -0.380093; } else { return 0.370773; } } else { if ( arr[26] <= -9.5 ) { return 1.07691; } else { return 0.278066; } } } } else { if ( arr[11] <= 27.5 ) { return -0.188583; } else { return 0.157865; } } } } } else { if ( arr[5] <= 8.5 ) { if ( arr[0] <= -10.5 ) { return 0.00207745; } else { return 1.29174; } } else { return -0.132605; } } } else { if ( arr[6] <= 18.5 ) { return 0.791693; } else { return -0.182431; } } }\r\n\r\ndouble predict(double[] arr) { return predictTree0(arr) + predictTree1(arr) + predictTree2(arr) + predictTree3(arr);}\r\n```"
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-27T07:25:45Z",
+        "body": "@guolinke not understand. Is there any other `decision_type` besides `no_greater`?"
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-27T07:27:15Z",
+        "body": "I chose java mainly because it can be used in hadoop or spark."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-04-27T07:30:26Z",
+        "body": "@wxchan \r\nfor categorical feature, it may is ```if (x ==1)``` (decision_type=1) .\r\n\r\nI wound like to have cpp and java version. (only few difference). \r\n\r\nSome other suggestions:\r\n1. I think it is better to use model file directly, not the model json. \r\n2. Multi-threading support. (put these prediction into function arrary, and use openmp) .\r\n3. support predict_type. (raw_score, normal, leaf_index) ."
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-27T07:56:49Z",
+        "body": "@guolinke `decision_type=0` means `no_greater`, `decision_type=1` means `is`?\r\n\r\ndo you mean to write this parser in c++/java or generated codes in c++/java(like what I do now)?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-04-27T07:58:46Z",
+        "body": "@wxchan \r\nyes.\r\n\r\nuse python to generate these code are ok. \r\nI mean generate both cpp and java codes."
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-30T07:45:40Z",
+        "body": "@guolinke what's your future plan on this feature, after #469 ?"
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-04-30T07:48:53Z",
+        "body": "@wxchan , I think it is good enough of #469 . Do you have any improvement ?"
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-30T08:12:34Z",
+        "body": "@guolinke Not really yet. I just wonder how this feature works on bigger datasets like #396 and #435 . Maybe make it support in python-package if it really helps."
+      },
+      {
+        "user": "guolinke",
+        "created_at": "2017-04-30T14:07:10Z",
+        "body": "@wxchan \r\nyou mean that use python to generate the code ? \r\n\r\nActually, I think it will be better if we can auto replace the code of predict in ```gbdt.cpp```. "
+      },
+      {
+        "user": "wxchan",
+        "created_at": "2017-04-30T14:39:29Z",
+        "body": "I mean expose it to c_api.\r\n\r\nActually recompile with long hard-coded predict function takes a lot of time on my machine, I don't know if it happens on other machines."
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "Plans to support multiclass classification?",
+    "created_at": "2016-10-27T18:40:15Z",
+    "closed_at": "2016-11-02T08:27:56Z",
+    "labels": [
+      "help wanted",
+      "feature request"
+    ],
+    "url": "https://github.com/microsoft/LightGBM/issues/43",
+    "body": "or through a 1 vs all classifier?\n",
+    "comments_url": "https://api.github.com/repos/microsoft/LightGBM/issues/43/comments",
+    "author": "rquintino",
+    "comments": [
+      {
+        "user": "wxchan",
+        "created_at": "2016-10-30T10:07:22Z",
+        "body": "See PR #53 .\n"
+      },
+      {
+        "user": "chivee",
+        "created_at": "2016-11-02T08:28:28Z",
+        "body": "@rquintino , please check the latest code for the Multiclass Classfication example\n"
+      }
+    ]
+  }
+]

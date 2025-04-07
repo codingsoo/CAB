@@ -1,0 +1,439 @@
+[
+  {
+    "number": 161,
+    "title": "miqt-rcc resources file (code gen defaults to import qt instead of qt6, and 'invalid pattern syntax')",
+    "created_at": "2025-02-01T04:11:04Z",
+    "closed_at": "2025-02-07T21:37:31Z",
+    "labels": [
+      "bug",
+      "good first issue"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/161",
+    "body": "\nrunning miqt-rcc, \n```\n$ ./miqt-rcc \"-Input\" \"/home/asd/go/src/github.com/xy/l-s/t_s/resources.qrc\"\nRCC OK\n```\n\n\nthe generated code is:\n```go\npackage main\n\n//go:generate miqt-rcc \"-Input\" \"/home/asd/go/src/github.com/xy/l-s/t_s/resources.qrc\"\n\nimport (\n\t\"embed\"\n\n\t\"github.com/mappu/miqt/qt\"\n)\n\n//go:embed /home/asd/go/src/github.com/xy/l-s/t_s/resources.rcc\nvar _resourceRcc []byte\n\nfunc init() {\n\t_ = embed.FS{}\n\tqt.QResource_RegisterResourceWithRccData(&_resourceRcc[0])\n}\n```\n\nrunning go build, it errors at:\n```\nresources.go:11:12: pattern /home/asd/go/src/github.com/xy/l-s/t_s/resources.rcc: invalid pattern syntax\n```\n\nchanging the line to\n```go\n//go:embed resources.rcc\n```\n\ngo build now gives a long output of errors, basically all looking like this:\n```\n/usr/bin/ld: /tmp/go-link-2713455232/001354.o: in function `QXmlStreamReader_EntityDeclarations':\n/home/asd/go/pkg/mod/github.com/mappu/miqt@v0.8.0/qt/gen_qxmlstream.cpp:450: multiple definition of `QXmlStreamReader_EntityDeclarations'; /tmp/go-link-2713455232/000677.o:/home/asd/go/pkg/mod/github.com/mappu/miqt@v0.8.0/qt6/gen_qxmlstream.cpp:372: first defined here\ncollect2: error: ld returned 1 exit status\n```\n\nso, its reading from both miqt@v0.8.0/qt and miqt@v0.8.0/qt6 \n\nchanging the import to qt6 fixes the problem:\n\n```go\nimport (\n\t\"embed\"\n\n\tqt \"github.com/mappu/miqt/qt6\"\n)\n```\n\n\n",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/161/comments",
+    "author": "5k3105",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-02-07T21:38:17Z",
+        "body": "I updated miqt-rcc to fix the `go:embed` path. Also, I added a new `-Qt6` argument. I think it should be much better now. Can you try it out?"
+      }
+    ]
+  },
+  {
+    "number": 153,
+    "title": "`const` in callbacks",
+    "created_at": "2025-01-28T08:33:48Z",
+    "closed_at": "2025-01-31T23:35:17Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/153",
+    "body": "Since callback signatures are now generated in C++, might as well go ahead and retain `const` and the pointer type, removing a `const_cast` in the process.",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/153/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-31T23:34:49Z",
+        "body": "Thank you - the `void*` was a holdover from when the dynamic_cast stuff was a bit more dodgy. It's great to have the real type parameter present there.\r\n\r\nI was worried about the `const` comment about CGO compatibility, but i tried some small examples and everything works fine in my testing.\r\n\r\n:ship: "
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-02-01T02:14:03Z",
+        "body": "It looks like this only changed the cpp, not the header, so the function prototype differs from the implementation. That's probably why there were no issues with the Go side."
+      }
+    ]
+  },
+  {
+    "number": 138,
+    "title": "Remove isSubclass",
+    "created_at": "2025-01-18T05:13:39Z",
+    "closed_at": "2025-01-18T23:21:48Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/138",
+    "body": "Fixes: #133\r\n\r\nUpdates: #137\r\n\r\nUpdates: #21 \r\n\r\nCurrently, miqt uses the `isSubclass` variable to track whether a cgo pointer to a Qt object is for a Miqt subclass or not. This affects (A) destructor behaviour and (B) method override behaviour inside the C ABI.\r\n\r\n- Change miqt subclasses to be final and non-virtual (Authored-By: @arnetheduck)\r\n- Change miqt subclass destructors to ensure we always use a virtual destructor, removing reliance on isSubclass sentinel flag (Authored-By: @arnetheduck)\r\n- Change the override functions to use the return value of `dynamic_cast<>` as a sentinel\r\n\r\nTest that override protection is still working:\r\n\r\n```golang\r\n\tlist := qt.NewQTreeWidget2()\r\n\r\n\theader := list.Header()\r\n\r\n\theader.OnActionEvent(func(super func(event *qt.QActionEvent), event *qt.QActionEvent) {\r\n\t\tpanic(\"Shouldn't be able to reach this part\")\r\n\t})\r\n```\r\n\r\nResult:\r\n\r\n```\r\npanic: miqt: can only override virtual methods for directly constructed types\r\n```\r\n\r\nWith this, it was possible to remove `isSubclass` from the language projection side.\r\n\r\nPTAL @arnetheduck - I cherry-picked your changes from 339a2c9569eb4 in your fork, using the original naming functions for now,\r\n",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/138/comments",
+    "author": "mappu",
+    "comments": [
+      {
+        "user": "arnetheduck",
+        "created_at": "2025-01-18T10:07:37Z",
+        "body": "lgtm.\r\n\r\n> using the original naming functions for now,\r\n\r\nlmk if you want to keep #132 around - it'll either need rebasing or closing.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 135,
+    "title": "Log blocked methods",
+    "created_at": "2025-01-15T10:18:13Z",
+    "closed_at": "2025-01-17T05:22:47Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/135",
+    "body": "Blocked methods are the source of many gaps in the binding - in particular, they block qt_metacall/activate/etc that is necessary for implementing meta-object support.\r\n\r\nThis change makes them visible in logs and also removes log timestamps so that logs from two runs easily can be diffed.",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/135/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-17T05:22:43Z",
+        "body": "Nice, this makes sense to me."
+      }
+    ]
+  },
+  {
+    "number": 132,
+    "title": "Move `go` name mangling to `emitgo`",
+    "created_at": "2025-01-11T21:45:38Z",
+    "closed_at": "2025-02-01T01:25:05Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/132",
+    "body": "This change helps keep rules for each language separate by moving `go` rules to `emitgo` while the C bindings stay closer to the original Qt naming (that already is mostly C-safe).\r\n\r\nAlthough it doesn't practically matter for go, it makes it slightly easier to reuse the generated code in other languages which have different keywords and naming conventions.\r\n\r\nThe cabi generator also gains a few helpers to help keep names consistent across files which hopefully aids reading the generator code\r\n- it did for me at least;)\r\n\r\nThe rule that converts under_score to CamelCase is left for another day since moving it turns out to be more invasive due to name collision handling - when underscores are kept, there are fewer name conflicts which ends up causing name changes in  the public go api when done naively.",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/132/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "ddkwork",
+        "created_at": "2025-01-12T03:14:55Z",
+        "body": "In the meantime, many IFs suggest switching to Switch"
+      },
+      {
+        "user": "arnetheduck",
+        "created_at": "2025-01-17T16:40:04Z",
+        "body": "> many IFs suggest switching to Switch\r\n\r\n`+332,433 −332,376` feels like enough changes for a single PR :stuck_out_tongue: \r\n"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-02-01T00:49:07Z",
+        "body": "The helpers for virtbase, delete, etc are actually pretty useful, i like them.\r\n\r\nI can't comment on the usefulness of this for other language bindings, but i can see it being important especially if the set of reserved words needs to change a lot. Although it doesn't affect Go, if a small change like this can help keep all other miqt versions closer together, that's a good thing.\r\n\r\nI have pushed two commits to your branch, to rebase onto master (one last time...) and to split the genbindings + rebuild changes into two separate commits. Once this passes the pipeline, let's merge it :ship: "
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-02-01T01:32:50Z",
+        "body": "Whoops, merging this broke some examples (modelview_color6)"
+      },
+      {
+        "user": "arnetheduck",
+        "created_at": "2025-02-01T08:44:31Z",
+        "body": "Great! \r\n\r\n> Whoops, merging this broke some examples (modelview_color6)\r\n\r\nCould these be compiled as part of CI, as a sanity check?"
+      }
+    ]
+  },
+  {
+    "number": 128,
+    "title": "Fix Compilation issues/125 on Windows with UCRT64 Environment ",
+    "created_at": "2025-01-10T10:22:50Z",
+    "closed_at": "2025-01-11T05:10:53Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/128",
+    "body": "This pull request addresses compilation issues encountered when building the mappu/miqt project on Windows using the MSYS2 environment with UCRT64 ",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/128/comments",
+    "author": "Ye1v",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T04:15:42Z",
+        "body": "Fixes: #125 \r\n\r\nHi @Ye1v , thank you for the PR!\r\n\r\nSorry, but you can't change the gen_ files directly, because they will be overwritten again by the code generator. The change must be made inside the cmd/genbindings program.\r\n\r\nOne solution is: this function can be blocklisted from generation in config-allowlist.go (it seems uncommon to ever call this function)\r\n\r\nAnother solution is: the root cause of Windows incompatibility can be addressed in some other way"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T05:10:53Z",
+        "body": "Closed in favor of #131. Thanks again for the PR and for doing all the research work for this issue. In the end, the fix was similar."
+      }
+    ]
+  },
+  {
+    "number": 126,
+    "title": "Add `Makefile` for rebuilding bindings",
+    "created_at": "2025-01-09T12:16:23Z",
+    "closed_at": "2025-01-17T05:23:39Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/126",
+    "body": "Having a makefile is a nice little trick to re-run the binding generation code without having to copy-paste and/or remember the right docker incantations :)",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/126/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "arnetheduck",
+        "created_at": "2025-01-11T09:40:48Z",
+        "body": "Oops - forgot that docker mounts are owned by root by default - push a version that sets the user instead"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T21:58:14Z",
+        "body": "Thanks, this looks great. I have a similar helper script that sets up local disk paths for my dev environment, but having a good one in the repo already will be nice."
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "Avoid dependency on exported go header",
+    "created_at": "2025-01-07T11:57:34Z",
+    "closed_at": "2025-01-11T02:21:00Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/124",
+    "body": "The expected type of the callback is already known from the AST - this change reduces dependency on cgo specifics and makes the generated C ABI entirely cgo-independent - in particular, there is no need to include `_cgo_export.h` any more.",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/124/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T02:20:52Z",
+        "body": "This change makes sense to me. The cgo_export was only needed for those definitions, but if we write the prototype ourselves, the result is more portable and we avoid the weird _Bool hack.\r\n\r\nThanks! LGTM :ship: \r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 123,
+    "title": "Small fixes",
+    "created_at": "2025-01-07T08:36:19Z",
+    "closed_at": "2025-01-11T02:19:26Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/123",
+    "body": "* `stdlib` is not used / needed\r\n* `miqt_strdup` doesn't exist\r\n* consistently use nameprefix for `_ret`",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/123/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T02:19:21Z",
+        "body": "LGTM :ship:\r\n\r\nThe miqt_strdup and stdlib were leftover from a previous (v0.5.0-era) way of marshaling strings and are no longer required."
+      }
+    ]
+  },
+  {
+    "number": 117,
+    "title": "Json parsing fails with `file already closed`",
+    "created_at": "2025-01-03T18:01:29Z",
+    "closed_at": "2025-01-03T22:34:10Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/117",
+    "body": "Running clang to generate json sometimes fails with `|0: file already closed`  - this likely due to a race condition where `cmd.Wait` closes the pipe before the json reader is done with it.\r\n\r\n```patch\r\nindex e1162d2d..daaa1c4f 100644\r\n--- a/cmd/genbindings/clangexec.go\r\n+++ b/cmd/genbindings/clangexec.go\r\n@@ -44,6 +44,7 @@ func clangExec(ctx context.Context, clangBin, inputHeader string, cflags []strin\r\n        clangArgs = append(clangArgs, cflags...)\r\n        clangArgs = append(clangArgs, `-Xclang`, `-ast-dump=json`, `-fsyntax-only`, inputHeader)\r\n \r\n+       log.Printf(\"cmd: %s %s\", clangBin, clangArgs)\r\n        cmd := exec.CommandContext(ctx, clangBin, clangArgs...)\r\n        pr, err := cmd.StdoutPipe()\r\n        if err != nil {\r\n@@ -67,13 +68,13 @@ func clangExec(ctx context.Context, clangBin, inputHeader string, cflags []strin\r\n                inner, innerErr = clangStripUpToFile(pr, matcher)\r\n        }()\r\n \r\n+       wg.Wait()\r\n+\r\n        err = cmd.Wait()\r\n        if err != nil {\r\n                return nil, fmt.Errorf(\"Command: %w\", err)\r\n        }\r\n \r\n-       wg.Wait()\r\n-\r\n        return inner, innerErr\r\n }\r\n```\r\n\r\nThis patch helps, but I don't know `go` so it might have some unintended consequences.\r\n",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/117/comments",
+    "author": "arnetheduck",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2025-01-03T21:20:24Z",
+        "body": "From re-reading the StdoutPipe docs I think that's correct. Thank you for the patch, i'll apply it now.\r\n\r\nI had encountered this intermittently, but always assumed it was OOM on the host causing unexpected clang termination. The retry loop catches and resolves this most of the time.\r\n\r\nOn a personal note, thank you for giving the world DC++, I'm starstruck and honored to have you visit my repo :smiley: I spent many happy years chatting on hubs and met my wife. I wrote DC clients for the Sony PSP, WinCE, and J2ME. "
+      },
+      {
+        "user": "arnetheduck",
+        "created_at": "2025-01-06T13:05:58Z",
+        "body": "Happy it worked out well for the both of you - I shall proceed to add matchmaker to my bio ;)\r\n"
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "How goroutine works when updating asynchronously",
+    "created_at": "2024-12-21T02:04:58Z",
+    "closed_at": "2024-12-30T04:20:19Z",
+    "labels": [
+      "duplicate",
+      "essential"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/111",
+    "body": "QObject: Cannot create children for a parent that is in a different thread.\r\n(Parent is QHeaderView(0x600001dea2b0), parent's thread is QThread(0x6000011d8320), current thread is QThread(0x6000011d7590)\r\nQBasicTimer::start: QBasicTimer can only be used with threads started with QThread\r\nQBasicTimer::start: QBasicTimer can only be used with threads started with QThread\r\nQBasicTimer::start: QBasicTimer can only be used with threads started with QThread\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/111/comments",
+    "author": "st0pli",
+    "comments": [
+      {
+        "user": "rcalixte",
+        "created_at": "2024-12-21T04:24:02Z",
+        "body": "What version of the miqt Go module are you using? I believe this was fixed on 0.7.0 and later versions."
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-12-29T02:33:34Z",
+        "body": "In Miqt v0.7.0 and later, Miqt affixes Go's main startup goroutine to a Qt thread. But if you use other goroutines, they would not be pinned to the same OS thread, and Qt complains about it.\r\n\r\nDuplicate of #76 "
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-12-30T04:20:19Z",
+        "body": "Hi @st0pli , it should now be working in master.\r\n\r\n1. Please update Miqt to the latest Git master version.\r\n2. `import \"github.com/mappu/miqt/qt6/mainthread\"`\r\n3. `mainthread.Wait(func() { /* do something */ })`\r\n\r\nPlease try it out, and let me know if you have any problems,"
+      },
+      {
+        "user": "st0pli",
+        "created_at": "2025-01-09T11:49:44Z",
+        "body": "> Hi @st0pli , it should now be working in master.\r\n> \r\n> 1. Please update Miqt to the latest Git master version.\r\n> 2. `import \"github.com/mappu/miqt/qt6/mainthread\"`\r\n> 3. `mainthread.Wait(func() { /* do something */ })`\r\n> \r\n> Please try it out, and let me know if you have any problems,\r\n\r\n@mappu Does qt5 support it as well?"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2025-01-11T04:11:46Z",
+        "body": "@st0pli A new version for Qt5 is added in PR #130."
+      }
+    ]
+  },
+  {
+    "number": 97,
+    "title": "panic when HorizontalScrollBar SetValue",
+    "created_at": "2024-11-30T09:09:29Z",
+    "closed_at": "2024-12-08T01:39:07Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/97",
+    "body": "console:=qt.NewQTextEdit(parent)\r\nconsole.HorizontalScrollBar().SetValue(console.HorizontalScrollBar().Minimum())",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/97/comments",
+    "author": "sh1xo",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2024-12-07T00:52:33Z",
+        "body": "I think this has the same cause as #98. I'll fix this soon."
+      }
+    ]
+  },
+  {
+    "number": 89,
+    "title": "subclass example won't build",
+    "created_at": "2024-11-20T07:31:02Z",
+    "closed_at": "2024-11-20T11:36:36Z",
+    "labels": [
+      "troubleshooting"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/89",
+    "body": "I copied the subclass example, but got this error:\r\n```\r\n$ go run .\r\n# github.com/mark-summerfield/qtsubclass\r\n./qtsubclass.go:27:9: window.OnPaintEvent undefined (type *qt6.QGroupBox has no field or method OnPaintEvent)\r\n./qtsubclass.go:46:9: window.OnContextMenuEvent undefined (type *qt6.QGroupBox has no field or method OnContextMenuEvent)\r\n```\r\nMy import is:\r\n```\r\nimport \tqt \"github.com/mappu/miqt/qt6\"\r\n```\r\nand my go.mod contains:\r\n```\r\nrequire\tgithub.com/mappu/miqt v0.6.0\r\n```\r\nI'm using Debian.\r\nMaybe its because I'm using Qt6 rather Qt5?",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/89/comments",
+    "author": "mark-summerfield",
+    "comments": [
+      {
+        "user": "jamalsa",
+        "created_at": "2024-11-20T10:11:53Z",
+        "body": "The latest master is not tagged yet, so you should update miqt using command `go get -u github.com/mappu/miqt@master`."
+      },
+      {
+        "user": "mark-summerfield",
+        "created_at": "2024-11-20T11:36:37Z",
+        "body": "OK, now it works perfectly. Thanks."
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "Qt6.8 remove operator== for many class",
+    "created_at": "2024-11-18T10:22:23Z",
+    "closed_at": "2024-11-22T07:09:09Z",
+    "labels": [
+      "essential"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/84",
+    "body": "Take `QDir` for example:\r\n```c++\r\n#if QT_CORE_REMOVED_SINCE(6, 8)\r\n    bool operator==(const QDir &dir) const;\r\n    inline bool operator!=(const QDir &dir) const { return !operator==(dir); }\r\n#endif\r\n```",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/84/comments",
+    "author": "zhangqi2023",
+    "comments": [
+      {
+        "user": "BrycensRanch",
+        "created_at": "2024-11-19T16:43:59Z",
+        "body": "Is that why I can't build the example anymore?\r\n\r\n\r\n```bash\r\n❯ go run -v .\r\ngithub.com/mappu/miqt/qt6\r\n# github.com/mappu/miqt/qt6\r\ngen_qabstractitemmodel.cpp:175:15: error: no member named 'operator==' in 'QModelIndex'\r\ngen_qabstractitemmodel.cpp:179:15: error: no member named 'operator!=' in 'QModelIndex'\r\ngen_qabstractitemmodel.cpp:183:15: error: no member named 'operator<' in 'QModelIndex'\r\ngen_qabstractitemmodel.cpp:207:15: error: no member named 'operator<' in 'QPersistentModelIndex'\r\ngen_qabstractitemmodel.cpp:211:15: error: no member named 'operator==' in 'QPersistentModelIndex'\r\ngen_qabstractitemmodel.cpp:215:15: error: no member named 'operator!=' in 'QPersistentModelIndex'\r\ngen_qabstractitemmodel.cpp:227:15: error: no member named 'operator==' in 'QPersistentModelIndex'\r\ngen_qabstractitemmodel.cpp:231:15: error: no member named 'operator!=' in 'QPersistentModelIndex'\r\n```\r\n\r\nthe example I ran:\r\n```go\r\npackage main\r\n\r\nimport (\r\n\t\"fmt\"\r\n\t\"os\"\r\n\r\n\tqt \"github.com/mappu/miqt/qt6\"\r\n)\r\n\r\nfunc main() {\r\n\r\n\tqt.NewQApplication(os.Args)\r\n\r\n\tbtn := qt.NewQPushButton3(\"Hello world!\")\r\n\tbtn.SetFixedWidth(320)\r\n\r\n\tvar counter int = 0\r\n\r\n\tbtn.OnPressed(func() {\r\n\t\tcounter++\r\n\t\tbtn.SetText(fmt.Sprintf(\"You have clicked the button %d time(s)\", counter))\r\n\t})\r\n\r\n\tbtn.Show()\r\n\r\n\tqt.QApplication_Exec()\r\n\r\n\tfmt.Println(\"OK!\")\r\n}\r\n\r\n```\r\n\r\nMy environment: \r\n```bash\r\n❯ fastfetch -l none\r\nromvnly@Shadow-PH315-54\r\n-----------------------\r\nOS: Fedora Linux 42 (KDE Plasma) x86_64\r\nHost: Predator PH315-54 (V1.15)\r\nKernel: Linux 6.11.9-300_tkg_icelake_preempt.fc41.x86_64\r\nUptime: 23 hours, 28 mins\r\nPackages: 4985 (rpm), 48 (nix-default), 60 (flatpak-system), 34 (flatpak-user), 10 (snap), 16 (brew)\r\nShell: bash 5.2.37\r\nDE: KDE Plasma 6.2.3\r\nWM: KWin (Wayland)\r\nCPU: 11th Gen Intel(R) Core(TM) i7-11800H (16) @ 4.60 GHz\r\nGPU 1: NVIDIA GeForce RTX 3060 Mobile / Max-Q\r\nGPU 2: Intel UHD Graphics @ 1.45 GHz [Integrated]\r\nMemory: 11.47 GiB / 15.38 GiB (75%)\r\nSwap: 15.65 GiB / 22.35 GiB (70%)\r\n```\r\n\r\nMy related installed packages:\r\n\r\n```bash\r\n❯ dnf list --installed | grep qt6\r\naccounts-qml-module-qt6.x86_64                                         0.7^20231216.05e79eb-4.fc41             <unknown>\r\ngstreamer1-plugins-good-qt6.x86_64                                     1.24.9-1.fc42                           rawhide\r\nkaccounts-integration-qt6.x86_64                                       24.08.3-1.fc42                          rawhide\r\nkcolorpicker-qt6.x86_64                                                0.3.0-4.fc41                            <unknown>\r\nkimageannotator-qt6.x86_64                                             0.7.0-5.fc41                            <unknown>\r\nkquickimageeditor-qt6.x86_64                                           0.3.0-4.fc41                            <unknown>\r\nksanecore-qt6.x86_64                                                   24.08.3-1.fc42                          rawhide\r\nktextaddons-qt6.x86_64                                                 1.5.4-2.fc41                            <unknown>\r\nlibaccounts-qt6.x86_64                                                 1.16^20231010.211051.29fd38e-5.fc41     <unknown>\r\nlibadwaita-qt6.x86_64                                                  1.4.2-8.fc41                            <unknown>\r\nlibkexiv2-qt6.x86_64                                                   24.08.3-1.fc42                          rawhide\r\nmlt-qt6.x86_64                                                         7.28.0-4.fc42                           rawhide\r\nphonon-qt6.x86_64                                                      4.12.0-7.fc41                           <unknown>\r\nphonon-qt6-backend-vlc.x86_64                                          0.12.0-4.fc41                           <unknown>\r\nplasma-breeze-qt6.x86_64                                               6.2.3-1.fc42                            rawhide\r\npolkit-qt6-1.x86_64                                                    0.200.0-2.fc41                          <unknown>\r\npoppler-qt6.x86_64                                                     24.08.0-1.fc42                          <unknown>\r\npulseaudio-qt-qt6.x86_64                                               1.6.1-1.fc42                            rawhide\r\npython-pyqt6-rpm-macros.noarch                                         6.8.0-0.1.fc42                          rawhide\r\npython3-pyqt6.x86_64                                                   6.8.0-0.1.fc42                          rawhide\r\npython3-pyqt6-base.x86_64                                              6.8.0-0.1.fc42                          rawhide\r\npython3-pyqt6-sip.x86_64                                               13.8.0-1.fc41                           <unknown>\r\npython3-pyqt6-webengine.x86_64                                         6.7.0-3.fc41                            <unknown>\r\nqaccessibilityclient-qt6.x86_64                                        0.6.0-2.fc41                            <unknown>\r\nqca-qt6.x86_64                                                         2.3.8-2.fc41                            <unknown>\r\nqca-qt6-ossl.x86_64                                                    2.3.8-2.fc41                            <unknown>\r\nqcoro-qt6.x86_64                                                       0.10.0-7.fc42                           rawhide\r\nqgpgme-qt6.x86_64                                                      1.24.0-1.fc42                           rawhide\r\nqt6-designer.x86_64                                                    6.8.0-1.fc42                            rawhide\r\nqt6-doc-devel.noarch                                                   6.7.0-3.fc41                            <unknown>\r\nqt6-doctools.x86_64                                                    6.8.0-1.fc42                            rawhide\r\nqt6-filesystem.x86_64                                                  6.8.0-1.fc42                            rawhide\r\nqt6-linguist.x86_64                                                    6.8.0-1.fc42                            rawhide\r\nqt6-qt5compat.x86_64                                                   6.8.0-1.fc42                            rawhide\r\nqt6-qtbase.x86_64                                                      6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-common.noarch                                               6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-devel.x86_64                                                6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-gui.x86_64                                                  6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-ibase.x86_64                                                6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-mysql.x86_64                                                6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-odbc.x86_64                                                 6.8.0-4.fc42                            rawhide\r\nqt6-qtbase-postgresql.x86_64                                           6.8.0-4.fc42                            rawhide\r\nqt6-qtcharts.x86_64                                                    6.8.0-1.fc42                            rawhide\r\nqt6-qtconnectivity.x86_64                                              6.8.0-1.fc42                            rawhide\r\nqt6-qtdeclarative.x86_64                                               6.8.0-3.fc42                            rawhide\r\nqt6-qtimageformats.x86_64                                              6.8.0-1.fc42                            rawhide\r\nqt6-qtmultimedia.x86_64                                                6.8.0-1.fc42                            rawhide\r\nqt6-qtnetworkauth.x86_64                                               6.8.0-1.fc42                            rawhide\r\nqt6-qtpdf.x86_64                                                       6.8.0-1.fc42                            rawhide\r\nqt6-qtpositioning.x86_64                                               6.8.0-1.fc42                            rawhide\r\nqt6-qtquick3d.x86_64                                                   6.8.0-1.fc42                            rawhide\r\nqt6-qtquicktimeline.x86_64                                             6.8.0-1.fc42                            rawhide\r\nqt6-qtremoteobjects.x86_64                                             6.8.0-1.fc42                            rawhide\r\nqt6-qtsensors.x86_64                                                   6.8.0-1.fc42                            rawhide\r\nqt6-qtserialport.x86_64                                                6.8.0-1.fc42                            rawhide\r\nqt6-qtshadertools.x86_64                                               6.8.0-1.fc42                            rawhide\r\nqt6-qtspeech.x86_64                                                    6.8.0-1.fc42                            rawhide\r\nqt6-qtspeech-flite.x86_64                                              6.8.0-1.fc42                            rawhide\r\nqt6-qtspeech-speechd.x86_64                                            6.8.0-1.fc42                            rawhide\r\nqt6-qtsvg.x86_64                                                       6.8.0-1.fc42                            rawhide\r\nqt6-qttools.x86_64                                                     6.8.0-1.fc42                            rawhide\r\nqt6-qttools-common.noarch                                              6.8.0-1.fc42                            rawhide\r\nqt6-qttools-devel.x86_64                                               6.8.0-1.fc42                            rawhide\r\nqt6-qttools-libs-designer.x86_64                                       6.8.0-1.fc42                            rawhide\r\nqt6-qttools-libs-designercomponents.x86_64                             6.8.0-1.fc42                            rawhide\r\nqt6-qttools-libs-help.x86_64                                           6.8.0-1.fc42                            rawhide\r\nqt6-qttranslations.noarch                                              6.8.0-1.fc42                            rawhide\r\nqt6-qtvirtualkeyboard.x86_64                                           6.8.0-1.fc42                            rawhide\r\nqt6-qtwayland.x86_64                                                   6.8.0-2.fc42                            rawhide\r\nqt6-qtwebchannel.x86_64                                                6.8.0-1.fc42                            rawhide\r\nqt6-qtwebengine.x86_64                                                 6.8.0-1.fc42                            rawhide\r\nqt6-qtwebsockets.x86_64                                                6.8.0-1.fc42                            rawhide\r\nqt6-qtwebview.x86_64                                                   6.8.0-1.fc42                            rawhide\r\nqt6-rpm-macros.noarch                                                  6.8.0-1.fc42                            rawhide\r\nqt6-srpm-macros.noarch                                                 6.8.0-1.fc42                            rawhide\r\nqt6pas.x86_64                                                          6.2.8-30601.fc42                        <unknown>\r\nqtkeychain-qt6.x86_64                                                  0.14.3-3.fc41                           <unknown>\r\nsignon-qt6.x86_64                                                      8.60^20240205.c8ad982-2.fc41            <unknown>\r\n```\r\n"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-11-22T06:05:42Z",
+        "body": "I can confirm the problem on Fedora 41 with Qt 6.8.\r\n\r\nMany `operator==` overloads were changed from class methods into global methods. In C++, writing `a == b` works for either, and is unaffected by this change. But because MIQT generated code like `a->operator==(b)`, it was affected.\r\n\r\nI'll change MIQT to use the `a == b` format in such cases."
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-11-22T07:09:51Z",
+        "body": "Qt 6.8 is now working on Fedora 41. Please upgrade to `master` and try it out.\r\n\r\nIn future, Qt 6.8 will be tested in CI automatically so that it keeps working."
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "Modify qt6/cbor for proper builds",
+    "created_at": "2024-11-17T16:23:07Z",
+    "closed_at": "2024-11-18T19:00:10Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/82",
+    "body": "Tested with Debian 12 and Qt 6.4",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/82/comments",
+    "author": "rcalixte",
+    "comments": [
+      {
+        "user": "rcalixte",
+        "created_at": "2024-11-17T17:29:42Z",
+        "body": "Should I include the diffs here? I can do whatever you'd like but I imagine you would prefer that they match your expectations. Feel free to push to this branch too. I'll try not to rebase over it. 😅 "
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-11-18T06:11:49Z",
+        "body": "Thanks - really nice find :facepalm: \r\n\r\nYes, I think generally the Qt diffs should be included in the PR (maybe as a second commit). The CI pipeline has a step that re-runs genbindings, to make sure that the bindings can always be generated cleanly with no diff.\r\n\r\nI'll push the diffs to your branch now,"
+      }
+    ]
+  },
+  {
+    "number": 77,
+    "title": "genbindings: Lint cleanup",
+    "created_at": "2024-11-13T13:35:01Z",
+    "closed_at": "2024-11-14T05:49:43Z",
+    "labels": [],
+    "url": "https://github.com/mappu/miqt/pull/77",
+    "body": "Some quick things I found while looking through for other changes. 😄 ",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/77/comments",
+    "author": "rcalixte",
+    "comments": [
+      {
+        "user": "mappu",
+        "created_at": "2024-11-14T05:49:39Z",
+        "body": "Nice, thank you!"
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "Add bindings for Qt WebEngine",
+    "created_at": "2024-10-10T18:43:30Z",
+    "closed_at": "2024-11-27T07:42:34Z",
+    "labels": [
+      "wishlist"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/37",
+    "body": "Please add support for QWebEngineView if possible",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/37/comments",
+    "author": "DanielAdolfsson",
+    "comments": [
+      {
+        "user": "DanielAdolfsson",
+        "created_at": "2024-10-11T02:14:45Z",
+        "body": "Hmm, I think it's Qt6 only"
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-10-22T05:16:40Z",
+        "body": "Now that basic Qt 6 support is merged (#11), this issue can be reopened."
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "Qt 6 support",
+    "created_at": "2024-08-25T05:20:44Z",
+    "closed_at": "2024-10-22T05:15:18Z",
+    "labels": [
+      "wishlist"
+    ],
+    "url": "https://github.com/mappu/miqt/issues/11",
+    "body": "Probably the current bindings generator could produce a Qt 6 bindings with only a few changes.\r\n\r\n- Should Qt 6 be exposed as a separate version of this module (e.g. miqt/v6), or, a `qt6` subdirectory inside the current v0 package?\r\n- What's the best way to handle generating different Qt versions?",
+    "comments_url": "https://api.github.com/repos/mappu/miqt/issues/11/comments",
+    "author": "mappu",
+    "comments": [
+      {
+        "user": "DanielAdolfsson",
+        "created_at": "2024-10-11T03:38:15Z",
+        "body": "It would also be nice if you included Qt6WebEngineWidgets, Qt6WebEngineCore, Qt6Multimedia and Qt6MultimediaWidgets.\r\n\r\nIs there Qt6 work being done somewhere? I might be able to assist somewhat, as I'm looking into using Qt6 with my own Go project soon."
+      },
+      {
+        "user": "mappu",
+        "created_at": "2024-10-11T04:24:12Z",
+        "body": "There is work being done - i'm just finalizing the exceptions for what new C++17 idioms are and are not easily bindable, and then i'll push my WIP branch, hopefully later today or this weekend.\r\n\r\nI'm still trying to decide between selecting Qt 5 / 6 with\r\n- a build tag (e.g. go build --tags miqt_qt6),\r\n- a git tag (e.g. go get miqt@v0.5.0-usingqt6),\r\n- a subfolder (e.g. import \"miqt/qt6\") or\r\n- a v6 module version.\r\n \r\nI'd somewhat like to do the build tag and deduplicate redundant definitions, but I suspect build tags are going to be cumbersome for new users, and it may be surprising when things don't just build out of the box. Do you have any opinion on what would be more ergonomic?"
+      },
+      {
+        "user": "DanielAdolfsson",
+        "created_at": "2024-10-11T06:09:19Z",
+        "body": "Good question. I'd probably go for subfolder `miqt/qtN`, personally."
+      }
+    ]
+  }
+]

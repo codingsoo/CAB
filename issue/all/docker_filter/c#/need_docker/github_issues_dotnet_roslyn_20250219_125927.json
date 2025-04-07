@@ -1,0 +1,331 @@
+[
+  {
+    "number": 62276,
+    "title": "inconsistent back and forth rewrite of `SyntaxTree` and (plain) string sources",
+    "created_at": "2022-06-30T14:18:10Z",
+    "closed_at": "2022-06-30T14:37:47Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/62276",
+    "body": "**Version Used**: 4.1.0\r\n\r\n**Steps to Reproduce**:\r\n\r\nI'm attaching a program that reproduces the issue.  \r\nIn summary, I'm writing the syntax tree of a C# source with top-level statements into another syntax tree where these (previous) top-level statements are inside a `Main` method. The rewritten syntax (and even the source rewritten from this syntax) look fine, but it the tree contains this diagnostics:\r\n\r\n`error CS1547: Keyword 'void' cannot be used in this context`\r\n\r\nHere's the program with the rewriting logic; below it, the output that I get when running it.\r\n\r\n```\r\nusing Microsoft.CodeAnalysis;\r\nusing Microsoft.CodeAnalysis.CSharp;\r\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\r\n\r\npublic class T\r\n{\r\n    public static void Main()\r\n    {\r\n        var source = @\"\r\nusing System;\r\nConsole.Write(1);\r\n\";\r\n\r\n        var originalTree = CSharpSyntaxTree.ParseText(source);\r\n        Console.WriteLine($\"<<<{originalTree}>>>\\n\" +\r\n                          $\"number of diagnostics: {originalTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        Console.WriteLine(\"rewritting the tree...\");\r\n        var rewrittenTree = new EmplaceGlobalStatement().Visit(originalTree.GetRoot()).NormalizeWhitespace().SyntaxTree;\r\n        Console.WriteLine($\"<<<{rewrittenTree}>>>\\n\" +\r\n                          $\"number of diagnostics: {rewrittenTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        if (rewrittenTree.GetDiagnostics().Count() == 1)\r\n        {\r\n            Console.WriteLine(rewrittenTree.GetDiagnostics().First() + \"\\n\\n\" + \r\n                              \"rewritting the rewritten tree (with a diagnostics) back to source...\");\r\n            var rewrittenSource = rewrittenTree.ToString();\r\n            var rewrittenSourceTree = CSharpSyntaxTree.ParseText(rewrittenSource);\r\n            Console.WriteLine($\"<<<{rewrittenSourceTree}>>>\\n\" +\r\n                              $\"number of diagnostics: {rewrittenSourceTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        }\r\n    }\r\n}\r\n\r\npublic class EmplaceGlobalStatement : CSharpSyntaxRewriter\r\n{\r\n    private readonly List<StatementSyntax> __stmtsNodes = new();\r\n\r\n    public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)\r\n    {\r\n        var node_P = (CompilationUnitSyntax)base.VisitCompilationUnit(node);\r\n\r\n        if (!__stmtsNodes.Any())\r\n            return node_P;\r\n\r\n        var methDecl =\r\n            SyntaxFactory.MethodDeclaration(\r\n                    SyntaxFactory.ParseTypeName(\"void\"),\r\n                    \"Main\")\r\n                .WithModifiers(\r\n                    SyntaxFactory.TokenList(\r\n                        SyntaxFactory.Token(SyntaxKind.PublicKeyword),\r\n                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))\r\n                .WithBody(\r\n                    SyntaxFactory.Block(__stmtsNodes));\r\n\r\n        var tyDecl =\r\n            SyntaxFactory.ClassDeclaration(\"Program\")\r\n                .WithModifiers(\r\n                    SyntaxFactory.TokenList(\r\n                        SyntaxFactory.Token(SyntaxKind.InternalKeyword),\r\n                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))\r\n                .WithMembers(\r\n                    SyntaxFactory.List<MemberDeclarationSyntax>().Add(methDecl));\r\n\r\n        node_P = node_P.AddMembers(tyDecl);\r\n\r\n        return node_P;\r\n    }\r\n\r\n    public override SyntaxNode VisitGlobalStatement(GlobalStatementSyntax node)\r\n    {\r\n        __stmtsNodes.Add(node.Statement);\r\n        return null;\r\n    }\r\n}\r\n```\r\n\r\nHere's the output.\r\n\r\n```\r\n<<<<\r\nusing System;\r\nConsole.Write(1);\r\n>>>\r\nnumber of diagnostics: 0\r\n\r\nrewritting the tree...\r\n<<<using System;\r\n\r\ninternal static class Program\r\n{\r\n    public static void Main()\r\n    {\r\n        Console.Write(1);\r\n    }\r\n}>>>\r\nnumber of diagnostics: 1\r\n\r\n(5,20): error CS1547: Keyword 'void' cannot be used in this context\r\n\r\nrewritting the rewritten tree (with a diagnostics) back to source...\r\n<<<using System;\r\n\r\ninternal static class Program\r\n{\r\n    public static void Main()\r\n    {\r\n        Console.Write(1);\r\n    }\r\n}>>>\r\nnumber of diagnostics: 0\r\n```\r\n ",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/62276/comments",
+    "author": "ltcmelo",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2022-06-30T14:37:47Z",
+        "body": "hey @ltcmelo :)\r\n\r\nAs mentioned yesterday, the issue is with ParseTypeName.  As you can see if you call that directly, it has the diagnostic on it saying that `void` is not valid.  That's because `void` is not a TypeName as far as the language is concerned.  If you want to construct `void`, you'll need to construct a PredefinedTypeSyntax directly like so:\r\n\r\n`SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))`\r\n\r\nI hope this helps! :)"
+      },
+      {
+        "user": "ltcmelo",
+        "created_at": "2022-06-30T15:34:13Z",
+        "body": "Ah\u2026 correct, I felt into this trap before. Sure, I need to use `PredefinedTypeSyntax`.\r\n\r\nBut I didn't notice that you touched this topic yesterday, I thought you were referring to the (in)valid identifiers that I previously had, `<`, `>`, and `$` with IL names.\r\n\r\nIn any case, thanks!\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why 'void' cannot be used with ParseTypeName and what syntactic category it belongs to",
+      "Guidance on proper construction of method return types in Roslyn syntax trees",
+      "Demonstration of valid syntax tree construction that avoids hidden diagnostics",
+      "Clarification of the distinction between TypeName syntax and PredefinedType syntax"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:16:12"
+    }
+  },
+  {
+    "number": 58120,
+    "title": "Using top-level programs results in analyzer failures",
+    "created_at": "2021-12-05T16:25:25Z",
+    "closed_at": "2021-12-05T23:31:36Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/58120",
+    "body": "**Version Used**: \r\nMicrosoft.CodeAnalysis v4.0.1\r\n\r\n**Steps to Reproduce**:\r\nConsider the code below, taken from an existing analyzer. This analyzer is designed to report a diagnostic when a developer declares a type without putting it in a namespace:\r\n```c#\r\nprivate static void AnalyzeNamedType(SymbolAnalysisContext context)\r\n{\r\n    var type = (INamedTypeSymbol)context.Symbol;\r\n\r\n    if (type.ContainingNamespace.IsGlobalNamespace && type.Locations.Any())\r\n    {\r\n        context.ReportDiagnostic(Diagnostic.Create(GlobalTypeRule, type.Locations[0], type.Name, type.ContainingAssembly.Name));\r\n    }\r\n}\r\n```\r\n\r\nThe analyzer incorrectly reports a diagnostic in a top-level program: \"Type 'Program' is declared in the global namespace, which does not match with assembly name 'MyCompany.MyProduct'.\". This analyzer should not report a diagnostic for a top-level program, because the user has not declared the Program type. But it should keep reporting a diagnostic when the user has written code for a class named \"Program\" that is in the global namespace.\r\n\r\nAs the author of the analyzer, I'd like to fix this bug. But there does not seem to be an API to distinguish between there, as `WellKnownMemberNames.TopLevelStatementsEntryPointTypeName` equals \"Program\", a location is reported for a symbol that does not exist in the source code and `type.IsImplicitlyDeclared` returns `false`. This doesn't make any sense to me.\r\n\r\n**Expected Behavior**:\r\n`type.Locations.Any()` to return empty and `type.IsImplicitlyDeclared` to return `true`, or another API to determine whether the Program class is compiler-generated or explicitly defined in source code.\r\n\r\n**Actual Behavior**:\r\n`type.Locations.Any()` returns the location of the first statement within the top-level file, which is something else entirely.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/58120/comments",
+    "author": "bkoelman",
+    "comments": [
+      {
+        "user": "Youssef1313",
+        "created_at": "2021-12-05T17:02:06Z",
+        "body": "You can use `type.GetMembers(WellKnownMemberNames.TopLevelStatementsEntryPointMethodName)` to determine whether the given symbol is a top-level class.\r\nThe entry-point method name is still unspeakable, ie, you can't declare one with the same name in source. That's why this should work.\r\n\r\nRegarding `IsImplicitlyDeclared`, this is by design."
+      },
+      {
+        "user": "bkoelman",
+        "created_at": "2021-12-05T23:20:43Z",
+        "body": "Thanks, that works. I looked at `type.MemberNames`, which returns an empty collection."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-12-05T23:31:36Z",
+        "body": "Sounds like this has been answered.  Thanks @Youssef1313  :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to distinguish between compiler-generated top-level Program types and user-defined types in the global namespace",
+      "Identification of intrinsic characteristics unique to compiler-generated types",
+      "Reliable detection mechanism that works with Roslyn symbol analysis APIs",
+      "Avoidance of hardcoded type name checks ('Program')"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:16:55"
+    }
+  },
+  {
+    "number": 52542,
+    "title": "Array of nullable generic parameter has unexpected default value",
+    "created_at": "2021-04-08T20:20:07Z",
+    "closed_at": "2021-04-12T17:22:00Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/52542",
+    "body": "I have the following structure:\r\n```\r\nclass MyClass<T> {\r\n  public T? array;\r\n\r\n  MyClass() {\r\n    array = new T?[1];\r\n  }\r\n}\r\n\r\nstruct MyStruct {\r\n  string fields;\r\n}\r\n```\r\n\r\nNow let's say I do the following:\r\n```\r\nMyClass<MyStruct> instance = new();\r\nConsole.WriteLine(instance.array[0] is null);\r\n```\r\n\r\nI would expect to see `True` however what I get is `False`. The array initializes itself with a bunch of empty structs while I would expect a bunch of `null`.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/52542/comments",
+    "author": "Lancelotbronner",
+    "comments": [
+      {
+        "user": "dotnet-issue-labeler[bot]",
+        "created_at": "2021-04-08T20:20:09Z",
+        "body": "I couldn't figure out the best area label to add to this issue. If you have write-permissions please help me learn by adding exactly one area label."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-04-12T17:22:00Z",
+        "body": "You need to do:\r\n\r\n```c#\r\nclass MyClass<T> where T : struct {\r\n  public T? array;\r\n\r\n  MyClass() {\r\n    array = new T?[1];\r\n  }\r\n}\r\n```\r\n\r\nWithout the `T : struct` constraint, `T?` means: \"can be default(T)\".  `default(MyStruct)` is not nullable, so it can't be null.  With the `T : struct` constraint means `can be Nullable<T>` so it can be null."
+      },
+      {
+        "user": "Lancelotbronner",
+        "created_at": "2021-04-13T19:31:05Z",
+        "body": "But what if I need T to be either a reference or value type? I thought that was the whole point of nullable?\n\n> On Apr 12, 2021, at 1:22 PM, CyrusNajmabadi ***@***.***> wrote:\n> \n> \ufeff\n> You need to do:\n> \n> class MyClass<T> where T : struct {\n>   public T? array;\n> \n>   MyClass() {\n>     array = new T?[1];\n>   }\n> }\n> Without the T : struct constraint, T? means: \"can be default(T)\". default(MyStruct) is not nullable, so it can't be null. With the T : struct constraint means can be Nullable<T> so it can be null.\n> \n> \u2014\n> You are receiving this because you authored the thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-04-13T20:22:27Z",
+        "body": "> But what if I need T to be either a reference or value type? \r\n\r\nThen you do just `Foo<T>` with no constraints.  An uncosntrained type parameter can be a reference or value type. \r\n\r\n> I thought that was the whole point of nullable?\r\n\r\nI don't know that means here.  The point of \"nullable value types\" was to allow one to represent a null state for any value type without high overhead.  The point of \"nullalbe reference types\" was to allow annotating your reference type usages to avoid null ref exceptions."
+      },
+      {
+        "user": "Lancelotbronner",
+        "created_at": "2021-04-13T21:43:58Z",
+        "body": "Oh thank you that makes more sense, I just expected it to work more like Swift\u2019s optionals.\n\nI instead made my own Optional<T> which had the behavior I was looking for.\n\nThank you for your explanations!\n\n> On Apr 13, 2021, at 4:22 PM, CyrusNajmabadi ***@***.***> wrote:\n> \n> \ufeff\n> But what if I need T to be either a reference or value type?\n> \n> Then you do just Foo<T> with no constraints. An uncosntrained type parameter can be a reference or value type.\n> \n> I thought that was the whole point of nullable?\n> \n> I don't know that means here. The point of \"nullable value types\" was to allow one to represent a null state for any value type without high overhead. The point of \"nullalbe reference types\" was to allow annotating your reference type usages to avoid null ref exceptions.\n> \n> \u2014\n> You are receiving this because you authored the thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how C# handles nullable semantics differently for value types vs. reference types in generic contexts",
+      "Clarification of C#'s nullable reference types vs System.Nullable<T> distinction",
+      "Mechanism to represent explicit null state regardless of value/reference type nature"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:17:32"
+    }
+  },
+  {
+    "number": 17254,
+    "title": "Diagnostic clarity: misleading error message",
+    "created_at": "2017-02-20T13:54:27Z",
+    "closed_at": "2017-02-21T11:15:06Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered",
+      "Blocked",
+      "Feature - Pattern Matching"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/17254",
+    "body": "Error messages for constant patterns under `is` can be misleading comparing to similar situation with `switch` statement patterns:\r\n```c#\r\nclass C {\r\n  public const int X = 42;\r\n}\r\n\r\nclass D {\r\n  public const string C = \"abc\";\r\n\r\n  // error CS0426: The type name 'X' does not exist in the type 'C'\r\n  public bool M1(object o) => o is C.X;\r\n    \r\n  public bool M2(object o) {\r\n      switch (o) {\r\n          // error CS1061: 'string' does not contain a definition for 'X' and no extension\r\n          // method 'X' accepting a first argument of type 'string' could be found\r\n          // (are you missing a using directive or an assembly reference?)\r\n          case C.X:\r\n              return true;\r\n          default:\r\n              return false;\r\n      }\r\n  }\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/17254/comments",
+    "author": "controlflow",
+    "comments": [
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T18:19:53Z",
+        "body": "The message is different because the meaning is different.\r\n\r\n`e is A.B` looks for a type named `A.B` as its first choice for how to interpret this. That is required for backward compatibility.\r\n\r\n`case A.B` looks for an expression named `A.B` (which is hoped to be a constant). That too is required for backward compatibility.\r\n\r\nThat is the reason the errors are different.\r\n\r\nDoes this answer address your concern/question? What would you prefer to be different?"
+      },
+      {
+        "user": "alrz",
+        "created_at": "2017-02-20T18:29:42Z",
+        "body": ">That is required for backward compatibility.\r\n\r\nCould that be relaxed to allow those cases but with a precedence for binding according to previous versions to retain backward compatibility? e.g. `e is X` first look for a type and then a constant, conversely, `case X` look for a constant and then for a type?"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T18:48:04Z",
+        "body": "@alrz That is exactly what we already do."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-20T18:50:02Z",
+        "body": "@gafter the error states that \"The type name 'X' does not exist in the type 'C'\", so it looks like the `C` reference in `o is C.X` is bound to type `C`, but in fact it is bound to constant `D.C`. Removing `D.C` constant fixes the error."
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T19:38:25Z",
+        "body": "@controlflow The name `C.X` must be bound either as a type or as a (constant) expression. As an expression it fails (because there is no constant named `X` inside `D.C`, which is what `C` as an expression binds to). As a type it fails because there is no such type `C.X` anywhere. Since the backward-compatible behavior is to treat it as a type, we select which of these two errors to report by doing so in a way analogous to the way the previous compiler did it, by reporting the error when looking up the type."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-21T00:07:33Z",
+        "body": "@gafter the only confusing part is \"does not exist in the type 'C'\". If expression `C` is bound to `D.C`, it has type `string`, not `C`, isn't it?"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-21T01:12:20Z",
+        "body": "@controlflow When we're looking up a type, we don't bind the part before the dot as an expression."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-21T11:15:06Z",
+        "body": "OK, I think I finally got it \ud83d\udc4d"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify why the compiler interprets 'C' differently in pattern matching vs switch expressions",
+      "Explain the backward compatibility constraints affecting error message differences",
+      "Resolve ambiguity in error message references to type vs constant contexts",
+      "Document binding precedence rules for pattern matching expressions"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:21:38"
+    }
+  },
+  {
+    "number": 6818,
+    "title": "Dynamically bound GetIndex operation doesn't pass lhs struct by ref",
+    "created_at": "2015-11-17T05:43:02Z",
+    "closed_at": "2015-12-17T21:57:14Z",
+    "labels": [
+      "Question",
+      "Resolution-Won't Fix",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/6818",
+    "body": "Unlike dynamically bound `InvokeMember` call sites do. Repro shown below (also applies for the native compiler, so not a regression):\n\n``` csharp\nusing System;\n\nclass Repro\n{\n  static void Main()\n  {\n    Case1();\n    Case2();\n    Case3();\n    Case4(); // ERROR\n    Case5();\n  }\n\n  static void Case1()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    b1.X();\n    b2.X();\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  static void Case2()\n  {\n    Bar b1 = new Bar();\n    Bar b2 = new Bar();\n    int x1 = 0;\n    dynamic x2 = 0;\n\n    b1.X(x1);\n    b2.X(x2);\n\n    Console.WriteLine(b1.Value + \" == \" + b2.Value);\n  }\n\n  static void Case3()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    var i1 = b1[0];\n    var i2 = b2[0];\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  static void Case4()\n  {\n    Bar b1 = new Bar();\n    Bar b2 = new Bar();\n    int x1 = 0;\n    dynamic x2 = 0;\n\n    var i1 = b1[x1];\n    var i2 = b2[x2];\n\n    Console.WriteLine(b1.Value + \" == \" + b2.Value);\n  }\n\n  static void Case5()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    var i1 = b1.Y;\n    var i2 = b2.Y;\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  struct Bar\n  {\n    public int Value;\n\n    public void X()\n    {\n      Value = 42;\n    }\n\n    public void X(int x)\n    {\n      Value = 42;\n    }\n\n    public int this[int x]\n    {\n      get\n      {\n        Value = 42;\n        return 0;\n      }\n    }\n\n    public int Y\n    {\n      get\n      {\n        Value = 42;\n        return 0;\n      }\n    }\n  }\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/6818/comments",
+    "author": "bartdesmet",
+    "comments": [
+      {
+        "user": "bartdesmet",
+        "created_at": "2015-11-17T05:49:57Z",
+        "body": "If this is deemed a bug indeed, the issue seems to be the lack of a call to `GetReceiverRefKind` in `MakeDynamicGetIndex` (unlike e.g. in `MakeDynamicSetIndex`) in `LoweredDynamicOperationFactory`.\n"
+      },
+      {
+        "user": "jaredpar",
+        "created_at": "2015-12-02T21:09:27Z",
+        "body": "@VSadov, @gafter is this a bug?  \n"
+      },
+      {
+        "user": "VSadov",
+        "created_at": "2015-12-17T21:55:54Z",
+        "body": "It is a bug, in theory, but I think it is the same way as it was emitted by the native compiler.\nChanging this behavior would be a breaking change now. \n\n\n---\n\nYes. It seems to be a long standing bug that indexer receivers do not have byref semantics in dynamic.  That would affect mutating indexers in structs when used dynamically and it seems very uncommon scenario, so fixing it would have very limited benefits while there is a risk of compatibility breaks.\nThat, IMO, makes this Won'tFix\n"
+      },
+      {
+        "user": "bartdesmet",
+        "created_at": "2015-12-17T22:11:12Z",
+        "body": "Ok, my expression tree nodes are bug compatible in that case :-). Thanks!\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Acknowledge the discrepancy in byref semantics between dynamic indexer operations and other dynamic member operations",
+      "Explain the compatibility considerations for potential fixes",
+      "Clarify whether the behavior is intentional or a known limitation",
+      "Address the impact on struct mutation patterns in dynamic scenarios"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:22:10"
+    }
+  },
+  {
+    "number": 6315,
+    "title": "Unit testing support for <include> documentation elements",
+    "created_at": "2015-10-26T04:51:26Z",
+    "closed_at": "2015-12-04T21:50:20Z",
+    "labels": [
+      "Question",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/6315",
+    "body": "I'm having trouble writing a unit test that includes a documentation comment containing an `<include>` element. I tried using `AddAdditionalDocument` to add the included file to the workspace, and I also tried writing the file to disk. In both cases, the expanded documentation simply included a comment saying the `<include>` element could not be expanded. See sharwell/StyleCopAnalyzers@93749a8 for an example.\n\n:question: Does the `AdhocWorkspace` support resolving `<include>` elements in a documentation comment? If so, where do I place the included file such that it will be located?\n\n:memo: This is part of my work to resolve DotNetAnalyzers/StyleCopAnalyzers#1603.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/6315/comments",
+    "author": "sharwell",
+    "comments": [
+      {
+        "user": "jaredpar",
+        "created_at": "2015-12-03T22:46:18Z",
+        "body": "CC @jasonmalinowski as he knows `AdhockWorkspace` the best. \n"
+      },
+      {
+        "user": "daveaglick",
+        "created_at": "2015-12-03T22:49:43Z",
+        "body": "If it helps, I was having this same problem and resolved it by supplying an `XmlReferenceResolver` to the compilation options. Failure to supply one results in the described behavior.\n"
+      },
+      {
+        "user": "jasonmalinowski",
+        "created_at": "2015-12-04T21:41:49Z",
+        "body": "I believe @daveaglick's advice is correct: the compiler/workspace tries to abstract files, and so unless there's a resolver doing something the compiler just will skip them.\n"
+      },
+      {
+        "user": "sharwell",
+        "created_at": "2015-12-04T21:50:19Z",
+        "body": "We successfully implemented unit tests for this functionality in DotNetAnalyzers/StyleCopAnalyzers#1898, based on @daveaglick's suggestions.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to configure XML reference resolution in AdhocWorkspace",
+      "Clarification on workspace/compilation interaction for XML includes",
+      "Guidance on abstract file handling in unit test environments"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:22:24"
+    }
+  },
+  {
+    "number": 4377,
+    "title": "Strange compilation error, cannot find attribute reference after applying code fix",
+    "created_at": "2015-08-06T15:58:04Z",
+    "closed_at": "2015-08-06T17:22:09Z",
+    "labels": [
+      "Question",
+      "Concept-API",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4377",
+    "body": "See the code below. What I'm trying to do is fairly simple. Have a code fix which adds an attribute if it's not there. This works fine when I use the non fully qualified name of the attribute, however if I do use the fully qualified name, I'm getting compilation errors. But strangely enough only a single one even when the fully qualified name is used twice. \n\nFor some reason the new attribute is not equivalent to the existing one even though they are equal as a string.\n\nAm I missing something?\n\nHere's the code, needs Roslyn references as well as to the old Composition dll in the GAC (but I'm getting the same results for Obsolete). I've duplicated some code from the template just to make it self-contained.\n\n``` CSharp\nusing System;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\nusing Microsoft.CodeAnalysis.Text;\nusing Microsoft.VisualStudio.TestTools.UnitTesting;\nusing static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;\n\nnamespace Test.CodeFixes\n{\n    [TestClass]\n    public class UnitTest1\n    {\n        internal static readonly MetadataReference CorlibReference = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);\n        internal static readonly MetadataReference SystemCoreReference = MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location);\n        internal static readonly MetadataReference CSharpSymbolsReference = MetadataReference.CreateFromFile(typeof(CSharpCompilation).Assembly.Location);\n        internal static readonly MetadataReference CodeAnalysisReference = MetadataReference.CreateFromFile(typeof(Compilation).Assembly.Location);\n\n        [TestMethod]\n        public void TestCompilationError()\n        {\n            var testCode = @\"\n\nusing System.ComponentModel.Composition;\n\n[System.ComponentModel.Composition.Export(typeof(System.String))]\n[Export(typeof(System.Single))]\npublic class TempClass\n{\n}\";\n\n            var project = CreateProject(testCode);\n\n            var document = project.Documents.Single();\n            CheckForCompilationErrors(project.GetCompilationAsync().Result);\n\n            var newDocument = AddAttributeAsyncFix(document, document.GetSyntaxRootAsync().Result.DescendantNodes().OfType<ClassDeclarationSyntax>().Single()).Result;\n            Console.WriteLine(@\"new code:\n\" + newDocument.GetTextAsync().Result);\n\n            CheckForCompilationErrors(newDocument.Project.GetCompilationAsync().Result);\n        }\n\n        private Project CreateProject(string testCode)\n        {\n            var TestProjectName = \"TestProject\";\n            var projectId = ProjectId.CreateNewId(TestProjectName);\n\n            var solution = new AdhocWorkspace()\n                .CurrentSolution\n                .AddProject(projectId, TestProjectName, TestProjectName, LanguageNames.CSharp)\n                .WithProjectCompilationOptions(projectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))\n                .AddMetadataReference(projectId, CorlibReference)\n                .AddMetadataReference(projectId, SystemCoreReference)\n                .AddMetadataReference(projectId, CSharpSymbolsReference)\n                .AddMetadataReference(projectId, CodeAnalysisReference)\n                .AddMetadataReferences(projectId, GetAdditionalReferences());\n\n\n            var documentId = DocumentId.CreateNewId(projectId);\n            solution = solution.AddDocument(documentId, \"test.cs\", SourceText.From(testCode));\n\n            var project = solution.GetProject(projectId);\n            return project;\n        }\n\n        private async Task<Document> AddAttributeAsyncFix(\n            Document document,\n            ClassDeclarationSyntax classDeclaration)\n        {\n            //Add [Export(typeof(TypeName))]\n            var root = await document.GetSyntaxRootAsync();\n\n            var typeofArgument = AttributeArgument(TypeOfExpression(ParseTypeName(\"System.Double\")));\n            var attributeSyntax = Attribute(IdentifierName(\"System.ComponentModel.Composition.Export\"), AttributeArgumentList().AddArguments(typeofArgument));\n            var attributeListSyntax = AttributeList(SeparatedList(new[] { attributeSyntax }));\n            var newClass = classDeclaration.AddAttributeLists(attributeListSyntax);\n            root = root.ReplaceNode(classDeclaration, newClass);\n\n            return document.WithSyntaxRoot(root);\n        }\n\n        private static void CheckForCompilationErrors(Compilation compilation)\n        {\n            var compilationDiagnositics = compilation.GetDiagnostics();\n            var errorDiagnostics = compilationDiagnositics.Where(x => x.Severity == DiagnosticSeverity.Error);\n            if (errorDiagnostics.Any())\n            {\n                Assert.Fail($@\"There are errors in the code to be analyzed. See below:\n{string.Join(\"\\r\\n\", errorDiagnostics.Select(x => x.GetMessage()))}\");\n            }\n        }\n\n        protected MetadataReference[] GetAdditionalReferences()\n        {\n            return new MetadataReference[]\n            {\n                MetadataReference.CreateFromFile(typeof(System.ComponentModel.Composition.ExportAttribute).Assembly.Location)\n            };\n        }\n    }\n}\n\n\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4377/comments",
+    "author": "hvanbakel",
+    "comments": [
+      {
+        "user": "Pilchie",
+        "created_at": "2015-08-06T17:22:09Z",
+        "body": "You can't create an `IdentifierName` for `System.ComponentModel.Composition.Export`.  An identifier name can only represent a single identifier, not a dotted name.\n\nTry using `ParseName` instead of of `IdentifierName`\n"
+      },
+      {
+        "user": "hvanbakel",
+        "created_at": "2015-08-06T17:39:46Z",
+        "body": "Works like a charm, thanks!\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why fully qualified attribute names are not recognized as equivalent when added programmatically",
+      "Guidance on proper Roslyn API usage for creating qualified attribute names",
+      "Solution must ensure added attributes are semantically equivalent to existing ones in the compilation",
+      "Clarification of Roslyn's node creation requirements for namespace-qualified identifiers"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:23:33"
+    }
+  }
+]

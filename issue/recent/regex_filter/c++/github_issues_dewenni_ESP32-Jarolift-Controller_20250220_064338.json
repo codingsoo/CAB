@@ -1,0 +1,57 @@
+[
+  {
+    "number": 5,
+    "title": "[BUG] Beim gleichzeitigen Ansteuern mehrerer Rollos aus HA wird nur der erste Befehl über Funk versendet",
+    "created_at": "2024-12-18T19:09:59Z",
+    "closed_at": "2024-12-21T09:19:11Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/dewenni/ESP32-Jarolift-Controller/issues/5",
+    "body": "### Wurde der Fehler in der neuesten Version getestet?\r\n- [x ] Ich nutze die v1.1.1.\r\n\r\n### Fehlerbeschreibung\r\nIch habe vier Rolladen über die Home Assistant Gruppenfunktion zu einer Rolladengruppe verknüpft\r\nSobald ich einen Steuerbefehl absende wird dieser zwar von HA über MQTT versendet, der Jarolift Controller\r\nSteuert jedoch nur den ersten Rolladen tatsächlich an. Siehe Log\r\n\r\n```\r\n\r\n[18.12.2024 - 20:04:42] I (APP-JARO): command STOP for channel 11 sent\r\n[18.12.2024 - 20:04:42] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/9 | payload: STOP\r\n[18.12.2024 - 20:04:42] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/10 | payload: STOP\r\n[18.12.2024 - 20:04:42] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/11 | payload: STOP\r\n[18.12.2024 - 20:04:42] D (APP-JARO): created devicekey low: 0x93a0fef1 // high: 0xba54365e\r\n[18.12.2024 - 20:04:42] D (APP-JARO): get serial: 0x0000100b for channel: 11\r\n[18.12.2024 - 20:04:42] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/12 | payload: STOP\r\n[18.12.2024 - 20:04:36] I (APP-WEB): web-client disconnected\r\n[18.12.2024 - 20:04:35] I (APP-JARO): Device Counter: 262\r\n[18.12.2024 - 20:04:35] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/9 | payload: CLOSE\r\n[18.12.2024 - 20:04:35] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/10 | payload: CLOSE\r\n[18.12.2024 - 20:04:35] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/11 | payload: CLOSE\r\n[18.12.2024 - 20:04:35] D (APP-JARO): created devicekey low: 0x93a0fef1 // high: 0xba54365e\r\n[18.12.2024 - 20:04:35] D (APP-JARO): get serial: 0x0000100b for channel: 11\r\n[18.12.2024 - 20:04:35] I (APP-MQTT): msg received | topic: jarolift/cmd/shutter/12 | payload: CLOSE\r\n[18.12.2024 - 20:04:31] D (APP-WEB): Received - Element ID: p10_log_refresh_btn = true\r\n``",
+    "comments_url": "https://api.github.com/repos/dewenni/ESP32-Jarolift-Controller/issues/5/comments",
+    "author": "flushbug",
+    "comments": [
+      {
+        "user": "dewenni",
+        "created_at": "2024-12-19T07:03:28Z",
+        "body": "Vermutlich ist das ein Timing-Problem. Durch die Gruppenfunktion werden die MQTT Nachrichten mehr oder weniger gleichzeitig gesendet. Der Sendeprozess über das CC1101 dauert dann aber etwas länger und dann gehen die anderen Kommandos wohl unter. Muss ich mir mal genauer ansehen und ggf. eine kleinen Kommando-Puffer einbauen.\r\nSollte lösbar sein.\r\n\r\n"
+      },
+      {
+        "user": "wunderbaum",
+        "created_at": "2024-12-19T15:41:48Z",
+        "body": "Ja, habe ich mit der \"alten\" Jarolift auch schon. Ich habe einfach Pausen in die Automation eingebaut."
+      },
+      {
+        "user": "dewenni",
+        "created_at": "2024-12-21T08:35:58Z",
+        "body": "so, @wunderbaum @flushbug testet doch bitte mal das neue Release v1.2.0\r\n\r\nIch habe einen Kommando-Puffer eingebaut für die eingehenden mqtt Nachrichten und auch für die Abarbeitung der CC1101 Befehle. Die eignenden mqtt Nachrichten werden beim Empfang in eine Queue eingetragen und dann azyklisch abgearbeitet.\r\nBei der Abarbeitung werden dann die entsprechenden CC1101 Befehle in eine zweite Queue eingetragen. Das passiert aber immer noch sehr schnell und zu schnell für den CC1101.\r\nDaher wird die CC1101 Queue nur alle 500ms abgefragt und enthaltene Befehle werden ausgeführt.\r\nDamit sollte das Problem jetzt hoffentlich nicht mehr auftreten."
+      },
+      {
+        "user": "flushbug",
+        "created_at": "2024-12-21T09:19:11Z",
+        "body": "Funktioniert ausgezeichnet ! Klar, das Delay zwischen den Befehlen ist sichtbar aber macht in der Realität nichts aus. "
+      },
+      {
+        "user": "dewenni",
+        "created_at": "2024-12-21T09:38:31Z",
+        "body": "Prima, danke für das schnelle Feedback.\r\nVielleicht kann man das auch noch etwas optimieren. Ich wollte jetzt erstmal die Funktion sicherstellen.\r\nIch glaube das Hauptproblem lag sogar an der MQTT Verarbeitung. Die aktuell statischen 500ms kann man ggf. noch optimieren. Aber wie du schon schreibst, eigentlich ist das ja egal wenn die etwas versetzt angesteuert werden.\r\nDa wäre es schon interessanter wenn ich versuche die Gruppensteuerung zu implementieren die Jarolift ja auch grundsätzlich unterstützt. Das steht auch noch auf meiner ToDo-Liste."
+      },
+      {
+        "user": "flushbug",
+        "created_at": "2024-12-21T10:32:48Z",
+        "body": "Nachdem ich jetzt selbst die Software bauen kann (habe sogar gestern Nacht Amateurhaft versucht die queue selber einzubauen aber ohne zu testen) kann ich auch selbst versuchen mit dem Timing zu spielen/optimieren. Aber guter Punkt bzgl Gruppencommand, da muss es ja etwas geben denn meine Fernbedienung kann auch mehrere Rollladen gleichzeitig ansteuern und die bewegen sich exakt zur selben Zeit. "
+      },
+      {
+        "user": "wunderbaum",
+        "created_at": "2024-12-21T11:42:41Z",
+        "body": "Bei mir wird es wohl leider erst nach den Feiertagen etwas. \nWill die Familie nicht mit Rollo Tests nerven 😉😂\n@flushbug  vermutlich geht's wenn du b einfach alle Rolläden einer _Gruppe_ gleichzeitig anlernst."
+      },
+      {
+        "user": "dewenni",
+        "created_at": "2024-12-24T09:14:45Z",
+        "body": "Ich habe im aktuellen Release v1.3.0 auch die Gruppenfunktion implementiert.\r\nDamit ist es nun wie bei den originalen Fernbedienungen möglich, Gruppen zu definieren und diese zeitgleich mit einem Befehl anzusteuern. Testet es gerne aus."
+      }
+    ]
+  }
+]

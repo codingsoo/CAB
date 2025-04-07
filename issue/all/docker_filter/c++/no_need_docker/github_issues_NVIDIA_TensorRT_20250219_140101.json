@@ -1,0 +1,271 @@
+[
+  {
+    "number": 2183,
+    "title": "i just want to known when to use trt api and use onnx if all of them can be work\u2026",
+    "created_at": "2022-07-26T11:36:35Z",
+    "closed_at": "2022-07-27T06:30:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/2183",
+    "body": "Could someone tell me what a difference in build with tensort api and build with onnx? When i test in 2d net work, the speed of them seem to be same and the speed in 3d point clound network may be some different. I like to build net work with tensorRT api but i don\u2019t know whether it has some advantage than onnx.Thanks!.i just want to known when to use trt api and use onnx if all of them can be work\u2026",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/2183/comments",
+    "author": "blazeCCC",
+    "comments": [
+      {
+        "user": "zhenhuaw-me",
+        "created_at": "2022-07-27T06:30:22Z",
+        "body": "In general, if ONNX parser works for you, you don't need to build with TensorRT API since that might take you some time to finish as you need to understand the semantic of the APIs.\r\n\r\nSometimes, API programming might have better performance and engineering benefits.\r\n* For performance, some ONNX models contains subgraph that can be optimized out while TensorRT might not cover yet. For example, consider there is `Mul(1, tensor)` in ONNX model which equals to `tensor` semantically, you can skip the Mul with API). This problem is due to the ONNX exporters generate some unneeded ops.\r\n* For engineering benefits, API gives you fine grain control over the network while the parser doesn't. For example, it would be easier to dump the output of an activation (mark it as output), also easier to setup precision per layer.\r\n\r\nClosing as this is a QA. Feel free to reopen if any further question."
+      },
+      {
+        "user": "blazeCCC",
+        "created_at": "2022-07-27T06:37:58Z",
+        "body": "> \r\n\r\nthank you! I basically get it."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explain scenarios where TensorRT API provides performance advantages over ONNX parsing",
+      "Describe engineering control benefits of TensorRT API compared to ONNX workflows",
+      "Clarify when ONNX parsing would be sufficient vs requiring lower-level API usage"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:21:25"
+    }
+  },
+  {
+    "number": 1630,
+    "title": "How to save the calibration.bin files?",
+    "created_at": "2021-11-20T09:29:05Z",
+    "closed_at": "2022-01-25T01:41:56Z",
+    "labels": [
+      "question",
+      "triaged"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/1630",
+    "body": "## Description\r\nCurrently, I'm trying to generate INT8 TRT engine with calibrations, like that\r\n`calibrator = Calibrator(data_loader=calib_data(), cache=\"identity-calib.cache\")\r\n    build_engine = EngineFromNetwork(\r\n        NetworkFromOnnxPath(\"identity.onnx\"), config=CreateConfig(int8=True, calibrator=calibrator)\r\n    )`\r\nBut I was really confused about the mechanisms:\r\n1. when was calibration performed? within the 'EngineFromNetwork' process? I tried to set break-point at calibration::get_batch(), but It did not works;\r\n2. How to get the calibration.bin files? I have tried to call the function of \"write_calibration_cache(self, cache)\",  But I don't know which 'cache' to pass in.\r\nPlease help me with these two problems, Thanks a lot.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/1630/comments",
+    "author": "xingyueye",
+    "comments": [
+      {
+        "user": "pranavm-nvidia",
+        "created_at": "2021-11-22T14:59:46Z",
+        "body": "1. Yes, calibration happens when the engine is being built. `EngineFromNetwork` is lazily evaluated, so you need to call it to build the engine: `engine = build_engine()`. \r\nAlternatively, you can use the immediately evaluated variants (`snake_case` instead of `PascalCase`):\r\n```py\r\nengine = engine_from_network(NetworkFromOnnxPath(\"identity.onnx\"), \r\n                             config=CreateConfig(int8=True, calibrator=calibrator) )\r\n```\r\n\r\n2. The calibrator is an interface that's implemented by the user and called by TRT. So `write_calibration_cache` is not intended to be called by you; instead it will be called once TRT finishes calibrating. "
+      },
+      {
+        "user": "xingyueye",
+        "created_at": "2021-11-23T06:44:29Z",
+        "body": "Thanks for your kindly reply. I have build quantized engine correctly and found the generated \"calibration.cache\".\r\nBTW, Is there any superior ways to select a better calibration datasets? \r\n"
+      },
+      {
+        "user": "pranavm-nvidia",
+        "created_at": "2021-11-23T14:17:14Z",
+        "body": "It should ideally be representative of your input data; e.g. a subset of the training data may work well"
+      },
+      {
+        "user": "ttyio",
+        "created_at": "2022-01-25T01:41:56Z",
+        "body": "close since no activity for more than 3 weeks, please reopen if you still have question, thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify when calibration occurs during the engine building process",
+      "Explain how calibration cache files are generated without manual intervention",
+      "Provide guidance on selecting appropriate calibration datasets"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:21:32"
+    }
+  },
+  {
+    "number": 1255,
+    "title": "Saving a context",
+    "created_at": "2021-05-18T08:20:16Z",
+    "closed_at": "2021-05-21T07:04:55Z",
+    "labels": [
+      "question",
+      "triaged"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/1255",
+    "body": "Hi,\r\n\r\nI am using your inference.py algorithm in the demo/BERT folder. To run inference, you need to load the engine to build the context as follows:\r\n\r\n  with open(args.engine, \"rb\") as f, \\\r\n      trt.Runtime(TRT_LOGGER) as runtime, \\\r\n      runtime.deserialize_cuda_engine(f.read()) as engine, \\\r\n      engine.create_execution_context() as context:\r\n\r\nIs it possible to save the context so that we don't have to load it every time we want to run inference? \r\nThank you for your answer!",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/1255/comments",
+    "author": "fdlci",
+    "comments": [
+      {
+        "user": "ttyio",
+        "created_at": "2021-05-21T04:52:59Z",
+        "body": "Hello @fdlci , you can reuse the context, no need to create it for every inference. Did you hit any error? thanks!"
+      },
+      {
+        "user": "fdlci",
+        "created_at": "2021-05-21T07:03:29Z",
+        "body": "Yes I can run several inferences without loading the context again. I thought I couldn't do that as I was running inference.py on one example only and everytime I tried a new example I had to run the entire code and reload the context again.\r\nThank you for your answer!\r\n "
+      },
+      {
+        "user": "ttyio",
+        "created_at": "2021-05-21T07:04:55Z",
+        "body": "@fdlci Thanks for confirm, closing"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation that context reuse is supported without reloading between inferences",
+      "Clarification about persistent context lifetime management"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:21:39"
+    }
+  },
+  {
+    "number": 1245,
+    "title": " implemented in c++ CUDA vs TensorRT",
+    "created_at": "2021-05-11T05:42:33Z",
+    "closed_at": "2021-05-11T07:11:41Z",
+    "labels": [
+      "question",
+      "triaged"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/1245",
+    "body": "@ttyio\r\nRecently, the object detection model has been successfully converted and the inference rate has also been reduced.\r\nTensorRT uses C++ CUDA more efficiently than PyTorch. For this reason, I am wondering which is the fastest, which is the fastest model implemented in c++ cuda or the model converted to TensorRT.\r\nIf the model is implemented in c++ CUDA and the speed is better than TensorRT, the model will be directly implemented in c++ CUDA.\r\nCan i get a public indicator of this?",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/1245/comments",
+    "author": "DonggeunYu",
+    "comments": [
+      {
+        "user": "ttyio",
+        "created_at": "2021-05-11T05:53:24Z",
+        "body": "Hello @DonggeunYu , TRT has various optimization for your network, like graph fusion, memory optimization and optimized kernels for different precisions.  It is a lot of effort if you implement all of them. And TRT keep evolution on new GPU arch. There are a lot of adapter work if you direct implement in C++ CUDA."
+      },
+      {
+        "user": "DonggeunYu",
+        "created_at": "2021-05-11T07:11:39Z",
+        "body": "Thank you :)\r\nIt would be nice to continue using TensorRT."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of TensorRT's optimization advantages over manual C++ CUDA implementations",
+      "Comparison of long-term maintenance costs between custom implementations and TensorRT",
+      "Reference to public benchmarks comparing TensorRT and custom CUDA implementations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:21:48"
+    }
+  },
+  {
+    "number": 1184,
+    "title": "A question about TensorRT cancel point and IExecutionContext",
+    "created_at": "2021-04-12T16:14:55Z",
+    "closed_at": "2021-04-14T03:20:46Z",
+    "labels": [
+      "question",
+      "triaged"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/1184",
+    "body": "Hello there, I am a developer of inference task serving system. We use TensorRT 6/TensorRT 7 as our inference execute framework. Due to soft realtime limitation, we sometimes need to cancel current context->execute() / context->executeV2() for next inference task running safely.\r\nI didn't find any solution on TensorRT documentation, can TensorRT development team gives me some advice of cancel context->execute()? My context->execute() is running on a single POSIX thread, can I cancel it safely? Or can you give me more information about TensorRT cancellation point? Thanks a lot!",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/1184/comments",
+    "author": "KarKLi",
+    "comments": [
+      {
+        "user": "ttyio",
+        "created_at": "2021-04-14T02:08:06Z",
+        "body": "Sorry @KarKLi , it is CUDA limitation that we cannot cancel the kernels that already enqueued. even for cudaDeviceReset, it will first flush the work that pending in the queue and wait for GPU idle first."
+      },
+      {
+        "user": "KarKLi",
+        "created_at": "2021-04-14T02:29:41Z",
+        "body": "> Sorry @KarKLi , it is CUDA limitation that we cannot cancel the kernels that already enqueued. even for cudaDeviceReset, it will first flush the work that pending in the queue and wait for GPU idle first.\r\n\r\nThx. And I have another question that the IExecutionContext created by engine->CreateExecutionContext() / engine->CreateExecutionContextWithoutDeviceMemory() can be reused? The \"reused\" means I don't call ctx->destroy(), save the pointer and use it again for later inference with CUDA stream or just CUDA. Will the inference execute properly?"
+      },
+      {
+        "user": "ttyio",
+        "created_at": "2021-04-14T02:36:58Z",
+        "body": "Hello @KarKLi , yes the `IExecutionContext` can be reused. But do not call `IExecutionContext::enqueue()`  with 2 different cuda stream simultaneously.  This is because intermediate tensor is resource of `IExecutionContext`,  behavior of execute the same context simultaneously on 2 different stream is undefined."
+      },
+      {
+        "user": "KarKLi",
+        "created_at": "2021-04-14T02:40:58Z",
+        "body": "> Hello @KarKLi , yes the `IExecutionContext` can be reused. But do not call `IExecutionContext::enqueue()` with 2 different cuda stream simultaneously. This is because intermediate tensor is resource of `IExecutionContext`, behavior of execute the same context simultaneously on 2 different stream is undefined.\r\n\r\nthanks for your reply! What if I create two ```IExecutionContext``` pointer by the same engine or different engines and call ```IExecutionContext::enqueue()``` / ```IExecutionContext::enqueueV2()``` with a same cuda stream, will it cause undefined behaviour?"
+      },
+      {
+        "user": "ttyio",
+        "created_at": "2021-04-14T02:53:26Z",
+        "body": "Hello @KarKLi , \r\ncases are valid:\r\n- ctx A and ctx B run on cuda stream A \r\n- ctx A run on cuda stream A and ctx B run on cuda stream B\r\n- ctx A run on cuda stream A, then run on stream B after waiting stream A finished\r\n\r\nonly invalid case:\r\n- ctx A run on cuda stream A, and run on stream B without event sync/wait"
+      },
+      {
+        "user": "KarKLi",
+        "created_at": "2021-04-14T03:00:23Z",
+        "body": "> Hello @KarKLi ,\r\n> cases are valid:\r\n> \r\n> * ctx A and ctx B run on cuda stream A\r\n> * ctx A run on cuda stream A and ctx B run on cuda stream B\r\n> * ctx A run on cuda stream A, then run on stream B after waiting stream A finished\r\n> \r\n> only invalid case:\r\n> \r\n> * ctx A run on cuda stream A, and run on stream B without event sync/wait\r\n\r\nThanks! I have last question that can the ctx's execution memory be exposed to user by some kind of TensorRT API? If not, forget to record the device memory address when I call ```ctx->setDeviceMemory()``` will cause GPU memory leak?"
+      },
+      {
+        "user": "ttyio",
+        "created_at": "2021-04-14T03:19:12Z",
+        "body": "Helo @KarKLi , \r\ndo you mean activations when you say `execution memory`? activations are shared between contexts for the same engine.\r\ncurrently only the device memory is exposed and you can use `createExecutionContextWithoutDeviceMemory`/`setDeviceMemory` to set them, or use `createExecutionContext` to ask TRT to manage this part of memory. and yes there will be memory leak if you manage it but not proper released."
+      },
+      {
+        "user": "KarKLi",
+        "created_at": "2021-04-14T03:20:46Z",
+        "body": "> Helo @KarKLi ,\r\n> do you mean activations when you say `execution memory`? activations are shared between contexts for the same engine.\r\n> currently only the device memory is exposed and you can use `createExecutionContextWithoutDeviceMemory`/`setDeviceMemory` to set them, or use `createExecutionContext` to ask TRT to manage this part of memory. and yes there will be memory leak if you manage it but not proper released.\r\n\r\nGot it. Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of valid IExecutionContext reuse patterns with CUDA streams",
+      "Explanation of proper device memory management when using custom memory allocation",
+      "Identification of synchronization requirements between CUDA streams",
+      "Confirmation of TensorRT's execution cancellation limitations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:21:56"
+    }
+  },
+  {
+    "number": 864,
+    "title": "TensorRT-7.1.3.4/samples/common/buffers.h:447: undefined reference to `sample::gLogError",
+    "created_at": "2020-10-29T13:04:25Z",
+    "closed_at": "2020-11-04T00:52:20Z",
+    "labels": [
+      "question",
+      "triaged"
+    ],
+    "url": "https://github.com/NVIDIA/TensorRT/issues/864",
+    "body": "hi, i am  use  tensorrt to accerate a simple classification model, liek resnet,i learned a similar project(tensorrt's googlenet),after i write my code and run it, it occurs such problem, can anybody help me?\r\nmy envir:ubuntu16.04+cuda10.2+tensorrt7.1.3.4+cudnn8.0.",
+    "comments_url": "https://api.github.com/repos/NVIDIA/TensorRT/issues/864/comments",
+    "author": "chegnyanjun",
+    "comments": [
+      {
+        "user": "mk-nvidia",
+        "created_at": "2020-10-29T13:56:43Z",
+        "body": "`gLogError` is defined in `${SAMPLES_DIR}/common/logger.cpp`. You need to make sure to link your sample to this file. See `CMakeLists.txt` for any sample, it has the line `include(../../CMakeSamplesTemplate.txt)`. `CMakeSamplesTemplate.txt` adds logger.cpp.\r\nDoes this fix your problem?"
+      },
+      {
+        "user": "chegnyanjun",
+        "created_at": "2020-11-04T00:49:11Z",
+        "body": "\uff20mk-nvidia,thanks for your reply, i have fixed my problem.thank you so much."
+      },
+      {
+        "user": "iambyd",
+        "created_at": "2022-08-03T01:10:05Z",
+        "body": "i got a sample error ,my CMakeLists.txt have include header file like this \r\n`include_directories(/usr/local/TensorRT-8.4.1.5/samples/common)`\r\n\r\nmy env:\r\n - system: ubuntu 20.4\r\n - cuda:11.1 \r\n - tensort:8.4.1.5\r\n - cudnn:8.4.1.50\r\n"
+      },
+      {
+        "user": "FengZhiheng",
+        "created_at": "2023-09-19T03:27:24Z",
+        "body": "I also have the same problem, my CMakeLists.txt  have \r\n```\r\nINCLUDE_DIRECTORIES(/usr/local/TensorRT-8.6.1.6/include/) \r\nINCLUDE_DIRECTORIES(/usr/local/TensorRT-8.6.1.6/samples/common/)\r\n```\r\nmy env:\r\nsystem: linux centos\r\ncuda:10.2\r\ntensort:8.6.1.6\r\n"
+      },
+      {
+        "user": "BrandonVeldman",
+        "created_at": "2023-10-15T20:05:14Z",
+        "body": "Hi \r\nafter i have done coding my program of simple_shell i experience these right after adding my gcc compiler command line what should i do to make it right ?\r\n\r\n\r\n/usr/bin/ld: /tmp/ccia5GLt.o: in function `exit_cmd':\r\ncmd_exit.c:(.text+0x28): undefined reference to `free_buffers'\r\n/usr/bin/ld: /tmp/ccEShV1t.o: in function `execution':\r\nexecu.c:(.text+0x85): undefined reference to `free_buffers'\r\n/usr/bin/ld: /tmp/ccJamUGt.o: in function `main':\r\nshell.c:(.text+0x8a): undefined reference to `free_buffers'\r\n/usr/bin/ld: shell.c:(.text+0x96): undefined reference to `free_buffers'\r\ncollect2: error: ld returned 1 exit status"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to ensure the linker includes the required source file defining `sample::gLogError`",
+      "Guidance on verifying CMake configuration includes critical dependencies like `CMakeSamplesTemplate.txt`",
+      "General approach to resolving undefined reference errors in TensorRT samples"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:22:08"
+    }
+  }
+]

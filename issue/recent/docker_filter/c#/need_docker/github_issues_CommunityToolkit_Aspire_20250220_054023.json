@@ -1,0 +1,74 @@
+[
+  {
+    "number": 431,
+    "title": "Enable ability to specify container image for OpenWebUI",
+    "created_at": "2025-01-30T01:42:36Z",
+    "closed_at": "2025-01-31T04:16:09Z",
+    "labels": [],
+    "url": "https://github.com/CommunityToolkit/Aspire/issues/431",
+    "body": "### Related to an existing integration?\n\nYes\n\n### Existing integration\n\nOllama\n\n### Overview\n\nIn the Ollama integration there is an additional builder enabling the OpenWebUI container image. Right now it is bound to a specific integrations' image tag.  The space is moving fast and Ollama and OpenWebUI are moving along fast with it. While the Ollama container image is flexible the OpenWebUI one is not.\n\nIt would be great to add a flexibility to provide the image tag as an override.\n\n### Usage example\n\ncurrent:\n\n```csharp\nvar ollama = builder.AddOllama(\"ollama\")\n    .WithDataVolume()\n    .WithOpenWebUI(); //gets whatever image is in the resource now eg 0.4.8\n```\n\nproposed would enable:\n```csharp\nvar ollama = builder.AddOllama(\"ollama\")\n    .WithDataVolume()\n    .WithOpenWebUI(imageTag: \"0.5.7\");\n```\n\n### Breaking change?\n\nNo\n\n### Alternatives\n\nmanually use AddContainer and re-specify all the defaults for the container, and establish connection with the Ollama resource.\n\n### Additional context\n\n_No response_\n\n### Help us help you\n\nNo, just wanted to propose this",
+    "comments_url": "https://api.github.com/repos/CommunityToolkit/Aspire/issues/431/comments",
+    "author": "timheuer",
+    "comments": [
+      {
+        "user": "Alirexaa",
+        "created_at": "2025-01-30T08:02:12Z",
+        "body": "This is possible right now.\n\n```csharp\nvar ollama = builder.AddOllama(\"ollama\")\n    .WithDataVolume()\n    .WithOpenWebUI(c=> c.WithImageTag(\"0.5.7\"));\n```"
+      },
+      {
+        "user": "timheuer",
+        "created_at": "2025-01-30T16:43:56Z",
+        "body": "I knew I was forgetting about the callback @Alirexaa! My intellisense was failing me in the moment so I was wanting something simpler :-)"
+      },
+      {
+        "user": "aaronpowell",
+        "created_at": "2025-01-31T04:16:09Z",
+        "body": "The pattern that @Alirexaa pointed out is consistent with the design in Aspire as well, so we'll stick with that."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a way to customize the OpenWebUI container image tag without redefining all container settings",
+      "Maintains API consistency with Aspire's design patterns",
+      "Preserves default behavior while allowing overrides",
+      "Avoids requiring full container reconfiguration"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:46:24"
+    }
+  },
+  {
+    "number": 241,
+    "title": "Container created WithOpenWebUI does not receive environment variables",
+    "created_at": "2024-11-14T15:08:46Z",
+    "closed_at": "2024-11-14T17:27:53Z",
+    "labels": [
+      "awaiting response"
+    ],
+    "url": "https://github.com/CommunityToolkit/Aspire/issues/241",
+    "body": "### Describe the bug\n\nEnvironment variables added using `WithEnvironment()` are provided to the main Ollama container, but not to the OpenWebUI container that is added with `WithOpenWebUi()`.\n\n\n### Regression\n\n_No response_\n\n### Steps to reproduce\n\n```text\nEnvironment: .Net 9\nPackages:\n\n<PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"9.0.0\" />\n<PackageReference Include=\"CommunityToolkit.Aspire.Hosting.Ollama\" Version=\"8.3.0\" />\n\n\n1. Create a new ASP.Net project with Aspire support and add this to program.cs\n csharp\nvar ollama = builder.AddOllama(\"ollama\")\n                    .AddModel(\"llama3\")\n                    .WithOpenWebUI()\n                    .WithDataVolume()\n                    .WithLifetime(ContainerLifetime.Persistent)\n                    .WithEnvironment(\"DCP_IDE_REQUEST_TIMEOUT_SECONDS\", \"600\");\n\n\n2. Start the application.\n3. In the Aspire dashboard, review the environment variables in the details of `ollama-openwebui` container. Observe missing variable `DCP_IDE_REQUEST_TIMEOUT_SECONDS`. For comparison, the variable will be present in the `ollama` container.\n```\n\n### Expected behavior\n\nEnvironment variable should be added to both containers.\n\n\n### Screenshots\n\n_No response_\n\n### IDE and version\n\nVS 2022\n\n### IDE version\n\n17.12.0\n\n### Nuget packages\n\n- [ ] CommunityToolkit.Aspire.Hosting.Azure.DataApiBuilder\n- [ ] CommunityToolkit.Aspire.Hosting.Azure.StaticWebApps\n- [ ] CommunityToolkit.Aspire.Hosting.Deno\n- [ ] CommunityToolkit.Aspire.Hosting.Golang\n- [ ] CommunityToolkit.Aspire.Hosting.Java\n- [ ] CommunityToolkit.Aspire.Hosting.Meilisearch\n- [ ] CommunityToolkit.Aspire.Hosting.NodeJS.Extensions\n- [x] CommunityToolkit.Aspire.Hosting.Ollama\n- [ ] CommunityToolkit.Aspire.Meilisearch\n- [ ] CommunityToolkit.Aspire.OllamaSharp\n\n### Nuget package version(s)\n\n8.3.0, 28 October 2024\n\n### Additional context\n\n_No response_\n\n### Help us help you\n\nNo, just wanted to report this",
+    "comments_url": "https://api.github.com/repos/CommunityToolkit/Aspire/issues/241/comments",
+    "author": "JohnMidity",
+    "comments": [
+      {
+        "user": "Alirexaa",
+        "created_at": "2024-11-14T15:27:51Z",
+        "body": "The `WithOpenWebUI()` returns an instance of `IResourceBuilder<OllamaResource>` so any chanid extension method will configure the `OllamaResource` not `OpenWebUIResource`.\n\nInstead, you should use the `configureContainer` parameter of `WithOpenWebUI`:\n\n```csharp\nvar ollama = builder.AddOllama(\"ollama\")\n    .WithDataVolume()\n    .WithOpenWebUI(c =>\n    {\n        //configure open web ui here\n        c.WithEnvironment(\"DCP_IDE_REQUEST_TIMEOUT_SECONDS\", \"600\");\n    });\n```\n"
+      },
+      {
+        "user": "JohnMidity",
+        "created_at": "2024-11-14T15:49:50Z",
+        "body": "Sorry, I overlooked that. That does indeed work.\nThank you for your quick response @Alirexaa "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates how to apply environment variables specifically to the OpenWebUI container",
+      "Explains resource targeting in chained configuration methods",
+      "Provides a method to configure dependent containers independently"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:46:39"
+    }
+  }
+]

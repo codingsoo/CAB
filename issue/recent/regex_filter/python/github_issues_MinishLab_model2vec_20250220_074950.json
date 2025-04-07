@@ -1,0 +1,350 @@
+[
+  {
+    "number": 171,
+    "title": "how to compare embeddings/logits after distillation?",
+    "created_at": "2025-02-01T08:26:02Z",
+    "closed_at": "2025-02-01T13:26:29Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/model2vec/issues/171",
+    "body": "wanna know how much performance loss  i will get from distillation",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/171/comments",
+    "author": "chuangzhidan",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2025-02-01T12:48:49Z",
+        "body": "Hello,\n\nyou should use an extrinsic task, i.e., the task you'd like to use your model for. There is no real other way to know how much performance you will lose.\n\nStéphan"
+      },
+      {
+        "user": "chuangzhidan",
+        "created_at": "2025-02-01T12:54:31Z",
+        "body": "> Hello,\n> \n> you should use an extrinsic task, i.e., the task you'd like to use your model for. There is no real other way to know how much performance you will lose.\n> \n> Stéphan\n\nok ,thank u"
+      }
+    ]
+  },
+  {
+    "number": 170,
+    "title": "Question - how does custom vocabulary work?",
+    "created_at": "2025-01-30T09:42:10Z",
+    "closed_at": "2025-02-12T18:51:54Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/model2vec/issues/170",
+    "body": "I am a little confused by custom vocabulary. I had a read through the code, and am not able to get my head around it. How are the new static embeddings computed for new sub words?\n\n",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/170/comments",
+    "author": "S-C-H",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-30T10:07:09Z",
+        "body": "Hey! \n\nWe just forward all items in the passed vocabulary through the sentence transformer. We then also add these items to the tokenizer. You're not able to add new subwords to the tokenizer, however.\n\nDoes that answer your question?"
+      },
+      {
+        "user": "Pringled",
+        "created_at": "2025-02-12T18:51:54Z",
+        "body": "Closing this due to inactivity. Feel free to open a new issue if you have any other questions!"
+      }
+    ]
+  },
+  {
+    "number": 160,
+    "title": "distill",
+    "created_at": "2025-01-23T14:47:13Z",
+    "closed_at": "2025-01-23T20:39:51Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/model2vec/issues/160",
+    "body": "Hi! Thanks for the great repo. I'm trying to distill a model2vec model from a relatively small sentence transformer, but it's taking several hours on GPU. Do you have any advice on optimizing this?\n\n```\nfrom model2vec.distill import distill\nm2v_model = distill(\"MY MODEL\", pca_dims=256)\nm2v_model.save_pretrained(\"m2v_model\")\n```\n",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/160/comments",
+    "author": "Mahhos",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T16:41:29Z",
+        "body": "Hello @Mahhos!\n\nThis shouldn't be happening. Distillation usually takes seconds on a GPU. Can you tell us more about the model?\n\nStéphan"
+      },
+      {
+        "user": "Mahhos",
+        "created_at": "2025-01-23T17:19:57Z",
+        "body": "it is a fine-tuned variant of BERT-based sentence transformer with 400m parameters trained for sentence-level tasks such as similarity, or classification."
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T17:28:24Z",
+        "body": "Ok, interesting! Does it show a progress bar at all? Could you rerun with your logging level set to `INFO`? \n\ne.g.,\n```python\nimport logging\nlogging.basicConfig(level=logging.INFO)\n```\n\nIf it doesn't show a progress bar, you actually never start distillation, so that means it is stuck somewhere else.\n\nIf that doesn't work: Can you confirm that you can load the model and the tokenizer? How many tokens does the tokenizer have?\n\nHope one of these steps solves the issue!\nStéphan"
+      },
+      {
+        "user": "Mahhos",
+        "created_at": "2025-01-23T17:46:53Z",
+        "body": "Thanks for your response. It doesn't show a progress bar. A message is showing (even without logging):\n\n> The repository for _path_to_model_ contains custom code which must be executed to correctly load the model. You can inspect the repository c...\n\nYes, I can load the model and tokenizer, the tokenizer has 30522 tokens.\n\nI can load model using:\n`model = SentenceTransformer(path_to_model, trust_remote_code=True)\n`\n\nis there any required dependencies/version? "
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T17:58:46Z",
+        "body": "Hey @Mahhos!\n\nWe load with `trust_remote_code=False`, which is the default. You should be able to just press `y` to load the remote code. You can also load the model and tokenizer first, and then distill using `distill_from_model`.\n\n```python\nfrom transformers import AutoModel, AutoTokenizer\nfrom model2vec.distill import distill_from_model\n\nmodel = AutoModel.from_pretrained(model_name)\ntokenizer = Autotokenizer.from_pretrained(model_name)\ndistill_from_model(model, tokenizer)\n```\n\nThis should take care of the issue."
+      },
+      {
+        "user": "Mahhos",
+        "created_at": "2025-01-23T18:08:12Z",
+        "body": "Thank you, Stephan! I could be able to run this using `trust_remote_code=True`. But, to save the model, `m2v_model.save_pretrained()` gives me below error. \n\n`ModuleNotFoundError: No module named 'huggingface_hub.errors'\n`"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T18:12:33Z",
+        "body": "Hey @Mahhos ,\n\nThat can be resolved by upgrading `huggingface_hub`. I'll also fix that in the next release so that it works with lower versions of `huggingface_hub`."
+      },
+      {
+        "user": "Mahhos",
+        "created_at": "2025-01-23T18:13:31Z",
+        "body": "Awesome! one last question, do we necessarily need gpu to run this?"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T18:15:26Z",
+        "body": "Hey! No, not at all. It makes it a little bit slower, but there is no need to use a gpu. We automatically select a gpu when possible though."
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2025-01-23T20:39:51Z",
+        "body": "Hello! I'm closing this issue because it seems to be resolved, let me know if you run into further issues!"
+      }
+    ]
+  },
+  {
+    "number": 137,
+    "title": "Using Model2Vec for Token Classification",
+    "created_at": "2024-11-29T01:57:11Z",
+    "closed_at": "2024-11-29T18:36:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/137",
+    "body": "Hi Model2Vec Team,\r\n\r\nThis is truely great work, thanks so much for the contribution! Awesome project!\r\n\r\nOne dumb question: Is it possible to apply model2vec to a token classification model, e.g., BERT model connected to a NER tagger?\r\n\r\nI've been playing with Model2Vec, and seems that for now it is designed to only output embedding for a whole sequence (e.g., [CLS]). It seems that Model2Vec currently does not support generating embeddings for every token in a sequence. Is this understanding correct?\r\n\r\nIf so, how would you recommend that I augment Model2Vec to support generating token-level embeddings, and potentially drop it into a NER tagger?\r\n\r\nThank you!",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/137/comments",
+    "author": "kelayamatoz",
+    "comments": [
+      {
+        "user": "Pringled",
+        "created_at": "2024-11-29T07:12:16Z",
+        "body": "Hi @kelayamatoz,\r\n\r\nThanks for the kind words! You can actually use Model2Vec for that purpose out of the box, the following should work:\r\n\r\n```python\r\nfrom model2vec import StaticModel\r\n\r\n# Load a model from the HuggingFace hub (in this case the potion-base-8M model)\r\nmodel = StaticModel.from_pretrained(\"minishlab/potion-base-8M\")\r\n\r\n# Make sequences of token embeddings\r\ntoken_embeddings = model.encode_as_sequence([\"It's dangerous to go alone!\", \"It's a secret to everybody.\"])\r\n```\r\n\r\nThis will give you the individual token embedding for every input token. Let me know if this works for you or if you have any other questions! "
+      },
+      {
+        "user": "kelayamatoz",
+        "created_at": "2024-11-29T18:36:14Z",
+        "body": "This works perfectly -- thank you for the pointer! My apologies, I just realized that the tutorial does include token embedding examples, and I somehow overlooked them. Sorry about that!\r\n"
+      }
+    ]
+  },
+  {
+    "number": 134,
+    "title": "Add `model2vec` to config.json",
+    "created_at": "2024-11-25T18:27:11Z",
+    "closed_at": "2024-12-01T13:33:11Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/134",
+    "body": "Hello.\r\n\r\nI'm planning to add a change to txtai to autodetect model2vec models. The best idea I have right now is the read the config.json file and see if it has the keys `apply_pca` and `apply_zipf`. \r\n\r\nWhile I believe this will be pretty unique, have you guys considered adding something to the config.json file to signal it's a model2vec file?",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/134/comments",
+    "author": "davidmezzetti",
+    "comments": [
+      {
+        "user": "Pringled",
+        "created_at": "2024-11-26T07:59:52Z",
+        "body": "Hey @davidmezzetti,\r\n\r\nThat's a great suggestion! We will add the following to our config.json files:\r\n```\r\n\"model_type\": \"model2vec\",\r\n\"architectures\": [\r\n    \"StaticModel\"\r\n  ],\r\n  ```\r\n  \r\n  And then you can use the `model_type` key to check for model2vec models. I'll ping you once we've made that change."
+      },
+      {
+        "user": "davidmezzetti",
+        "created_at": "2024-11-26T10:42:56Z",
+        "body": "Sounds great! This will make it easier in my case as txtai is working with multiple vectorization libraries. Once this change is in, txtai will be able to automatically infer the vectorization method for model2vec models.\r\n\r\n```python\r\nimport txtai\r\nembeddings = txtai.Embeddings(path=\"minishlab/potion-base-8M\")\r\n```\r\n"
+      },
+      {
+        "user": "Pringled",
+        "created_at": "2024-11-27T18:31:01Z",
+        "body": "Hey @davidmezzetti, I just updated all our configs to include the changes. Let me know if everything works as intended!"
+      },
+      {
+        "user": "davidmezzetti",
+        "created_at": "2024-11-27T20:35:07Z",
+        "body": "Excellent. Looks like this should work. I'll integrate this into txtai and report back. Thank you!"
+      },
+      {
+        "user": "davidmezzetti",
+        "created_at": "2024-12-01T13:33:11Z",
+        "body": "This change has been made, thanks again!\r\n\r\nJust as an FYI, the potion-science models don't appear to have the updated config. But the other models are all working as expected. "
+      },
+      {
+        "user": "Pringled",
+        "created_at": "2024-12-01T14:04:40Z",
+        "body": "Hey @davidmezzetti, great, no problem! I just updated the science models as well, thanks for pointing that out!"
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "title": "Question: Object has no attribute 'backend_tokenizer'`",
+    "created_at": "2024-10-28T12:11:43Z",
+    "closed_at": "2024-10-28T12:37:13Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/115",
+    "body": "Hi, \r\n\r\nI'm experimenting with a model called PLBART. But, I'm getting this error. It seems this is because the fast tokenizer is missing from the model. What are your suggestions or recommendations? \r\n\r\nThe code: \r\n\r\n```\r\nfrom sentence_transformers import SentenceTransformer\r\nfrom sentence_transformers.models import StaticEmbedding\r\n\r\nstatic_embedding = StaticEmbedding.from_distillation(\r\n    \"uclanlp/plbart-java-cs\",\r\n    device=\"cuda\",\r\n    pca_dims=256,\r\n    apply_zipf=True,\r\n)\r\nmodel = SentenceTransformer(modules=[static_embedding])\r\n```\r\n\r\nThe error:\r\n\r\n`AttributeError: 'PLBartTokenizer' object has no attribute 'backend_tokenizer'`\r\n\r\nThanks,\r\nFahad. ",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/115/comments",
+    "author": "FahadEbrahim",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-28T12:33:52Z",
+        "body": "Hey @FahadEbrahim ,\r\n\r\nThanks for your issue. I am sorry to say that we actually don't have a workaround at all for this issue, and are unlikely to get a workaround soon. Supporting Fixing this would require us to rewrite the tokenization strategy, which is now super optimized for speed.\r\n\r\nI also want to point out that this because the plbart model you are using does not do tokenization completely in line with how a standard Transformers works, i.e., they are missing various configuration files related to tokenization, which I think prevents auto-conversion to a fast tokenizer. \r\n\r\nSorry to not have better news,\r\nStéphan"
+      },
+      {
+        "user": "FahadEbrahim",
+        "created_at": "2024-10-28T12:37:13Z",
+        "body": "Hi @stephantul, \r\n\r\nThank you very much for your prompt assistance and feedback. \r\n\r\nRegards,\r\nFahad."
+      }
+    ]
+  },
+  {
+    "number": 111,
+    "title": "AttributeError: 'tokenizers.Tokenizer' object has no attribute 'encode_batch_fast'",
+    "created_at": "2024-10-24T00:51:11Z",
+    "closed_at": "2024-10-24T04:52:17Z",
+    "labels": [
+      "bug",
+      "question"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/111",
+    "body": "Hello.\r\nI encountered one more issue when testing `model2vec` in the following environment:\r\nYou can avoid the error by changing `self.tokenize.encode_batch_fast` to `self.tokenize.encode_batch`.\r\n\r\n### Environment\r\n\r\n```python\r\nmodel2vec==0.3.0\r\ntokenizers==0.19.1\r\n```\r\n\r\n### Code\r\n\r\n```python\r\nfrom model2vec.distill.distillation import distill\r\n\r\n# Choose a Sentence Transformer model\r\nmodel_id = \"Alibaba-NLP/gte-Qwen2-7B-instruct\"\r\n\r\n# Distill an output model with the chosen dimensions\r\nmodel = distill(model_name=model_id, device=\"cpu\", pca_dims=256)\r\n\r\nemb = model.encode([\"안녕하세요\", \"Hello\"])\r\n```\r\n\r\n### Error\r\n\r\n```python\r\nAttributeError: 'tokenizers.Tokenizer' object has no attribute 'encode_batch_fast'\r\n```",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/111/comments",
+    "author": "su-park",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-24T03:48:46Z",
+        "body": "Hello @su-park,\r\n\r\n`encode_batch_fast` was added in tokenizers 0.20. Could you confirm that you have installed a version >= 0.20? If this the case, then we need to provide a work-around for tokenizers that don't have this function, and fall back to `encode_batch`.\r\n\r\nThanks!\r\nStéphan"
+      },
+      {
+        "user": "su-park",
+        "created_at": "2024-10-24T04:52:17Z",
+        "body": "Oh, I didn’t know that.\r\nI worked around it by installing `tokenizers==0.19.1` due to the MTEB package and its dependencies.\r\nThank you for checking."
+      }
+    ]
+  },
+  {
+    "number": 110,
+    "title": "HFValidationError using custom model",
+    "created_at": "2024-10-23T11:59:24Z",
+    "closed_at": "2024-10-23T12:29:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/110",
+    "body": "Hi,\r\n\r\nI am trying to use Model2Vec with a custom model we have.\r\nThe `distill` seems to run fine, until it tries to call `validate_repo_id` with the custom path I have (`./model`).\r\n\r\n1. I have a custom model that I can load successfully:\r\n\r\n```python\r\nfrom transformers import AutoModelForSequenceClassification\r\n\r\nmodel_save_path = \"./model\"\r\nmodel = AutoModelForSequenceClassification.from_pretrained(model_save_path)\r\n```\r\n\r\n2. I `distill` the custom model:\r\n\r\n```python\r\nfrom model2vec.distill import distill\r\n\r\nmodel_save_path = \"./model\"\r\nm2v_model = distill(model_name=model_save_path, pca_dims=256)\r\n```\r\n\r\n3. The following error is raised:\r\n\r\n```\r\nHFValidationError\r\n\r\n    This cell raised an exception: HFValidationError('Repo id must use alphanumeric chars or '-', '_', '.', '--' and '..' are forbidden, '-' and '.' cannot start or end the name, max length is 96: './model'.')\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/110/comments",
+    "author": "tomsquest",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T12:04:42Z",
+        "body": "Hi @tomsquest ,\r\n\r\nJust using `model` as a path should do the trick. Could you let us know whether that works? If that doesn't work, you can always load the model and tokenizer yourself, and use `distill_from_model`\r\n\r\n```python\r\nfrom model2vec.distill import distill_from_model\r\n\r\n# Some way to get your model and tokenizer.\r\nmodel, tokenizer = load_model_and_tokenizer(...)\r\n\r\nm2v_model = distill_from_model(model, tokenizer, pca_dims=256)\r\n```\r\n\r\nStéphan"
+      },
+      {
+        "user": "tomsquest",
+        "created_at": "2024-10-23T12:27:31Z",
+        "body": "Hi @stephantul ,\r\n\r\nYes, it's working using just `model` (instead of `./model`). That was my workaround. 👍"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T12:29:39Z",
+        "body": "Alright! Happy to be of service, I'm closing this for now. Let me know if you have other issues, and please reopen or make another issue if that's the case. Thanks for using model2vec! 🙏 "
+      }
+    ]
+  },
+  {
+    "number": 108,
+    "title": "Number of tokens (151646) does not match number of vectors (151643)",
+    "created_at": "2024-10-23T08:25:59Z",
+    "closed_at": "2024-10-24T00:22:14Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/108",
+    "body": "Hello.\r\n\r\nI tried testing `model2vec` in the following environment and encountered the error below. Is there a way to resolve this?\r\n\r\n### Environment\r\n\r\n```python\r\nmodel2vec==0.3.0\r\ntokenizers==0.19.1\r\n```\r\n\r\n### Code\r\n\r\n```python\r\nfrom model2vec.distill.distillation import distill\r\n\r\n# Choose a Sentence Transformer model\r\nmodel_id = \"Alibaba-NLP/gte-Qwen2-7B-instruct\"\r\n\r\n# Distill an output model with the chosen dimensions\r\nmodel = distill(model_name=model_id, device=\"cpu\", pca_dims=256)\r\n```\r\n\r\n### Error\r\n\r\n```python\r\nValue Error: Number of tokens (151646) does not match number of vectors (151643)\r\n```",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/108/comments",
+    "author": "su-park",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T08:30:33Z",
+        "body": "Hey @su-park ,\r\n\r\nThanks for reporting! This shouldn't be happening, I'll take a look as soon as possible. \r\n\r\nStéphan"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T08:39:09Z",
+        "body": "Hey, I figured it out. Somehow, the number of tokens of the backend tokenizer and the number of tokens in the HF tokenizer doesn't match. \r\n\r\n```python\r\nfrom transformers import AutoTokenizer\r\n\r\ntokenizer = AutoTokenizer.from_pretrained(\"Alibaba-NLP/gte-Qwen2-7B-instruct\")\r\ntokenizer.vocab_size\r\n# 151643\r\ntokenizer.backend_tokenizer.get_vocab_size()\r\n# 151646\r\nlen(tokenizer.get_vocab())\r\n# 151646\r\n```\r\n\r\nI checked, and there are definitely 151646 tokens in the vocabulary, not 15643. So I think the `vocab_size` being off by three is actually a bug in Transformers, not a bug in `model2vec`. In the mean-time, we could rely on the length of the vocabulary instead. I'll open a PR to change this."
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T08:45:24Z",
+        "body": "PR is here #109 . \r\n\r\nI'll see if we can push this together with #107 and release a bugfix release soon."
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-23T11:32:37Z",
+        "body": "I accidentally closed this because I merged the PR. Sorry about that. If you want, you can pull main and retry. I think it should work."
+      },
+      {
+        "user": "su-park",
+        "created_at": "2024-10-24T00:22:14Z",
+        "body": "Thank you for your swift support.\r\n\r\nIt worked!"
+      }
+    ]
+  },
+  {
+    "number": 105,
+    "title": "Support for LLM2VEC models?",
+    "created_at": "2024-10-22T08:40:51Z",
+    "closed_at": "2024-10-29T19:44:00Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/MinishLab/model2vec/issues/105",
+    "body": "Hi\r\n\r\nThanks for this great work !\r\n\r\nIt would be awesome if you can provide distillation support for LLM2VEC models. Sentence Transformer currently doesnt have a support for LLM2VEC and hence it is not possible to use it for distillation.\r\n\r\nThanks ",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/105/comments",
+    "author": "sandeep-krutrim",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-22T10:15:10Z",
+        "body": "Hello @sandeep-krutrim, thanks for reaching out!\r\n\r\nWe don't use sentence-transformers to distill models, just plain `transformers`. We basically just do a forward pass, nothing fancy. I'm not familiar with the library itself, so I don't know what would be needed to properly support them.\r\n\r\nIf you have a clear example of how you do a forward pass, we could add support or tell you how it could work.\r\n\r\nStéphan"
+      },
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-29T19:44:00Z",
+        "body": "Hello, I'm closing this for now because of inactivity.\r\n\r\nLet me know if you need more help!\r\nStéphan"
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "AttributeError: 'NoneType' object has no attribute 'get'",
+    "created_at": "2024-10-12T19:01:40Z",
+    "closed_at": "2024-10-12T19:37:09Z",
+    "labels": [],
+    "url": "https://github.com/MinishLab/model2vec/issues/79",
+    "body": "If I try to use the distilled model with Sentence Transformers, I am getting the following error:\r\n\r\n```\r\n---------------------------------------------------------------------------\r\nAttributeError                            Traceback (most recent call last)\r\nCell In[4], line 7\r\n      5 model_distilled = distill(model_name=model_name, pca_dims=256)\r\n      6 model_distilled.save_pretrained(\"./multilingual-e5-small-distilled\")\r\n----> 7 st_model_distilled = SentenceTransformer(\"multilingual-e5-small-distilled\")\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/sentence_transformers/SentenceTransformer.py:306, in SentenceTransformer.__init__(self, model_name_or_path, modules, device, prompts, default_prompt_name, similarity_fn_name, cache_folder, trust_remote_code, revision, local_files_only, token, use_auth_token, truncate_dim, model_kwargs, tokenizer_kwargs, config_kwargs, model_card_data)\r\n    294         modules, self.module_kwargs = self._load_sbert_model(\r\n    295             model_name_or_path,\r\n    296             token=token,\r\n   (...)\r\n    303             config_kwargs=config_kwargs,\r\n    304         )\r\n    305     else:\r\n--> 306         modules = self._load_auto_model(\r\n    307             model_name_or_path,\r\n    308             token=token,\r\n    309             cache_folder=cache_folder,\r\n    310             revision=revision,\r\n    311             trust_remote_code=trust_remote_code,\r\n    312             local_files_only=local_files_only,\r\n    313             model_kwargs=model_kwargs,\r\n    314             tokenizer_kwargs=tokenizer_kwargs,\r\n    315             config_kwargs=config_kwargs,\r\n    316         )\r\n    318 if modules is not None and not isinstance(modules, OrderedDict):\r\n    319     modules = OrderedDict([(str(idx), module) for idx, module in enumerate(modules)])\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/sentence_transformers/SentenceTransformer.py:1454, in SentenceTransformer._load_auto_model(self, model_name_or_path, token, cache_folder, revision, trust_remote_code, local_files_only, model_kwargs, tokenizer_kwargs, config_kwargs)\r\n   1451 tokenizer_kwargs = shared_kwargs if tokenizer_kwargs is None else {**shared_kwargs, **tokenizer_kwargs}\r\n   1452 config_kwargs = shared_kwargs if config_kwargs is None else {**shared_kwargs, **config_kwargs}\r\n-> 1454 transformer_model = Transformer(\r\n   1455     model_name_or_path,\r\n   1456     cache_dir=cache_folder,\r\n   1457     model_args=model_kwargs,\r\n   1458     tokenizer_args=tokenizer_kwargs,\r\n   1459     config_args=config_kwargs,\r\n   1460 )\r\n   1461 pooling_model = Pooling(transformer_model.get_word_embedding_dimension(), \"mean\")\r\n   1462 self.model_card_data.set_base_model(model_name_or_path, revision=revision)\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/sentence_transformers/models/Transformer.py:56, in Transformer.__init__(self, model_name_or_path, max_seq_length, model_args, tokenizer_args, config_args, cache_dir, do_lower_case, tokenizer_name_or_path)\r\n     53     config_args = {}\r\n     55 config = AutoConfig.from_pretrained(model_name_or_path, **config_args, cache_dir=cache_dir)\r\n---> 56 self._load_model(model_name_or_path, config, cache_dir, **model_args)\r\n     58 if max_seq_length is not None and \"model_max_length\" not in tokenizer_args:\r\n     59     tokenizer_args[\"model_max_length\"] = max_seq_length\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/sentence_transformers/models/Transformer.py:87, in Transformer._load_model(self, model_name_or_path, config, cache_dir, **model_args)\r\n     85     self._load_mt5_model(model_name_or_path, config, cache_dir, **model_args)\r\n     86 else:\r\n---> 87     self.auto_model = AutoModel.from_pretrained(\r\n     88         model_name_or_path, config=config, cache_dir=cache_dir, **model_args\r\n     89     )\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py:564, in _BaseAutoModelClass.from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs)\r\n    562 elif type(config) in cls._model_mapping.keys():\r\n    563     model_class = _get_model_class(config, cls._model_mapping)\r\n--> 564     return model_class.from_pretrained(\r\n    565         pretrained_model_name_or_path, *model_args, config=config, **hub_kwargs, **kwargs\r\n    566     )\r\n    567 raise ValueError(\r\n    568     f\"Unrecognized configuration class {config.__class__} for this kind of AutoModel: {cls.__name__}.\\n\"\r\n    569     f\"Model type should be one of {', '.join(c.__name__ for c in cls._model_mapping.keys())}.\"\r\n    570 )\r\n\r\nFile ~/PycharmProjects/product-search-custom-embedding/.venv/lib/python3.10/site-packages/transformers/modeling_utils.py:3792, in PreTrainedModel.from_pretrained(cls, pretrained_model_name_or_path, config, cache_dir, ignore_mismatched_sizes, force_download, local_files_only, token, revision, use_safetensors, *model_args, **kwargs)\r\n   3789 with safe_open(resolved_archive_file, framework=\"pt\") as f:\r\n   3790     metadata = f.metadata()\r\n-> 3792 if metadata.get(\"format\") == \"pt\":\r\n   3793     pass\r\n   3794 elif metadata.get(\"format\") == \"tf\":\r\n\r\nAttributeError: 'NoneType' object has no attribute 'get'\r\n```\r\n\r\nUse the following code snippet to reproduce the error:\r\n\r\n```python\r\nfrom model2vec.distill import distill\r\nfrom sentence_transformers import SentenceTransformer\r\n\r\nmodel_name = \"intfloat/multilingual-e5-small\"\r\nmodel_distilled = distill(model_name=model_name, pca_dims=256)\r\nmodel_distilled.save_pretrained(\"./multilingual-e5-small-distilled\")\r\nst_model_distilled = SentenceTransformer(\"multilingual-e5-small-distilled\")\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/MinishLab/model2vec/issues/79/comments",
+    "author": "aoezdTchibo",
+    "comments": [
+      {
+        "user": "stephantul",
+        "created_at": "2024-10-12T19:29:18Z",
+        "body": "Hey, you are unfortunately not able to use `model2vec` like this. Please use the following snippet:\r\n\r\n```python\r\nfrom sentence_transformers import SentenceTransformer\r\nfrom sentence_transformers.models import StaticEmbedding\r\n\r\nmodel_name = \"intfloat/multilingual-e5-small\"\r\nstatic_embedding = StaticEmbedding.from_distillation(model_name, device=\"cuda\")\r\nmodel = SentenceTransformer(modules=[static_embedding])\r\n```\r\n\r\nShould you have any further questions, please don't hesitate to reach out."
+      },
+      {
+        "user": "aoezdTchibo",
+        "created_at": "2024-10-12T19:37:09Z",
+        "body": "Works with the provided snippet, thank you!"
+      }
+    ]
+  }
+]

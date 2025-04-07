@@ -1,0 +1,126 @@
+[
+  {
+    "number": 1021,
+    "title": "no effect with FPS and benchmark flag",
+    "created_at": "2018-12-08T09:09:59Z",
+    "closed_at": "2018-12-20T09:50:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/carla-simulator/carla/issues/1021",
+    "body": "Hi,\r\nI started the carla server in this way:\r\n    ./CarlaUE4.sh -benchmark -fps=10 -windowed\r\n\r\nAnd then run manual_control.py. I'm sure manual_control.py is connecting to the carla server started just now in that I can see the same vehicle in the same position in pygame and server scene. But in the hud, the server FPS is always around 30 despite the value of fps flag, which is almost the same as when I started the carla server without benchmark and fps flags. I'm very confused about it. Appreciate any suggestion. Thanks.\r\n",
+    "comments_url": "https://api.github.com/repos/carla-simulator/carla/issues/1021/comments",
+    "author": "tanglrHello",
+    "comments": [
+      {
+        "user": "nsubiron",
+        "created_at": "2018-12-10T11:39:15Z",
+        "body": "Hi @tanglrHello,\r\n\r\nThe FPS shown in the \"manual_control.py\" is measured in real-time, with a timer, just to test the performance of the server. What you may want to see is the simulation-time, e.g.\r\n```diff\r\n--- a/PythonAPI/manual_control.py\r\n+++ b/PythonAPI/manual_control.py\r\n@@ -307,7 +307,7 @@ class HUD(object):\r\n \r\n     def on_world_tick(self, timestamp):\r\n         self._server_clock.tick()\r\n-        self.server_fps = self._server_clock.get_fps()\r\n+        self.server_fps = 1.0 / timestamp.delta_seconds\r\n         self.frame_number = timestamp.frame_count\r\n         self.simulation_time = timestamp.elapsed_seconds\r\n```"
+      },
+      {
+        "user": "tanglrHello",
+        "created_at": "2018-12-17T09:14:37Z",
+        "body": "It works! Thank you so much.\n\n---\n\nIn my understanding, if I set the fps of the simulator to 10, OnTick() will be executed 10 times per second. If I spawn a sensor in the carla world and add a callback function for the sensor, the callback function will also be executed 10 times per second at the same pace with OnTick(). But when I add a print time command in _parse_image() of manual_control.py, it shows the print lines are around 30 times in a single second, which means the callback function are executed 30 times per second. And as I modified the code in the way you suggested, server fps in hud is around 10.\r\nI'd like to know what is wrong with my comprehension. Expecting your reply. Thank you!"
+      },
+      {
+        "user": "nsubiron",
+        "created_at": "2018-12-17T13:04:21Z",
+        "body": "`OnTick()` callbacks are called 10 times per _simulation-second_, but it's actually called as fast as your hardware is able to compute. Meaning, every object in the simulation sees steps of 0.1ms, but you will observe the simulation like moving fast-forward. On the opposite, if you set an FPS of say 500, the vehicles are updated 500 times per _simulation-second_, but you'll observe the simulation in slow motion.\r\n\r\nIn other words, if you run with `-benchmark -fps=60`, save the images, and play them at 60 fps the video will look real-time."
+      },
+      {
+        "user": "tanglrHello",
+        "created_at": "2018-12-20T09:50:53Z",
+        "body": "It's clear to me now. Thanks for the reply!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify the relationship between CARLA's FPS flag and the actual simulation time vs real-time execution",
+      "Explain how to accurately measure server FPS relative to simulation steps",
+      "Differentiate between hardware-limited execution and simulation-time progression",
+      "Address the purpose of the -benchmark flag in relation to time perception"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-04 23:50:31"
+    }
+  },
+  {
+    "number": 636,
+    "title": "Import own fbx file to generate road?",
+    "created_at": "2018-07-28T22:29:03Z",
+    "closed_at": "2018-07-30T17:53:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/carla-simulator/carla/issues/636",
+    "body": "Hi all, I am new to Carla and want to create a environment based on my city.\r\nI imported my .fbx file into CarlaUE4 project as new roads, but then carla client didn't work.\r\nIt seems that the CarlaMapGenerator is a must to run carla client? If so, how can I \r\ncreate my own roads rather than randomly generated roads?\r\nThanks!\r\n",
+    "comments_url": "https://api.github.com/repos/carla-simulator/carla/issues/636/comments",
+    "author": "yjumpzhighy",
+    "comments": [
+      {
+        "user": "nsubiron",
+        "created_at": "2018-07-29T08:16:04Z",
+        "body": "Hi @yangzuyuanhao,\r\n\r\nIt is possible to use your own roads without the CarlaMapGenerator, but you'll get the annoying message `Controller doesn't have a road map!` (and of course the autopilot won't work). As a hack to get rid of this message you can add a CarlaMapGenerator somewhere far where is not visible, it will create the road map so the controllers are happy.\r\n\r\nNow if you want the autopilot to work (depending on how complex is your road layout), you can create way-points with our RoutePlanner."
+      },
+      {
+        "user": "yjumpzhighy",
+        "created_at": "2018-07-30T00:02:09Z",
+        "body": "HI @nsubiron ,\r\nThanks for your help! I tried your suggestions by moving the  carla generated map far away.\r\nHowever, the controller works only when the playerstart is outside of my own-created-road. There seems to be a clear boundary. Once I move the playerstart into my own city range, the controller fails\r\nimmediately. \r\n"
+      },
+      {
+        "user": "nsubiron",
+        "created_at": "2018-07-30T09:25:09Z",
+        "body": "The autopilot needs our roads to work, otherwise it thinks it's off-road."
+      },
+      {
+        "user": "yjumpzhighy",
+        "created_at": "2018-07-30T14:57:36Z",
+        "body": "@nsubiron \r\nSorry for confusion, it is not autopilot. \r\nError happens after I start the server (clicked the play button in UE4), with error message:\r\nPIE: Error: Blueprint Runtime Error: Accessed None trying to read property CallFunc_GetPlayerPawn_ReturnValue from function: 'ExecuteUbergraph_Weather' from node: AttachToComponent in graph: EventGraph in object: Weather with description: Accessed None trying to read property CallFunc_GetPlayerPawn_ReturnValue\r\n\r\n"
+      },
+      {
+        "user": "nsubiron",
+        "created_at": "2018-07-30T15:59:30Z",
+        "body": "Do you have _\"Carla Game Mode\"_ selected as game mode in the project settings? Can you check if inside it it has the default pawn set?"
+      },
+      {
+        "user": "yjumpzhighy",
+        "created_at": "2018-07-30T16:29:40Z",
+        "body": "Hi @nsubiron, yes, the project settings are good.\r\nBy the way, the error won't happen if I drop my playerstart outside my own-created-road. It makes me\r\nfell confused.\r\n "
+      },
+      {
+        "user": "nsubiron",
+        "created_at": "2018-07-30T16:39:50Z",
+        "body": "Uhm I'm confused too. Can it be that there is some collider near your player start so the vehicle fails to spawn because collision?"
+      },
+      {
+        "user": "yjumpzhighy",
+        "created_at": "2018-07-30T16:50:23Z",
+        "body": "Hi @nsubiron , pretty sure no objects near my playerstart. Actually, anywhere inside my own-created-road-range would reproduce that error..."
+      },
+      {
+        "user": "TheNihilisticRobot",
+        "created_at": "2018-07-30T17:45:13Z",
+        "body": "Hi @yangzuyuanhao \r\n\r\nPlease, open your road's model and check \"simple collision\" under \"collision drawing options\" to see the mesh collider.\r\nA common problem when trying to import big road models into Unreal is that the automatic collision generated when importing goes far up trying to cover the entire model with very few polygons. If this is true for your model you could either delete your simple collision and generate one manually yourself (Most efficient) or, in the details panel of the mesh, under collision, change collision complexity to \"Use Complex Collision as Simple\" this way it will use all the geometry of the model as collision (This option is a bit more costly but will probably work right away). "
+      },
+      {
+        "user": "yjumpzhighy",
+        "created_at": "2018-07-30T17:53:43Z",
+        "body": "@TheNihilisticRobot & @nsubiron,\r\nThanks guys, I changed my road's collision setting and it works!\r\nReally appreciate your help!"
+      },
+      {
+        "user": "pushpendra9950",
+        "created_at": "2023-01-15T17:28:20Z",
+        "body": "Hello everyone,\r\nI am interested in importing my own 3D model into CARLA for simulated images. Can you please provide me with a detailed guide or tutorial on how to do this? I would greatly appreciate any information you can provide.\r\n\r\nThank you."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure custom road models have properly configured collision meshes to prevent vehicle spawning errors",
+      "Address spatial relationships between custom assets and CARLA's default systems",
+      "Explain how to validate custom environment setups for runtime errors"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-04 23:51:06"
+    }
+  }
+]

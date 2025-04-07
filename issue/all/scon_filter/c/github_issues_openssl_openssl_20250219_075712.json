@@ -1,0 +1,362 @@
+[
+  {
+    "number": 25569,
+    "title": "OpenSSL Initialization Failure Due to Manually Mapped DLLs Not Recognized by GetModuleHandleExA",
+    "created_at": "2024-09-29T21:58:05Z",
+    "closed_at": "2024-09-30T13:06:42Z",
+    "labels": [
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/25569",
+    "body": "Say we stop using `LoadLibraryA` instead we create its equivalent for security purposes, the module we map windows wont be aware of it, for OpenSSL modules, when we map it, and attempt to initialize OpenSSL, its failing to robustly initialize on that Context, the reason exaclty becouse of `ossl_init_load_crypto_nodelete`, who returns false inside Crypto Initialize routine, becouse of the fact that WinApi `GetModuleHandleExA` is not aware of the manually mapped modules, how to approach this problem? notice that appart from that, when redirecting to another legit module, and forcing the function to return true, everything initialize as expected and OpenSSL works as normal (Sanity Tested Extensively).\r\nVersion 1.1.1w\r\nto reproduce the issue simply use any dll manual mapper and simply call `OPENSSL_init_crypto`",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/25569/comments",
+    "author": "pinwhell",
+    "comments": [
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T08:50:17Z",
+        "body": "Some Front matter: Openssl 1.1.1w is no longer supported.\n\nThat said, I don't think what you're trying to do is possible at the moment.  Doing the wrapping that you describe seems like it would prevent the use of GetModuleHandleEx.\n\nThat said, how are you creating the equivalent of LoadLibraryA?  Are you creating and linking to a separate DLL?"
+      },
+      {
+        "user": "tom-cosgrove-arm",
+        "created_at": "2024-09-30T09:09:45Z",
+        "body": "Is this an issue in OpenSSL, or should it be a discussion?"
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T09:11:47Z",
+        "body": "I think thats to be determined.  Currently whats being attempted I don't think can be done.  The question to answer is, should it be possible?  i.e. is this a feature request?"
+      },
+      {
+        "user": "tom-cosgrove-arm",
+        "created_at": "2024-09-30T09:35:45Z",
+        "body": "> The question to answer is, should it be possible?\r\n\r\n`LoadLibraryA` is a fundamental operating system API. Replacing these is almost certainly going to cause problems in some use-cases.\r\n\r\n> Say we stop using `LoadLibraryA` instead we create its equivalent for security purposes\r\n\r\nWithout knowing how the \"equivalent\" is created, and what \"security purposes\" means, this is a very vague requirement.\r\n\r\n> `GetModuleHandleExA` is not aware of the manually mapped modules\r\n\r\nSince `GetModuleHandleExA` is a fundamental operating system API that works with `LoadLibraryA`, it's clear that the \"equivalent to LoadLibraryA\" API isn't really equivalent.\r\n\r\nIt may be that what the OP wants (\"securing\" `LoadLibraryA` for an unspecified meaning of \"securing\") could be achieved by hooking `LoadLibraryA` and only allowing whitelisted requests through."
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T10:03:06Z",
+        "body": "@tom-cosgrove-arm are you suggesting that LoadLibraryA is a weak symbol that the author can override and call the underlying function after passing a whitelist test?  That would make sense"
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T11:33:00Z",
+        "body": "not exaclty guys, let me explain why it precisely fails!, that call to GetModuleHandleEx was to pin the current OpenSSL module so it cant be unloaded, as you can see this action fails becouse the Module is not mapped by the OS, instead by us!, so the os is not aware of such module thus the reason why GetModuleHandleEx fails!, i was experimenting did a patch to that single thing, and OpenSSL succesfully initialized, worked, and was extensively tested, and passed all tests\n\n---\n\nwhen i said, \"Replaced\" LoadLibraryA, i was refering mimicing its action, meaning manually loading the DLL instead of calling LoadLibraryA directly, and yes its a OpenSSL issue"
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T12:02:50Z",
+        "body": "You're still not being particularly clear in what you are trying to do.  Its clear that the call to GetModuleHandleEx pins libcrypto.so so that it can't be unloaded.\r\n\r\nFrom that we can conclude that the ability to pin a library is a requirement for openssl on windows.\r\n\r\nWhats unclear is exactly how you are mimicing the loading of libcrypto.  If you are not calling LoadLibraryA, what are you doing?  Are you just opening the file, memory mapping it, and resolving symbols on your own?\r\n\r\nIf so, OpenSSL was never meant to be loaded in that fashion.  Its always been assumed that the library is loaded by the operating systems, using API's that inform the OS of that operation. Thats not a bug, its a design choice.\r\n\r\nYou can continue to explore this approach, and if you have a proposed change, please feel free to post it, and we will gladly review it, but I expect your use case is not one openssl will likely choose to support natively"
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T12:48:37Z",
+        "body": "> You're still not being particularly clear in what you are trying to do.  Its clear that the call to GetModuleHandleEx pins libcrypto.so so that it can't be unloaded.\n> \n> \n> \n> From that we can conclude that the ability to pin a library is a requirement for openssl on windows.\n> \n> \n> \n> Whats unclear is exactly how you are mimicing the loading of libcrypto.  If you are not calling LoadLibraryA, what are you doing?  Are you just opening the file, memory mapping it, and resolving symbols on your own?\n> \n> \n> \n> If so, OpenSSL was never meant to be loaded in that fashion.  Its always been assumed that the library is loaded by the operating systems, using API's that inform the OS of that operation. Thats not a bug, its a design choice.\n> \n> \n> \n> You can continue to explore this approach, and if you have a proposed change, please feel free to post it, and we will gladly review it, but I expect your use case is not one openssl will likely choose to support natively\n\nI am mapping the library, solving its imports, handling relocations, handling TLS, which is enough to make everything works, as you see for security reasons I am not mapping it in the OS records of loaded libs, otherwise simply call LoadLib in the first place and problem solved, maybe there could be a option to control pinning mechanism manually so users can selectively decide if pinning or not, to avoid this type of problems, I guess it definitely an edge case probably beyond scope of OpenSSL, but could be cool to support that bare metal like environment"
+      },
+      {
+        "user": "mattcaswell",
+        "created_at": "2024-09-30T12:58:16Z",
+        "body": "You can compile OpenSSL with \"no-pinshared\" to turn off pinning."
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T13:06:34Z",
+        "body": "> You can compile OpenSSL with \"no-pinshared\" to turn off pinning.\n\nIf this is such an option I do believe it would be the ideal solution, I wasn't aware of it, Just to be clear for anyone who might get the same problem, on the 1.1.1w just handling this issue, OpenSSL seems to behave properly when manually mapped, Thanks guys ..."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to bypass or disable OpenSSL's dependency on GetModuleHandleExA for module pinning during initialization",
+      "Support for initializing OpenSSL in environments where modules are not registered with the operating system",
+      "A configuration option to control module pinning behavior at compile-time or runtime"
+    ]
+  },
+  {
+    "number": 23058,
+    "title": "Enable ZLIB without TLS compression",
+    "created_at": "2023-12-14T20:51:41Z",
+    "closed_at": "2023-12-22T13:20:05Z",
+    "labels": [
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/23058",
+    "body": "TLSv1.2 and less makes compression available at protocol level. This leads to problems such as the CRIME attack and therefore I had the openssl compiled with no-zlib.\r\nNo I would like to compile openssl with zlib due to compressed certificates but I would still like not to allow zlib at TLS level. My understanding is that this is currently not possible. The define OPENSSL_NO_COMP in ssl/ covers the instances of compression at TLS level but \"no-comp\" can't be used at configure time because this also disables all compression including for certificates.\r\n\r\nIs this correct? If so, would it be possible to introduce another define so that it is possible to use zlib compression certificates while disabling zlib compression at TLS protocol level?",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/23058/comments",
+    "author": "sebastianas",
+    "comments": [
+      {
+        "user": "t8m",
+        "created_at": "2023-12-15T11:27:38Z",
+        "body": "This could be a valid feature. On the other hand TLS compression is disabled in TLS connections by default and you won't get it negotiated unless you call SSL_COMP_add_compression_method() in your application.\r\n"
+      },
+      {
+        "user": "sebastianas",
+        "created_at": "2023-12-18T20:38:16Z",
+        "body": "On 2023-12-15 03:27:50 [-0800], Tom\u00e1\u0161 Mr\u00e1z wrote:\r\n> This could be a valid feature. On the other hand TLS compression is\r\n> disabled in TLS connections by default and you won't get it negotiated\r\n> unless you call SSL_COMP_add_compression_method() in your application.\r\n\r\nI was under the impression that this is enabled by default if available.\r\nHowever, if this is not the case then it would work me to enable zlib\r\nand allow the individual application use if it is safe to do so.\r\n\r\nThank you.\r\n\r\nSebastian\r\n"
+      },
+      {
+        "user": "t8m",
+        "created_at": "2023-12-19T17:57:52Z",
+        "body": "No, TLS compression is never enabled by default. @mattcaswell please correct me if I am wrong."
+      },
+      {
+        "user": "mattcaswell",
+        "created_at": "2023-12-20T10:14:48Z",
+        "body": "From OpenSSL 1.1.0 and above TLS compression was disabled by default, i.e. the TLS runtime option `SSL_OP_NO_COMPRESSION` is set by default. To enable it you have to explicitly clear that option on your `SSL_CTX`/`SSL`.\r\n\r\nFrom OpenSSL 3.2.0 and above the default security level has changed to 2. TLS compression is disallowed at security level 2 and above. Therefore in OpenSSL 3.2.0 and above, in order to enable TLS compression you would have to clear the option mentioned above *and* reduce the security level to 1 or lower.\r\n\r\nWe could probably do with improving out documentation on the second point because its not really mentioned anywhere.\n\n---\n\n> you won't get it negotiated unless you call SSL_COMP_add_compression_method() in your application.\r\n\r\nNote that this is *not* necessary. The compression methods will be loaded by default and used if the runtime options and security level allow.\n\n---\n\n> We could probably do with improving out documentation on the second point because its not really mentioned anywhere.\r\n\r\n#23104"
+      },
+      {
+        "user": "t8m",
+        "created_at": "2023-12-20T13:10:31Z",
+        "body": "@sebastianas given the above can we close this RFE?"
+      },
+      {
+        "user": "sebastianas",
+        "created_at": "2023-12-22T10:06:15Z",
+        "body": "On 2023-12-20 05:10:42 [-0800], Tom\u00e1\u0161 Mr\u00e1z wrote:\r\n> @sebastianas given the above can we close this RFE?\r\n\r\nYes, thank you.\r\n\r\nSebastian\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation that TLS compression remains disabled by default when zlib is enabled for certificate compression",
+      "Clarification of OpenSSL's default behavior regarding compression methods",
+      "Documentation of security-level interactions with compression settings"
+    ]
+  },
+  {
+    "number": 21330,
+    "title": "No pointer check for NULL before it is dereferenced in evp_pkey_asn1_ctrl",
+    "created_at": "2023-06-30T12:55:41Z",
+    "closed_at": "2023-07-07T09:08:15Z",
+    "labels": [
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/21330",
+    "body": "OpenSSL 3.0.7\r\n\r\nIn function evp_pkey_asn1_ctrl, there is no pointer check to NULL before it is dereferenced. This function is used in functions\r\nEVP_PKEY_set1_encoded_public_key, EVP_PKEY_get1_encoded_public_key, EVP_PKEY_get_default_digest_nid. \r\nFunctions EVP_PKEY_set1_encoded_public_key and EVP_PKEY_get1_encoded_public_key are deprecated in OpenSSL 3.0, but function EVP_PKEY_get_default_digest_nid can be used. In EVP_PKEY_get_default_digest_nid (and other depreceted functions) can be passed NULL as the 1st argument, next this NULL pointer is passed as 1st argument in call to function evp_pkey_asn1_ctrl, where it is dereferenced.\r\n\r\nMaybe need to add a check EVP_PKEY *pkey to NULL in a function evp_pkey_asn1_ctrl and return -2 if it equal NULL?",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/21330/comments",
+    "author": "nv-dmd",
+    "comments": [
+      {
+        "user": "nv-dmd",
+        "created_at": "2023-07-05T07:13:39Z",
+        "body": "What about this issuer? Can I make PR?"
+      },
+      {
+        "user": "t8m",
+        "created_at": "2023-07-05T10:45:28Z",
+        "body": "We do not do similar NULL checks in other similar functions. I am not sure this is really worth it."
+      },
+      {
+        "user": "nv-dmd",
+        "created_at": "2023-07-06T12:28:07Z",
+        "body": "Maybe then add a check to NULL the 1st argument in the functions EVP_PKEY_set1_encoded_public_key, EVP_PKEY_get1_encoded_public_key, EVP_PKEY_get_default_digest_nid and return 0 if equal NULL?"
+      },
+      {
+        "user": "paulidale",
+        "created_at": "2023-07-07T02:55:40Z",
+        "body": "That would be okay I think."
+      },
+      {
+        "user": "nv-dmd",
+        "created_at": "2023-07-07T09:08:15Z",
+        "body": "Sorry. I missed that this issue has already been fixed in the pull request #20294. \r\nClose this issue/"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures NULL pointer checks exist in functions that could receive NULL arguments",
+      "Maintains consistency with OpenSSL's error handling patterns",
+      "Provides clear validation for deprecated functions' input parameters",
+      "Confirms resolution through existing project maintenance processes"
+    ]
+  },
+  {
+    "number": 21224,
+    "title": "CSR verification fails with SHA3-384 and ECDSA",
+    "created_at": "2023-06-16T16:24:10Z",
+    "closed_at": "2024-06-20T18:51:11Z",
+    "labels": [
+      "branch: master",
+      "good first issue",
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/21224",
+    "body": "Hello,\r\n\r\nI create a key with ECDSA and then create a Certificate Signing Request (CSR) with ECDSA key and SHA3-384. When I want to create an intermediate.csr certificate, I'll get the following error. It looks like that verifying CSR is failing:\r\n\r\nError while verifying certificate request self-signature:\r\n    ```\r\n40774836027F0000:error:068000C7:asn1 encoding routines:ASN1_item_verify_ctx:unknown signature algorithm:crypto/asn1/a_verify.c:136:\r\n    ```\r\n\r\nPlease help!\r\n\r\nTo reproduce the error:\r\n\r\n    ```\r\n    $ openssl ecparam -out root.key -name secp384r1 -genkey\r\n    $ openssl req -new -x509 -key root.key -out root.crt -sha3-384 -subj \"/C=CA/ST=State/L=City/O=Organization/OU=Organization Unit/CN=Common Name\"\r\n    $ openssl ecparam -out intermediate.key -name secp384r1 -genkey\r\n    $ openssl req -new -key intermediate.key -out intermediate.csr -sha3-384 -subj \"/C=CA/ST=State/L=City/O=Organization/OU=Organization Unit/CN=Common Name\"\r\n    $ openssl x509 -req -in intermediate.csr -CA root.crt -CAkey root.key -out intermediate.crt -sha3-384 -days 36500 -CAcreateserial\r\n\r\n    ```\r\n \r\n\r\nError while verifying certificate request self-signature:\r\n    ```\r\n40774836027F0000:error:068000C7:asn1 encoding routines:ASN1_item_verify_ctx:unknown signature algorithm:crypto/asn1/a_verify.c:136:\r\n    ```\r\n\r\nor\r\n\r\n    ```\r\n    $ openssl req -text -noout -verify -in intermediate.csr\r\n    ```\r\n   \r\nOutput:\r\n    ```\r\n40D7AC8BD77F0000:error:068000C7:asn1 encoding routines:ASN1_item_verify_ctx:unknown signature algorithm:crypto/asn1/a_verify.c:136:\r\n    ```\r\n\r\n\r\nIt looks like verification fails in OBJ_bsearch_sig() where it returns NULL in :\r\n    ```\r\n...\\openssl\\crypto\\objects\\obj_xref.c\r\n    ```\r\n\r\nCode:\r\n\r\n     ```\r\n    static int ossl_obj_find_sigid_algs(int signid, int *pdig_nid, int *ppkey_nid,\r\n                                        int lock)\r\n    {\r\n        nid_triple tmp;\r\n        const nid_triple *rv;\r\n        int idx;\r\n    \r\n        if (signid == NID_undef)\r\n            return 0;\r\n    \r\n        tmp.sign_id = signid;\r\n        rv = OBJ_bsearch_sig(&tmp, sigoid_srt, OSSL_NELEM(sigoid_srt));\r\n        if (rv == NULL) {\r\n            if (!obj_sig_init())\r\n                return 0;\r\n            if (lock && !CRYPTO_THREAD_read_lock(sig_lock)) {\r\n                ERR_raise(ERR_LIB_OBJ, ERR_R_UNABLE_TO_GET_READ_LOCK);\r\n                return 0;\r\n            }\r\n            if (sig_app != NULL) {\r\n                idx = sk_nid_triple_find(sig_app, &tmp);\r\n                if (idx >= 0)\r\n                    rv = sk_nid_triple_value(sig_app, idx);\r\n            }\r\n            if (lock)\r\n                CRYPTO_THREAD_unlock(sig_lock);\r\n            if (rv == NULL)\r\n                return 0;\r\n        }\r\n    \r\n        if (pdig_nid != NULL)\r\n            *pdig_nid = rv->hash_id;\r\n        if (ppkey_nid != NULL)\r\n            *ppkey_nid = rv->pkey_id;\r\n        return 1;\r\n    }\r\n\r\n\r\n    ```\r\n\r\n  sigoid_srt[] In ...\\openssl\\crypto\\objects\\obj_xref.h does not include:\r\n\r\n    ```\r\n     {NID_ecdsa_with_SHA3_384, NID_sha3_384, NID_X9_62_id_ecPublicKey}\r\n\r\n    ```\r\n\r\nEven after adding the above line to obj_xref.h, OBJ_bsearch_sig() cannot find the corresponding NID.\r\n",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/21224/comments",
+    "author": "shahabalilou",
+    "comments": [
+      {
+        "user": "preveen-stack",
+        "created_at": "2023-06-17T05:03:11Z",
+        "body": "@shahabalilou please share the openssl version and operating system version\r\nAlso, please check the markdown formatting of the comment"
+      },
+      {
+        "user": "shahabalilou",
+        "created_at": "2023-06-19T13:20:08Z",
+        "body": "> @shahabalilou please share the openssl version and operating system version Also, please check the markdown formatting of the comment\r\n\r\nOpenSSL 3.0.7\r\nCentOS Linux release 7.7.1908 "
+      },
+      {
+        "user": "t8m",
+        "created_at": "2023-06-23T13:23:55Z",
+        "body": "It would have to be added to `obj_xref.txt` and `make update` run. Of course there are other SHA3 hash algorithms with ECDSA missing there too.\r\n\r\n"
+      },
+      {
+        "user": "shahabalilou",
+        "created_at": "2023-06-23T13:30:20Z",
+        "body": "> It would have to be added to `obj_xref.txt` and `make update` run. Of course there are other SHA3 hash algorithms with ECDSA missing there too.\r\n\r\nYeah, I figured it out and fixed it. We have to add it to obj_xref.h too. I can upstream it but don't have permission yet."
+      },
+      {
+        "user": "erbsland-dev",
+        "created_at": "2024-06-20T18:35:02Z",
+        "body": "@t8m This is fixed, I just checked if it applies on the shown cases.\r\n\r\n```bash\r\n$ openssl ecparam -out root.key -name secp384r1 -genkey\r\n$ openssl req -new -x509 -key root.key -out root.crt -sha3-384 -subj \"/C=CA/ST=State/L=City/O=Organization/OU=Organization Unit/CN=Common Name\"\r\n$ openssl ecparam -out intermediate.key -name secp384r1 -genkey\r\n$ openssl req -new -key intermediate.key -out intermediate.csr -sha3-384 -subj \"/C=CA/ST=State/L=City/O=Organization/OU=Organization Unit/CN=Common Name\"\r\n$ openssl x509 -req -in intermediate.csr -CA root.crt -CAkey root.key -out intermediate.crt -sha3-384 -days 36500 -CAcreateserial\r\n```\r\n\r\nOutput:\r\n```\r\nCertificate request self-signature ok\r\nsubject=C=CA, ST=State, L=City, O=Organization, OU=Organization Unit, CN=Common Name\r\n```\r\n\r\n```bash\r\n$ /usr/local/bin/openssl req -text -noout -verify -in intermediate.csr\r\nCertificate request self-signature verify OK\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why OpenSSL fails to recognize the ECDSA-with-SHA3-384 signature algorithm combination",
+      "Identification of required algorithm mappings in OpenSSL's internal tables",
+      "Solution that enables proper signature algorithm recognition without manual source code modification",
+      "Verification method for successful CSR signing with ECDSA/SHA3-384",
+      "Clarification about OpenSSL version requirements for native SHA3-384/ECDSA support"
+    ]
+  },
+  {
+    "number": 19014,
+    "title": "Options `-ssl3`,, `-no_ssl3`, `-no_tls1`, `-no_tls1_1`, `-no_tls1_2`, `-no_tls1_3`,  not recognised",
+    "created_at": "2022-08-17T08:58:13Z",
+    "closed_at": "2023-04-28T12:08:30Z",
+    "labels": [
+      "good first issue",
+      "help wanted",
+      "triaged: documentation"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/19014",
+    "body": "_release:_ openssl-3.0.5\r\n\r\n_manual reference:_\r\n```\r\n$ man 'OPENSSL(1ossl)'\r\n(...)\r\n       -ssl3, -tls1, -tls1_1, -tls1_2, -tls1_3, -no_ssl3, -no_tls1, -no_tls1_1, -no_tls1_2, -no_tls1_3\r\n           These options require or disable the use of the specified SSL or TLS protocols. (...)\r\n```\r\nHello. options `-ssl3`,, `-no_ssl3`, `-no_tls1`, `-no_tls1_1`, `-no_tls1_2`, `-no_tls1_3`,  not recognised; illustration:\r\n```\r\n$ openssl ciphers -ssl3\r\nlist: Use -help for summary.\r\n```\r\nAs opposed, other options are recognised; illustration:\r\n```\r\n$ openssl ciphers -tls1_3 | sed 's/:/\\n/g' | head -1\r\nTLS_AES_256_GCM_SHA384\r\n```",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/19014/comments",
+    "author": "Ricky-Tigg",
+    "comments": [
+      {
+        "user": "t8m",
+        "created_at": "2022-08-17T11:06:54Z",
+        "body": "The no_* options do not apply to the ciphers command but they apply to other commands such as s_client. The -ssl3 option is probably not supported by your build but it is supported if enable-ssl3 is used with the build configuration. So perhaps some clarification in the manual page would be appropriate but the options should not be removed from the manual page."
+      },
+      {
+        "user": "Ricky-Tigg",
+        "created_at": "2022-08-17T14:12:43Z",
+        "body": "That was much helpful. At the time the report was sent, i was not yet aware of the existence of `openssl help <command>`. Now I am. Consulting `openssl help ciphers` would have been beneficial before reporting. Then, by default,  version 3 of SSL was disabled which, if i interpret correctly, caused the output.\r\n```\r\n$ openssl list -disabled | column\r\nDisabled algorithms:\tMDC2\tSM4\tEC2M\tSM2\tSSL3\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify which OpenSSL commands support protocol version flags like -ssl3 or -no_ssl3",
+      "Explain how build configurations affect protocol availability",
+      "Provide method to check valid options per command",
+      "Differentiate between protocol control flags and cipher suite selection"
+    ]
+  },
+  {
+    "number": 17602,
+    "title": "Add support to get modules-dir via pkg-config",
+    "created_at": "2022-01-27T16:06:08Z",
+    "closed_at": "2022-01-28T18:00:15Z",
+    "labels": [
+      "good first issue",
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/17602",
+    "body": "I currently can get the engins-dir via `pkg-config --variable=enginesdir libcrypto` to find out where to install engines, but there is no way to find out where to install providers via pkg-config. \r\n\r\nA `pkg-config --variable=modulessdir libcrypto` would make sense and should be easy to add in Configurations/unix-Makefile.tmpl.\r\n\r\nI know that I can find out the modules dir via `openssl version -m`, but pkcs-config is more convenient in many situations. ",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/17602/comments",
+    "author": "ifranzki",
+    "comments": [
+      {
+        "user": "mattcaswell",
+        "created_at": "2022-01-27T16:26:45Z",
+        "body": "Seems reasonable."
+      },
+      {
+        "user": "levitte",
+        "created_at": "2022-01-27T16:47:47Z",
+        "body": "#17605 adds it"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a pkg-config variable to retrieve OpenSSL's modules directory",
+      "Maintains consistency with existing pkg-config interface patterns",
+      "Ensures compatibility with standard package management workflows"
+    ]
+  },
+  {
+    "number": 10060,
+    "title": "Consistent formatting of I<a:b> in manpages",
+    "created_at": "2019-09-30T16:51:47Z",
+    "closed_at": "2020-11-18T18:38:00Z",
+    "labels": [
+      "help wanted",
+      "triaged: documentation"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/10060",
+    "body": "Many of our commands take a key/value pair -- host:port, opt:value, etc.\r\n\r\nThe proper formatting of this is apparently ```I<first>:I<second>```\r\n\r\nWhile fixing those, should we also standardize on the terminology?  I see ```opt:value``` ```hostname:port``` ```paramset:X``` etc.  (Most of these you will not see until #10022 is merged).",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/10060/comments",
+    "author": "richsalz",
+    "comments": [
+      {
+        "user": "levitte",
+        "created_at": "2019-09-30T17:33:56Z",
+        "body": "I have to revise that what I said earlier. From careful read of man(1), it turns out that all parts of a command that should be typed in exactly as is should be bold. Therefore, `I<first>B<:>I<second>`.\r\n\r\n(the question of variable option names is separate, FYI) "
+      },
+      {
+        "user": "richsalz",
+        "created_at": "2020-11-18T18:38:00Z",
+        "body": "I think @levitte and I fixed this now, closing.  Richard, please re-open if there's still some nits.\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Adherence to manpage formatting conventions for key/value pairs"
+    ]
+  },
+  {
+    "number": 8394,
+    "title": "const mismatch between ",
+    "created_at": "2019-03-04T13:21:26Z",
+    "closed_at": "2020-12-24T12:21:30Z",
+    "labels": [
+      "good first issue",
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/8394",
+    "body": "The PKCS8_pkey_get0_attrs function returns const STACK_OF(X509_ATTRIBUTE) and there is no non-const variant of this function.\r\nThe X509at_get0_data_by_OBJ accepts STACK_OF(X509_ATTRIBUTE)\r\n",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/8394/comments",
+    "author": "beldmit",
+    "comments": [
+      {
+        "user": "levitte",
+        "created_at": "2019-11-05T14:05:34Z",
+        "body": "Without looking, I would think of constifying the argument to `X509at_get0_data_by_OBJ` before anything else, if that's possible."
+      },
+      {
+        "user": "akshit-akhoury",
+        "created_at": "2020-10-02T15:55:34Z",
+        "body": "Hey, if the ask is to set the arguments of `X509at_get0_data_by_OBJ ` to accept const STACK_OF(X509_ATTRIBUTE), I think I can make this change.\r\n"
+      },
+      {
+        "user": "mattcaswell",
+        "created_at": "2020-10-02T15:59:10Z",
+        "body": "> Hey, if the ask is to set the arguments of X509at_get0_data_by_OBJ to accept const STACK_OF(X509_ATTRIBUTE), I think I can make this change.\r\n\r\nYes please!"
+      },
+      {
+        "user": "akshit-akhoury",
+        "created_at": "2020-10-02T17:19:36Z",
+        "body": "Hey, I've created a PR, wasn't sure if this change required either update of docs or tests."
+      },
+      {
+        "user": "beldmit",
+        "created_at": "2020-12-24T12:21:29Z",
+        "body": "Fixed by #13062"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve const-correctness mismatch between PKCS8_pkey_get0_attrs and X509at_get0_data_by_OBJ",
+      "Maintain API functionality while ensuring type consistency",
+      "Avoid introducing breaking changes to existing interfaces"
+    ]
+  }
+]

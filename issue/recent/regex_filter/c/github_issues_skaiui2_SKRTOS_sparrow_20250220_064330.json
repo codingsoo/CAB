@@ -1,0 +1,109 @@
+[
+  {
+    "number": 7,
+    "title": "动态建立task",
+    "created_at": "2025-01-06T06:09:06Z",
+    "closed_at": "2025-01-09T09:40:01Z",
+    "labels": [],
+    "url": "https://github.com/skaiui2/SKRTOS_sparrow/issues/7",
+    "body": "是否能实现一个在调度器启动后，从task中建立一个task功能？跳出调度器，在中断中建立一个task，不知行不行？",
+    "comments_url": "https://api.github.com/repos/skaiui2/SKRTOS_sparrow/issues/7/comments",
+    "author": "hlmpost",
+    "comments": [
+      {
+        "user": "skaiui2",
+        "created_at": "2025-01-06T09:25:38Z",
+        "body": "目前在task中建立task是可行的，在task中调用创建任务的函数即可，在中断中建立task也是同理，只是动态创建又动态删除，往往得不偿失。处理中断，通常的做法是将中断的内容放在一个任务中，中断通过IPC等机制触发该任务执行，也就是中断线程化。\r\n"
+      },
+      {
+        "user": "hlmpost",
+        "created_at": "2025-01-07T01:19:48Z",
+        "body": "好的，中断处理工作，是这么做的。只是有时有些需求，随机的会运行一下，如果考虑内存碎片，是可以建一个task，通过消息传入执行的函数来处理。"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "队列满的机制",
+    "created_at": "2025-01-04T02:36:57Z",
+    "closed_at": "2025-01-06T05:35:14Z",
+    "labels": [],
+    "url": "https://github.com/skaiui2/SKRTOS_sparrow/issues/6",
+    "body": "当向队列写入数量达到设定值，send的tick大于0，队列满的情况下，如果不queue_receive一条，则发送task会在这while(temp == schedule_PendSV)，一直等待。schedule_PendSV一直不会有变化，调度器也会停止。\r\n是有意这么设计么？",
+    "comments_url": "https://api.github.com/repos/skaiui2/SKRTOS_sparrow/issues/6/comments",
+    "author": "hlmpost",
+    "comments": [
+      {
+        "user": "skaiui2",
+        "created_at": "2025-01-04T03:26:55Z",
+        "body": "并没有，你说的这种情况不应该发生，更像是调试时编译器对空循环的优化导致的卡死问题。当队列满时，如果等待发送的队列等待时间到期，它会被唤醒并跳过while(temp == schedule_PendSV)循环，然后移除状态并返回错误。schedule_PendSV的值对调度器的运行并没有影响，它仅仅只是一个记录调度发生的标志位，我在这里加入循环是为了等待PendSV中断的发生，在这里，PendSV中断是一定会发生的，因为前面的TaskDelay延时函数会默认发起一次调度。\r\n再次感谢你的测试，考虑到目前没有详细说明这些机制，我会补充一份使用手册的。"
+      },
+      {
+        "user": "skaiui2",
+        "created_at": "2025-01-04T03:36:07Z",
+        "body": "你可以注释掉while(temp == schedule_PendSV)循环（其实触发了中断是会立即执行中断的，只是确保万无一失才加上），然后在xPortPendSVHandler中断（调度中断）和SysTick_Handler中断（时钟中断，负责管理延时任务和定时触发调度中断）打上断点并观察。"
+      },
+      {
+        "user": "hlmpost",
+        "created_at": "2025-01-06T03:33:16Z",
+        "body": "我使用出现的问题，应该是在中断中调用了queue_send，是否现在ipc机制还不能在中断中使用有tick等待的方式？tick=0，我测了下，还没出现问题"
+      },
+      {
+        "user": "skaiui2",
+        "created_at": "2025-01-06T04:25:34Z",
+        "body": "只有任务对象才有延时等待，但中断并不是任务，所以不能设置tick等待时间，在中断中使用时，应当把ticks设置为0，我已经在使用手册中补充了这一点。"
+      },
+      {
+        "user": "hlmpost",
+        "created_at": "2025-01-06T05:35:09Z",
+        "body": "对，使用时容易忽略。freertos也需要专门的isr调用接口"
+      }
+    ]
+  },
+  {
+    "number": 5,
+    "title": "ipc的使用，碰到个有点奇怪的问题",
+    "created_at": "2025-01-03T10:40:18Z",
+    "closed_at": "2025-01-04T02:30:35Z",
+    "labels": [],
+    "url": "https://github.com/skaiui2/SKRTOS_sparrow/issues/5",
+    "body": "如使用mequeue，\r\n在queue_receive中会碰到if( CheckState(taskHandle,Block) )判断不是block状态，但queue->MessageNumber = 0的情况。从而进入ExtractFromQueue，是MessageNumber -1，由0变成0xff的情况。sem等类似\r\n只在一个task用一个queue，是正常的，当两个task，各用一个queue，就会发生此情况。",
+    "comments_url": "https://api.github.com/repos/skaiui2/SKRTOS_sparrow/issues/5/comments",
+    "author": "hlmpost",
+    "comments": [
+      {
+        "user": "skaiui2",
+        "created_at": "2025-01-03T14:19:39Z",
+        "body": "十分感谢你的反馈。这个bug是因为我在CheckState函数忘记使用临时值temp获取阻塞状态表，而是直接使用了阻塞状态表进行操作，导致阻塞状态被消除而产生的问题。我已经向source分支下的Sparrow文件夹提交了修复。"
+      },
+      {
+        "user": "hlmpost",
+        "created_at": "2025-01-04T02:13:12Z",
+        "body": "感谢迅速修复，初步测了下，感觉对于mcu来说，基本堪用了"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "heap bug",
+    "created_at": "2024-12-08T03:59:46Z",
+    "closed_at": "2025-01-09T09:39:39Z",
+    "labels": [],
+    "url": "https://github.com/skaiui2/SKRTOS_sparrow/issues/4",
+    "body": "1.  heap_init  end_heap应该向低地址（向前）进行字节对齐，theheap.tail会出现内存溢出，地址会超出所分配的全局数组结束地址\r\n2. malloc不到内存时应返回0（NULL）,但是返回8，这儿是对0进行偏移了一个HeapStructSize的结果，应该在遍历寻找合适大小的内存块后判断used_node是否为NULL，如果used_node为NULL直接return NULL\r\n",
+    "comments_url": "https://api.github.com/repos/skaiui2/SKRTOS_sparrow/issues/4/comments",
+    "author": "Tommua",
+    "comments": [
+      {
+        "user": "skaiui2",
+        "created_at": "2024-12-08T04:58:21Z",
+        "body": "感谢你的建议，第一点已经修改了。第二点，当use_node是NULL时，used_node->BlockSize将会是随机值，因此修改为在循环中判断"
+      },
+      {
+        "user": "Tommua",
+        "created_at": "2024-12-08T05:15:39Z",
+        "body": "是的，我正是这个意思\r\n\r\n\r\n\r\n---Original---\r\nFrom: ***@***.***&gt;\r\nDate: Sun, Dec 8, 2024 12:58 PM\r\nTo: ***@***.***&gt;;\r\nCc: ***@***.******@***.***&gt;;\r\nSubject: Re: [skaiui2/SKRTOS_sparrow] heap bug (Issue #4)\r\n\r\n\r\n\r\n\r\n \r\n感谢你的建议，第一点已经修改了。第二点，当use_node是NULL时，used_node-&gt;BlockSize将会是随机值，因此修改为在循环中判断\r\n \r\n—\r\nReply to this email directly, view it on GitHub, or unsubscribe.\r\nYou are receiving this because you authored the thread.Message ID: ***@***.***&gt;"
+      }
+    ]
+  }
+]

@@ -1,0 +1,203 @@
+[
+  {
+    "number": 64,
+    "title": "Automatic custom enum parsing doesn't work with \"Save as String\"",
+    "created_at": "2024-11-23T22:05:23Z",
+    "closed_at": "2024-12-02T21:08:34Z",
+    "labels": [
+      "bug",
+      "ready"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/issues/64",
+    "body": "I'm working from the \"dev\" branch.\r\nTo reproduce:\r\n- Make a custom enum in the Custom Types Editor, add some values, and set it to Save as String.\r\n- Add an object like a point, and add this enum as a custom property, and set the value.\r\n- If editing an existing object, when changing from \"Save as String\" to \"Save as Int\" or vice-versa, you have to make a change in the map (like moving the object a couple pixels or something) and then save the map for the storage type to take effect. \r\n- in C#, import a map with the default loader and no arguments.\r\n- I get the error \"System.FormatException: 'The input string 'North' was not in a correct format.'\"\r\n\r\nSo, for thoroughness, this is what is in the .tiled-project:\r\n```\r\n    \"propertyTypes\": [\r\n        {\r\n            \"id\": 5,\r\n            \"name\": \"CardinalDirection\",\r\n            \"storageType\": \"string\",\r\n            \"type\": \"enum\",\r\n            \"values\": [\r\n                \"North\",\r\n                \"East\",\r\n                \"South\",\r\n                \"West\"\r\n            ],\r\n            \"valuesAsFlags\": false\r\n        },\r\n```\r\nThis is what is in the .tmx:\r\n```\r\n  <object id=\"6\" name=\"Tim\" x=\"630.695\" y=\"180.202\">\r\n   <properties>\r\n    <property name=\"cardinal\" propertytype=\"CardinalDirection\" value=\"North\"/>\r\n   </properties>\r\n   <point/>\r\n  </object>\r\n```",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/64/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-23T22:34:23Z",
+        "body": "Great detail here, nice! Yeah, I'm aware of this limitation regarding enums. Is there any way to have enum properties without having them being defined as custom types? Because if not, then it feels more natural to have a hard requirement in DotTiled that those custom enum types are also defined properly with `CustomEnumDefinition`.\r\n\r\nHowever, if there's a way to have enum properties without having them defined (like how you can input arbitrary strings in `class`) as a custom type, then we're going to have to find a way to deal with them without them needing to be defined in DotTiled.\r\n\r\nWhat do you think?"
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-24T14:36:04Z",
+        "body": "It's a great feature, and the enums are much easier than classes to implement, so it's definitely manageable as a requirement. My personal preference would be to have strings as a backup option however, because why not? The string is *right there*. From my perspective in this case, I get a crash on load with one storage type and not the other, so it feels more like a bug than a limitation. So I'm curious what's going on data-wise with the \"Save As Integer\" option selected. Is that integer available? If so, why make the string unavailable?\r\n\r\nI think part of what i was getting at with my original issue about classes has to do with the process of iteratively coding a game. You make some maps, put some data into the maps, and then you might want to launch the game and see some fraction of that working before you implement all of the data you have in the map file. It's iterative, and not being able to load and view a map before a ton of stuff is perfectly in place can be frustrating. This is _especially_ true if you're learning to use all these tools simultaneously. Not to rag on the custom classes again, but in that case that would have been a total deal-breaker for me using this library a couple years ago."
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-24T15:22:21Z",
+        "body": "You make a good point. I agree that it should be as frictionless as possible to use DotTiled in an iterative development process. Let's go over the 4 combinations of enums that you can have in the `.tmx` format.\r\n\r\n1. String storage, no flags\r\n```xml\r\n<property name=\"customenumstringprop\" propertytype=\"CustomEnumString\" value=\"CustomEnumString_2\"/>\r\n```\r\nIn this case, there's no problem with providing just the string value with a `StringProperty`.\r\n\r\n2. String storage, flags\r\n```xml\r\n<property name=\"customenumstringflagsprop\" propertytype=\"CustomEnumStringFlags\" value=\"CustomEnumStringFlags_1,CustomEnumStringFlags_2\"/>\r\n```\r\nCan provide this string too as a `StringProperty`, but it might be confusing to some extent. But that would allow developers to do their own e.g. `.Contains(\"CustomEnumStringFlags_1\")` to check if a flag is set.\r\n\r\n3. Integer storage, no flags\r\n```xml\r\n<property name=\"customenumintprop\" type=\"int\" propertytype=\"CustomEnumInt\" value=\"3\"/>\r\n```\r\nCan provide as `IntProperty`. If users want to know which string value \"3\" corresponds to in Tiled, there is no other solution than also providing a custom enum definition.\r\n\r\n4. Integer storage, flags\r\n```xml\r\n<property name=\"customenumintflagsprop\" type=\"int\" propertytype=\"CustomEnumIntFlags\" value=\"6\"/>\r\n```\r\nWe can provide this as an `IntProperty`, and users would have to do their own bitwise `&` to check if a flag is set.\r\n\r\nEssentially, this behaviour would be to use whatever `type` is set to by default, and *only* ever map a property like the ones above to an `EnumProperty` if there is a custom enum definition for that `propertytype`. The same behaviour should be possible to implement for the `.tmj` format.\r\n\r\nThe only problem that I can see is that we will be providing different types of properties (`IntProperty` and `StringProperty`) depending on what the user has configured for that custom enum type. We won't get the exact same thing unfortunately, and I'm not sure that I see a way past that. There will be completely different data in the map file so we can't provide the same things. That is the advantage of using a custom enum type - we can provide an `EnumProperty` that will look the same regardless of storage type (as long as it is configured the same in DotTiled).\r\n\r\nDo you think this is an acceptable way to change the behaviour? It would allow users to freely use custom enums, load maps that use them without crashing, and check their values without having to define them as custom enum definitions. The only caveat is the different storage type -> different property type in DotTiled."
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-27T14:13:03Z",
+        "body": "Yes, this sounds straightforward enough! I think getting the exact same data out regardless of setup is a noble goal but limiting in this case. You could add a warning in these cases I suppose. "
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-27T21:22:53Z",
+        "body": "Great, there's a PR up with a fix for this issue. Is it possible for you to verify it against something you were experiencing a problem with? #65 "
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-12-02T17:06:47Z",
+        "body": "Ah, apologies, I thought I responded already. The PR seems to work as expected! Tested with several permutations."
+      }
+    ]
+  },
+  {
+    "number": 48,
+    "title": "Added storageType parameter to FromEnum",
+    "created_at": "2024-11-14T14:49:17Z",
+    "closed_at": "2024-11-16T18:21:08Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/48",
+    "body": "Perhaps the default value for the parameter should be left off, or set to String, but I didn't want to make a breaking change.",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/48/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-16T18:21:08Z",
+        "body": "A different fixing pull request has already been merged into dev. Closing as duplicate. #54 "
+      }
+    ]
+  },
+  {
+    "number": 47,
+    "title": "TryParse on empty color string now returns null",
+    "created_at": "2024-11-14T14:48:44Z",
+    "closed_at": "2024-11-22T20:20:14Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/47",
+    "body": "Moved exception into Parse in the case of a string greater than 1 character (\"#\")",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/47/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-16T12:57:17Z",
+        "body": "I am not sure I agree with this modification. Typically in C#, a `Parse` method will be used when you expect the parsing to be successful (and want an exception to be thrown if it fails since that is an unexpected outcome). \r\n\r\n`TryParse` is used when you would like to attempt to parse a string into some kind of structure, and get a `bool` result of its success.\r\n\r\nTo be in line with typical C# conventions, I think we should stick to the current implementation of letting `Parse` throw an exception and have `TryParse` be exception-less. \r\n\r\nPerhaps we are trying to solve a different problem here? Is there some kind of parsing error regarding colors that you are attempting to solve? Perhaps one that is expected to be present when there is none?"
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-16T19:18:53Z",
+        "body": "Basically, there are scenarios where Tiled will output a color property with an empty string. Like if you make an object, and just add a new Color property to it, but leave it unset, the tmx will save with that property as an empty string. If the color property is part of a custom type however, the tmx won't add the property at all if it is unset. So I think it makes sense to allow the color value to be null, or perhaps an Optional. Or just return black as is the case in a lot of other places in the library. My fix keeps the exception in the case that the string is greater than one character, but returns null (or default) in the case that the string is one character, since it recurses with \"#\" added in any case. The difference between Parse and TryParse is a bit arbitrary to me, though, so however it's implemented is fine with me."
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-21T20:04:09Z",
+        "body": "I believe I understand the issue you are describing, and I have made a draft PR #63 with a proposed solution. If you have time, could you check if the proposed solution works for the case you are describing? Or if you can review the solution in a way to check that it would work."
+      },
+      {
+        "user": "differenceclouds",
+        "created_at": "2024-11-22T17:55:22Z",
+        "body": "Yep, that works fine!"
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-22T20:19:44Z",
+        "body": "Great, then I'll close this PR as duplicate :)"
+      }
+    ]
+  },
+  {
+    "number": 46,
+    "title": "\"rendersize\" -> \"tilerendersize\" in TmxReaderBase.Tileset.cs",
+    "created_at": "2024-11-14T14:48:10Z",
+    "closed_at": "2024-11-16T18:39:19Z",
+    "labels": [],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/46",
+    "body": "Fix to match the XML and TmjReaderBase.",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/46/comments",
+    "author": "differenceclouds",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-16T12:24:51Z",
+        "body": "This PR fixes #52 by implementing the suggested solution."
+      }
+    ]
+  },
+  {
+    "number": 45,
+    "title": "TMX custom string properties with newlines are not properly handled",
+    "created_at": "2024-11-13T16:57:00Z",
+    "closed_at": "2024-12-02T21:08:33Z",
+    "labels": [
+      "bug",
+      "ready"
+    ],
+    "url": "https://github.com/dcronqvist/DotTiled/issues/45",
+    "body": "I have a custom string property on an object\r\nWhen the string is only one line, it has a value property as the parser expects:\r\n```xml\r\n<properties>\r\n  <property name=\"Text\" value=\"test\"/>\r\n</properties>\r\n```\r\nbut when I add a newline in Tiled, the string becomes content of the tag:\r\n```xml\r\n<properties>\r\n  <property name=\"Text\">test\r\ntext</property>\r\n</properties>\r\n```\r\nand an exception is thrown when DotTiled tries to parse it:\r\n```st\r\nUnhandled exception. System.Xml.XmlException: value attribute is required\r\n   at DotTiled.Serialization.Tmx.ExtensionsXmlReader.GetRequiredAttribute(XmlReader reader, String attribute)\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.<ReadProperties>b__33_0(XmlReader r)\r\n   at DotTiled.Serialization.Tmx.ExtensionsXmlReader.ReadList[T](XmlReader reader, String wrapper, String elementName, Func`2 readElement)\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.ReadProperties()\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.<>c__DisplayClass19_0.<ReadObject>b__1()\r\n   at DotTiled.Serialization.Tmx.ExtensionsXmlReader.ProcessChildren(XmlReader reader, String wrapper, Func`3 getProcessAction)\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.ReadObject()\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.<>c__DisplayClass18_0.<ReadObjectLayer>b__3()  \r\n   at DotTiled.Serialization.Tmx.ExtensionsXmlReader.ProcessChildren(XmlReader reader, String wrapper, Func`3 getProcessAction)\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.ReadObjectLayer()\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.<>c__DisplayClass17_0.<ReadMap>b__8()\r\n   at DotTiled.Serialization.Tmx.ExtensionsXmlReader.ProcessChildren(XmlReader reader, String wrapper, Func`3 getProcessAction)\r\n   at DotTiled.Serialization.Tmx.TmxReaderBase.ReadMap()\r\n   at DotTiled.Serialization.Tmx.TmxMapReader.ReadMap()\r\n   at DotTiled.Serialization.MapReader.ReadMap()\r\n   at DotTiled.Serialization.Loader.LoadMap(String mapPath)\r\n```",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/45/comments",
+    "author": "Metraberryy",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-11-14T00:18:39Z",
+        "body": "Nice find! Currently away on vacation but will take a look in a few days :)"
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "Fix type of visible attribute in tileset object group.",
+    "created_at": "2024-10-03T20:31:38Z",
+    "closed_at": "2024-10-04T19:05:42Z",
+    "labels": [],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/37",
+    "body": "How to recreate bug:\r\nAdd collision object to tile and then hide it. Crashes with parse error.",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/37/comments",
+    "author": "Serdan",
+    "comments": [
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-10-04T19:04:57Z",
+        "body": "Hey! I was able to reproduce the issue and this seems like a good fix :)\r\n\r\nThanks for your contribution, and good find! Will push a new version of the NuGet shortly that includes this fix."
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "title": "Example project and updated .gitignore",
+    "created_at": "2024-09-09T22:58:45Z",
+    "closed_at": "2024-09-16T17:09:08Z",
+    "labels": [],
+    "url": "https://github.com/dcronqvist/DotTiled/pull/32",
+    "body": "## Description\r\n<!-- Provide a clear and concise description of the changes introduced by this PR. Include the purpose and context for these changes. -->\r\n\r\n### Type of Change\r\n\r\n- [ ] Bug fix (non-breaking change which fixes an issue)\r\n- [ ] New feature (non-breaking change which adds functionality)\r\n- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)\r\n- [x] Documentation update\r\n\r\n## Checklist\r\n\r\n- [ ] Tests have been added/updated to cover new functionality.\r\n- [ ] Documentation has been updated for all new changes (e.g., usage examples, API documentation).\r\n\r\nSimple example project with a few common usages, eg. reading tiles, properties, tilesets. Example includes both quick and easy way to load, and manually.\r\nAlso updated .gitignore to ignore .idea directory created by JetBrains Rider.",
+    "comments_url": "https://api.github.com/repos/dcronqvist/DotTiled/issues/32/comments",
+    "author": "ameoverflow",
+    "comments": [
+      {
+        "user": "ameoverflow",
+        "created_at": "2024-09-11T15:11:42Z",
+        "body": "Changes made, force pushed before because I haven't changed username and e-mail in git (forgot to do that after changing my username). Used embedded resources in manual example.\r\n\r\n`make lint` returns now\r\n```\r\n/home/krnl/Projects/DotTiled/src/DotTiled.Example/Program.cs(6,7): warning IDE0040: Accessibility modifiers required [/home/krnl/Projects/DotTiled/src/DotTiled.Example/DotTiled.Example.csproj]\r\n/home/krnl/Projects/DotTiled/src/DotTiled.Example/Program.cs(8,3): warning IDE0210: Convert to top-level statements [/home/krnl/Projects/DotTiled/src/DotTiled.Example/DotTiled.Example.csproj]\r\n```\r\nwhich I can't really fix, first one is class definition, second one is because I don't use top-level statements.\r\n\r\nI can also make examples for other features, or using actual game engines, eg. Unity, or Godot."
+      },
+      {
+        "user": "ameoverflow",
+        "created_at": "2024-09-12T12:05:40Z",
+        "body": "Godot 4.3 supports full .NET 8 capabilities, so unless there's a bug, DotTiled will work. I'll try later, and if it works, I'll put Godot example with this PR"
+      },
+      {
+        "user": "dcronqvist",
+        "created_at": "2024-09-12T16:11:28Z",
+        "body": "> Godot 4.3 supports full .NET 8 capabilities, so unless there's a bug, DotTiled will work. I'll try later, and if it works, I'll put Godot example with this PR\r\n\r\nInteresting! I was not aware of that, let me know if it works out :)"
+      },
+      {
+        "user": "ameoverflow",
+        "created_at": "2024-09-12T18:22:08Z",
+        "body": "Done, working on Godot example now. Once I get it working, I'll push it to this PR."
+      },
+      {
+        "user": "ameoverflow",
+        "created_at": "2024-09-13T17:32:51Z",
+        "body": "Godot example done, PR can be merged."
+      }
+    ]
+  }
+]

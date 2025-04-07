@@ -1,0 +1,323 @@
+[
+  {
+    "number": 3554,
+    "title": "Record types",
+    "created_at": "2021-01-08T14:25:56Z",
+    "closed_at": "2021-01-08T14:29:20Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3554",
+    "body": "Just trying to map record types and it seems Automapper sees them as Object. Am I right in assuming it's a bit too early to think Automapper should map record types successfully?\r\n\r\nFor instance:\r\n```\r\n// command.Scopes is of type Scope[]\r\nvar mapS = _mapper.Map<Scope>(command.Scopes);\r\n```\r\nthrows\r\n```\r\nMissing type map configuration or unsupported mapping.\r\n\r\nMapping types:\r\nObject -> Scope\r\nSystem.Object -> Scope\r\n```\r\n\r\nI have `CreateMap<Scope, Scope>();` in my Mapping profile so this in theory should work?\r\n",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3554/comments",
+    "author": "jameswoodley",
+    "comments": [
+      {
+        "user": "lbargaoanu",
+        "created_at": "2021-01-08T14:29:20Z",
+        "body": "It should work. Check the older discussion about it."
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2021-01-08T15:04:39Z",
+        "body": "Records are just classes with compile time sugar. Otherwise they look like normal classes with private setters and/or a constructor.\r\n\r\nRecords work with serialization, EF Core, anything that uses reflection/expression trees/Reflection.Emit.\n\n---\n\nAlso above it looks like you're trying to map something to itself? And then an array of something to a single thing at runtime? All that is a bit weird."
+      },
+      {
+        "user": "jameswoodley",
+        "created_at": "2021-01-08T15:26:19Z",
+        "body": "I'll give the full story:\r\n\r\nI have a record that has multiple properties within it, one of which is another record.\r\n```\r\npublic record Scope(string Description, string Value);\r\n\r\npublic record ApiCreateRequest(string Name, string Identifier, Scope[] Scopes,\r\n        bool IncludePermissionsInScopeClaim, bool SkipConsentIfFirstParty, bool AllowOfflineAccess,\r\n        int? TokenLifetimeSeconds);\r\n```\r\n\r\nI then have a MediatR command object that I'd like to map to the ApiCreateRequest record\r\n```\r\npublic class CreateApiCommand : IRequest<ApiReadModel>\r\n{\r\n    public string Name { get; init; } = default!;\r\n    public string Identifier { get; init; } = default!;\r\n    public Scope[] Scopes { get; init; } = Array.Empty<Scope>();\r\n    public bool IncludePermissionsInScopeClaim { get; init; } = true;\r\n    public bool SkipConsentIfFirstParty { get; init; } = true;\r\n    public bool AllowOfflineAccess { get; init; }\r\n    public int? TokenLifetimeSeconds { get; init; }\r\n}\r\n```\r\nand my mapping profile\r\n```\r\nCreateMap<CreateApiCommand, ApiCreateRequest>();\r\n```\r\n\r\nWhen running my unit tests, I noticed that equality wasn't preserved even though both records should be equal value, so:\r\n```\r\nvar map = _mapper.Map<ApiCreateRequest>(command);\r\nvar map1 = _mapper.Map<ApiCreateRequest>(command);\r\nvar equality = map.Equals(map1);      <-- False\r\n```\r\n\r\nI took out the inner Scope[] and then it was preserved. So I thought OK I'll try mapping just the scopes and checking that for equality, so added\r\n```\r\nCreateMap<Scope, Scope>()\r\n``` \r\nto my profile (as the docs say you don't need to worry about enumerator, arrays, lists etc?) and tried again. This time I got the Object -> Scope exception\r\n\r\nMy end goal here really is to be able to run map twice on the same source, get 2 different result objects, call .Equals on it and get a true.\r\n\r\n\n\n---\n\nGot an email with a new comment @jbogard but it seems to have disappeared on here, anyway in terms of the Command not being a record, not intentional per se, could probably just be a standard POCO. No real business need for immutability there I don't think"
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2021-01-08T15:37:22Z",
+        "body": "Record equality isn't doing what you think it's doing:\r\n\r\n```csharp\r\nvar request1 = new ApiCreateRequest(\r\n    Name: \"Joe\",\r\n    Identifier: \"1234\",\r\n    Scopes: new[]\r\n    {\r\n        new Scope(\r\n            Description: \"Description1\",\r\n            Value: \"Value1\"),\r\n        new Scope(\r\n            Description: \"Description2\",\r\n            Value: \"Value2\")\r\n    },\r\n    IncludePermissionsInScopeClaim: true,\r\n    SkipConsentIfFirstParty: false,\r\n    AllowOfflineAccess: true,\r\n    TokenLifetimeSeconds: 10\r\n);\r\nvar request2 = new ApiCreateRequest(\r\n    Name: \"Joe\",\r\n    Identifier: \"1234\",\r\n    Scopes: new[]\r\n    {\r\n        new Scope(\r\n            Description: \"Description1\",\r\n            Value: \"Value1\"),\r\n        new Scope(\r\n            Description: \"Description2\",\r\n            Value: \"Value2\")\r\n    },\r\n    IncludePermissionsInScopeClaim: true,\r\n    SkipConsentIfFirstParty: false,\r\n    AllowOfflineAccess: true,\r\n    TokenLifetimeSeconds: 10\r\n);\r\nConsole.WriteLine(request1.Equals(request2)); // prints false\r\n```\r\n\r\n```csharp\r\nvar scopes = new[]\r\n{\r\n    new Scope(\r\n        Description: \"Description1\",\r\n        Value: \"Value1\"),\r\n    new Scope(\r\n        Description: \"Description2\",\r\n        Value: \"Value2\")\r\n};\r\nvar request1 = new ApiCreateRequest(\r\n    Name: \"Joe\",\r\n    Identifier: \"1234\",\r\n    Scopes: scopes,\r\n    IncludePermissionsInScopeClaim: true,\r\n    SkipConsentIfFirstParty: false,\r\n    AllowOfflineAccess: true,\r\n    TokenLifetimeSeconds: 10\r\n);\r\nvar request2 = new ApiCreateRequest(\r\n    Name: \"Joe\",\r\n    Identifier: \"1234\",\r\n    Scopes: scopes,\r\n    IncludePermissionsInScopeClaim: true,\r\n    SkipConsentIfFirstParty: false,\r\n    AllowOfflineAccess: true,\r\n    TokenLifetimeSeconds: 10\r\n);\r\nConsole.WriteLine(request1.Equals(request2)); // prints true\r\n```\r\n\r\nThis is because it's using `EqualityComparer<T>` for each member. Arrays do not implement `IEquatable<T>`. So it'll use the default `Equals` method, which is reference equality.\r\n\r\nWomp womp"
+      },
+      {
+        "user": "jameswoodley",
+        "created_at": "2021-01-08T16:24:07Z",
+        "body": "Makes so much sense now you spell it out, and I feel foolish. Thanks so much!"
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2021-01-08T16:26:59Z",
+        "body": "I had to pull it up in DotPeek to see what was happening, but it makes sense now."
+      },
+      {
+        "user": "jameswoodley",
+        "created_at": "2021-01-08T17:28:15Z",
+        "body": "Is there something clever I can do in a .ForMember config to help this, or should I map without the scopes and manually copy?"
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2021-01-08T17:40:13Z",
+        "body": "Fundamentally, records do not support the behavior you want (removing AutoMapper from the equation). You have some options:\r\n\r\n- Use a collection type that DOES implement `IEquatable<T>` and uses `Enumerable.SequenceEquals`. I don't see one offhand so you'll likely need to create this yourself.\r\n- Override `Equals` and do what the decompiled stuff does, replacing the `EqualityComparer<T>.Default` part of the collection `SequenceEquals`\r\n\r\nDon't use AutoMapper to try to work around the design of Records, though, that's super confusing to anyone using it. You'd have to \"UseDestinationValue\" then mutate the array contents, which I DON'T think you'd want to do, that's super weird. Say you want to use `ReadOnlyCollection<T>` instead? This would all break."
+      },
+      {
+        "user": "jameswoodley",
+        "created_at": "2021-01-08T17:41:42Z",
+        "body": "Yup I'm with you, I was hoping for a silver bullet that isn't there. All good. I'll find a way.\r\n\r\nThanks again for the help and digging into the framework, really appreciate it"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-02-14T00:20:21Z",
+        "body": "This issue has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how record equality works with collection-type properties like arrays",
+      "Solutions for achieving structural equality in records containing mutable reference types"
+    ]
+  },
+  {
+    "number": 3545,
+    "title": "Mapping with a constructor doesn't work if a target property is mapped using MapFrom",
+    "created_at": "2020-12-10T17:26:35Z",
+    "closed_at": "2020-12-10T17:47:03Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3545",
+    "body": "### Source/destination types\r\n\r\n```csharp\r\nrecord Foo(int Id, string Name, string Description);\r\n\r\nrecord FooDto(int Id, string Name, string Text);\r\n```\r\n\r\n(I'm using records here, but I don't think it matters)\r\n\r\n### Mapping configuration\r\n\r\n```csharp\r\n    var mapper = new MapperConfiguration(cfg =>\r\n    {\r\n        cfg.CreateMap<Foo, FooDto>()\r\n            .ForMember(dto => dto.Text, o => o.MapFrom(f => f.Description));\r\n    }).CreateMapper();\r\n```\r\n\r\n### Version: 10.1.1\r\n\r\n### Expected behavior\r\n\r\nShould map successfully\r\n\r\n### Actual behavior\r\n\r\n> **ArgumentException**: FooDto needs to have a constructor with 0 args or only optional args. (Parameter 'type')\r\n\r\n### Steps to reproduce\r\n\r\n```csharp\r\n    var foo = new Foo(123, \"hello\", \"test\");\r\n    var dto = mapper.Map<FooDto>(foo);\r\n```\r\n\r\n### Additional remarks\r\n\r\nIt works fine if `FooDto.Text` is renamed to `Description` and I remove the `ForMember(... MapFrom(...))` configuration, so I'm pretty sure that's what causing the problem.",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3545/comments",
+    "author": "thomaslevesque",
+    "comments": [
+      {
+        "user": "lbargaoanu",
+        "created_at": "2020-12-10T17:47:03Z",
+        "body": "You need `ForCtorParam`."
+      },
+      {
+        "user": "thomaslevesque",
+        "created_at": "2020-12-10T20:30:07Z",
+        "body": "Oh! I had never noticed that method before. Thanks!"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-01-17T00:52:53Z",
+        "body": "This issue has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why constructor mapping fails when using MapFrom for a target property",
+      "Clarification on the relationship between constructor parameters and property mappings in AutoMapper",
+      "Guidance on configuring constructor parameter mapping for immutable types",
+      "Differentiation between property mapping and constructor parameter mapping in AutoMapper"
+    ]
+  },
+  {
+    "number": 3432,
+    "title": "ProjectTo InvalidOperationException",
+    "created_at": "2020-05-27T11:58:21Z",
+    "closed_at": "2020-05-27T13:21:46Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3432",
+    "body": "### Source/destination types\r\n\r\n```csharp\r\n// EF Core entities\r\n\r\npublic class Foo\r\n{\r\n    public int Id { get; set; }\r\n    public ICollection<FooTranslation> Translations { get; set; } = new List<FooTranslation>();\r\n    // other properties, not relevant to this issue\r\n}\r\n\r\npublic class FooTranslation\r\n{\r\n    public int FooId { get; set; }\r\n    public string Language { get; set; }\r\n    public string Name { get; set; }\r\n    public string Description { get; set; }\r\n}\r\n\r\n// DTOs\r\npublic class FooDto\r\n{\r\n    public int Id { get; set; }\r\n    public LocalizedText Name { get; set; }\r\n    public LocalizedText Description { get; set; }\r\n    // other properties, not relevant to this issue\r\n}\r\n\r\n// The dictionary key is the language\r\npublic class LocalizedText : Dictionary<string, string> { }\r\n```\r\n\r\n### Mapping configuration\r\n\r\n```csharp\r\nCreateMap<Foo, FooDto>()\r\n    .ForMember(dto => dto.Name, o => o.MapFrom(f => f.Translations.ToLocalizedText(t => t.Name)))\r\n    .ForMember(dto => dto.Description, o => o.MapFrom(f => f.Translations.ToLocalizedText(t => t.Description)))\r\n```\r\n\r\n`ToLocalizedText` is a method that converts a list of `FooTranslation` to a `LocalizedText` (I can post the code if requested, but it's probably not relevant)\r\n\r\n### Version\r\nAutoMapper 9.0.0\r\nEF Core 3.1.3\r\n\r\n### Expected behavior\r\n\r\n`dbContext.Foos.ProjectTo<FooDto>(configurationProvider)` should work\r\n\r\n### Actual behavior\r\n\r\nIt throws an exception:\r\n\r\n> System.InvalidOperationException: When called from 'VisitLambda', rewriting a node of type 'System.Linq.Expressions.ParameterExpression' must return a non-null value of the same type. Alternatively, override 'VisitLambda' and change it to not visit children of this type.\r\n\r\n### Steps to reproduce\r\n\r\nProject Foo to FooDto in a EF query:\r\n\r\n```csharp\r\nvar dtos = await _dbContext.Foos.Project<FooDto>(_mapper.ConfigurationProvider);\r\n```\r\n\r\n---\r\n\r\nI realize that it looks like an EF issue rather than an AutoMapper issue, but bear with me for a moment.\r\n\r\nThe problem is probably that EF Core can't translate `ToLocalizedText` to SQL, which makes sense. But I *have* to use `ToLocalizedText`, because if I just do `MapFrom(f => f.Translations)`, it doesn't return the right thing.\r\n\r\nBasically, what I need is a way to specify that `Name` is mapped from `Translations`, so that the query has the right `Include`s, and also specify that the value should be converted using `ToLocalizedText`. But I can't put `ToLocalizedText` in the expression, since it can't translate to SQL.\r\n\r\nIs there a way to do that? i.e., specify separately:\r\n- where the value comes from (`Translations`)\r\n- how to convert it to the destination type\r\n\r\nI also tried this:\r\n\r\n```csharp\r\n.ForMember(dto => dto.Name, o => o.ConvertUsing(\r\n    new TranslationValueConverter<FooTranslation>(t => t.Name),\r\n    f => f.Translations));\r\n```\r\nBut it returns a different error: \r\n\r\n> System.Exception: Can't resolve this to Queryable Expression\r\n\r\nAm I just missing something obvious?",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3432/comments",
+    "author": "thomaslevesque",
+    "comments": [
+      {
+        "user": "thomaslevesque",
+        "created_at": "2020-05-27T12:14:41Z",
+        "body": "Basically, what I'm looking for is a `MapFrom` overload which lets me specify a conversion separately from the source member, i.e. something like this:\r\n\r\n```\r\n.ForMember(dto => dto.Name, o => o.MapFrom(\r\n    f => f.Translations,\r\n    translations => translations.ToLocalizedText(t => t.Name)));\r\n```\r\nThe first argument would be used for the Linq projection, the second would be applied after the results have been fetched from the DB.\r\n\r\nIs there already something in AutoMapper that would let me achieve this? Or is it a feature you'd consider adding?"
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2020-05-27T12:32:38Z",
+        "body": "This is not a feature that's possible to add to AutoMapper. Once we give the projection to the query provider, execution of the LINQ query is completely in the LINQ provider's hands:\r\n\r\n```csharp\r\n   var foos = await _dbContext\r\n        .Where(foo => foo.Bar > 3) // System.Linq.QueryableExtensions\r\n        .ProjectTo<FooDto>() // returns IQueryable\r\n        .ToListAsync(); // executed by the IQueryable.Provider\r\n```\r\n\r\nOnce you go `IQueryable`, your choices for intercepting or extending the query execution are completely determined by the `IQueryable.Provider`. Once execution is *finished*, then you can do post-processing on the server-side if you like (after `ToListAsync`).\r\n\r\nIf AutoMapper were to support what you suggest, we'd have to wrap query providers, execute their result, then transform the result and assign values once it's finished. And because each query provider is different, for N query providers we'd have to have N specific packages to that query provider.\r\n\r\nWe can do `ProjectTo` because ALL that's doing is calling `Select` on the underlying query provider. \r\n\r\nIn your code, I'd suggest doing your own post-processing of the value after calling `ToList`."
+      },
+      {
+        "user": "thomaslevesque",
+        "created_at": "2020-05-27T13:21:46Z",
+        "body": "Thanks for the reply, @jbogard. I see the problem now.\r\n\r\n> In your code, I'd suggest doing your own post-processing of the value after calling `ToList`.\r\n\r\nYes, that's what I ended up doing."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2020-09-17T00:27:32Z",
+        "body": "This issue has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must enable EF Core to handle projection without translating unsupported methods to SQL",
+      "Must maintain proper relationship handling for EF Core navigation properties",
+      "Allow post-processing of query results after database retrieval"
+    ]
+  },
+  {
+    "number": 3423,
+    "title": "Map To Immutable Object With Differently Named Constructor Args",
+    "created_at": "2020-05-19T23:07:21Z",
+    "closed_at": "2020-05-20T04:40:23Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3423",
+    "body": "Currently, when mapping objects using a constructor, the constructor arguments must match the source property name.  I have found this unintuitive.  Intuitively, I would expect that AutoMapper would look at the source object and my configurations and find an appropriate constructor without having to do any additional configuration.\r\n\r\n### Source/destination types\r\n\r\n```csharp\r\nclass Source\r\n{\r\n    public Source(int one, string two)\r\n    {\r\n        One = one;\r\n        Two = two;\r\n    }\r\n\r\n    public int One { get; private set; }\r\n    public string Two { get; private set; }\r\n}\r\n\r\nclass Destination\r\n{\r\n    public Destination(int one, string two2)\r\n    {\r\n        One = one;\r\n        Two2 = two2;\r\n    }\r\n\r\n    public int One { get; private set; }\r\n    public string Two2 { get; private set; }\r\n}\r\n```\r\n\r\n### Mapping configuration\r\n\r\n```csharp\r\nCreateMap<Source, Destination>()\r\n      .ForMember(dest => dest.Two2, opt => opt.MapFrom(src => src.Two))\r\n```\r\n\r\n### Version: 9.0.0\r\n\r\n### Expected behavior\r\n\r\n`Destination` object is created using the available `Destination` constructor.\r\n\r\n### Actual behavior\r\n\r\nI have to either:\r\n1. Create a default constructor (or constructor with all optional args).\r\n2. Change the name of `two2` in the Destination constructor to `two` so it matches `Source.Two`.  Or create another constructor just for AutoMapper.\r\n3. Add `ForCtorParam()` call in my configuration.\r\n\r\nI would rather not have to do any of these.  It seems like AutoMapper should be able to figure it out without this.  Maybe it's not as straight forward as it seems, but if it can be done, I think it would go a long way to improve usability and be more intuitive for those of us who like to use immutable types.\r\n\r\n### Steps to reproduce\r\n\r\n```csharp\r\nmapper.Map<Destination>(new Source(1, \"two\"));\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3423/comments",
+    "author": "danadesrosiers",
+    "comments": [
+      {
+        "user": "lbargaoanu",
+        "created_at": "2020-05-20T04:05:18Z",
+        "body": "If you have a private setter, you don't need the constructor anymore. AM will use the setter. Without a setter, you can write an extension method that calls both `ForMember` and `ForCtorParam`."
+      },
+      {
+        "user": "danadesrosiers",
+        "created_at": "2020-05-20T19:19:15Z",
+        "body": "Thank you for the quick response!\r\n\r\n> If you have a private setter, you don't need the constructor anymore.\r\n\r\nThis is only an option if the object never needs to be instantiated manually.  Also, when using nullable reference types in C# 8.0, you get warnings that non-nullable reference types are not instantiated.  For both of these reasons, this solution doesn't work for me.\r\n\r\n> you can write an extension method that calls both ForMember and ForCtorParam.\r\n\r\nThat sounds like a reasonable work around.  I'm going to move forward with that.  \r\n\r\nI still suggest updating the library to make this easier.  I know it would have saved me a lot of time and confusion. "
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2020-05-20T19:44:55Z",
+        "body": "I'm not too concerned with nullable reference types, because you're far more likely to use C# 9.0 record types instead for those. We'll see what we need to do to support those :)"
+      },
+      {
+        "user": "lock[bot]",
+        "created_at": "2020-06-24T18:11:08Z",
+        "body": "This thread has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "AutoMapper should automatically resolve constructor parameters using existing property mappings without requiring explicit ForCtorParam configuration",
+      "Solution must support immutable types without requiring parameter renaming or additional constructors",
+      "Mapping should work with nullable reference type safety requirements",
+      "Avoid requiring workaround patterns like combined extension methods for member/ctor mapping",
+      "Maintain type safety and compile-time validation for constructor parameter mapping"
+    ]
+  },
+  {
+    "number": 3190,
+    "title": "Breaking change between v8.1.0 and v8.1.1 when mapping to a dictionary",
+    "created_at": "2019-08-12T17:42:02Z",
+    "closed_at": "2019-08-12T17:53:23Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3190",
+    "body": "Hello,\r\n\r\nI meant to post this a while ago when 8.1.1 was released but I got caught up in things at work so I never got a chance. I'm not sure if this was an intentional breaking change or not, but there was a breaking change in 8.1.1 when mapping from a collection of Key/Values to a Dictionary (the Key/Value type is not `KeyValuePair` because it is an EF entity).\r\n\r\n### Expected behavior\r\nIn 8.1.0 of AutoMapper, this mapping worked without any issues. It would map the Key/Values into the Dictionary.\r\n\r\n### Actual behavior\r\nIn 8.1.1, the following error is thrown:\r\n\r\n```\r\nAutoMapperMappingException: Error mapping types.\r\n\r\nMapping types:\r\nOrder -> OrderModel\r\nUserQuery+Order -> UserQuery+OrderModel\r\n\r\nType Map configuration:\r\nOrder -> OrderModel\r\nUserQuery+Order -> UserQuery+OrderModel\r\n\r\nDestination Member:\r\nAttributes\r\n```\r\n\r\n### Steps to reproduce\r\n\r\n```csharp\r\nvoid Main()\r\n{\r\n    var services = new ServiceCollection();\r\n    services.AddAutoMapper(this.GetType().Assembly);\r\n    \r\n    using var root = services.BuildServiceProvider();\r\n    var mapper = root.GetRequiredService<IMapper>();\r\n    \r\n    var model = mapper.Map<OrderModel>(new Order\r\n    {\r\n        OrderNumber = \"PO1001\",\r\n        Attributes =\r\n        {\r\n            new Order.Attribute { Key = \"Key1\", Value = \"Value1\" },\r\n            new Order.Attribute { Key = \"Key2\", Value = \"Value2\" },\r\n        }\r\n    });\r\n}\r\n\r\npublic class Order\r\n{\r\n    public String OrderNumber { get; set; }\r\n    public ICollection<Attribute> Attributes { get; set; } = new HashSet<Attribute>();\r\n\r\n    public class Attribute\r\n    {\r\n        public String Key { get; set; }\r\n        public String Value { get; set; }\r\n    }\r\n}\r\n\r\npublic class OrderModel\r\n{\r\n    public String OrderNumber { get; set; }\r\n    public IDictionary<String, String> Attributes { get; set; } = new Dictionary<String, String>();\r\n}\r\n\r\npublic class Profile : AutoMapper.Profile\r\n{\r\n    public Profile()\r\n    {\r\n        this.CreateMap<Order, OrderModel>();\r\n    }\r\n}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3190/comments",
+    "author": "ChristopherHaws",
+    "comments": [
+      {
+        "user": "lbargaoanu",
+        "created_at": "2019-08-12T17:53:23Z",
+        "body": "9.0 was just released. So use that or stick with the version you have."
+      },
+      {
+        "user": "ChristopherHaws",
+        "created_at": "2019-08-12T18:06:57Z",
+        "body": "@lbargaoanu This issue still occurs in v9."
+      },
+      {
+        "user": "lbargaoanu",
+        "created_at": "2019-08-12T18:10:41Z",
+        "body": "You can either do what the message says, or keep the version you have."
+      },
+      {
+        "user": "jbogard",
+        "created_at": "2019-08-14T12:46:00Z",
+        "body": "The `Order.Attribute` type is unknown to AutoMapper. Previously, we would create dynamic maps on the fly. We turned that off, then removed dynamic maps, since you could have misspelled or changed the `Order.Attribute` type and your mapping would silently skip those properties.\r\n\r\nYou need to create a map from your custom type to the KeyValuePair type:\r\n\r\n```c#\r\npublic class Profile : AutoMapper.Profile\r\n{\r\n    public Profile()\r\n    {\r\n        this.CreateMap<Order, OrderModel>();\r\n        this.CreateMap<Order.Attribute, KeyValuePair<string, string>>();\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "ChristopherHaws",
+        "created_at": "2019-08-14T17:33:54Z",
+        "body": "Ah, I didn't realize that it was being dynamically mapped. Thanks for the clarification!"
+      },
+      {
+        "user": "lock[bot]",
+        "created_at": "2019-09-14T18:31:48Z",
+        "body": "This thread has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the mapping behavior changed between AutoMapper versions",
+      "Clear guidance on configuring explicit type mappings for custom Key/Value types",
+      "Solution must address dictionary mapping from custom collection types"
+    ]
+  },
+  {
+    "number": 3166,
+    "title": "Mapping fails to recognize existing constructor parameters",
+    "created_at": "2019-07-12T21:41:49Z",
+    "closed_at": "2019-07-12T22:18:20Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3166",
+    "body": "### Source/destination types\r\n\r\n```csharp\r\nSrc: \r\n public class UserClaim : AuditableEntity\r\n    {\r\n        [Key]\r\n        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]\r\n        public int UserClaimId { get; set; }\r\n\r\n        [Required]\r\n        public int UserId { get; set; }\r\n\r\n        [Required]\r\n        [ForeignKey(\"ClaimType\")]\r\n        public ClaimTypeEnum ClaimTypeId { get; set; }\r\n        \r\n        [Required]\r\n        public ClaimType ClaimType { get; set; }\r\n\r\n        [Required]\r\n        [MaxLength(50)]\r\n        public string ClaimValue { get; set; }\r\n    }\r\n}\r\npublic class ClaimType : AuditableEntity\r\n    {\r\n        [Key]\r\n        public ClaimTypeEnum ClaimTypeId { get; set; }\r\n        public string ClaimTypeName { get; set; }\r\n    }\r\nDest: System.Security.Claims.Claim\r\n\r\n\r\npublic class Claim\r\n    {\r\n        ...\r\n        //\r\n        // Summary:\r\n        //     Initializes a new instance of the System.Security.Claims.Claim class with the\r\n        //     specified claim type, and value.\r\n        //\r\n        // Parameters:\r\n        //   type:\r\n        //     The claim type.\r\n        //\r\n        //   value:\r\n        //     The claim value.\r\n        //\r\n        // Exceptions:\r\n        //   T:System.ArgumentNullException:\r\n        //     type or value is null.\r\n        public Claim(string type, string value);\r\n...\r\n\r\n```\r\n\r\n### Mapping configuration\r\n\r\n```csharp\r\nAutoMapper.Mapper.Initialize(config =>\r\n            {\r\n                config.CreateMap<UserClaim, Claim>()\r\n                .ForCtorParam(\"value\", opt => opt.MapFrom(src => src.ClaimValue))\r\n                .ForCtorParam(\"type\", opt => opt.MapFrom(src => src.ClaimType.ClaimTypeName));\r\n            });\r\n```\r\n\r\n### Version: 8.0.0\r\n\r\n### Expected behavior\r\n\r\nsuccessfully map?\r\n\r\n### Actual behavior\r\n\r\n\r\nException has occurred: CLR/AutoMapper.AutoMapperConfigurationException\r\nAn exception of type 'AutoMapper.AutoMapperConfigurationException' occurred in AutoMapper.dll but was not handled in user code: 'Claim does not have a constructor with a parameter named 'value'.\r\nSystem.Security.Claims.Claim'\r\n   at AutoMapper.CtorParamConfigurationExpression`1.Configure(TypeMap typeMap)\r\n   at AutoMapper.Configuration.MappingExpression`2.Configure(TypeMap typeMap)\r\n   at AutoMapper.ProfileMap.BuildTypeMap(IConfigurationProvider configurationProvider, ITypeMapConfiguration config)\r\n   at AutoMapper.ProfileMap.Register(IConfigurationProvider configurationProvider)\r\n   at AutoMapper.MapperConfiguration.Seal()\r\n   at AutoMapper.MapperConfiguration..ctor(MapperConfigurationExpression configurationExpression)\r\n   at AutoMapper.MapperConfiguration..ctor(Action`1 configure)\r\n   at AutoMapper.Mapper.Initialize(Action`1 config)\r\n   at Wellspring.Eqp.Api.Startup.SetUpAutoMapper() in /home/brian/clients/walsh/eqp-api/src/Wellspring.Eqp.Api/Startup.cs:line 362\r\n   at Wellspring.Eqp.Api.Startup.Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger`1 logger) in /home/brian/clients/walsh/eqp-api/src/Wellspring.Eqp.Api/Startup.cs:line 241\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor, Boolean wrapExceptions)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at Microsoft.AspNetCore.Hosting.Internal.ConfigureBuilder.Invoke(Object instance, IApplicationBuilder builder)\r\n   at Microsoft.AspNetCore.Hosting.Internal.ConfigureBuilder.<>c__DisplayClass4_0.<Build>b__0(IApplicationBuilder builder)\r\n   at Microsoft.AspNetCore.Hosting.Internal.GenericWebHostBuilder.<>c__DisplayClass13_0.<UseStartup>b__2(IApplicationBuilder app)\r\n   at Microsoft.AspNetCore.Mvc.Filters.MiddlewareFilterBuilderStartupFilter.<>c__DisplayClass0_0.<Configure>g__MiddlewareFilterBuilder|0(IApplicationBuilder builder)\r\n   at Microsoft.AspNetCore.HostFilteringStartupFilter.<>c__DisplayClass0_0.<Configure>b__0(IApplicationBuilder app)\r\n   at Microsoft.AspNetCore.Hosting.Internal.GenericWebHostService.<StartAsync>d__31.MoveNext()\r\n",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3166/comments",
+    "author": "WellspringCS",
+    "comments": [
+      {
+        "user": "spydacarnage",
+        "created_at": "2019-07-12T21:57:20Z",
+        "body": "Due to the way that constructor mapping currently works, your source object must contain all the properties contained in the destination constructor.\r\n\r\nThere is currently an active PR (#3160) to resolve this issue, but in the meantime, you can create a dummy parameter (`public object Value => null;`) in `UserClaim` and it should work."
+      },
+      {
+        "user": "WellspringCS",
+        "created_at": "2019-07-12T22:18:11Z",
+        "body": "Thank you for your quick reply! I tried this,\r\n\r\n```\r\n// for automapper to work\r\npublic object Value => null;\r\npublic object Type => null;\r\n```\r\nand indeed found that the problem went away. Needless to say, it does seem a hack and ugly. But it works, and I appreciate your solution. Here's hoping the next release will address this gap."
+      },
+      {
+        "user": "lbargaoanu",
+        "created_at": "2019-07-13T06:35:42Z",
+        "body": "There is no need for that. You can use `ConstructUsing` or optional parameters. Or just take advantage of the naming convention:\r\n\r\n  \tpublic Claim(string claimValue, string claimTypeClaimTypeName)\r\n"
+      },
+      {
+        "user": "WellspringCS",
+        "created_at": "2019-08-07T17:44:44Z",
+        "body": "@lbargaoanu Thank you very much. I've been putting out other fires but kept your response and tried it out when I came up for air. Worked like a charm! I'm rather new to AutoMapper so wasn't aware of this feature.\r\n\r\n```\r\nAutoMapper.Mapper.Initialize(config => {\r\n  config.CreateMap<UserClaim, Claim>()\r\n     .ConstructUsing(userClaim => new Claim(\r\n              userClaim.ClaimType.ClaimTypeName\r\n            , userClaim.ClaimValue\r\n         )\r\n     );\r\n  ...\r\n```\r\n\r\nThank you once again!"
+      },
+      {
+        "user": "lock[bot]",
+        "created_at": "2019-09-07T18:31:48Z",
+        "body": "This thread has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must enable AutoMapper to resolve destination constructor parameters without requiring dummy properties in the source class",
+      "Must demonstrate correct configuration for constructor parameter mapping when parameter names don't match source properties",
+      "Solution should leverage AutoMapper's constructor mapping capabilities without class modifications",
+      "Must explain how to handle constructor parameters with non-matching names between source and destination",
+      "Should address AutoMapper's constructor parameter resolution logic"
+    ]
+  },
+  {
+    "number": 3125,
+    "title": "Problem with mapping if the maps are in separate classes",
+    "created_at": "2019-06-17T12:01:03Z",
+    "closed_at": "2019-06-17T12:55:23Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/AutoMapper/AutoMapper/issues/3125",
+    "body": "AutoMapper versions: 8.1.1\r\nThe previous version worked!\r\n\r\nLet's look at the code below:\r\n\r\n```\r\n    public class A\r\n    {\r\n        public int P1 { get; set; }\r\n    }\r\n\r\n    public class B\r\n    {\r\n        public int P1 { get; set; }\r\n    }\r\n\r\n    public class C\r\n    {\r\n        public List<A> List { get; set; }\r\n    }\r\n\r\n    public class D\r\n    {\r\n        public List<B> List { get; set; }\r\n    }\r\n\r\n    public sealed class C_To_D : MapperConfigurationExpression\r\n    {\r\n        public C_To_D()\r\n        {\r\n             // \u2193 it would work \u2193\r\n            //CreateMap<A, B>()\r\n            //    .ForMember(_ => _.P1, _ => _.MapFrom(v => v.P1));\r\n\r\n            CreateMap<C, D>()\r\n                .ForMember(_ => _.List, _ => _.MapFrom(v => v.List));\r\n        }\r\n    }\r\n\r\n    public sealed class A_To_B : MapperConfigurationExpression\r\n    {\r\n        public A_To_B()\r\n        {\r\n             // \u2193 it does not work \u2193\r\n            CreateMap<A, B>()\r\n                .ForMember(_ => _.P1, _ => _.MapFrom(v => v.P1));\r\n        }\r\n    }\r\n```\r\nIf the map from A to B is in a separate class then:\r\n\r\n**Message: AutoMapper.AutoMapperConfigurationException : The following member on ...D cannot be mapped: \r\n\tList \r\nAdd a custom mapping expression, ignore, add a custom resolver, or modify the destination type ...D.\r\nContext:\r\n\tMapping to member List from ...C to ...D\r\nException of type 'AutoMapper.AutoMapperConfigurationException' was thrown.**\r\n\r\nThe project is so large that it is impossible to have maps in this way. Please help.",
+    "comments_url": "https://api.github.com/repos/AutoMapper/AutoMapper/issues/3125/comments",
+    "author": "Tomaszczubaszek",
+    "comments": [
+      {
+        "user": "jbogard",
+        "created_at": "2019-06-17T12:33:33Z",
+        "body": "Why are your classes inheriting from `MapperConfigurationExpression`? That's the class that performs configuration once for the entire mapper.\r\n\r\nTypically you use `Profile` classes to segregate configuration."
+      },
+      {
+        "user": "Tomaszczubaszek",
+        "created_at": "2019-06-17T12:55:23Z",
+        "body": "Thanks, correcting this solves the problem."
+      },
+      {
+        "user": "lock[bot]",
+        "created_at": "2019-07-18T19:42:16Z",
+        "body": "This thread has been automatically locked since there has not been any recent activity after it was closed. Please open a new issue for related bugs."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly segregate AutoMapper configurations across multiple classes",
+      "Clear guidance on AutoMapper's configuration discovery mechanism",
+      "Solution must maintain separation of concerns for large codebases",
+      "Explanation of AutoMapper's Profile class usage",
+      "Clarification on configuration inheritance vs composition"
+    ]
+  }
+]

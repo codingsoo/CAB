@@ -1,0 +1,218 @@
+[
+  {
+    "number": 117,
+    "title": "stream=true requests cause \"Object of type Stream is not JSON serializable\" error",
+    "created_at": "2024-12-28T18:14:36Z",
+    "closed_at": "2025-01-03T03:41:07Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/codelion/optillm/issues/117",
+    "body": "When sending a `stream=true` request to optiLLM, the service encounters the following error:\r\n\r\n`{\"error\":\"Object of type Stream is not JSON serializable\"}`\r\n\r\nThis error suggests that optiLLM is not properly handling streamed responses from liteLLM or OpenAI GPT-4o. Instead of processing the stream incrementally, it attempts to serialize the raw stream object directly into JSON, which causes the serialization failure.\r\n\r\n**Steps to Reproduce**:\r\nSend a POST request to optiLLM with the following payload:\r\n```\r\n{\r\n    \"model\": \"gpt-4o\",\r\n    \"messages\": [\r\n        { \"role\": \"system\", \"content\": \"You are a helpful assistant.\" },\r\n        { \"role\": \"user\", \"content\": \"Write a Python program to build an RL model using only numpy.\" }\r\n    ],\r\n    \"max_tokens\": 1000,\r\n    \"stream\": true\r\n}\r\n```\r\n\r\n**Observe the error response**:\r\n`{\"error\":\"Object of type Stream is not JSON serializable\"}`\r\n\r\n**Expected Behavior**:\r\nThe optiLLM service should handle streamed responses by:\r\n- Iterating through the stream of chunks from liteLLM or OpenAI.\r\n- Processing each chunk incrementally and forwarding it to the next layer (e.g., AnythingLLM).\r\n\r\n**Additional Context**:\r\n- The following pipeline works properly: User -> AnythingLLM -> liteLLM -> openai/gpt-4o\r\n- The problem seems specific to how optiLLM handles the streamed response from liteLLM.\r\n\r\n**Severity**:\r\nHigh - This issue blocks the usage of stream=true functionality, which is critical for incremental responses in real-time applications.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/117/comments",
+    "author": "doublefx",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-12-29T00:21:08Z",
+        "body": "Most of the approaches require the full output and multiple calls to the LLM so we cannot stream the responses to the next layer as they come. We could handle it in optillm by waiting for the full stream to finish but the effect would be similar to using the underlying LLM without streaming. "
+      },
+      {
+        "user": "av",
+        "created_at": "2024-12-29T10:19:20Z",
+        "body": "Also encountered this while integrating OptiLLM. \r\n\r\nA good middle ground for the LLM proxies is to stream what's possible. Every approach will have some portions that can be send back to the client for either traceability or as additional data even before the final response. In another proxy (don't want to link it) we called that \"Intermediate outputs\" and it can be toggled on/off based on the user preference.\r\n\r\nHowever, this specific problem with OptiLLM break its compatibility with downstream services, for example - Open WebUI, which enables streaming by default. If a full streaming support is not planned (understandably, it's a big undertake) - a reasonable workaround is to imitate streaming interface and simply send the whole response in a single chunk when the workflow is finished."
+      },
+      {
+        "user": "codelion",
+        "created_at": "2024-12-29T12:27:13Z",
+        "body": "> However, this specific problem with OptiLLM break its compatibility with downstream services, for example - Open WebUI, which enables streaming by default. If a full streaming support is not planned (understandably, it's a big undertake) - a reasonable workaround is to imitate streaming interface and simply send the whole response in a single chunk when the workflow is finished.\r\n\r\nThis is already done, the request here is to enable streaming inputs from the inference server. I can add similar workaround as well to the inputs from inference server so as to not break anything. Good suggestion.\r\n\r\n"
+      },
+      {
+        "user": "av",
+        "created_at": "2024-12-29T13:18:33Z",
+        "body": "Yes, found the commit now, likely the streaming workaround is not fully compatible with Open WebUI due to some reason, thank you!"
+      }
+    ]
+  },
+  {
+    "number": 113,
+    "title": "Streaming Support?",
+    "created_at": "2024-12-07T18:23:35Z",
+    "closed_at": "2024-12-16T23:55:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/codelion/optillm/issues/113",
+    "body": "Hey hey! Excellent work! Does optillm supports streaming responses? ",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/113/comments",
+    "author": "bet0x",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-12-08T16:26:52Z",
+        "body": "It supports streaming responses but we need to wait for all the calls to finish for most of the approaches to start streaming since they are dependent on each other. So, in practice it won't make it faster."
+      }
+    ]
+  },
+  {
+    "number": 112,
+    "title": "Remove hard-coded User/Assistant prefixes from conversation parsing",
+    "created_at": "2024-12-01T09:12:37Z",
+    "closed_at": "2025-01-03T03:40:50Z",
+    "labels": [],
+    "url": "https://github.com/codelion/optillm/issues/112",
+    "body": "The current implementation automatically prepends \"User:\" and \"Assistant:\" to messages when parsing conversations in `parse_conversation()`. This creates formatting issues when integrating with LLMs that have their own prompt templates and conversation formats.\r\n\r\n\r\nIn `parse_conversation()`, messages are formatted as:\r\n```python\r\nif role == 'user':\r\n    conversation.append(f\"User: {text_content}\")\r\nelif role == 'assistant':\r\n    conversation.append(f\"Assistant: {text_content}\")\r\n```\r\n\r\nThis forces a specific conversation format regardless of the LLM's requirements or user's intended prompt template.\r\n\r\nIn my opinion the proxy should maintain message content as-is without adding role prefixes, allowing:\r\n- Users to control their own prompt templates\r\n- Direct compatibility with various LLM conversation formats\r\n- Clean integration with different chat models",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/112/comments",
+    "author": "ElioDonato",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-12-01T17:07:30Z",
+        "body": "This is done only for multi-turn conversations, because several of the approaches that are implemented do a multi-turn conversation within. It doesn’t change the format of the messages as the response is always an open ai compatible messages object. The only thing that happens is that the initial multi-turn message is converted to a single turn message which is intentional to allow the implemented approaches to work. "
+      },
+      {
+        "user": "codelion",
+        "created_at": "2025-01-02T02:35:50Z",
+        "body": "I have addressed this in #119 by converting the User: Assistant: tags added by the proxy back to the messages object. This should make sure there are no formatting issues as long as OpenAI compatible messages are used. "
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "Add plugin system, ability to config with extra body and prompts",
+    "created_at": "2024-10-01T09:06:47Z",
+    "closed_at": "2024-10-01T09:06:53Z",
+    "labels": [],
+    "url": "https://github.com/codelion/optillm/pull/40",
+    "body": "fixes #39 ",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/40/comments",
+    "author": "codelion",
+    "comments": [
+      {
+        "user": "femto",
+        "created_at": "2024-10-02T05:35:17Z",
+        "body": "Thanks for the prompt response, will check out this later."
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "title": "Clarification: proxy or library for cot_decoding??",
+    "created_at": "2024-09-24T18:05:42Z",
+    "closed_at": "2024-09-24T22:47:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/codelion/optillm/issues/35",
+    "body": "The documentation is unclear.  It looks like the proxy code doesn't support cot_decoding at all, right?  So it's only available as a library and the python notebook demo right now?\r\n\r\nOr are you saying that cot_decoding will work with the proxy if a suitable server is used that provides multiple choices in the chat response, like ollama (but not llama.cpp).\r\n\r\nI think it's the former, since the proxy code doesn't seem to include cot_decoding, but would like a clear statement on this.\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/35/comments",
+    "author": "lee-b",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-09-24T20:53:39Z",
+        "body": "cot_decoding cannot be implemented via a proxy with only API access to model. It need to look at the logits of tokens before they are decoded. I have implemented it using transformers library so the model needs to be loaded in using `AutoModelForCausalLM.from_pretrained(model_name)` as shown in the colab.\r\n\r\nMultiple responses when they are returned via api are already decoded using some existing strategy like beam search. To implement it in llama.cpp or vllm  we will need to integrate it into the upstream library that does the decoding."
+      },
+      {
+        "user": "lee-b",
+        "created_at": "2024-09-24T22:47:34Z",
+        "body": "Got it, thanks :)"
+      }
+    ]
+  },
+  {
+    "number": 18,
+    "title": "Option to use the Azure OpenAI API.",
+    "created_at": "2024-09-18T14:19:38Z",
+    "closed_at": "2024-09-18T18:09:42Z",
+    "labels": [],
+    "url": "https://github.com/codelion/optillm/pull/18",
+    "body": "Just introduced the possibility to use the Azure OpenAI API as an alternative option to the OpenAI API.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/18/comments",
+    "author": "virtualramblas",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-09-18T18:09:31Z",
+        "body": "This looks good. Thanks for adding it."
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "Gsm8k bad test",
+    "created_at": "2024-09-18T10:35:16Z",
+    "closed_at": "2024-09-18T11:32:20Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/codelion/optillm/issues/16",
+    "body": "I was looking through the tests, and noticed the gsm8k test has the final prompt you are asking as one of the multi-shot examples with the answer already given.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/16/comments",
+    "author": "Tostino",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-09-18T11:32:20Z",
+        "body": "thanks for catching it, will fix it in #17 "
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Support AzureOpenAI client ",
+    "created_at": "2024-09-17T20:08:59Z",
+    "closed_at": "2024-09-18T18:09:58Z",
+    "labels": [
+      "enhancement",
+      "good first issue"
+    ],
+    "url": "https://github.com/codelion/optillm/issues/13",
+    "body": "As mentioned in #11 it should be easy to support base models that are deployed on azure by passing the `AzureOpenAI` client instead of the default one.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/13/comments",
+    "author": "codelion",
+    "comments": [
+      {
+        "user": "virtualramblas",
+        "created_at": "2024-09-18T14:23:43Z",
+        "body": "Thank you for opening this issue. I have raised pull request #18 for it. Motivated by the fact that I don't have an OpenAI key, but I have one for Azure :) \r\nThanks @codelion  for creating this wonderful project :clap:"
+      }
+    ]
+  },
+  {
+    "number": 7,
+    "title": "fix(healthcheck): dont require api key for /health",
+    "created_at": "2024-09-15T23:00:52Z",
+    "closed_at": "2024-09-16T03:58:18Z",
+    "labels": [],
+    "url": "https://github.com/codelion/optillm/pull/7",
+    "body": "Small hotfix to follow up from #6, don't require api key for /health endpoint.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/7/comments",
+    "author": "sammcj",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-09-16T03:58:21Z",
+        "body": "Thanks, merged."
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "feat(docker,auth): Add Docker, Compose, Auth, Parameter envs",
+    "created_at": "2024-09-15T00:23:05Z",
+    "closed_at": "2024-09-15T01:36:42Z",
+    "labels": [],
+    "url": "https://github.com/codelion/optillm/pull/6",
+    "body": "Neat project!\r\n\r\nI wanted to make some changes and thought I'd submit them to you in a PR, totally understand if you're not interested in them though - if that's the case feel free to close the PR.\r\n\r\n- Feat: Add Dockerfile for container builds.\r\n- Feat: Add Docker Compose example.\r\n- Feat: Add optional authentication to the optillm proxy.\r\n- Feat: Add the option of configuring optillm via environment variables.\r\n- Feat: Add basic /health endpoint.\r\n- Docs: Add documentation for running with Docker.\r\n- Docs: Add documentation for args.\r\n- Fix: Clean up mix of - and _ in args, handle old _ args for backwards compatibility.\r\n- Fix: Minor linting in readme.\r\n- Chore: Move arg parsing out of main to it's own class.",
+    "comments_url": "https://api.github.com/repos/codelion/optillm/issues/6/comments",
+    "author": "sammcj",
+    "comments": [
+      {
+        "user": "codelion",
+        "created_at": "2024-09-15T01:36:40Z",
+        "body": "Thanks for the PR I was planning on adding docker support as well. I have done a quick review and I am going to merge it now."
+      }
+    ]
+  }
+]

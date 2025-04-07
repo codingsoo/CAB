@@ -1,0 +1,1025 @@
+[
+  {
+    "number": 5302,
+    "title": "Question reg. fairseq mms/data_prep/align_and_segment.py",
+    "created_at": "2023-08-30T01:37:20Z",
+    "closed_at": "2023-09-06T21:56:12Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/5302",
+    "body": " I am testing the mms/data_prep/align_and_segment.py code with some datasets and wanted to know some info. In the paper, its mentioned that \"After manual inspection of sample quality and their corresponding score for several languages, we select \u22120.2 as the threshold and choose samples with scores greater than this threshold.\" \r\nSo does the mms/data_prep/align_and_segment.py code do the above mentioned qc, in essence I want to know if the outputs from this code were given directly as inputs to the tts model as training data? If not could you point me to the code that does the qc . I am just testing with various inputs to see if TTS model can be improved for a specific language.\r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/5302/comments",
+    "author": "spanta28",
+    "comments": [
+      {
+        "user": "vineelpratap",
+        "created_at": "2023-09-06T21:33:52Z",
+        "body": "The \"align_and_segment.py\" doesn't do the filtering mentioned above. \r\nThe reason we filter is because we were using a specific dataset based on religious texts which we found to be noisy. It won't be needed for cases where audio and the corresponding text match. \r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "spanta28",
+        "created_at": "2023-09-06T21:56:09Z",
+        "body": "Got it. Thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of whether align_and_segment.py implements the paper's quality control threshold filtering",
+      "Explanation of when filtering is necessary based on dataset characteristics"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:37:36"
+    }
+  },
+  {
+    "number": 4716,
+    "title": "Parallel (batched) translation from different source languages",
+    "created_at": "2022-09-12T06:46:11Z",
+    "closed_at": "2022-09-14T12:30:53Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/4716",
+    "body": "Hi team, \r\n\r\nThe opportunity of parallel translation (in a single batch) from different source languages is of a particular interest,.\r\nThe current obstacle lies in the fact that the tokenizer depends on a single specified source language prior to make input embeddings. E.g., in the frame of `transformers` package, initially I should load a tokenizer with an indication of source language to use,\r\n`tokenizer = AutoTokenizer.from_pretrained(\"nllb-200-3.3B\", use_auth_token=True, src_lang='eng_Latn')`,\r\nand only then, I can define a batch of inputs:\r\n`inputs = tokenizer.prepare_seq2seq_batch(list_of_texts, return_tensors=\"pt\").to(device)`.\r\n\r\nIs there a possibility to organize the workflow in another manner, for example, to make batches of language-independent input embeddings feasible? Maybe somebody already had experience of real usage? Any proposals about code snippet to use?",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/4716/comments",
+    "author": "molokanov50",
+    "comments": [
+      {
+        "user": "gmryu",
+        "created_at": "2022-09-12T13:31:00Z",
+        "body": "I am no expert and I merely want to share my point of view.\r\n\r\nThe actual question is how do you make a tokenizer judge in which language this sentence is written? \r\nThere must be a ID token in front of that sentence, i.e. `<en> I like apples.`, to tell a tokenizer the language. (or an exhaustive program to identify it by reading characters)\r\n\r\nIf it is so, you can actually load all tokenizer you need first, then switch tokenizers if a sentence's language is changed from the previous sentence's.\r\nWell, actually you can also collect sentences written in the same language to form a batch. Then you shuffle/sample from those batches to make a multilingual batch.\r\nThis is the only way I believe."
+      },
+      {
+        "user": "molokanov50",
+        "created_at": "2022-09-14T12:30:53Z",
+        "body": "I found out everything i need to sample `BatchEncoding` objects as you said - `input_ids` and `attention_mask` attributes need to be sampled correctly.\r\nAnd on the whole, your methodics helped me a lot, thanks!\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports processing multilingual batches without requiring a fixed source language tokenizer",
+      "Enables dynamic language identification per input in batch processing",
+      "Maintains tokenization integrity across multiple languages"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:37:44"
+    }
+  },
+  {
+    "number": 4587,
+    "title": "[LanguagePairDataset]: Simplest way of loading embedding vectors as input (Encoder)?",
+    "created_at": "2022-07-18T12:56:04Z",
+    "closed_at": "2022-07-22T09:00:10Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/4587",
+    "body": "#### What is your question?\r\nI'm experimenting with loading **embedding vectors** into an Encoder in the \"transformer\" architecture. My inputs would look like this:\r\n`batch_size x embedding_dim x padded_input_length`\r\n\r\nand my outputs would be standard TranslationTask outputs:\r\n`batch_size x padded_input_length`\r\n\r\nWhile the outputs are tokens, the inputs are already encoded embeddings (hence the extra dimension).\r\n\r\nI'm fairly confident in modifying the `LanguagePairDataset` class to accept this input. However, I'm not sure how to change `load_langpair_dataset` within `fairseq/tasks/translation.py` to load numerical data of shape, as some helper functions used here (such as `load_indexed_dataset` within `fairseq/data/data_utils.py` presuppose token data and the use of a dictionary (which I will not need for the Encoder). \r\n\r\nWhat would be a minimal example/best way of going about loading this type of input? Perhaps the answer lies in using the `dataset_impl` argument?\r\n\r\nCould I get some pointers? :)\r\n\r\n#### Code\r\n\r\nI'm happy to share any snippets of what I have so far if needed.\r\n\r\nI'm using fairseq 0.12.2, installed with `pip install --editable ./` on Python 3.10.\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/4587/comments",
+    "author": "st-vincent1",
+    "comments": [
+      {
+        "user": "gmryu",
+        "created_at": "2022-07-19T10:34:26Z",
+        "body": "I assume you are using copies of `data/language_pair_dataset.py` and `tasks/translation.py`. (If you are not, copy them and modify the copy, not the origin)\r\n\r\nThen, `fairseq-preprocess`ed data is numerical. Dictionaries are passed in `load_indexed_dataset` but they are not used here.\r\nSo please calm down a bit. I do not believe it is a wise choice to mess with `dataset_impl` as they are mostly meant to save memory / speed up during excution.\r\n\r\nActually one step back, do you really need to use `load_indexed_dataset`? \r\nIf you do not require loading a huge amount of data via mmap, you can use your own script to load your binary data. \r\n(well, you can use `load_indexed_dataset` as well. In that case read through their implementation. They have some format to follow. Though I guess you want to start from `fairseq-preprocess`.)\r\n\r\nThe minimal way of creating a `LanguagePairDataset` is:\r\n```\r\nlines=[\"I am John.\", \"You are Alice.\"] # raw inputs.\r\nsrc_tokens = [\r\n        #each is a 1d LongTensor. pad, non-pad, length do not matter.\r\n        fs_dict.encode_line( _str , add_if_not_exist=False).long()\r\n        for _str in lines\r\n]\r\nsrc_lengths = [t.numel() for t in src_tokens]\r\n# the same for tgt_tokens\r\n\r\nLanguagePairDataset(\r\n        src_tokens, src_lengths, src_dict,\r\n        tgt_tokens, tgt_lengths, tgt_dict,\r\n        left_pad_source=True, ...\r\n)\r\n```\r\nA proof that you can use `list[torch.LongTensor]` instead of those fancy dataset. (may take more time during loading, but loading is seldom a bottle neck compared to training I belive)"
+      },
+      {
+        "user": "st-vincent1",
+        "created_at": "2022-07-21T08:28:11Z",
+        "body": "@gmryu, Thanks for the reply! I'm working on copies of course :)\r\n\r\nI took your advice and looked away from `load_indexed_dataset` and `dataset_impl` and instead I just load the dataset directly in the `load_dataset` function within the `tasks/mytask.py` implementation. So far it seems to be working :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Avoids dependency on token-based helper functions like load_indexed_dataset",
+      "Provides a method to load numerical embeddings directly without token preprocessing",
+      "Works with existing dataset infrastructure without complex modifications",
+      "Maintains compatibility with LanguagePairDataset structure",
+      "Avoids deep changes to dataset_impl or memory mapping implementations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:37:51"
+    }
+  },
+  {
+    "number": 4186,
+    "title": "speech_to_text's example might have a typo",
+    "created_at": "2022-02-06T08:31:02Z",
+    "closed_at": "2022-02-13T14:10:06Z",
+    "labels": [
+      "question",
+      "needs triage",
+      "speech"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/4186",
+    "body": "## \u2753 Questions and Help\r\n\r\n#### What is your question?\r\nAm I misusing script or do we have a typo?\r\n\r\n#### Code\r\n```python3\r\npython fairseq/examples/speech_to_text/prep_librispeech_data.py\r\n```\r\n \r\ncreates an error:\r\n```python3\r\nTraceback (most recent call last):\r\n  File \"prep_librispeech_data.py\", line 14, in <module>\r\n    from examples.speech_to_text.data_utils import (\r\nModuleNotFoundError: No module named 'examples'\r\n```\r\n#### What have you tried?\r\nchanging source code to:\r\n\r\n```python3\r\nfrom data_utils import (\r\n    create_zip,\r\n    extract_fbank_features,\r\n    gen_config_yaml,\r\n    gen_vocab,\r\n    get_zip_manifest,\r\n    save_df_to_tsv,\r\n)\r\n```\r\nseems to work then...\r\n#### What's your environment?\r\n\r\n - fairseq Version 0.10.2\r\n - PyTorch Version 1.10.2+cu113\r\n - OS Debian GNU/Linux 11 (bullseye)\r\n - How you installed fairseq (`pip`, source): clone source, pip install path/to/fairseq\r\n - Python version: 3.7.11\r\n - CUDA/cuDNN version: cu113\r\n - GPU models and configuration: RTX 3050 TI\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/4186/comments",
+    "author": "ZurabDz",
+    "comments": [
+      {
+        "user": "duj12",
+        "created_at": "2022-02-12T06:08:24Z",
+        "body": "you may add the path of fairseq root to your PYTHONPATH, input this in shell script:\r\nexport PYTHONPYTH=$PYTHONPATH:/path/to/your/fairseq\r\nso that python can find 'examples/speech_to_text/prep_librispeech_data.py' to execute."
+      },
+      {
+        "user": "ZurabDz",
+        "created_at": "2022-02-12T07:21:46Z",
+        "body": "Yep you are right, sorry didn't think of that. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolve Python module path resolution issue preventing script execution",
+      "Maintain original script structure while ensuring proper module discovery",
+      "Provide environment-based solution rather than code modification",
+      "Ensure reproducibility for other users following the example"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:38:12"
+    }
+  },
+  {
+    "number": 3927,
+    "title": "How to restore the checkpoint in wav2vec (fairseq-hydra-train))",
+    "created_at": "2021-10-04T07:39:59Z",
+    "closed_at": "2021-10-04T14:12:01Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3927",
+    "body": "## \u2753 Questions and Help\r\n\r\n### Before asking:\r\n1. search the issues.\r\n2. search the docs.\r\n\r\n<!-- If you still can't find what you need: -->\r\n\r\n#### What is your question?\r\n\r\nHi, I want to restore the checkpoint to continue the training processing. \r\nHowever, I can't find the parser (--restore_file) in the fairseq-hydra-train. It only can be found in the fairseq-train.\r\nHow to restore the checkpoint on wav2vec (fairseq-hydra-train))?\r\n\r\nThank you.\r\n\r\n\r\n#### Code\r\n\r\n<!-- Please paste a code snippet if your question requires it! -->\r\n\r\n#### What have you tried?\r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version (e.g., 1.0 or main):\r\n - PyTorch Version (e.g., 1.0) 1.9\r\n - OS (e.g., Linux): Linux\r\n - How you installed fairseq (`pip`, source): source\r\n - Build command you used (if compiling from source):\r\n - Python version: 3.7\r\n - CUDA/cuDNN version: 11.0\r\n - GPU models and configuration: Nviaia-V100\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3927/comments",
+    "author": "r03943158",
+    "comments": [
+      {
+        "user": "ahazeemi",
+        "created_at": "2021-10-04T08:22:43Z",
+        "body": "@r03943158 We can use `checkpoint.restore_file` for it:\r\n\r\n```\r\nfairseq-hydra-train \\\r\n    task.data=/path/to/data \\\r\n    checkpoint.restore_file=/path/to/checkpoint\r\n    --config-dir /path/to/fairseq-py/examples/wav2vec/config/pretraining \\\r\n    --config-name wav2vec2_large_librivox\r\n```"
+      },
+      {
+        "user": "r03943158",
+        "created_at": "2021-10-04T14:11:47Z",
+        "body": "@ahazeemi Thank you! It seems the script works fine."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrates how to specify a checkpoint path using Hydra configuration syntax",
+      "Shows integration with fairseq-hydra-train's parameter structure",
+      "Enables resuming training from existing checkpoint"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:38:18"
+    }
+  },
+  {
+    "number": 3831,
+    "title": "Wav2vec CTC fine tuning model error",
+    "created_at": "2021-08-29T04:03:26Z",
+    "closed_at": "2021-08-30T06:59:08Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3831",
+    "body": "## \u2753 Questions and Help\r\nHi everyone, I am going to do fine-tuning my custom dataset using the `wav2vec_small_960h.pt`.\r\n\r\n<!-- If you still can't find what you need: -->\r\nHowever, I got an error which details as below:\r\n`\r\n-- Process 0 terminated with the following error:\r\nTraceback (most recent call last):\r\n  File \"/home/ubuntu/.conda/envs/fairseq/lib/python3.6/site-packages/torch/multiprocessing/spawn.py\", line 59, in _wrap\r\n    fn(i, *args)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/distributed/utils.py\", line 328, in distributed_main\r\n    main(cfg, **kwargs)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq_cli/train.py\", line 97, in main\r\n    model = task.build_model(cfg.model)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/tasks/audio_finetuning.py\", line 190, in build_model\r\n    model = super().build_model(model_cfg)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/tasks/audio_pretraining.py\", line 198, in build_model\r\n    model = super().build_model(model_cfg)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/tasks/fairseq_task.py\", line 320, in build_model\r\n    model = models.build_model(cfg, self)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/models/__init__.py\", line 107, in build_model\r\n    return model.build_model(cfg, task)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/models/wav2vec/wav2vec2_asr.py\", line 176, in build_model\r\n    w2v_encoder = Wav2VecEncoder(cfg, len(task.target_dictionary))\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/models/wav2vec/wav2vec2_asr.py\", line 356, in __init__\r\n    model = task.build_model(w2v_args.model)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/tasks/audio_pretraining.py\", line 198, in build_model\r\n    model = super().build_model(model_cfg)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/tasks/fairseq_task.py\", line 320, in build_model\r\n    model = models.build_model(cfg, self)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/models/__init__.py\", line 107, in build_model\r\n    return model.build_model(cfg, task)\r\n  File \"/home/ubuntu/manhlt/fairseq/fairseq/models/wav2vec/wav2vec2_asr.py\", line 176, in build_model\r\n    w2v_encoder = Wav2VecEncoder(cfg, len(task.target_dictionary))\r\nTypeError: object of type 'NoneType' has no len()\r\n`\r\n#### Code\r\nhere is my running script:\r\n`\r\nfairseq-hydra-train task.data=/home/ubuntu/manhlt/phoST-ASR/format_dataset/phost-fairseq-test/ \\\r\n                    model.w2v_path=/home/ubuntu/wav2vec_small_960h.pt \\\r\n                    --config-dir config/finetuning \\\r\n                    --config-name base_100h\r\n`\r\nI already have these files in the data folder:\r\n- dict.ltr.txt\r\n- train.ltr\r\n- train.wrd\r\n- valid.ltr\r\n- valid.wrd\r\n- train.tsv\r\n- valid.tsv\r\n- lexicon.txt\r\n<!-- Please paste a code snippet if your question requires it! -->   \r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version : 1.0.0a0+6f847c8\r\n - PyTorch Version: 1.9\r\n - OS linux: Ubuntu 18.04\r\n - How you installed fairseq (`pip`, source): from source\r\n - Build command you used (if compiling from source):\r\n - Python version:\r\n - CUDA/cuDNN version: Cuda 11.0\r\n - GPU models and configuration: NVIDIA V100\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3831/comments",
+    "author": "v-manhlt3",
+    "comments": [
+      {
+        "user": "xiaoch2004",
+        "created_at": "2021-08-30T04:20:30Z",
+        "body": "wav2vec_small_960h.pt is the model after finetuned. You should use wav2vec_small.pt instead"
+      },
+      {
+        "user": "v-manhlt3",
+        "created_at": "2021-08-30T06:59:08Z",
+        "body": "Thanks for your quick response! the problem is solved."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the root cause of the 'NoneType' error related to task.target_dictionary",
+      "Ensures correct model checkpoint format is used for fine-tuning initialization",
+      "Confirms compatibility between pretrained model and fine-tuning setup"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:38:25"
+    }
+  },
+  {
+    "number": 3394,
+    "title": "Relation of Wav2vec2.0 \"max-sample-size\" and audio time",
+    "created_at": "2021-03-25T02:29:51Z",
+    "closed_at": "2021-04-25T02:08:40Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3394",
+    "body": "## \u2753 Questions and Help\r\n\r\n### Before asking:   \r\n1. search the issues.   \r\n2. search the docs.    \r\n\r\n<!-- If you still can't find what you need: -->\r\n\r\n#### What is your question?\r\n\r\nI want to know the relation of Wav2vec2.0 \"max-sample-size\" and audio time. For example, when I set the \"max_sample_size=320000\", what is the duration of wav audios(16000Hz) ?\r\n\r\n#### Code\r\n\r\n<!-- Please paste a code snippet if your question requires it! -->   \r\n\r\n#### What have you tried?\r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version (e.g., 1.0 or master):\r\n - PyTorch Version (e.g., 1.0)\r\n - OS (e.g., Linux):\r\n - How you installed fairseq (`pip`, source):\r\n - Build command you used (if compiling from source):\r\n - Python version:\r\n - CUDA/cuDNN version:\r\n - GPU models and configuration:\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3394/comments",
+    "author": "CSLujunyu",
+    "comments": [
+      {
+        "user": "harveenchadha",
+        "created_at": "2021-04-23T21:48:12Z",
+        "body": "If your max_sample_size is 320000 and your sample rate is 16000 then it means at once you are allowing a file of 20 seconds.\r\n\r\n320000/16000 = 20 seconds"
+      },
+      {
+        "user": "CSLujunyu",
+        "created_at": "2021-04-25T02:08:40Z",
+        "body": "Thanks~"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of the mathematical relationship between max-sample-size and audio duration",
+      "Clarification of how sample rate affects duration calculation",
+      "Generalizable formula for converting sample size to seconds",
+      "Validation of unit conversion between samples and time"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:38:36"
+    }
+  },
+  {
+    "number": 3265,
+    "title": "Preprocessing: help with parameter",
+    "created_at": "2021-02-22T12:31:09Z",
+    "closed_at": "2021-02-22T17:12:06Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3265",
+    "body": "I'm training a couple of transformer for some translation tasks to make a research, but I'm not sure if the fairseq-preprocess command does what I want to. Specifically, I'm wondering about the parameter --tokenizer and --bpe.\r\n\r\nWhen we specify these, like --tokenizer moses, is the preprocessing going to tokenize, or we are just telling to the script that the data was already tokenized using the one indicated? I'm wondering the same for the parameter --bpe.\r\n\r\nOn top of that, do we need to give these two parameters again to the fairseq-train command right? \r\n\r\nI know it's probably a silly question, but I would like some clarification, as the documentation is a bit vague. \r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3265/comments",
+    "author": "fferlito",
+    "comments": [
+      {
+        "user": "lematt1991",
+        "created_at": "2021-02-22T16:19:45Z",
+        "body": "Hmm, I'm  not sure why these arguments are even visible for `fairseq-preprocess` as they seem to meant for use with the torch hub interface (Maybe @myleott  or @alexeib have more context on this?).  To clarify, you should apply tokenization and BPE encoding prior to calling `fairseq-preprocess`."
+      },
+      {
+        "user": "fferlito",
+        "created_at": "2021-02-22T16:27:57Z",
+        "body": "@lematt1991 thanks a lot for the clarification. I had this doubt as the example for the translator use the moses library and the subword-nmt before using the fairseq library, but in the documentation they were given as possible parameters. \r\nI assume that I don't need to specify these parameter in the `fairseq-preprocess` and `fairseq-train` right?\r\n\r\nThanks a lot for your time! :)"
+      },
+      {
+        "user": "lematt1991",
+        "created_at": "2021-02-22T17:12:06Z",
+        "body": "> I assume that I don't need to specify these parameter in the fairseq-preprocess and fairseq-train right?\r\n\r\nThat's correct\n\n---\n\nClosing for now.  Please open a new issue if you are still having problems."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarifies whether --tokenizer and --bpe parameters in fairseq-preprocess trigger tokenization/BPE processing or merely indicate pre-tokenized data",
+      "Explains the relationship between preprocessing parameters and training parameters",
+      "Confirms whether external preprocessing (like Moses tokenization) is required before using fairseq tools",
+      "Addresses the documentation ambiguity without requiring technical implementation details"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:38:57"
+    }
+  },
+  {
+    "number": 3050,
+    "title": "Load_model_ensemble_and_task() gives error for multiple models",
+    "created_at": "2020-12-20T09:45:49Z",
+    "closed_at": "2020-12-25T18:27:41Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/3050",
+    "body": "\r\n#### What is your question?\r\n\r\nHi, I am having problems loading pretrained models. I used the code given in the readme file, and I have tried it for two models, but the load_model_ensemble_and_task()  function is raising different errors for both of them.\r\n\r\n**When I try to load \"wav2vec_large.pt\" model, I get** \r\n\r\nKeyError                                  Traceback (most recent call last)\r\n<ipython-input-3-ca5356f4acbd> in <module>\r\n----> 1 model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp])\r\n\r\n~/fairseq/checkpoint_utils.py in load_model_ensemble_and_task(filenames, arg_overrides, task, strict, suffix, num_shards)\r\n    277             if not PathManager.exists(filename):\r\n    278                 raise IOError(\"Model file not found: {}\".format(filename))\r\n--> 279             state = load_checkpoint_to_cpu(filename, arg_overrides)\r\n    280             if shard_idx == 0:\r\n    281                 args = state[\"args\"]\r\n\r\n~/fairseq/checkpoint_utils.py in load_checkpoint_to_cpu(path, arg_overrides)\r\n    230         for arg_name, arg_val in arg_overrides.items():\r\n    231             setattr(args, arg_name, arg_val)\r\n--> 232     state = _upgrade_state_dict(state)\r\n    233     return state\r\n    234 \r\n\r\n~/fairseq/checkpoint_utils.py in _upgrade_state_dict(state)\r\n    432 \r\n    433     # set any missing default values in the task, model or other registries\r\n--> 434     registry.set_defaults(state[\"args\"], tasks.TASK_REGISTRY[state[\"args\"].task])\r\n    435     registry.set_defaults(state[\"args\"], models.ARCH_MODEL_REGISTRY[state[\"args\"].arch])\r\n    436     for registry_name, REGISTRY in registry.REGISTRIES.items():\r\n\r\nKeyError: 'speech_pretraining' \r\n\r\n **And when I try to load \"wav2vec_small_960h.pt\", I get:**\r\n\r\nRuntimeError: Error(s) in loading state_dict for Wav2VecCtc:\r\n\tsize mismatch for w2v_encoder.proj.weight: copying a param with shape torch.Size([32, 768]) from checkpoint, the shape in current model is torch.Size([512, 768]).\r\n\tsize mismatch for w2v_encoder.proj.bias: copying a param with shape torch.Size([32]) from checkpoint, the shape in current model is torch.Size([512]).\r\n\r\n#### Code\r\n\r\nimport torch\r\nimport fairseq\r\n\r\ncp = \"wav2vec_large.pt\"\r\nmodel, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp])\r\n\r\n#### What's your environment?\r\nI am trying this in a container which is created from the jupyter/base-notebook image.\r\n\r\n - fairseq Version: 0.10.1\r\n - PyTorch Version (e.g., 1.0): 1.7.0\r\n - How you installed fairseq (`pip`, source): pip \r\n - Python version: 3.8.6\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/3050/comments",
+    "author": "myazann",
+    "comments": [
+      {
+        "user": "ajmssc",
+        "created_at": "2020-12-24T19:08:30Z",
+        "body": "try `pip install soundfile git+git://github.com/pytorch/fairseq.git@b8ea8a9b72c82192da07e3377adf4ebbde16716d`"
+      },
+      {
+        "user": "myazann",
+        "created_at": "2020-12-25T18:27:41Z",
+        "body": "> try `pip install soundfile git+git://github.com/pytorch/fairseq.git@b8ea8a9b72c82192da07e3377adf4ebbde16716d`\r\n\r\nThis works, thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Resolves version incompatibility between fairseq installation and model checkpoints",
+      "Ensures required dependencies for speech pretraining tasks are properly installed"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:39:19"
+    }
+  },
+  {
+    "number": 2896,
+    "title": "question about self-training wav2vec 2.0",
+    "created_at": "2020-11-16T09:01:20Z",
+    "closed_at": "2020-11-17T07:49:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2896",
+    "body": "Hello, I was wondering if for finetuning the final wav2vec 2.0 model (ctc ft), you are using both the labeled and pseudo-labeled data? \r\nAlso, would it help if we continued training the finetuned wav2vec model (with 100h labeled data) on the pseudo-labeled data or is better to finetune from scratch?",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2896/comments",
+    "author": "natspan",
+    "comments": [
+      {
+        "user": "alexeib",
+        "created_at": "2020-11-16T18:40:20Z",
+        "body": "yes it is using both. we finetuned the models from scratch. you can try fine-tuning a fine-tuned model. i tried it and it didnt help, but i also didnt run many experiments with this setup so it might be a question of finding the right hyper params "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarifies whether labeled and pseudo-labeled data are both used during final fine-tuning",
+      "Compares effectiveness of fine-tuning from scratch vs continuing training from pre-fine-tuned model",
+      "Addresses potential hyperparameter considerations for different training approaches"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:39:24"
+    }
+  },
+  {
+    "number": 2593,
+    "title": "Inconsistent Sacrebleu score using ./scripts/sacrebleu.sh and score.py",
+    "created_at": "2020-09-09T07:01:15Z",
+    "closed_at": "2020-09-10T09:02:15Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2593",
+    "body": "## \u2753 Questions and Help\r\n\r\n### Before asking:   \r\n1. search the issues.   \r\n2. search the docs.    \r\n\r\n<!-- If you still can't find what you need: -->\r\n\r\n#### What is your question?\r\nHi! I want to check if I use sacrebleu in the right way.\r\n\r\n#### Code\r\nGenerate ``vanilla.output.detok.txt`` : \r\n``python generate.py ./data-bin/wmt14_en_de --path checkpoints_wmt14en2de_vanilla_transformer/checkpoint_best.pt --batch-size 512 --beam 5  --remove-bpe > vanilla.output.detok.txt``\r\n\r\nThen run \r\n``bash ./scripts/sacrebleu.sh wmt14/full en de vanilla.output.detok.txt\r\n``. \r\nThe output is \r\n``BLEU+case.mixed+lang.en-de+numrefs.1+smooth.exp+test.wmt14/full+tok.13a+version.1.4.12 = 26.1 57.3/31.8/19.8/12.9 (BP = 1.000 ratio = 1.039 hyp_len = 65117 ref_len = 62688)\r\n``\r\n\r\nBut when I use ``score.py``: \r\nGenerate ``vanilla.output.detok.sys``, ``vanilla.output.detok.sys``: \r\n``grep ^H vanilla.output.detok.txt | cut -f3- > vanilla.output.detok.sys``\r\n``grep ^T vanilla.output.detok.txt | cut -f2- > vanilla.output.detok.ref``\r\n\r\n1) without ``sacrebleu``:  \r\n``python score.py --sys vanilla.output.detok.sys --ref vanilla.output.detok.ref``\r\noutput:\r\n``\r\nNamespace(ignore_case=False, order=4, ref='vanilla.output.detok.ref', sacrebleu=False, sentence_bleu=False, sys='vanilla.output.detok.sys')\r\nBLEU4 = 26.72, 58.1/32.5/20.3/13.3 (BP=1.000, ratio=1.031, syslen=66486, reflen=64506)\r\n``\r\n2) with ``sacrebleu``: \r\n``python score.py --sys vanilla.output.detok.sys --ref vanilla.output.detok.ref --sacrebleu``\r\noutput: \r\n``\r\nNamespace(ignore_case=False, order=4, ref='vanilla.output.detok.ref', sacrebleu=True, sentence_bleu=False, sys='vanilla.output.detok.sys')\r\nWARNING:root:That's 100 lines that end in a tokenized period ('.')\r\nWARNING:root:It looks like you forgot to detokenize your test data, which may hurt your score.\r\nWARNING:root:If you insist your data is detokenized, or don't care, you can suppress this message with '--force'.\r\n<sacrebleu.metrics.bleu.BLEUScore object at 0x7fbbbc1ebcd0>\r\n``. I checked the output in this object, it is ``27.36``.\r\n\r\nSo did I use these commands correctly? Thank you.\r\n\r\n\r\n<!-- Please paste a code snippet if your question requires it! -->   \r\n\r\n#### What have you tried?\r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version (e.g., 1.0 or master): 0.9\r\n - PyTorch Version (e.g., 1.0): \r\n - OS (e.g., Linux):\r\n - How you installed fairseq (`pip`, source):\r\n - Build command you used (if compiling from source):\r\n - Python version:\r\n - CUDA/cuDNN version:\r\n - GPU models and configuration:\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2593/comments",
+    "author": "haorannlp",
+    "comments": [
+      {
+        "user": "lematt1991",
+        "created_at": "2020-09-09T14:11:34Z",
+        "body": "You're close.  One thing that the `./scripts/sacrebleu.sh` script does that the `score.py` script does not is detokenize.  To reproduce the `sacrebleu.sh` script using `score.py` you'll want to make the following change:\r\n\r\n```\r\ngrep ^H vanilla.output.detok.txt | cut -f3- | sacremoses detokenize > vanilla.output.detok.sys\r\ngrep ^T vanilla.output.detok.txt | cut -f2- | sacremoses detokenize > vanilla.output.detok.ref\r\n```\r\n\r\nThis will detokenize both the system outputs and the reference before computing BLEU.  Hope this helps!"
+      },
+      {
+        "user": "haorannlp",
+        "created_at": "2020-09-10T09:02:15Z",
+        "body": "@lematt1991 Thank you for your clarification. But BLEU4 now turned to be: 22.27 (without ``--sacrebleu``), 25.89 (with ``sacrebleu``). Does the ``--remove-bpe`` parameter in ``generate.py`` already detokenize the output? \n\n---\n\n@lematt1991 \r\n``grep ^H vanilla.output.detok.txt | cut -f3 | sacremoses detokenize > vanilla.output.detok.sys``\r\n``grep ^T vanilla.output.detok.txt | cut -f2 | sacremoses detokenize > vanilla.output.detok.ref``\r\ncan reproduce the results."
+      },
+      {
+        "user": "lorelupo",
+        "created_at": "2020-11-05T17:43:03Z",
+        "body": "Hello ,\r\n\r\nIt looks to me that this is still an issue for wmt14 en-fr. I follow this procedure:\r\n\r\n1. generate with\r\n    `fairseq-generate ./data-bin/wmt14_en_fr --task translation --path $sdir/$avg_checkpoint  --batch-size 16 --remove-bpe --beam 4 --lenpen 0.6 | tee $sdir/logs/test.log`\r\n2. score with \r\n   ```\r\n   grep ^H $sdir/logs/test.log | cut -f3 | sacremoses detokenize > $sdir/logs/test.detok.sys\r\n   grep ^T $sdir/logs/test.log | cut -f2 | sacremoses detokenize > $sdir/logs/test.detok.ref\r\n   python fairseq_cli/score.py --sys $sdir/logs/test.detok.sys --ref $sdir/logs/test.detok.ref --sacrebleu | tee $sdir/logs/score.log\r\n   ```\r\n3. finally scoring with:\r\n   `bash scripts/sacrebleu.sh wmt14/full $src $tgt $sdir/logs/test.log | tee $sdir/logs/score.log`\r\n\r\nResults:\r\n\r\n2. Scoring with `fairseq_cli/score.py`: \r\n    BLEU = **37.04** 66.6/44.8/32.1/23.5 (BP = 0.956 ratio = 0.957 hyp_len = 80771 ref_len = 84388)\r\n\r\n3. Scoring with `scripts/sacrebleu.sh`:\r\n    BLEU+case.mixed+lang.en-fr+numrefs.1+smooth.exp+test.wmt14/full+tok.13a+version.1.4.14 = **32.3** 60.5/38.3/26.0/17.9 (BP = 1.000 ratio = 1.045 hyp_len = 80771 ref_len = 77306)\r\n\r\nI think that this might be due to the fact that when removing BPE some tokens remains separated by a white-space even after detokenization, although they should not, e.g. \"d' un\" instead of \"d'un\", 'km / h\" instead of \"km/h\".\r\n\r\nAs a concrete example, this commands\r\n````\r\nref=~/.sacrebleu/wmt14/full/en-fr.fr\r\nsys=checkpoints/wmt14/transfo_base/logs/test.log.sorted.detok\r\npaste -d \\\\n $sys $ref >out.txt\r\nhead out.txt\r\ntail out.txt\r\n````\r\n\r\nreturn:\r\n\r\n```\r\nCoup de pinceau spectaculaire au-dessus de Bogota\r\nSpectaculaire saut en \"wingsuit\" au-dessus de Bogota\r\nLe sportif Jhonathan Florez a saut\u00e9 d' un h\u00e9licopt\u00e8re au-dessus de Bogota, la capitale de la Colombie, jeudi.\r\nLe sportif Jhonathan Florez a saut\u00e9 jeudi d'un h\u00e9licopt\u00e8re au-dessus de Bogota, la capitale colombienne.\r\nPortant une combinaison d' ailes, il a survol\u00e9 le c\u00e9l\u00e8bre sanctuaire Monserrate \u00e0 160 km / h. Le sanctuaire est situ\u00e9 \u00e0 une altitude de plus de 3 000 m\u00e8tres et de nombreux spectateurs s' y sont rassembl\u00e9s pour observer son exploitation.\r\nEquip\u00e9 d'un wingsuit (une combinaison munie d'ailes), il est pass\u00e9 \u00e0 160 km/h au-dessus du c\u00e9l\u00e8bre sanctuaire Monserrate, situ\u00e9 \u00e0 plus de 3 000 m\u00e8tres d'altitude, o\u00f9 de nombreux badauds s'\u00e9taient rassembl\u00e9s pour observer son exploit.\r\nUne bo\u00eete noire dans votre voiture?\r\nUne bo\u00eete noire dans votre voiture ?\r\nTandis que les planificateurs routiers am\u00e9ricains luttent pour trouver l' argent n\u00e9cessaire \u00e0 la mise en place d' un r\u00e9seau routier en panne, beaucoup commencent \u00e0 voir une solution dans une petite bo\u00eete noire qui correspond parfaitement au tableau de bord de votre voiture.\r\nAlors que les planificateurs du r\u00e9seau routier des \u00c9tats-Unis ont du mal \u00e0 trouver l'argent n\u00e9cessaire pour r\u00e9parer l'infrastructure autorouti\u00e8re en d\u00e9cr\u00e9pitude, nombreux sont ceux qui entrevoient une solution sous forme d'une petite bo\u00eete noire qui se fixe au-dessus du tableau de bord de votre voiture.\r\n```\r\n\r\nand\r\n\r\n```\r\nLe conseil scolaire Marguerite-Bourgeoys a cr\u00e9\u00e9 un centre de recherche qui fournira des outils aux enseignants qui, eux-m\u00eames, viennent parfois d' ailleurs.\r\nLa commission scolaire Marguerite-Bourgeoys a cr\u00e9\u00e9 un centre de recherche qui donnera des outils aux professeurs qui, eux aussi parfois, viennent d'ailleurs.\r\nRachida Azdouz de l' Universit\u00e9 de Montr\u00e9al sera le directeur scientifique.\r\nRachida Azdouz, de l'Universit\u00e9 de Montr\u00e9al, en sera la directrice scientifique.\r\nPr\u00e9paration \u00e0 la gestion d' une classe dans un contexte nord-am\u00e9ricain et qu\u00e9b\u00e9cois.\r\nLa pr\u00e9paration \u00e0 g\u00e9rer une classe dans un contexte nord-am\u00e9ricain, qu\u00e9b\u00e9cois.\r\n\"Le besoin r\u00e9el est de mettre en \u0153uvre diff\u00e9rentes strat\u00e9gies \u00e9ducatives\", r\u00e9sume-t-elle.\r\n\"Des strat\u00e9gies p\u00e9dagogiques diff\u00e9rentes, c'est \u00e7a le v\u00e9ritable besoin \", r\u00e9sume-t-elle.\r\nLa recherche portera sur l' inclusion sous tous ses aspects: linguistique, \u00e9ducatif, social et culturel.\r\nLes recherches porteront sur l'inclusion sous tous ses angles: linguistique, scolaire, social et culturel.\r\n```\r\n\r\nIs there a way to fix this?\r\n"
+      },
+      {
+        "user": "kurtabela",
+        "created_at": "2022-01-25T11:51:49Z",
+        "body": "> @lematt1991 Thank you for your clarification. But BLEU4 now turned to be: 22.27 (without `--sacrebleu`), 25.89 (with `sacrebleu`). Does the `--remove-bpe` parameter in `generate.py` already detokenize the output?\r\n\r\nI do have the `--remove-bpe` parameter but I still face this warning. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why different BLEU scores occur between sacrebleu.sh and score.py methods",
+      "Clarification on proper detokenization requirements for BLEU scoring",
+      "Guidance on interaction between --remove-bpe flag and subsequent processing steps",
+      "Validation of correct scoring methodology for WMT benchmarks",
+      "Explanation of tokenization normalization requirements"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:40:25"
+    }
+  },
+  {
+    "number": 2558,
+    "title": "Dataset not found even though all files are present",
+    "created_at": "2020-09-02T16:09:11Z",
+    "closed_at": "2020-09-03T11:04:59Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2558",
+    "body": "Hi all!\r\nI was training a seq2seq model for a specific task (In same language) however I am getting this error:-\r\n```\r\nNamespace(activation_fn='gelu', adaptive_softmax_cutoff=None, adaptive_softmax_dropout=0, arch='bart_large', attention_dropout=0.0, best_checkpoint_metric='loss', bpe=None, bucket_cap_mb=25, clip_norm=0.1, cpu=False, criterion='cross_entropy', cross_self_attention=False, curriculum=0, data='/content/drive/My Drive/HashPro/preprocessed', dataset_impl=None, ddp_backend='c10d', decoder_attention_heads=16, decoder_embed_dim=1024, decoder_embed_path=None, decoder_ffn_embed_dim=4096, decoder_input_dim=1024, decoder_layerdrop=0, decoder_layers=12, decoder_layers_to_keep=None, decoder_learned_pos=True, decoder_normalize_before=False, decoder_output_dim=1024, device_id=0, disable_validation=False, distributed_backend='nccl', distributed_init_method=None, distributed_no_spawn=False, distributed_port=-1, distributed_rank=0, distributed_world_size=1, dropout=0.2, empty_cache_freq=0, encoder_attention_heads=16, encoder_embed_dim=1024, encoder_embed_path=None, encoder_ffn_embed_dim=4096, encoder_layerdrop=0, encoder_layers=12, encoder_layers_to_keep=None, encoder_learned_pos=True, encoder_normalize_before=False, fast_stat_sync=False, find_unused_parameters=False, fix_batches_to_gpus=False, fixed_validation_seed=None, force_anneal=None, fp16=True, fp16_init_scale=128, fp16_scale_tolerance=0.0, fp16_scale_window=None, keep_interval_updates=-1, keep_last_epochs=-1, layer_wise_attention=False, layernorm_embedding=True, lazy_load=False, left_pad_source='True', left_pad_target='False', load_alignments=False, log_format=None, log_interval=1000, lr=[0.02], lr_scheduler='fixed', lr_shrink=0.1, max_epoch=0, max_sentences=8, max_sentences_valid=8, max_source_positions=1024, max_target_positions=1024, max_tokens=None, max_tokens_valid=None, max_update=0, maximize_best_checkpoint_metric=False, memory_efficient_fp16=False, min_loss_scale=0.0001, min_lr=-1, momentum=0.0, no_cross_attention=False, no_epoch_checkpoints=False, no_last_checkpoints=False, no_progress_bar=False, no_save=False, no_save_optimizer_state=False, no_scale_embedding=True, no_token_positional_embeddings=False, num_workers=1, optimizer='sgd', optimizer_overrides='{}', pooler_activation_fn='tanh', pooler_dropout=0.0, raw_text=False, relu_dropout=0.0, required_batch_size_multiple=8, reset_dataloader=False, reset_lr_scheduler=False, reset_meters=False, reset_optimizer=False, restore_file='checkpoint_last.pt', save_dir='/content/drive/My Drive/HashPro/Checkpoints/', save_interval=1, save_interval_updates=0, seed=1, sentence_avg=False, share_all_embeddings=True, share_decoder_input_output_embed=True, skip_invalid_size_inputs_valid_test=False, source_lang=None, target_lang=None, task='translation', tensorboard_logdir='', threshold_loss_scale=None, tokenizer=None, train_subset='train', truncate_source=False, update_freq=[1], upsample_primary=1, use_bmuf=False, user_dir=None, valid_subset='valid', validate_interval=1, warmup_updates=0, weight_decay=0.0)\r\n| [input] dictionary: 21936 types\r\n| [output] dictionary: 9216 types\r\n\r\nTraceback (most recent call last):\r\n  File \"/usr/local/bin/fairseq-train\", line 8, in <module>\r\n    sys.exit(cli_main())\r\n  File \"/usr/local/lib/python3.6/dist-packages/fairseq_cli/train.py\", line 333, in cli_main\r\n    main(args)\r\n  File \"/usr/local/lib/python3.6/dist-packages/fairseq_cli/train.py\", line 48, in main\r\n    task.load_dataset(valid_sub_split, combine=False, epoch=0)\r\n  File \"/usr/local/lib/python3.6/dist-packages/fairseq/tasks/translation.py\", line 219, in load_dataset\r\n    truncate_source=self.args.truncate_source,\r\n  File \"/usr/local/lib/python3.6/dist-packages/fairseq/tasks/translation.py\", line 52, in load_langpair_dataset\r\n    raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))\r\nFileNotFoundError: Dataset not found: valid (/content/drive/My Drive/HashPro/preprocessed)\r\n```\r\nIt does report finding the dictionaries, but apparently the dataset is not found. Here are the dataset files :-\r\n> dict.input.txt\r\n> dict.output.txt\r\n> hashpro_hashes.bpe.input\r\n> hashpro_hashes.bpe.output\r\n> preprocess.log\r\n> train.input-output.input.bin\r\n> train.input-output.input.idx\r\n> train.input-output.output.bin\r\n> train.input-output.output.idx\r\n\r\nSince all the files are included, and the path seems to be correct (since it can load up the dictionaries) I don't understand why such a problem is occurring. This is the training command I am using to train the whole model-\r\n\r\n`%%bash`\r\n`fairseq-train '/content/drive/My Drive/HashPro/preprocessed' --max-sentences 8 --fp16 --lr 0.02 --clip-norm 0.1 --optimizer sgd --dropout 0.2 --arch bart_large --save-dir /content/drive/'My Drive'/HashPro/Checkpoints/`\r\n\r\nI am using TPU which has been initialized in the standard way shown in Colab examples. Apparently there have been some changes in the implementations - I can no longer put the `--tpu` flag or `--bf16`. Has the support been disabled for debugging or is there a problem with the way I have installed FairSeq?\r\n ",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2558/comments",
+    "author": "neel04",
+    "comments": [
+      {
+        "user": "huihuifan",
+        "created_at": "2020-09-03T11:04:59Z",
+        "body": "You need to have valid.input and valid.output when you run preprocess.py, that's what --validpref is looking for. Your model is trying to validate, and it cannot find it. preprocess.py will generate valid.input-output.input.bin, valid.input-output.input.idx etc just like train"
+      },
+      {
+        "user": "neel04",
+        "created_at": "2020-09-03T15:03:38Z",
+        "body": "@huihuifan Thanks a ton!! I had not put the `--validpref` flag in my preprocessing step and since it didn't give me any warning or error, I thought that it must have used the same argument for `--trainpref` as the path for validpref. Again, appreciate the help!!"
+      },
+      {
+        "user": "Crista23",
+        "created_at": "2021-04-18T23:05:20Z",
+        "body": "Hi @huihuifan , I have the same problem even though my files are present in the correct format and I am trying to generate translations with --replace_unk:\r\n\r\nTraceback (most recent call last):\r\n  File \"generate.py\", line 192, in <module>\r\n    cli_main()\r\n  File \"generate.py\", line 188, in cli_main\r\n    main(args)\r\n  File \"generate.py\", line 35, in main\r\n    task.load_dataset(args.gen_subset)\r\n  File \"/usr/fairseq/tasks/translation.py\", line 154, in load_dataset\r\n    raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))\r\nFileNotFoundError: Dataset not found: test (/data/test)\r\n\r\nWhat could be causing this? Thanks!\r\n    "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why validation dataset files are missing despite presence of training files",
+      "Clarification of preprocessing requirements for validation data",
+      "Guidance on verifying dataset split file naming conventions",
+      "Explanation of Fairseq's dataset split detection mechanism",
+      "Troubleshooting path validation without code specifics"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:40:33"
+    }
+  },
+  {
+    "number": 2538,
+    "title": "(wav2vec 2.0)Can you provide detailed hyperparameters for finetune?",
+    "created_at": "2020-08-29T11:28:37Z",
+    "closed_at": "2020-09-04T02:37:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2538",
+    "body": "You guys have done a great job, can you provide detailed hyperparameters for 10h finetune in wav2vec 2.0. I don\u2019t know how to adjust the hyperparameters for 10min, 1h and 10h datasets. Thanks a lot.",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2538/comments",
+    "author": "zqs01",
+    "comments": [
+      {
+        "user": "alexeib",
+        "created_at": "2020-08-31T19:29:14Z",
+        "body": "theres a table in the appendix B in the paper that shows the differences between various splits. in general you would just adjust --max-update, and then adjust --warmup-steps, --hold-steps, and --decay steps so that they use 0.1/0.4/0.5 of max-update respectively. you then need to update --mask-prob and --mask-channel-prob. this prob would be mask-length * x where x is the number in the table and mask-length is what you use for --mask-length (10 in the example) or --mask-channel-length.\r\n\r\nso for example, for 10h we see that timestep mask prob should be 0.065, so we set --mask-prob to 0.65. channel mask prob is 0.004, so we set it to 64 * 0.004 = 0.256. then we set --max-updates to 20000 and change --warmup-steps to 20000 * 0.1 = 2000, --hold-steps to 8000 and --decay-steps to 10000.\r\n\r\nyou can adjust the example for other splits following the same procedure.\r\n\r\ndo you think it would be valuable to add examples for every split even though it will make readme much longer?"
+      },
+      {
+        "user": "craigbaker",
+        "created_at": "2020-09-01T00:09:52Z",
+        "body": "Thank you for the explanation. I was able to figure out the masking parameters by reading the code and appendix B, but not the training schedule. In the readme, I would suggest providing this explanation and just the relevant command line arguments for the 10h example as you have here, with a reference to appendix B as a guide for other dataset sizes."
+      },
+      {
+        "user": "zqs01",
+        "created_at": "2020-09-04T02:37:24Z",
+        "body": "Thank you @alexeib "
+      },
+      {
+        "user": "Nian-Chen",
+        "created_at": "2021-07-04T14:59:03Z",
+        "body": "Hi@alexeib\r\nFor 10-min-finetuning experiment\uff1a\r\nFollow the wav2vec2.0 paper, the 10min-dataset contains 48 samples.\r\nIs it reasonable for me to set the batch-size to 48? and also what is the learning rate? I have found severe overfitting on this experiment so far.\r\nCan you help me\uff1fThanks a lot!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to proportionally adjust training schedule parameters (max-updates, warmup-steps, hold-steps, decay-steps) based on dataset size",
+      "Methodology for calculating mask probabilities (mask-prob, mask-channel-prob) using values from the paper's table and mask length",
+      "Reference to paper guidelines (Appendix B) for dataset-specific values",
+      "Generalizable procedure applicable to arbitrary dataset splits"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:40:40"
+    }
+  },
+  {
+    "number": 2485,
+    "title": "How to get '.ltr' file ?",
+    "created_at": "2020-08-17T09:20:28Z",
+    "closed_at": "2020-08-20T04:21:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2485",
+    "body": "python3 train.py /path/ --save-dir /path/model_exportdir1 --fp16 --post-process letter --valid-subset valid --no-epoch-checkpoints --best-checkpoint-metric wer --num-workers 4 --max-update 80000 --sentence-avg --task audio_pretraining --arch wav2vec_ctc --w2v-path /path/wav2vec_small_10m.pt --labels ltr --apply-mask --mask-selection static --mask-other 0 --mask-length 10 --mask-prob 0.5 --layerdrop 0.1 --mask-channel-selection static --mask-channel-other 0 --mask-channel-length 64 --mask-channel-prob 0.5 --zero-infinity --feature-grad-mult 0.0 --freeze-finetune-updates 10000 --validate-after-updates 10000 --optimizer adam --adam-betas '(0.9, 0.98)' --adam-eps 1e-08 --lr 2e-05 --lr-scheduler tri_stage --warmup-steps 8000 --hold-steps 32000 --decay-steps 40000 --final-lr-scale 0.05 --final-dropout 0.0 --dropout 0.0 --activation-dropout 0.1 --criterion ctc --attention-dropout 0.0 --max-tokens 1280000 --seed 2337 --log-format json --log-interval 500 --ddp-backend no_c10d\r\n\r\n\r\nRunning this above command and getting below error :-\r\n\r\nFile \"/path/fairseq-master/fairseq/tasks/audio_pretraining.py\", line 110, in load_dataset\r\n    with open(label_path, \"r\") as f:\r\nFileNotFoundError: [Errno 2] No such file or directory: '/path/valid.ltr\r\n\r\n\r\nCan anyone suggest what'd this '.ltr' file and how to create it ?",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2485/comments",
+    "author": "MrityunjoyS",
+    "comments": [
+      {
+        "user": "zqs01",
+        "created_at": "2020-08-19T14:34:15Z",
+        "body": "I also want to solve this question."
+      },
+      {
+        "user": "MrityunjoyS",
+        "created_at": "2020-08-19T14:36:57Z",
+        "body": "I did one thing, just copying the '.ltr.txt' file created from manifest file to '.ltr' file and was able to finetune using Librispeech model. Although I don't know if it's correct or not"
+      },
+      {
+        "user": "alexeib",
+        "created_at": "2020-08-19T21:25:50Z",
+        "body": "yeah sorry, you can just rename the files that \"libri_labels.py\" outputs to .wrd and .ltr respectively to use the .ltr as letter targets. i'll update the script when i get a chance"
+      },
+      {
+        "user": "MrityunjoyS",
+        "created_at": "2020-08-20T04:21:42Z",
+        "body": "Thank you @alexeib "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of what the .ltr file represents in the training context",
+      "Clear method to generate valid .ltr files from source data",
+      "Identification of the correct script/tool to create label files",
+      "Differentiation between .ltr and other file types like .ltr.txt"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:40:53"
+    }
+  },
+  {
+    "number": 2339,
+    "title": "does fairseq-train support finetune with \"bart_base\"",
+    "created_at": "2020-07-17T07:44:09Z",
+    "closed_at": "2020-07-17T16:20:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2339",
+    "body": "## \u2753 Questions and Help\r\nWhen I set the parameter a**rch** as \"**bart_base**\", I have the following errors\r\n\r\nfairseq-train: error: argument --arch/-a: invalid choice: 'bart_base' (choose from 'transformer', 'transformer_iwslt_de_en', 'transformer_wmt_en_de', 'transformer_vaswani_wmt_en_de_big', 'transformer_vaswani_wmt_en_fr_big', 'transformer_wmt_en_de_big', 'transformer_wmt_en_de_big_t2t', 'transformer_align', 'transformer_wmt_en_de_big_align', 'levenshtein_transformer', 'levenshtein_transformer_wmt_en_de', 'levenshtein_transformer_vaswani_wmt_en_de_big', 'levenshtein_transformer_wmt_en_de_big', 'nonautoregressive_transformer', 'nonautoregressive_transformer_wmt_en_de', 'cmlm_transformer', 'cmlm_transformer_wmt_en_de', 'lightconv', 'lightconv_iwslt_de_en', 'lightconv_wmt_en_de', 'lightconv_wmt_en_de_big', 'lightconv_wmt_en_fr_big', 'lightconv_wmt_zh_en_big', 'lightconv_lm', 'lightconv_lm_gbw', 'fconv', 'fconv_iwslt_de_en', 'fconv_wmt_en_ro', 'fconv_wmt_en_de', 'fconv_wmt_en_fr', 'fconv_lm', 'fconv_lm_dauphin_wikitext103', 'fconv_lm_dauphin_gbw', 'lstm', 'lstm_wiseman_iwslt_de_en', 'lstm_luong_wmt_en_de', 'transformer_from_pretrained_xlm', 'masked_lm', 'bert_base', 'bert_large', 'xlm_base', 'iterative_nonautoregressive_transformer', 'iterative_nonautoregressive_transformer_wmt_en_de', 'insertion_transformer', 'wav2vec', 'fconv_self_att', 'fconv_self_att_wp', 'roberta', 'roberta_base', 'roberta_large', 'xlm', 'multilingual_transformer', 'multilingual_transformer_iwslt_de_en', 'transformer_lm', 'transformer_lm_big', 'transformer_lm_baevski_wiki103', 'transformer_lm_wiki103', 'transformer_lm_baevski_gbw', 'transformer_lm_gbw', 'transformer_lm_gpt', 'transformer_lm_gpt2_small', 'transformer_lm_gpt2_medium', 'transformer_lm_gpt2_big', 'bart_large')\r\n\r\n\r\n>>> sorted(a)\r\n['bart_large', 'bert_base', 'bert_large', 'cmlm_transformer', 'cmlm_transformer_wmt_en_de', 'fconv', 'fconv_iwslt_de_en', 'fconv_lm', 'fconv_lm_dauphin_gbw', 'fconv_lm_dauphin_wikitext103', 'fconv_self_att', 'fconv_self_att_wp', 'fconv_wmt_en_de', 'fconv_wmt_en_fr', 'fconv_wmt_en_ro', 'insertion_transformer', 'iterative_nonautoregressive_transformer', 'iterative_nonautoregressive_transformer_wmt_en_de', 'levenshtein_transformer', 'levenshtein_transformer_vaswani_wmt_en_de_big', 'levenshtein_transformer_wmt_en_de', 'levenshtein_transformer_wmt_en_de_big', 'lightconv', 'lightconv_iwslt_de_en', 'lightconv_lm', 'lightconv_lm_gbw', 'lightconv_wmt_en_de', 'lightconv_wmt_en_de_big', 'lightconv_wmt_en_fr_big', 'lightconv_wmt_zh_en_big', 'lstm', 'lstm_luong_wmt_en_de', 'lstm_wiseman_iwslt_de_en', 'masked_lm', 'multilingual_transformer', 'multilingual_transformer_iwslt_de_en', 'nonautoregressive_transformer', 'nonautoregressive_transformer_wmt_en_de', 'roberta', 'roberta_base', 'roberta_large', 'transformer', 'transformer_align', 'transformer_from_pretrained_xlm', 'transformer_iwslt_de_en', 'transformer_lm', 'transformer_lm_baevski_gbw', 'transformer_lm_baevski_wiki103', 'transformer_lm_big', 'transformer_lm_gbw', 'transformer_lm_gpt', 'transformer_lm_gpt2_big', 'transformer_lm_gpt2_medium', 'transformer_lm_gpt2_small', 'transformer_lm_wiki103', 'transformer_vaswani_wmt_en_de_big', 'transformer_vaswani_wmt_en_fr_big', 'transformer_wmt_en_de', 'transformer_wmt_en_de_big', 'transformer_wmt_en_de_big_align', 'transformer_wmt_en_de_big_t2t', 'wav2vec', 'xlm', 'xlm_base']\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2339/comments",
+    "author": "songwang41",
+    "comments": [
+      {
+        "user": "myleott",
+        "created_at": "2020-07-17T16:20:48Z",
+        "body": "There's `bert_base` and `bart_large`, but no `bart_base`."
+      },
+      {
+        "user": "songwang41",
+        "created_at": "2020-07-18T22:25:07Z",
+        "body": "The author is wrong or did not further check before closing this.  @myleott \r\n\r\nI found the newer version of fairseq instead of the pip version support this."
+      },
+      {
+        "user": "myleott",
+        "created_at": "2020-07-24T14:54:42Z",
+        "body": "Ah, right, the `bart_base` architecture was added later. Using the latest version should fix it"
+      },
+      {
+        "user": "yuye2133",
+        "created_at": "2020-10-14T12:45:27Z",
+        "body": "> The author is wrong or did not further check before closing this. @myleott\r\n> \r\n> I found the newer version of fairseq instead of the pip version support this.\r\n\r\nHow to install the latest version\uff0cI installed fairseq-0.9.0 with PIP and still reported the error"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of version compatibility for 'bart_base' architecture support",
+      "Guidance on obtaining a fairseq version with 'bart_base' implementation",
+      "Confirmation that 'bart_base' is a valid architecture in specific implementations",
+      "Resolution of version mismatch between pip package and source code"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:01"
+    }
+  },
+  {
+    "number": 2201,
+    "title": "What do the metrics wps, ups and wpb mean in the training logger ?",
+    "created_at": "2020-06-01T17:13:17Z",
+    "closed_at": "2020-06-02T12:32:58Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2201",
+    "body": "In the following dictionary from the training log output:\r\n\r\n<pre>{&quot;epoch&quot;: 27, &quot;update&quot;: 26.267, &quot;loss&quot;: &quot;8.206&quot;, &quot;nll_loss&quot;: &quot;7.049&quot;, &quot;ppl&quot;: &quot;132.47&quot;, &quot;wps&quot;: &quot;1195.4&quot;, &quot;ups&quot;: &quot;1.62&quot;, &quot;wpb&quot;: &quot;738.1&quot;, &quot;bsz&quot;: &quot;46.4&quot;, &quot;num_updates&quot;: &quot;33700&quot;, &quot;lr&quot;: &quot;0.00017226&quot;, &quot;gnorm&quot;: &quot;1.833&quot;, &quot;clip&quot;: &quot;1&quot;, &quot;train_wall&quot;: &quot;61&quot;, &quot;wall&quot;: &quot;30542&quot;}</pre>\r\n\r\nI assume the following from looking at the code and other issues:\r\n**bsz** = batch size \r\n**gnorm** = L2 norm of the gradients\r\n**clip** = gradient clipping threshold\r\n**train_wall** = time taken for one training step\r\n**wall** = total time spent training, validating, saving checkpoints (so far)\r\n**wps** = ?\r\n**ups** = ?\r\n**wpb** = ?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2201/comments",
+    "author": "shahbazsyed",
+    "comments": [
+      {
+        "user": "kalyangvs",
+        "created_at": "2020-06-02T08:13:15Z",
+        "body": "wps - Words Per Second\r\nups - Updates Per Second\r\nwpb - Words Per Batch"
+      },
+      {
+        "user": "shahbazsyed",
+        "created_at": "2020-06-02T12:32:58Z",
+        "body": "Thanks!"
+      },
+      {
+        "user": "benjamin3344",
+        "created_at": "2021-04-17T01:39:21Z",
+        "body": "Anyone know what nvo, stp is short for? And what does the \"words\" mean in wps and wpb..  @gvskalyan @shahbazsyed \r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Expansion of acronyms wps, ups, and wpb into their full terms",
+      "Clarification of what 'words' refers to in the context of wps/wpb",
+      "Differentiation between batch-level and time-based metrics"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:09"
+    }
+  },
+  {
+    "number": 2049,
+    "title": "I got AttributeError: module 'sacrebleu' has no attribute 'DEFAULT_TOKENIZER'.",
+    "created_at": "2020-04-23T01:28:14Z",
+    "closed_at": "2020-04-23T04:44:24Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2049",
+    "body": "#### What have you tried?\r\n!time fairseq-train \\\r\n    data-bin/iwslt14.tokenized.de-en \\\r\n    --arch transformer_iwslt_de_en --share-decoder-input-output-embed \\\r\n    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \\\r\n    --lr 5e-4 --lr-scheduler inverse_sqrt --warmup-updates 4000 \\\r\n    --dropout 0.3 --weight-decay 0.0001 \\\r\n    --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \\\r\n    --max-tokens 4096 \\\r\n    --eval-bleu \\\r\n    --eval-bleu-args '{\"beam\": 5, \"max_len_a\": 1.2, \"max_len_b\": 10}' \\\r\n    --eval-bleu-detok moses \\\r\n    --eval-bleu-remove-bpe \\\r\n    --eval-bleu-print-samples \\\r\n    --best-checkpoint-metric bleu --maximize-best-checkpoint-metric\r\n\r\n2020-04-23 00:55:17 | INFO | fairseq.tasks.translation | data-bin/iwslt14.tokenized.de-en train de-en 160239 examples\r\nepoch 001 | loss 9.592 | nll_loss 9.072 | ppl 538.049 | wps 9749.7 | ups 2.72 | wpb 3586.8 | bsz 145.5 | num_updates 1101 | lr 0.000137625 | gnorm 1.687 | clip 0 | oom 0 | train_wall 401 | wall 411\r\nepoch 001 | valid on 'valid' subset:   0% 0/62 [00:00<?, ?it/s]2020-04-23 01:02:06 | INFO | fairseq.tasks.translation | example hypothesis: so this is so you know, you can see this is this is.\r\n2020-04-23 01:02:06 | INFO | fairseq.tasks.translation | example reference: that's about that big.\r\nTraceback (most recent call last):\r\n  File \"/usr/local/bin/fairseq-train\", line 11, in <module>\r\n    load_entry_point('fairseq', 'console_scripts', 'fairseq-train')()\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 307, in cli_main\r\n    main(args)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 105, in main\r\n    valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 242, in validate\r\n    trainer.valid_step(sample)\r\n  File \"/usr/lib/python3.6/contextlib.py\", line 52, in inner\r\n    return func(*args, **kwds)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/trainer.py\", line 437, in valid_step\r\n    sample, self.model, self.criterion\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/tasks/translation.py\", line 269, in valid_step\r\n    bleu = self._inference_with_bleu(self.sequence_generator, sample, model)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/tasks/translation.py\", line 356, in _inference_with_bleu\r\n    tokenize = sacrebleu.DEFAULT_TOKENIZER if not self.args.eval_tokenized_bleu else 'none'\r\nAttributeError: module 'sacrebleu' has no attribute 'DEFAULT_TOKENIZER'\r\n\r\n#### What's your environment?\r\n!pip install fairseq\r\nSuccessfully installed fairseq-0.9.0 mecab-python3-0.996.5 portalocker-1.7.0 sacrebleu-1.4.7\r\nPython 3.6.9\r\ntorch 1.4.0\r\nGoogle Colab GPU",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2049/comments",
+    "author": "pdc-kaminaga",
+    "comments": [
+      {
+        "user": "pdc-kaminaga",
+        "created_at": "2020-04-23T04:44:24Z",
+        "body": "Train.py was the same.\r\n\r\n!time python train.py \\\r\n    examples/translation/data-bin/iwslt14.tokenized.de-en \\\r\n    --arch transformer_iwslt_de_en --share-decoder-input-output-embed \\\r\n    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \\\r\n    --lr 5e-4 --lr-scheduler inverse_sqrt --warmup-updates 4000 \\\r\n    --dropout 0.3 --weight-decay 0.0001 \\\r\n    --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \\\r\n    --max-tokens 4096 \\\r\n    --eval-bleu \\\r\n    --eval-bleu-args '{\"beam\": 5, \"max_len_a\": 1.2, \"max_len_b\": 10}' \\\r\n    --eval-bleu-detok moses \\\r\n    --eval-bleu-remove-bpe \\\r\n    --eval-bleu-print-samples \\\r\n    --best-checkpoint-metric bleu --maximize-best-checkpoint-metric\r\n    \r\n2020-04-23 02:26:59 | INFO | fairseq_cli.train | model transformer_iwslt_de_en, criterion LabelSmoothedCrossEntropyCriterion\r\n2020-04-23 02:26:59 | INFO | fairseq_cli.train | num. model params: 39469056 (num. trained: 39469056)\r\n2020-04-23 02:27:02 | INFO | fairseq_cli.train | training on 1 GPUs\r\n2020-04-23 02:27:02 | INFO | fairseq_cli.train | max tokens per GPU = 4096 and max sentences per GPU = None\r\n2020-04-23 02:27:02 | INFO | fairseq.trainer | no existing checkpoint found checkpoints/checkpoint_last.pt\r\n2020-04-23 02:27:02 | INFO | fairseq.trainer | loading train data for epoch 0\r\n2020-04-23 02:27:02 | INFO | fairseq.data.data_utils | loaded 160239 examples from: examples/translation/data-bin/iwslt14.tokenized.de-en/train.de-en.de\r\n2020-04-23 02:27:02 | INFO | fairseq.data.data_utils | loaded 160239 examples from: examples/translation/data-bin/iwslt14.tokenized.de-en/train.de-en.en\r\n2020-04-23 02:27:02 | INFO | fairseq.tasks.translation | examples/translation/data-bin/iwslt14.tokenized.de-en train de-en 160239 examples\r\nepoch 001 | loss 9.592 | nll_loss 9.072 | ppl 538.049 | wps 9659.3 | ups 2.69 | wpb 3586.8 | bsz 145.5 | num_updates 1101 | lr 0.000137625 | gnorm 1.687 | clip 0 | oom 0 | train_wall 405 | wall 410\r\nepoch 001 | valid on 'valid' subset:   0% 0/62 [00:00<?, ?it/s]2020-04-23 02:33:54 | INFO | fairseq.tasks.translation | example hypothesis: so this is so you know, you can see this is this is.\r\n2020-04-23 02:33:54 | INFO | fairseq.tasks.translation | example reference: that's about that big.\r\nTraceback (most recent call last):\r\n  File \"train.py\", line 11, in <module>\r\n    cli_main()\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 307, in cli_main\r\n    main(args)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 105, in main\r\n    valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq_cli/train.py\", line 242, in validate\r\n    trainer.valid_step(sample)\r\n  File \"/usr/lib/python3.6/contextlib.py\", line 52, in inner\r\n    return func(*args, **kwds)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/trainer.py\", line 437, in valid_step\r\n    sample, self.model, self.criterion\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/tasks/translation.py\", line 269, in valid_step\r\n    bleu = self._inference_with_bleu(self.sequence_generator, sample, model)\r\n  File \"/content/drive/My Drive/Colab Notebooks/BERT/BERT\u306b\u3088\u308b\u7ffb\u8a33/fairseq/fairseq/tasks/translation.py\", line 356, in _inference_with_bleu\r\n    tokenize = sacrebleu.DEFAULT_TOKENIZER if not self.args.eval_tokenized_bleu else 'none'\r\nAttributeError: module 'sacrebleu' has no attribute 'DEFAULT_TOKENIZER'\n\n---\n\nThe latest code download solved it.\r\nThank you."
+      },
+      {
+        "user": "irugina",
+        "created_at": "2020-04-27T08:01:11Z",
+        "body": "Hello! I'm running into the same issue and cannot afford to try the most recent fairseq version. Does anyone know exactly where this problem comes from? Thank you! "
+      },
+      {
+        "user": "myleott",
+        "created_at": "2020-05-01T12:27:09Z",
+        "body": "@irugina, it's due to an upstream change in sacrebleu. Here's the fix: adff51b4a67c5000aabbe0e00a7bc4b28e855794"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of version compatibility between sacrebleu and fairseq",
+      "Solution for maintaining backward compatibility with older fairseq versions",
+      "Clear connection between sacrebleu API changes and the AttributeError"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:19"
+    }
+  },
+  {
+    "number": 2015,
+    "title": "How to save model output from fairseq-generate?",
+    "created_at": "2020-04-14T21:18:38Z",
+    "closed_at": "2020-04-15T17:15:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2015",
+    "body": "I just follow the tutorial and stuck on this command:\r\n```\r\nfairseq-generate data-bin/iwslt14.tokenized.de-en \\\r\n    --path checkpoints/fconv/checkpoint_best.pt \\\r\n    --batch-size 128 --beam 5\r\n```\r\nHow can I save model output on test part of my data? I spent a solid amount of time, but didn't find the answer. I found `--results-path` argument, but for some reason, it doesn't work for me and save data in a strange format, like `H- ...`.  Is there just to save the model output (predictions) on particular data?\r\nSorry, if this question is obvious, but I didn't find anything in docs.",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2015/comments",
+    "author": "skurzhanskyi",
+    "comments": [
+      {
+        "user": "Alex-Fabbri",
+        "created_at": "2020-04-15T14:21:48Z",
+        "body": "You can just grep what's in your --results-path file to get the output. Otherwise afaik there isn't a way to get just the outputs. \r\n\r\ngrep ^T output.txt | cut -f2-  > target.txt\r\ngrep ^H output.txt | cut -f3-  > hypotheses.txt"
+      },
+      {
+        "user": "myleott",
+        "created_at": "2020-04-15T17:15:44Z",
+        "body": "Yep, @Alex-Fabbri is right!"
+      },
+      {
+        "user": "skurzhanskyi",
+        "created_at": "2020-04-15T17:24:03Z",
+        "body": "Thanks for the swift answer "
+      },
+      {
+        "user": "NikhilPr95",
+        "created_at": "2020-07-22T05:17:58Z",
+        "body": "It would be great if there was a way to specify an output file on the command line. Currently I am facing issues because the console I am printing to does not have the necessary fonts."
+      },
+      {
+        "user": "Jiahao004",
+        "created_at": "2021-09-09T06:49:48Z",
+        "body": "how could I save the output to shards?"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Method to save raw model predictions in a human-readable format",
+      "Solution works with fairseq-generate's existing output structure",
+      "Output preservation without font/display dependencies",
+      "Flexible output destination specification",
+      "Separation of predictions from other metadata"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:26"
+    }
+  },
+  {
+    "number": 2004,
+    "title": "Explanation of Extra Embeddings after generation from Dict",
+    "created_at": "2020-04-13T02:44:27Z",
+    "closed_at": "2020-04-13T12:12:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/2004",
+    "body": "### What is your question?\r\n\r\nHi! I am trying to extract word embeddings and do some analysis on a transformer model I trained. Compared to the srcdict used to generate the emeddings the 'encoder.embed_tokens.weight' seems to have 4 more tokens. Can someone confirm if these extra or special tokens are at the end, beginning or somewhere else. Also, is the order of the srcdict maintained when initializing the embedding matrix.\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/2004/comments",
+    "author": "reachtarunhere",
+    "comments": [
+      {
+        "user": "huihuifan",
+        "created_at": "2020-04-13T12:12:36Z",
+        "body": "Hello, the source dict models special tokens in the dictionary, such as unk and start of sentence. The order is maintained and they are always appended at the beginning. You can see the tokens added if you check the dictionary.py file. "
+      },
+      {
+        "user": "reachtarunhere",
+        "created_at": "2020-04-25T14:34:59Z",
+        "body": "Thanks I got my thing to work :)"
+      },
+      {
+        "user": "huihuifan",
+        "created_at": "2020-04-26T20:01:52Z",
+        "body": "fantastic!\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation of the positional placement of special tokens in the embedding matrix relative to the source dictionary",
+      "Verification that the original source dictionary order is preserved in the embedding matrix"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:36"
+    }
+  },
+  {
+    "number": 1990,
+    "title": "Pre-processing Script",
+    "created_at": "2020-04-10T16:48:48Z",
+    "closed_at": "2020-04-13T12:15:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1990",
+    "body": "I know this isn\u2019t really an issue, more just a question. I\u2019m relatively new to all this, but in the docs, for the example pre-processing, a script called \u2018prepare-iwslt14.sh\u2019 is called. I\u2019ve looked into it but I want to ask, is it necessary to have shell scripts like these, and if so why?\r\n\r\nI\u2019d appreciate it if anyone could help me with this.\r\n\r\n\r\nFor info:\r\n - fairseq Version: 0.9\r\n - PyTorch Version: 1.4.0\r\n - OS: Ubuntu (Linux)",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1990/comments",
+    "author": "JustCunn",
+    "comments": [
+      {
+        "user": "erip",
+        "created_at": "2020-04-11T12:12:03Z",
+        "body": "What's necessary for good performance is to tokenize and byte-pair encoder your data. Because `fairseq-preprocess` doesn't perform this for you, something will have to. The most convenient way to do this in an experiment is with scripts like `prepare-iwslt14.sh`."
+      },
+      {
+        "user": "JustCunn",
+        "created_at": "2020-04-11T13:38:24Z",
+        "body": "Yeah, It\u2019s just different coming from something like OpenNMT-py that does have some options to do pre-processing like that. Thanks very much for clearing that up!"
+      },
+      {
+        "user": "erip",
+        "created_at": "2020-04-11T14:13:27Z",
+        "body": "PRs are welcome. \ud83d\ude04 "
+      },
+      {
+        "user": "huihuifan",
+        "created_at": "2020-04-13T12:15:18Z",
+        "body": "Thanks @erip for answering! Yes, usually we preprocess the data with a separate script, though you can link it together with your training. The prepare-iwslt script also downloads data, I believe. "
+      },
+      {
+        "user": "JustCunn",
+        "created_at": "2020-04-14T12:15:32Z",
+        "body": "Just while I have this thread, instead of opening a new one because I think the two issues might be related, but after training, when using Fairseq-generate, I enter `\u2014batch-size 128` But it tells me that `--max-sentences/--batch-size cannot be larger than --buffer-size' print(args) `. It only works with a batch size of 0. I don\u2019t know if this is affecting my translation quality or not. Could it have been pre-processed wrong?"
+      },
+      {
+        "user": "myleott",
+        "created_at": "2020-04-15T17:13:07Z",
+        "body": "You're probably using `fairseq-interactive`, right? In that case, `--buffer-size` controls how many lines are read before generation happens. So just set `buffer-size=2000` and it should be fine. It will read 2000 lines and construct batches of size 128 out of it."
+      },
+      {
+        "user": "JustCunn",
+        "created_at": "2020-04-15T18:26:42Z",
+        "body": "Yeah it must\u2019ve been an issue like that. Whatever it was, it\u2019s gone now, so that\u2019s all good. Thanks for that though!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why shell scripts are used for preprocessing in fairseq workflows",
+      "Clarification of framework limitations requiring external preprocessing steps",
+      "Guidance on parameter relationships (batch size vs buffer size) for generation",
+      "Differentiation between preprocessing responsibilities vs framework capabilities"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:42"
+    }
+  },
+  {
+    "number": 1879,
+    "title": "Production with fairseq, translation",
+    "created_at": "2020-03-22T12:37:07Z",
+    "closed_at": "2020-03-23T12:07:17Z",
+    "labels": [
+      "question",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1879",
+    "body": "## \u2753 Questions and Help\r\n\r\n#### What is your question?\r\nI want to port my trained model to production. It seems the CLI is not a good option as I want to avoid having to reload my model. So I am testing the `from_pretrained` python functions provided in hub_utils, but I cannot seem to make it work.\r\n\r\n#### Code\r\nGiven a model trained with sentencepiece, I execute the following file `run.py` inside the fairseq root\r\n\r\n```\r\nfrom fairseq.models.transformer import TransformerModel\r\nde2en = TransformerModel.from_pretrained(\r\n  'checkpoints/transformer/',\r\n  checkpoint_file='checkpoint_best.pt',\r\n  data_name_or_path='data-bin/de-en/',\r\n  bpe='sentencepiece',\r\n  bpe_codes='examples/translation/de-en/sentencepiece.bpe.model'\r\n)\r\nprint(de2en.translate('du bist ein ferd'))\r\n```\r\n\r\nthis results in the following error\r\n```\r\nTraceback (most recent call last):\r\n  File \"run.py\", line 7, in <module>\r\n    bpe_codes='examples/translation/de-en/sentencepiece.bpe.model'\r\n  File \"/home/ubuntu/fairseq/fairseq/models/fairseq_model.py\", line 221, in from_pretrained\r\n    return hub_utils.GeneratorHubInterface(x[\"args\"], x[\"task\"], x[\"models\"])\r\n  File \"/home/ubuntu/fairseq/fairseq/hub_utils.py\", line 112, in __init__\r\n    self.bpe = encoders.build_bpe(args)\r\n  File \"/home/ubuntu/fairseq/fairseq/registry.py\", line 41, in build_x\r\n    return builder(args, *extra_args, **extra_kwargs)\r\n  File \"/home/ubuntu/fairseq/fairseq/data/encoders/sentencepiece_bpe.py\", line 21, in __init__\r\n    vocab = file_utils.cached_path(args.sentencepiece_vocab)\r\nAttributeError: 'Namespace' object has no attribute 'sentencepiece_vocab'\r\n```\r\n\r\n#### What have you tried?\r\nI have tried giving it various paths for the sentencepiece, but nothing works. I can't seem to figure exactly how `hub_utils` functions.\r\n\r\n#### What's your environment?\r\n\r\n - fairseq 0.9\r\n - PyTorch 1.5\r\n - OS ubuntu 18.04\r\n - How you installed fairseq (`pip`, source): source, about a week ago\r\n - Build command you used (if compiling from source): same as official readme\r\n - Python version: 3.7.4\r\n - CUDA/cuDNN version: 10.1\r\n - GPU models and configuration: p3.2 instance on amazon\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1879/comments",
+    "author": "alrojo",
+    "comments": [
+      {
+        "user": "kkaiser",
+        "created_at": "2020-03-22T15:49:27Z",
+        "body": "`bpe_codes` takes a file that must be in the same directory as specified in the first argument\r\n```\r\nfrom fairseq.models.transformer import TransformerModel\r\nde2en = TransformerModel.from_pretrained(\r\n  'checkpoints/transformer/',\r\n  checkpoint_file='checkpoint_best.pt',\r\n  data_name_or_path='data-bin/de-en/',\r\n  bpe='sentencepiece',\r\n  bpe_codes='sentencepiece.bpe.model'\r\n)\r\nprint(de2en.translate('du bist ein ferd'))\r\n```\r\n\r\npath to file: `checkpoints/transformer/sentencepiece.bpe.model`"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of correct path resolution for BPE model files in hub_utils",
+      "Clarification of directory structure expectations for from_pretrained()",
+      "Guidance on proper BPE encoder configuration without CLI",
+      "Resolution of Namespace object attribute errors in model initialization"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:49"
+    }
+  },
+  {
+    "number": 1764,
+    "title": "Batch size of wiki103 model",
+    "created_at": "2020-03-02T17:03:50Z",
+    "closed_at": "2020-03-03T18:53:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1764",
+    "body": "## \u2753 Questions and Help\r\n\r\n#### What is your question?\r\n\r\nI have a few questions related to the Wiki103 pretrained model and the provided training script.\r\n\r\n1)  In the training script code you have \r\n\r\n> --max-tokens 3072  --tokens-per-sample 3072\r\n\r\nHowever in the paper, you state that \r\n> For WIKITEXT-103 we partition the training data into blocks of 512 contiguous tokens\r\n\r\nI'm wondering where/how this is happening given the provided training example or if the training example does not match the paper?  In general, I am confused about how batch size is determined in the fairseq framework.  Running the below code with the wiki103 comandline args provided gives src_tokens with size [1, 3072].  \r\n\r\n2)  For multiple gpus, are  --max-tokens   --tokens-per-sample per gpu or do they get split across gpus?\r\n\r\n3)  Loading the the model, the saved args have the arch as 'transformer_lm_gbw' and not 'transformer_lm_wiki103'.  Why is this?\r\n\r\n\r\n#### Code\r\n```    \r\n        reg_task = LanguageModelingTask.setup_task(args)\r\n        reg_task.load_dataset(split)\r\n        reg_iter = reg_task.get_batch_iterator(reg_task.datasets[split], max_tokens=args.max_tokens,\r\n                                               max_sentences=args.max_sentences,\r\n                                               max_positions=args.max_target_positions)\r\n        reg_e_iter = reg_iter.next_epoch_itr(shuffle=True)\r\n\r\n        for sample in reg_e_iter:\r\n            print(sample, sample['id'].shape, 'id shape')\r\n            print(sample['net_input']['src_tokens'].shape)\r\n```\r\n\r\n\r\n#### What's your environment?\r\n\r\n - fairseq Version (e.g., 1.0 or master): 0.9\r\n - PyTorch Version (e.g., 1.0)  1.4\r\n - OS (e.g., Linux): Linux\r\n - How you installed fairseq (`pip`, source): pip\r\n - Build command you used (if compiling from source):\r\n - Python version: 3.6\r\n - CUDA/cuDNN version: 10.1\r\n - GPU models and configuration:  TitanX and others\r\n - Any other relevant information:\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1764/comments",
+    "author": "arvieFrydenlund",
+    "comments": [
+      {
+        "user": "myleott",
+        "created_at": "2020-03-03T14:50:47Z",
+        "body": "> (...) However in the paper, you state that (...)\r\n\r\nSee Section 5.1 of the paper: \"Table 2 shows our result on WIKITEXT-103 where adaptive inputs achieve 18.7 perplexity. For this result only, we partition the training data into blocks of 3072 contiguous tokens instead of 512 tokens as for other experiments.\" I believe this is the model that was released.\r\n\r\n> For multiple gpus, are --max-tokens --tokens-per-sample per gpu or do they get split across gpus?\r\n\r\n`--max-tokens` and `--tokens-per-sample` are per GPU. So if you have two GPUs then you'll effectively have double the max tokens.\r\n\r\n> Loading the the model, the saved args have the arch as 'transformer_lm_gbw' and not 'transformer_lm_wiki103'. Why is this?\r\n\r\nYou can mostly ignore the \"arch\" value in the checkpoint, since the other configuration can be overridden elsewhere in the args. You should look at `decoder_layers`, `decoder_embed_dim`, ..., directly."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification of token partitioning implementation vs paper description",
+      "Explanation of parameter distribution across GPUs",
+      "Rationale for architecture naming discrepancy",
+      "General batch size determination logic in fairseq"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:41:56"
+    }
+  },
+  {
+    "number": 1741,
+    "title": "Should sentences be split for the (masked) language modeling task?",
+    "created_at": "2020-02-24T10:42:32Z",
+    "closed_at": "2020-02-24T16:21:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1741",
+    "body": "## \u2753 Questions and Help\r\n\r\n#### What is your question?\r\n\r\nIn the `wikitext` dataset suggested in the language modeling task (and used as well by the RoBERTa example), sentences are not split into different lines. Instead, in this dataset, newlines denote a new paragraph (and double new line denotes change of document, as mandated by the \"language modeling format\" mentioned in the docs).\r\n\r\nMy question is: is sentence splitting something that we should consider when training our own language models? In the case of BERT, it is obvious that it is a hard requirement (for the NSP objective), while in the case of BART, I'm not sure because there are no examples of training BART from scratch, but I think that it's necessary because of the sentence permutation. In the case of RoBERTa, it is not a requirement, and it doesn't appear in the example, but is it something that would be beneficial? Did you use it when building your models? So far, I haven't found any mention of this in the original articles or fairseq's documentation.\r\n\r\nIn summary: even if sentence splitting (into newlines) is not required for RoBERTa, is it something that would be beneficial? Did you do it? In the case of BART, it is a hard requirement, right?\r\n\r\nMany thanks in advance.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1741/comments",
+    "author": "jordiae",
+    "comments": [
+      {
+        "user": "myleott",
+        "created_at": "2020-02-24T16:17:56Z",
+        "body": "Good question. For RoBERTa we always put a blank newline between \"documents\", so for books there's a blank newline between each book, for wikipedia a blank newline between articles, etc.\r\n\r\nWithin each \"document,\" we split sentences for books and wikipedia. STORIES also seems to split on sentences. Both CC-NEWS and OpenWebText usually have one paragraph per line.\r\n\r\nSo for example, in Wikipedia we have one sentence per line, with blank lines between articles:\r\n```\r\nJean Bernard Bossu (1720\u20131792) was a captain in the French navy, adventurer and explorer.\r\nHe travelled several times to New France, where he explored the regions along the Mississippi.\r\n(...)\r\n\r\nThe long-tailed Talaud mosaic-tailed rat or the long-tailed Talaud melomys (\"Melomys talaudium\") is a species of rodent in the family Muridae.\r\nIt is endemic to Karakelong and Salebabu in the Talaud Islands in Indonesia where it occurs in forest habitats.\r\n(...)\r\n```\r\n\r\nFor OpenWebText we usually have one paragraph per line, with blank lines between articles:\r\n```\r\nSt Columba Day: the Christianization of Scotland\r\nToday is the feast day of St Columba, a Christian missionary known for the spread of Christianity in what is now known as Scotland. Columba was born in Ireland in 591 CE, and was a monk of some renown, and the story about him is interesting. He made a copy of the Psalms under the direction of another monk, intending to keep the copy. The dispute between ownership grew beyond Columba and the monk to their respective groups, and eventually led to an actual battle in 561. Later, Columba also induced another battle in violation of the King Ireland\u2019s order.\r\n(...)\r\n\r\nGeorgia Tech players expressed disappointment over not being able to play against Central Florida on Saturday after the game was canceled Monday because of effects of Hurricane Irma.\r\n\u201cWe\u2019re always ready to play,\u201d quarterback TaQuon Marshall said Wednesday following the team\u2019s practice. \u201cWe were looking forward to playing. I know a lot of the guys from Florida were looking forward to going down and playing in their hometown. It\u2019s disappointing, but we\u2019re happy we can get a break also and rest our bodies and move on to next week.\u201d\r\n(...)\r\n```\n\n---\n\nI think the key is putting blank lines between articles, which gives the model an explicit separator. This also enables you to train with `--sample-break-mode=complete_doc`, which we found gives slightly better performance than `complete`."
+      },
+      {
+        "user": "jordiae",
+        "created_at": "2020-02-24T16:21:17Z",
+        "body": "@myleott Understood, many thanks for your answer."
+      },
+      {
+        "user": "leo-liuzy",
+        "created_at": "2021-07-29T21:47:35Z",
+        "body": "@myleott Could you also comment on cc-100 as well?"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify the role of sentence splitting vs. document separation in language model training",
+      "Explain how different model architectures (RoBERTa vs BART) require different text formatting",
+      "Provide evidence about performance impact of text formatting choices",
+      "Address implementation practices in original model training",
+      "Differentiate between hard requirements vs. optional optimizations"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:42:02"
+    }
+  },
+  {
+    "number": 1705,
+    "title": "Help with --sampling-topp hyperparameter ?",
+    "created_at": "2020-02-14T07:46:09Z",
+    "closed_at": "2020-02-18T06:32:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1705",
+    "body": "I tried experimenting with --sampling-topp hyperparamter\r\npython interactive.py test/ --path checkpoints/models_anv/checkpoint_best.pt  --source-lang en --target-lang hi --nbest 5 --sampling --sampling-topp 0.1\r\npython interactive.py test/ --path checkpoints/models_anv/checkpoint_best.pt  --source-lang en --target-lang hi --nbest 5 --sampling --sampling-topp 0.9\r\n\r\nI am not able to understand the outputs. When I use p = 0.1, all of my 5 best outputs are same with\r\nH-0     -1.0333465788368796\r\n\r\nWhen I use p = 0.9 , I get different outputs but the max score is \r\nH-0     -1.2899561307704726\r\nwhich is poorer than p = 0.1 and also beam search output\r\n\r\nCan anyone tell me where I am missing with the fundamentals of topp sampling(nucleus sampling) ?\r\nAnd what excatly this means in the documentation:\r\n\"\"sample from the smallest set whose cumulative probability mass exceeds p for next words\"\"",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1705/comments",
+    "author": "aj7tesh",
+    "comments": [
+      {
+        "user": "myleott",
+        "created_at": "2020-02-14T16:43:13Z",
+        "body": "Suppose the model predicts the following probability distribution for the next word:\r\n```\r\ntoken  prob\r\na      0.4\r\nb      0.2\r\nc      0.15\r\nd      0.10\r\ne      0.06\r\nf      0.01\r\n...\r\n```\r\n\r\nWhen you do `--sampling-topp=0.1` then you're going to sample from the top 10% of the probability mass. In this case the first candidate (`a`) covers 40% of the probability mass so you'll always sample `a`.\r\n\r\nWhen you do `--sampling-topp=0.9` then you're going to sample from the top 90% of the probability mass. In this case you'll sample from `a`-`e`, which covers 91% of the mass.\r\n\r\nDoes that make sense?"
+      },
+      {
+        "user": "aj7tesh",
+        "created_at": "2020-02-18T06:32:01Z",
+        "body": "yes, thanks @myleott "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how the --sampling-topp value affects token selection based on cumulative probability thresholds",
+      "Clarification of the relationship between probability mass coverage and output diversity/quality",
+      "Interpretation of the documentation statement about 'smallest set exceeding cumulative probability p'"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:42:08"
+    }
+  },
+  {
+    "number": 1574,
+    "title": "Matrix mismatch error when using pretrained model",
+    "created_at": "2020-01-03T15:28:04Z",
+    "closed_at": "2020-01-04T08:25:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/1574",
+    "body": "When I use the given pretrained model ``transformer.wmt16.en-de`` from paper Scaling Neural Machine Translation, here reported a matrix mismatch error:\r\n\r\n```\r\npython interactive.py ../wmt16.en-de.joined-dict.transformer/ --path ../wmt16.en-de.joined-dict.transformer/model.pt --task translation --remove-bpe -s en -t de\r\nNamespace(beam=5, bpe=None, buffer_size=1, cpu=False, criterion='cross_entropy', data='../wmt16.en-de.joined-dict.transformer/', dataset_impl=None, decoding_iterations=None, decoding_strategy='left_to_right', dehyphenate=False, diverse_beam_groups=-1, diverse_beam_strength=0.5, force_anneal=None, fp16=False, fp16_init_scale=128, fp16_scale_tolerance=0.0, fp16_scale_window=None, gen_subset='test', gold_target_len=False, input='-', lazy_load=False, left_pad_source='True', left_pad_target='False', length_beam=5, lenpen=1, log_format=None, log_interval=1000, lr_scheduler='fixed', lr_shrink=0.1, match_source_len=False, max_len_a=0, max_len_b=200, max_sentences=1, max_source_positions=1024, max_target_positions=1024, max_tokens=None, memory_efficient_fp16=False, min_len=1, min_loss_scale=0.0001, model_overrides='{}', momentum=0.99, nbest=1, no_beamable_mm=False, no_early_stop=False, no_progress_bar=False, no_repeat_ngram_size=0, num_shards=1, num_workers=0, optimizer='nag', path='../wmt16.en-de.joined-dict.transformer/model.pt', prefix_size=0, print_alignment=False, quiet=False, raw_text=False, remove_bpe='@@ ', replace_unk=None, required_batch_size_multiple=8, results_path=None, sacrebleu=False, sampling=False, sampling_topk=-1, sampling_topp=-1.0, score_reference=False, seed=1, shard_id=0, skip_invalid_size_inputs_valid_test=False, source_lang='en', target_lang='de', task='translation', tbmf_wrapper=False, temperature=1.0, tensorboard_logdir='', threshold_loss_scale=None, tokenizer=None, unkpen=0, unnormalized=False, upsample_primary=1, user_dir=None, warmup_updates=0, weight_decay=0.0)\r\n| [en] dictionary: 32769 types\r\n| [de] dictionary: 32769 types\r\n| loading model(s) from ../wmt16.en-de.joined-dict.transformer/model.pt\r\nTraceback (most recent call last):\r\n  File \"interactive.py\", line 195, in <module>\r\n    cli_main()\r\n  File \"interactive.py\", line 191, in cli_main\r\n    main(args)\r\n  File \"interactive.py\", line 84, in main\r\n    task=task,\r\n  File \"/root/code/ft_local/Mask-Predict-master/fairseq/checkpoint_utils.py\", line 156, in load_model_ensemble\r\n    ensemble, args, _task = load_model_ensemble_and_task(filenames, arg_overrides, task)\r\n  File \"/root/code/ft_local/Mask-Predict-master/fairseq/checkpoint_utils.py\", line 175, in load_model_ensemble_and_task\r\n    model.load_state_dict(state['model'], strict=True)\r\n  File \"/root/code/ft_local/Mask-Predict-master/fairseq/models/fairseq_model.py\", line 72, in load_state_dict\r\n    return super().load_state_dict(state_dict, strict)\r\n  File \"/root/miniconda2/envs/py3.7/lib/python3.7/site-packages/torch/nn/modules/module.py\", line 839, in load_state_dict\r\n    self.__class__.__name__, \"\\n\\t\".join(error_msgs)))\r\nRuntimeError: Error(s) in loading state_dict for TransformerModel:\r\n        size mismatch for encoder.embed_tokens.weight: copying a param with shape torch.Size([32768, 1024]) from checkpoint, the shape in current model is torch.Size([32769, 1024]).\r\n        size mismatch for decoder.embed_tokens.weight: copying a param with shape torch.Size([32768, 1024]) from checkpoint, the shape in current model is torch.Size([32769, 1024]).\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/1574/comments",
+    "author": "alphadl",
+    "comments": [
+      {
+        "user": "alphadl",
+        "created_at": "2020-01-03T15:28:51Z",
+        "body": "@myleott "
+      },
+      {
+        "user": "lematt1991",
+        "created_at": "2020-01-03T17:18:06Z",
+        "body": "How did you pre-process the data?  If you want to use the pre-trained model provided in the README, you'll need to provide the dictionaries from the tar file.  Specifically:\r\n\r\n```\r\nfairseq-preprocess \\\r\n    --source-lang en --target-lang de \\\r\n    --trainpref $TEXT/train.tok.clean.bpe.32000 \\\r\n    --validpref $TEXT/newstest2013.tok.bpe.32000 \\\r\n    --testpref $TEXT/newstest2014.tok.bpe.32000 \\\r\n    --destdir data-bin/wmt16_en_de_bpe32k --workers 20 \\\r\n    --joined-dictionary --srcdict wmt16.en-de.joined-dict.transformer/dict.en.txt\r\n```\r\n\r\n"
+      },
+      {
+        "user": "alphadl",
+        "created_at": "2020-01-04T08:25:04Z",
+        "body": "Thanks! @lematt1991 "
+      },
+      {
+        "user": "Tikquuss",
+        "created_at": "2020-05-31T14:23:11Z",
+        "body": "Thanks! @lematt1991"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Alignment between pretrained model's vocabulary size and current data preprocessing",
+      "Explanation of required preprocessing steps matching the pretrained model's expectations",
+      "Clarification of model-specific data preparation requirements"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:42:30"
+    }
+  },
+  {
+    "number": 4684,
+    "title": "Unshuffles test set during generation ",
+    "created_at": "2022-08-31T21:41:59Z",
+    "closed_at": "2022-09-06T18:00:19Z",
+    "labels": [
+      "enhancement",
+      "help wanted",
+      "needs triage"
+    ],
+    "url": "https://github.com/facebookresearch/fairseq/issues/4684",
+    "body": "Hi, \r\n\r\nHow do we keep the test set sentence order during generation? Is there a flag we can pass to the generation to keep the test set sequence untouched? This is very important for my work. I would like to request the new feature. \r\n\r\nThanks! ",
+    "comments_url": "https://api.github.com/repos/facebookresearch/fairseq/issues/4684/comments",
+    "author": "i55code",
+    "comments": [
+      {
+        "user": "cordercorder",
+        "created_at": "2022-09-03T02:35:42Z",
+        "body": "For test set, fairseq will automatically sort the sentences by length and there is no flag to keep the sentence order. Despite that, you can extract the input and output sentences by regular expression from the results produced by `fairseq-generate`  and reorder the sentences by their sample id (already in the results) to keep the order."
+      },
+      {
+        "user": "i55code",
+        "created_at": "2022-09-06T18:00:19Z",
+        "body": "Hi @cordercorder , thank you so much! Keeping the order of sentences is important for my work, yes, sample id would work. Thanks!"
+      },
+      {
+        "user": "BrightXiaoHan",
+        "created_at": "2022-09-12T02:16:39Z",
+        "body": "These commands may help you.\r\n```\r\ngrep ^S generate-test.txt | LC_ALL=C sort -V | cut -f2- > src.txt\r\ngrep ^T generate-test.txt | LC_ALL=C sort -V | cut -f2- > ref.txt\r\ngrep ^H generate-test.txt | LC_ALL=C sort -V | cut -f3- > hyp.txt\r\n``` "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Preservation of original sentence order in test set outputs",
+      "Method to align generated outputs with input sequence"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 00:42:37"
+    }
+  }
+]

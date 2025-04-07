@@ -1,0 +1,248 @@
+[
+  {
+    "number": 99,
+    "title": "excellent, but can we change to volume?",
+    "created_at": "2025-02-16T11:00:32Z",
+    "closed_at": "2025-02-17T18:15:56Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/issues/99",
+    "body": "As title,\nI am looking for the option to increasing the volume. is this possible?",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/99/comments",
+    "author": "jasonzhang761213",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-17T18:15:56Z",
+        "body": "This is an audio manipulation question, please ask an LLM how to do this."
+      }
+    ]
+  },
+  {
+    "number": 91,
+    "title": "replace `np.prod()` with `math.prod()` to make Kokoro `torch.compile`-able",
+    "created_at": "2025-02-14T15:05:28Z",
+    "closed_at": "2025-02-15T06:48:52Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/91",
+    "body": "Using `np.prod()` will return a numpy type, which Pytorch will transform it into FakeTensor while compiling it. This will cause error with the `F.upsample()` operator.\r\n\r\n```python\r\nfrom kokoro import KPipeline\r\n\r\npipe = KPipeline(\"a\")\r\ntext = \"The sky above the port was the color of television, tuned to a dead channel.\"\r\n\r\npipe.model.compile()\r\n[x for _, _, x in pipe(text, voice='af_heart')]\r\n```\r\n```\r\nTypeError: upsample_linear1d() received an invalid combination of arguments - got (Tensor, NoneType, bool, list), but expected one of:\r\n * (Tensor input, tuple of ints output_size, bool align_corners, tuple of floats scale_factors)\r\n      didn't match because some of the arguments have invalid types: (Tensor, !NoneType!, bool, !list of [numpy.ndarray]!)\r\n * (Tensor input, tuple of ints output_size, bool align_corners, float scales = None, *, Tensor out = None)\r\n```\r\n\r\nThis PR simply replaces `np.prod()` with `math.prod()`, which has the same functionality, but returns an ordinary Python number. This makes `torch.compile()` successful, though there are still plenty of graph breaks (I will address this in subsequent PRs).\r\n\r\nPotential of `torch.compile()`\r\n\r\n```python\r\nfrom kokoro import KPipeline\r\nimport time\r\n\r\npipe = KPipeline(\"a\")\r\ntext = \"The sky above the port was the color of television, tuned to a dead channel.\"\r\n\r\nN = 100\r\n\r\naudio = [x for _, _, x in pipe(text, voice='af_heart')]\r\n\r\nt0 = time.time()\r\nfor _ in range(N):\r\n    audio = [x for _, _, x in pipe(text, voice='af_heart')]\r\nprint(f\"Eager: {(time.time() - t0) / N * 100:.2f} ms\")\r\n\r\npipe.model.compile()\r\naudio = [x for _, _, x in pipe(text, voice='af_heart')]\r\n\r\nt0 = time.time()\r\nfor _ in range(N):\r\n    audio = [x for _, _, x in pipe(text, voice='af_heart')]\r\nprint(f\"Compile: {(time.time() - t0) / N * 100:.2f} ms\")\r\n```\r\n```\r\n# on 4070Ti SUPER\r\nEager: 4.20 ms\r\nCompile: 3.13 ms\r\n```",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/91/comments",
+    "author": "gau-nernst",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-14T18:14:58Z",
+        "body": "Might be a dumb question, but why not use `torch.prod` instead of both numpy and math here?"
+      },
+      {
+        "user": "gau-nernst",
+        "created_at": "2025-02-15T00:19:03Z",
+        "body": "Simple answer. `torch.prod()` only works on tensor, and will return a tensor.\r\n\r\nFundamentally, we only want a Python number (`scale_factor` in `F.interpolate()` should be a Python number, not a tensor, not a numpy type - well, `F.interpolate()` works with numpy type in eager mode, but not in compile mode, since PyTorch will try to convert it to a tensor while tracing the computation graph)"
+      }
+    ]
+  },
+  {
+    "number": 85,
+    "title": "Use self.method() instead of Class.method()",
+    "created_at": "2025-02-12T14:05:23Z",
+    "closed_at": "2025-02-12T19:12:49Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/85",
+    "body": "`self.method()` and `Class.method()` are equivalent when `self` is an instance of `Class`.",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/85/comments",
+    "author": "jeethu",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-12T19:12:49Z",
+        "body": "It's a deliberate style choice to use `Class.method` for code clarity/readability, since `self.nlp` and `self.lexicon` can be heavy resources. `Class.method` clearly indicates that the method does not require access to those resources and could help ease refactors down the road.\r\n\r\nEdit: Thought I was in the misaki repo, `self.nlp` and `self.lexicon` are used in en.py over there. Same reasoning applies here in kokoro for KPipeline."
+      }
+    ]
+  },
+  {
+    "number": 81,
+    "title": "Port HuggingFace Space to plain Gradio",
+    "created_at": "2025-02-11T19:58:38Z",
+    "closed_at": "2025-02-11T21:05:00Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/81",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/81/comments",
+    "author": "CarelessParsley",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-11T21:04:49Z",
+        "body": "PRs accepted, but for local use we remove the banner. Thanks for the PR"
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "title": "install fixes",
+    "created_at": "2025-02-07T17:45:47Z",
+    "closed_at": "2025-02-15T19:07:46Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/61",
+    "body": "Updated package.json to fix setup",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/61/comments",
+    "author": "jasonkneen",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-15T19:07:46Z",
+        "body": "Sorry for leaving this stale, closing because of conflicts. Feel free to reopen a new PR, but if you do that please describe in more detail what is being fixed."
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "title": "no pauses for punctuation marks in Chinese",
+    "created_at": "2025-02-07T10:14:39Z",
+    "closed_at": "2025-02-08T04:48:34Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/issues/59",
+    "body": "For Mandarin Chinese, the generated audio does not have appropriate pauses for punctuation marks. How should this be handled?\n\n对于中文的普通话，生成的音频，对于标点符号，没有进行适当的停顿，这需要怎么处理？",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/59/comments",
+    "author": "wangqy1973",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-07T22:28:44Z",
+        "body": "I just realized that this is a bug because I am not converting the full-width punctuation back to ASCII properly, which means the tokenizer will skip the punctuation marks `，` and `？`. Will work on a patch, in the meantime, I think hacking it like this might work? @wangqy1973 \n```py\ntext = \"对于中文的普通话，生成的音频，对于标点符号，没有进行适当的停顿，这需要怎么处理？\"\ntext = text.replace(\"，\", \", \").replace(\"？\", \"? \") # etc\n```"
+      }
+    ]
+  },
+  {
+    "number": 53,
+    "title": "Proposed generate_from_tokens method, example",
+    "created_at": "2025-02-05T01:29:36Z",
+    "closed_at": "2025-02-05T07:18:53Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/53",
+    "body": "Exposing generation from either MToken or phoneme strings directly",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/53/comments",
+    "author": "remsky",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-02-05T07:18:46Z",
+        "body": "Someday might be worth thinking about a refactor to reduce line duplication with `__call__`, but that day is not today"
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "Adding a new voice",
+    "created_at": "2025-01-30T05:08:53Z",
+    "closed_at": "2025-01-30T23:15:23Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/issues/23",
+    "body": "How to generate a new voice.pth file? Was it generated using the same style encoder used in StyleTTS2?",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/23/comments",
+    "author": "shashank-neuralgarage",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-01-30T23:15:24Z",
+        "body": "See #2 if referring to voice cloning.\n\nIf you're referring to voice mixing, i.e. combining existing voicepacks, that convenience functionality is a TODO, but you can also DIY relatively easily like this:\n\n```py\nimport torch\nbella = torch.load('af_bella.pt', weights_only=True)\nsarah = torch.load('af_sarah.pt', weights_only=True)\naf_bellasarah = torch.mean(torch.stack([bella, sarah]), dim=0)\ntorch.save(af_bellasarah, 'af_bellasarah.pt')\n```\n\nThen at inference, you would redirect the voice parameter to a local path instead: `voice='/path/to/af_bellasarah.pt'`."
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "[Feature Request]: Availability to mix existing audios",
+    "created_at": "2025-01-29T22:06:17Z",
+    "closed_at": "2025-01-30T23:22:47Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/issues/22",
+    "body": "It was possible previously to load several audios and take mean tensor of them to get slightly different audios.",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/22/comments",
+    "author": "Temirulan",
+    "comments": [
+      {
+        "user": "Temirulan",
+        "created_at": "2025-01-29T22:07:35Z",
+        "body": "Opened #21 merge request for this"
+      },
+      {
+        "user": "edo-lucio",
+        "created_at": "2025-01-30T15:21:32Z",
+        "body": "@Temirulan You can still do it. I'm not sure whether it's the best approach but I managed to make it work by twisting the `__call__` function of the `KPipeline` class from the library a bit. \n\n```\ndef __call__(\n        self,\n        text: Union[str, List[str]],\n        pack: str,\n        speed: Number = 1,\n        split_pattern: Optional[str] = r'\\n+',\n        model: Optional[KModel] = None\n    ) -> Generator[Tuple[str, str, Optional[torch.FloatTensor]], None, None]:\n\n        model = model or self.model\n        pack = pack.to(model.device) if model else pack\n        if isinstance(text, str):\n            text = re.split(split_pattern, text.strip()) if split_pattern else [text]\n        for graphemes in text:\n            # TODO(misaki): Unify G2P interface between English and non-English\n            if self.lang_code in 'ab':\n                _, tokens = self.g2p(graphemes)\n                for gs, ps in self.en_tokenize(tokens):\n                    if not ps:\n                        continue\n                    elif len(ps) > 510:\n                        print(f\"⚠️ WARNING: Unexpected len(ps) == {len(ps)} > 510 and ps == '{ps}'\")\n                        ps = ps[:510]\n                    yield gs, ps, CustomKPipeline.infer(model, ps, pack, speed)\n            else:\n                ps = self.g2p(graphemes)\n                if not ps:\n                    continue\n                elif len(ps) > 510:\n                    print(f'⚠️ WARNING: Truncating len(ps) == {len(ps)} > 510')\n                    ps = ps[:510]\n                yield graphemes, ps, CustomKPipeline.infer(model, ps, pack, speed)\n```\nand instantiate it this way: \n\n```\ndevice = 'cuda' if torch.cuda.is_available() else 'cpu'\nmodel = KModel().to(device).eval()\npipeline = CustomKPipeline(lang_code=\"i\", model=model)\n```\n\nBlend the voices as you prefer:\n\n```\nVOICE_NAMES = [\n    'af', # Default voice is a 50-50 mix of Bella & Sarah\n    'af_bella', 'af_sarah', 'am_adam', 'am_michael',\n    'bf_emma', 'bf_isabella', 'bm_george', 'bm_lewis',\n    'af_nicole', 'af_sky',\n]\n\n# create the mixing of the voices \nvoice_pack_1 = pipeline.load_voice(VOICE_NAMES[1])\nvoice_pack_2 = pipeline.load_voice(VOICE_NAMES[4])\nvoice_pack_3 = pipeline.load_voice(VOICE_NAMES[3])\nbf_average = (voice_pack_1 + voice_pack_2) / 2\n```\nand call the `pipeline` as before \n\n```\nimport soundfile as sf\n\ngenerator = pipeline(\n    text, pack=bf_average,  # Change voice here\n    speed=1, split_pattern=r'\\n\\n'\n)\n# Loop through generator, print outputs, and save audio files\nfor i, (gs, ps, audio) in enumerate(generator):\n    print(f\"Index: {i}\")\n    print(f\"Graphemes: {gs}\")  # Graphemes/text\n    print(f\"Phonemes: {ps}\")    # Phonemes\n\n    # Save audio to a file (WAV format)\n    audio_filename = f'{i}.wav'\n    sf.write(audio_filename, audio, 24000)  # Save each audio file at 24kHz\n\n    print(f\"Saved audio as {audio_filename}\")\n    \n    # Optional: Play audio using an external player (you can use pygame or another library)\n    # For example, using pygame for local playback:\n    # import pygame\n    # pygame.mixer.init()\n    # pygame.mixer.music.load(audio_filename)\n    # pygame.mixer.music.play()\n    \n    # You could also simply open the file manually with any audio player, e.g., VLC, Audacity\n```\nSeems to be working but lmk\n\n"
+      }
+    ]
+  },
+  {
+    "number": 21,
+    "title": "Loading and mixing several voices with averaging",
+    "created_at": "2025-01-29T22:05:30Z",
+    "closed_at": "2025-01-30T23:22:32Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/21",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/21/comments",
+    "author": "Temirulan",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-01-30T23:22:27Z",
+        "body": "Thanks 👍 merging and closing #22"
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "Does kokoro js support longer then 30 seconds output?",
+    "created_at": "2025-01-20T12:56:02Z",
+    "closed_at": "2025-01-21T01:55:27Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/issues/8",
+    "body": "Currently always making the total duration 30 seconds.\nIf so, what would be the best practice to split the text before into chunks.\n\nThank you so much for this awesome project",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/8/comments",
+    "author": "franz101",
+    "comments": [
+      {
+        "user": "salivity",
+        "created_at": "2025-01-20T13:37:12Z",
+        "body": "You should make an algorithm that chucks the text at suitable intervals like a sentence or paragraph, make sure its less than the 512 tokens limit. Then join the files with something like ffmpeg."
+      },
+      {
+        "user": "xcaptain",
+        "created_at": "2025-01-20T13:39:49Z",
+        "body": "It took about 3 minutes on my laptop to generate a 30s audio, what about you?"
+      },
+      {
+        "user": "franz101",
+        "created_at": "2025-01-21T00:19:33Z",
+        "body": "good point 1:40 26 seconds"
+      },
+      {
+        "user": "franz101",
+        "created_at": "2025-01-21T01:55:27Z",
+        "body": "wrote a small script closing this for now"
+      },
+      {
+        "user": "a-eid",
+        "created_at": "2025-01-28T15:22:15Z",
+        "body": "@franz101 could you share that script ? also do you combine them into the same audio file ?\n"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "PoC Kokoro as a pip package",
+    "created_at": "2025-01-17T15:10:13Z",
+    "closed_at": "2025-01-28T18:54:34Z",
+    "labels": [],
+    "url": "https://github.com/hexgrad/kokoro/pull/6",
+    "body": "Hi, \r\n\r\nThis PR is very simple. It adds the possibility to use Kokoro models as a pip toolkit making it much more convenient when working in specific directories. \r\n\r\nI didn't modified the README yet as I wasn't sure exactly what were your plans regarding this project. If you want, I can update the README to explain how to setup the package, and how to run the inference. ",
+    "comments_url": "https://api.github.com/repos/hexgrad/kokoro/issues/6/comments",
+    "author": "Adel-Moumen",
+    "comments": [
+      {
+        "user": "hexgrad",
+        "created_at": "2025-01-28T18:54:34Z",
+        "body": "Sorry for leaving this stale; I think #11 closes this"
+      }
+    ]
+  }
+]

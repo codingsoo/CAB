@@ -1,0 +1,1894 @@
+[
+  {
+    "number": 75804,
+    "title": "locals declared with VarPatternSyntax have their type annotated as nullable, even when expression in IsExpressionSyntax is clearly not null",
+    "created_at": "2024-11-07T17:19:41Z",
+    "closed_at": "2024-11-07T17:38:57Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/75804",
+    "body": "**Version Used**: \n4.12.0.0\n\n**Steps to Reproduce**:\n\n```\n        #nullable enable\n\n        public class Person {\n            public string Name { get; set; } = string.Empty;\n            public int Age { get; set; }\n        }\n        public class TestClass {\n            public static string IsNotNull(Person c) {\n                if(c.Name is var x)\n                    return x.ToString();\n                return string.Empty;\n            }\n        }\n```\n\n**Expected Behavior**:\nthe ```x``` variable should be reported as of type **string**\n\n**Actual Behavior**:\nthe ```x``` variable is reported as of type **string?**\nIn IDE, it is manifested when I hover mouse cursor over x. The tooltip says that this local is of type **string?**.\nWhen I call ```semanticModel.GetSymbolInfo(x, cancellationToken)```, where x represents identifier for \"x\" variable from the above code, I get ILocalSymbol instance. Its type is returned with NullableAnnotation.Annotated.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/75804/comments",
+    "author": "Przemyslaw-W",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2024-11-07T17:38:57Z",
+        "body": "The local type is `string?` as we do allow you to assign null to that variable.  That's very much the design and intent or NRT.  It's not htat 'nulls' are not allowed here.  It's that if you put in null, we will later warn you if it would cause a null ref."
+      },
+      {
+        "user": "Przemyslaw-W",
+        "created_at": "2024-11-07T18:12:31Z",
+        "body": "Got it. Thank you for your explanation!"
+      }
+    ]
+  },
+  {
+    "number": 66442,
+    "title": "Cannot create nuint to UInt32 conversion in custom CoreLib",
+    "created_at": "2023-01-17T18:08:24Z",
+    "closed_at": "2024-07-22T13:40:41Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-By Design"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/66442",
+    "body": "**Version Used**: \r\n\r\n**Steps to Reproduce**:\r\n\r\n1. Create Class1.cs with following content\r\n```csharp\r\nnamespace System\r\n{\r\n    public class Object\r\n    {\r\n        \r\n    }\r\n\r\n    public readonly struct UIntPtr\r\n    {\r\n        // error CS0556: User-defined conversion must convert to or from the enclosing type\r\n        public static explicit operator nuint(uint value) => checked((nuint)value);\r\n    }\r\n\r\n    public class Attribute { }\r\n    public class String { }\r\n    public abstract class ValueType { }\r\n    public struct Void { }\r\n    public struct UInt32 { }\r\n\r\n    namespace Runtime.Versioning\r\n    {\r\n        public class TargetFrameworkAttribute : Attribute\r\n        {\r\n            public TargetFrameworkAttribute(string name)\r\n            {\r\n            }\r\n\r\n            public string FrameworkDisplayName { get; set; }\r\n        }\r\n    }\r\n\r\n    namespace Reflection\r\n    {\r\n        class Dummmy { }\r\n    }\r\n}\r\n```\r\n2. Create nuintissue.csproj with following content\r\n```xml\r\n<Project Sdk=\"Microsoft.NET.Sdk\">\r\n\r\n  <PropertyGroup>\r\n    <TargetFramework>net7.0</TargetFramework>\r\n    <ImplicitUsings>disable</ImplicitUsings>\r\n\r\n    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>\r\n    <NoStdLib>true</NoStdLib>\r\n    <NoConfig>true</NoConfig>\r\n    <IsCoreAssembly>true</IsCoreAssembly>\r\n    <RuntimeMetadataVersion>v4.0.30319</RuntimeMetadataVersion>\r\n    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>\r\n  </PropertyGroup>\r\n\r\n</Project>\r\n```\r\n3. Run `dotnet build`\r\n\r\n**Expected Behavior**:\r\n\r\nNo compilation error\r\n\r\n**Actual Behavior**:\r\n```\r\nerror CS0556: User-defined conversion must convert to or from the enclosing type\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/66442/comments",
+    "author": "kant2002",
+    "comments": [
+      {
+        "user": "jcouv",
+        "created_at": "2023-01-20T22:17:58Z",
+        "body": "I think this is by-design.\r\nIn frameworks that don't have the `RuntimeFeature.NumericIntPtr` feature flag, `UIntPtr` and `nuint` are not considered identical.\r\nYou have two possible solutions:\r\n1. change the definition of the conversion operator to use `UIntPtr` and `UInt32` instead of corresponding built-in type syntax (`nuint` and `uint`): `public static explicit operator UIntPtr(UInt32 value)`\r\n2. add the `RuntimeFeature.NumericIntPtr` feature flag (after that release we do consider the two types to be strictly equivalent)\r\n\r\nThe test below shows that both of those solutions work.\r\nTagging @cston (who worked on native integers) in case anything to add.\r\n\r\n```\r\n        [Fact]\r\n        public void TODO2()\r\n        {\r\n            var src = \"\"\"\r\nnamespace System\r\n{\r\n    public class Object\r\n    {\r\n\r\n    }\r\n\r\n    public readonly struct UIntPtr\r\n    {\r\n        // error CS0556: User-defined conversion must convert to or from the enclosing type\r\n        public static explicit operator nuint(uint value) => checked((nuint)value);\r\n    }\r\n\r\n    public class Attribute { }\r\n    public class String { }\r\n    public abstract class ValueType { }\r\n    public struct Void { }\r\n    public struct UInt32 { }\r\n\r\n    namespace Runtime.Versioning\r\n    {\r\n        public class TargetFrameworkAttribute : Attribute\r\n        {\r\n            public TargetFrameworkAttribute(string name)\r\n            {\r\n            }\r\n\r\n            public string FrameworkDisplayName { get; set; }\r\n        }\r\n    }\r\n\r\n    namespace Reflection\r\n    {\r\n        class Dummmy { }\r\n    }\r\n}\r\n\"\"\";\r\n            var comp = CreateEmptyCompilation(src);\r\n            comp.VerifyDiagnostics(\r\n                // (11,41): error CS0556: User-defined conversion must convert to or from the enclosing type\r\n                //         public static explicit operator nuint(uint value) => checked((nuint)value);\r\n                Diagnostic(ErrorCode.ERR_ConversionNotInvolvingContainedType, \"nuint\").WithLocation(11, 41)\r\n                );\r\n\r\n            var runtimeFeatures = \"\"\"\r\nnamespace System.Runtime.CompilerServices\r\n{\r\n    public static class RuntimeFeature\r\n    {\r\n        public const string NumericIntPtr = \"NumericIntPtr\";\r\n    }\r\n}\r\n\"\"\";\r\n            comp = CreateEmptyCompilation(src + runtimeFeatures);\r\n            comp.VerifyDiagnostics();\r\n\r\n            var src2 = \"\"\"\r\nnamespace System\r\n{\r\n    public class Object\r\n    {\r\n\r\n    }\r\n\r\n    public readonly struct UIntPtr\r\n    {\r\n        // error CS0556: User-defined conversion must convert to or from the enclosing type\r\n        public static explicit operator UIntPtr(UInt32 value) => checked((nuint)value);\r\n    }\r\n\r\n    public class Attribute { }\r\n    public class String { }\r\n    public abstract class ValueType { }\r\n    public struct Void { }\r\n    public struct UInt32 { }\r\n\r\n    namespace Runtime.Versioning\r\n    {\r\n        public class TargetFrameworkAttribute : Attribute\r\n        {\r\n            public TargetFrameworkAttribute(string name)\r\n            {\r\n            }\r\n\r\n            public string FrameworkDisplayName { get; set; }\r\n        }\r\n    }\r\n\r\n    namespace Reflection\r\n    {\r\n        class Dummmy { }\r\n    }\r\n}\r\n\"\"\";\r\n            comp = CreateEmptyCompilation(src2);\r\n            comp.VerifyDiagnostics(\r\n                );\r\n\r\n        }\r\n```"
+      },
+      {
+        "user": "kant2002",
+        "created_at": "2023-01-21T04:21:41Z",
+        "body": "Thanks a lot, that unblocks me and I really should be looking on `RuntimeFeature` class more in the future.\n\n---\n\n@jcouv same setup with `RuntimeFeature.NumericIntPtr` added.\r\n\r\nIf  I add this line \r\n\r\n```csharp\r\npublic static bool operator ==(nint value1, nint value2) => value1 == value2;\r\n```\r\n\r\nI receive `error CS0563: One of the parameters of a binary operator must be the containing type` which at this point also strange"
+      },
+      {
+        "user": "jcouv",
+        "created_at": "2023-01-22T10:08:55Z",
+        "body": "You'll need to provide the complete snippet to get any useful advice. The operator you provided can't work in the code snippet in OP (which doesn't define `IntPtr`)."
+      }
+    ]
+  },
+  {
+    "number": 62276,
+    "title": "inconsistent back and forth rewrite of `SyntaxTree` and (plain) string sources",
+    "created_at": "2022-06-30T14:18:10Z",
+    "closed_at": "2022-06-30T14:37:47Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/62276",
+    "body": "**Version Used**: 4.1.0\r\n\r\n**Steps to Reproduce**:\r\n\r\nI'm attaching a program that reproduces the issue.  \r\nIn summary, I'm writing the syntax tree of a C# source with top-level statements into another syntax tree where these (previous) top-level statements are inside a `Main` method. The rewritten syntax (and even the source rewritten from this syntax) look fine, but it the tree contains this diagnostics:\r\n\r\n`error CS1547: Keyword 'void' cannot be used in this context`\r\n\r\nHere's the program with the rewriting logic; below it, the output that I get when running it.\r\n\r\n```\r\nusing Microsoft.CodeAnalysis;\r\nusing Microsoft.CodeAnalysis.CSharp;\r\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\r\n\r\npublic class T\r\n{\r\n    public static void Main()\r\n    {\r\n        var source = @\"\r\nusing System;\r\nConsole.Write(1);\r\n\";\r\n\r\n        var originalTree = CSharpSyntaxTree.ParseText(source);\r\n        Console.WriteLine($\"<<<{originalTree}>>>\\n\" +\r\n                          $\"number of diagnostics: {originalTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        Console.WriteLine(\"rewritting the tree...\");\r\n        var rewrittenTree = new EmplaceGlobalStatement().Visit(originalTree.GetRoot()).NormalizeWhitespace().SyntaxTree;\r\n        Console.WriteLine($\"<<<{rewrittenTree}>>>\\n\" +\r\n                          $\"number of diagnostics: {rewrittenTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        if (rewrittenTree.GetDiagnostics().Count() == 1)\r\n        {\r\n            Console.WriteLine(rewrittenTree.GetDiagnostics().First() + \"\\n\\n\" + \r\n                              \"rewritting the rewritten tree (with a diagnostics) back to source...\");\r\n            var rewrittenSource = rewrittenTree.ToString();\r\n            var rewrittenSourceTree = CSharpSyntaxTree.ParseText(rewrittenSource);\r\n            Console.WriteLine($\"<<<{rewrittenSourceTree}>>>\\n\" +\r\n                              $\"number of diagnostics: {rewrittenSourceTree.GetDiagnostics().Count()}\\n\");\r\n\r\n        }\r\n    }\r\n}\r\n\r\npublic class EmplaceGlobalStatement : CSharpSyntaxRewriter\r\n{\r\n    private readonly List<StatementSyntax> __stmtsNodes = new();\r\n\r\n    public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)\r\n    {\r\n        var node_P = (CompilationUnitSyntax)base.VisitCompilationUnit(node);\r\n\r\n        if (!__stmtsNodes.Any())\r\n            return node_P;\r\n\r\n        var methDecl =\r\n            SyntaxFactory.MethodDeclaration(\r\n                    SyntaxFactory.ParseTypeName(\"void\"),\r\n                    \"Main\")\r\n                .WithModifiers(\r\n                    SyntaxFactory.TokenList(\r\n                        SyntaxFactory.Token(SyntaxKind.PublicKeyword),\r\n                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))\r\n                .WithBody(\r\n                    SyntaxFactory.Block(__stmtsNodes));\r\n\r\n        var tyDecl =\r\n            SyntaxFactory.ClassDeclaration(\"Program\")\r\n                .WithModifiers(\r\n                    SyntaxFactory.TokenList(\r\n                        SyntaxFactory.Token(SyntaxKind.InternalKeyword),\r\n                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))\r\n                .WithMembers(\r\n                    SyntaxFactory.List<MemberDeclarationSyntax>().Add(methDecl));\r\n\r\n        node_P = node_P.AddMembers(tyDecl);\r\n\r\n        return node_P;\r\n    }\r\n\r\n    public override SyntaxNode VisitGlobalStatement(GlobalStatementSyntax node)\r\n    {\r\n        __stmtsNodes.Add(node.Statement);\r\n        return null;\r\n    }\r\n}\r\n```\r\n\r\nHere's the output.\r\n\r\n```\r\n<<<<\r\nusing System;\r\nConsole.Write(1);\r\n>>>\r\nnumber of diagnostics: 0\r\n\r\nrewritting the tree...\r\n<<<using System;\r\n\r\ninternal static class Program\r\n{\r\n    public static void Main()\r\n    {\r\n        Console.Write(1);\r\n    }\r\n}>>>\r\nnumber of diagnostics: 1\r\n\r\n(5,20): error CS1547: Keyword 'void' cannot be used in this context\r\n\r\nrewritting the rewritten tree (with a diagnostics) back to source...\r\n<<<using System;\r\n\r\ninternal static class Program\r\n{\r\n    public static void Main()\r\n    {\r\n        Console.Write(1);\r\n    }\r\n}>>>\r\nnumber of diagnostics: 0\r\n```\r\n ",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/62276/comments",
+    "author": "ltcmelo",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2022-06-30T14:37:47Z",
+        "body": "hey @ltcmelo :)\r\n\r\nAs mentioned yesterday, the issue is with ParseTypeName.  As you can see if you call that directly, it has the diagnostic on it saying that `void` is not valid.  That's because `void` is not a TypeName as far as the language is concerned.  If you want to construct `void`, you'll need to construct a PredefinedTypeSyntax directly like so:\r\n\r\n`SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))`\r\n\r\nI hope this helps! :)"
+      },
+      {
+        "user": "ltcmelo",
+        "created_at": "2022-06-30T15:34:13Z",
+        "body": "Ah\u2026 correct, I felt into this trap before. Sure, I need to use `PredefinedTypeSyntax`.\r\n\r\nBut I didn't notice that you touched this topic yesterday, I thought you were referring to the (in)valid identifiers that I previously had, `<`, `>`, and `$` with IL names.\r\n\r\nIn any case, thanks!\r\n"
+      }
+    ]
+  },
+  {
+    "number": 61116,
+    "title": "CS0539 implementing interface method with T? explicitly",
+    "created_at": "2022-05-03T22:29:43Z",
+    "closed_at": "2022-05-03T23:02:06Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/61116",
+    "body": "**Version Used**:  NET6\r\n\r\nGetting a strange CS0539 error trying to implement an interface method explicitly. Not sure if this is by-design, thought I would ask.\r\n\r\n(Nullable context enabled in this scenario.)\r\n\r\nConsider these two interfaces:\r\n\r\n```csharp\r\ninternal interface Interface1\r\n{\r\n\tvoid Method<T>(T value);\r\n}\r\n\r\ninternal interface Interface2\r\n{\r\n\tvoid MethodNullable<T>(T? value);\r\n}\r\n```\r\n\r\n`Interface2` differs in that it has `T?`. My goal is to accept `T`, `null`, or `Nullable<T>`.\r\n\r\nThese interfaces both work fine when implemented directly/implicitly(?):\r\n\r\n```csharp\r\ninternal sealed class TestClass : Interface1, Interface2\r\n{\r\n\tpublic void Method<T>(T value) { }\r\n\r\n\tpublic void MethodNullable<T>(T? value) { }\r\n}\r\n```\r\n\r\nBut for some reason `Interface2.MethodNullable` generates CS0539 when implemented explicitly:\r\n\r\n```csharp\r\ninternal sealed class TestClassExplicit : Interface1, Interface2\r\n{\r\n\tvoid Interface1.Method<T>(T value) { }\r\n\r\n\t// Generates CS0539\r\n\tvoid Interface2.MethodNullable<T>(T? value) { }\r\n}\r\n```\r\n\r\n**Expected Behavior**:\r\n\r\nNo errors.\r\n\r\n**Actual Behavior**:\r\n\r\n* `CS0535 'TestClassExplicit' does not implement interface member 'Interface2.MethodNullable<T>(T?)'`\r\n* `CS0539 'TestClassExplicit.MethodNullable<T>(T?)' in explicit interface declaration is not found among members of the interface that can be implemented`\r\n* `CS0453 The type 'T' must be a non-nullable value type in order to use it as parameter 'T' in the generic type or method 'Nullable<T>'`",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/61116/comments",
+    "author": "CodeBlanch",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2022-05-03T23:02:00Z",
+        "body": "You need to write your explicit interface impl as:\r\n\r\n```c#\r\n    void Interface2.MethodNullable<T>(T? value) where T : default { }\r\n```\r\n\r\nWill add explanation later as to why this is.\n\n---\n\nOk, so this is a fallout of decisions we made back when we added generics in C# 2, and the later how those were impacted by NRT added in C# 8.\r\n\r\nBack in C#2.0 it was possible to write the following:\r\n\r\n```c#\r\ninterface IFoo\r\n{\r\n    void Foo<T>(T t);\r\n    void Foo<T>(T? t) where T : struct;\r\n}\r\n\r\nclass C : IFoo\r\n{\r\n    void IFoo.Foo<T>(T t) { }\r\n    void IFoo.Foo<T>(T? t) { }\r\n}\r\n```\r\n\r\nNote that when declaring these implementations in 'C' that the methods do *not* have constraints written on them.  This was fine for C# 2.0 as there was never any question about what this might mean.  In other words, the compiler could see `void IFoo.Foo<T>(T? t) { }` and know that `T` was only valid with a `struct` constraint, and so it could find `void Foo<T>(T? t) where T : struct;` in the interface to match this as an implementation of.  \r\n\r\nHowever, once we added NRT this became potentially ambiguous.  Consider for example:\r\n\r\n```c#\r\ninterface IFoo\r\n{\r\n    void Foo<T>(T? t);\r\n    void Foo<T>(T? t) where T : struct;\r\n}\r\n\r\nclass C : IFoo\r\n{\r\n    void IFoo.Foo<T>(T? t) { }  //<-- which method does this correspond to?\r\n}\r\n```\r\n\r\nTo match prior semantics, we wanted to ensure that that impl method still match the `Nullable<T>` method in the interface (e.g. the one with `where T : struct` on it).  But how could a user write the impl method and have it match the NRT method (the top method in the interface)?  \r\n\r\nTo solve that, we added `where T : default` to say \"ok, this is a case where T is actually unconstrained, and if you see the `?` that doesn't mean `Nullable<T>`, instead it means `NRT`'s `?`.  "
+      }
+    ]
+  },
+  {
+    "number": 58588,
+    "title": "Does .NET still support CSI?",
+    "created_at": "2021-12-13T21:45:28Z",
+    "closed_at": "2022-01-14T18:58:52Z",
+    "labels": [
+      "Question",
+      "Area-Interactive"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/58588",
+    "body": "CSI is a C# REPL that was supported in older versions of .NET I believe. However, when I run \"csi /version\" I get 3.11.0-4.21403.6 () which looks like it's not using the preview version of .NET 6 I have installed on my computer. Could some form of CSI be added, possibly to the dotnet command? Being able to rapidly test code snippets makes learning C# easier for me and is something I do in Python all the time.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/58588/comments",
+    "author": "Keithcat1",
+    "comments": [
+      {
+        "user": "buyaa-n",
+        "created_at": "2022-01-04T07:58:04Z",
+        "body": "Seems it is included in roslyn, transferring"
+      },
+      {
+        "user": "tmat",
+        "created_at": "2022-01-05T00:27:18Z",
+        "body": "It is included with Visual Studio msbuild: E.g. `C:\\Program Files\\Microsoft Visual Studio\\2022\\Preview\\MSBuild\\Current\\Bin\\Roslyn\\csi.exe`"
+      },
+      {
+        "user": "Keithcat1",
+        "created_at": "2022-01-14T18:58:52Z",
+        "body": "Okay found it. Had to install Visual Studio build tools 2022, didn't quite know that was a thing."
+      },
+      {
+        "user": "ahdung",
+        "created_at": "2024-07-10T07:12:54Z",
+        "body": "So how to specify dotnet version in csi?"
+      }
+    ]
+  },
+  {
+    "number": 58120,
+    "title": "Using top-level programs results in analyzer failures",
+    "created_at": "2021-12-05T16:25:25Z",
+    "closed_at": "2021-12-05T23:31:36Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/58120",
+    "body": "**Version Used**: \r\nMicrosoft.CodeAnalysis v4.0.1\r\n\r\n**Steps to Reproduce**:\r\nConsider the code below, taken from an existing analyzer. This analyzer is designed to report a diagnostic when a developer declares a type without putting it in a namespace:\r\n```c#\r\nprivate static void AnalyzeNamedType(SymbolAnalysisContext context)\r\n{\r\n    var type = (INamedTypeSymbol)context.Symbol;\r\n\r\n    if (type.ContainingNamespace.IsGlobalNamespace && type.Locations.Any())\r\n    {\r\n        context.ReportDiagnostic(Diagnostic.Create(GlobalTypeRule, type.Locations[0], type.Name, type.ContainingAssembly.Name));\r\n    }\r\n}\r\n```\r\n\r\nThe analyzer incorrectly reports a diagnostic in a top-level program: \"Type 'Program' is declared in the global namespace, which does not match with assembly name 'MyCompany.MyProduct'.\". This analyzer should not report a diagnostic for a top-level program, because the user has not declared the Program type. But it should keep reporting a diagnostic when the user has written code for a class named \"Program\" that is in the global namespace.\r\n\r\nAs the author of the analyzer, I'd like to fix this bug. But there does not seem to be an API to distinguish between there, as `WellKnownMemberNames.TopLevelStatementsEntryPointTypeName` equals \"Program\", a location is reported for a symbol that does not exist in the source code and `type.IsImplicitlyDeclared` returns `false`. This doesn't make any sense to me.\r\n\r\n**Expected Behavior**:\r\n`type.Locations.Any()` to return empty and `type.IsImplicitlyDeclared` to return `true`, or another API to determine whether the Program class is compiler-generated or explicitly defined in source code.\r\n\r\n**Actual Behavior**:\r\n`type.Locations.Any()` returns the location of the first statement within the top-level file, which is something else entirely.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/58120/comments",
+    "author": "bkoelman",
+    "comments": [
+      {
+        "user": "Youssef1313",
+        "created_at": "2021-12-05T17:02:06Z",
+        "body": "You can use `type.GetMembers(WellKnownMemberNames.TopLevelStatementsEntryPointMethodName)` to determine whether the given symbol is a top-level class.\r\nThe entry-point method name is still unspeakable, ie, you can't declare one with the same name in source. That's why this should work.\r\n\r\nRegarding `IsImplicitlyDeclared`, this is by design."
+      },
+      {
+        "user": "bkoelman",
+        "created_at": "2021-12-05T23:20:43Z",
+        "body": "Thanks, that works. I looked at `type.MemberNames`, which returns an empty collection."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-12-05T23:31:36Z",
+        "body": "Sounds like this has been answered.  Thanks @Youssef1313  :)"
+      }
+    ]
+  },
+  {
+    "number": 58112,
+    "title": "Provide access to semantic model during filtering phase of incremental source generator",
+    "created_at": "2021-12-04T12:02:08Z",
+    "closed_at": "2021-12-15T07:02:52Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Feature - Source Generators"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/58112",
+    "body": "I am trying to port my existing Source Generators to the new Incremental Source Generators. Currently I am relying on a bunch of `ISyntaxContextReceiver`s to discover types on which the Source Generators perform actions for. I am also relying on the `SemanticModel` to check attribute's namespaces etc.\r\n\r\nFrom what I understand, the `predicate` passed to `incrementalGeneratorInitializationContext.SyntaxProvider.CreateSyntaxProvider` is supposed to be fast and filter out types which are needed as soon as possible so the generator does not need to perform more work than strictly necessary. \r\nHowever, the predicate does not give me access to the semantic model, only the `transform` function does this. This leaves me with having to filter out unwanted types a step later than I would like, since I only have access to the semantic model then. This doesn't seem ideal, since it doesn't exclude as many types as possible initially and also it feels a bit weird to do filtering in the \"transform\" step.\r\n\r\nI am wondering if this is the \"correct way\" to do it if one needs access to the semantic model and if so, why this design was intentional. Or is it something which wasn't considered because of missing use cases?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/58112/comments",
+    "author": "CollinAlpert",
+    "comments": [
+      {
+        "user": "jaredpar",
+        "created_at": "2021-12-14T23:09:34Z",
+        "body": "@chsienki "
+      },
+      {
+        "user": "chsienki",
+        "created_at": "2021-12-15T03:35:25Z",
+        "body": "Yes, this is by design and you're using it correctly. \r\n\r\nFrom our experience with the `ISyntaxReceiver` implementations we know that syntax discovery is often the most expensive part of a generator. By splitting it out we can actually be more efficient. The first lambda allows the compiler to know *which* syntax you (might) be using. Most edits result in only a single syntax tree changing (such as typing in a different file in the IDE) we can know that the syntax hasn't changed in the other files, so there is no need to re-walk their trees (which is expensive).\r\n\r\nThe second lambda then lets you analyze the collected nodes with the semantic model. This can't be cached: typing in one file can change the semantic meaning of a node in another file, so any time any syntax changes we have to re-run the transformation for each selected node.\r\n\r\nIn the pathological case of the first lambda just being `return true` we can still be more efficient as we don't have to re-walk the trees of each file in order to run the second lambda where you have access to the semantic model."
+      },
+      {
+        "user": "CollinAlpert",
+        "created_at": "2021-12-15T07:02:42Z",
+        "body": "That makes sense, thanks a lot for the clarification!"
+      }
+    ]
+  },
+  {
+    "number": 57575,
+    "title": "Improper precedence of or operator in combination with not in pattern matching?",
+    "created_at": "2021-11-04T14:52:58Z",
+    "closed_at": "2021-11-04T19:49:59Z",
+    "labels": [
+      "Bug",
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/57575",
+    "body": "**Version 5**: \r\n\r\n**Steps to Reproduce**:\r\n\r\nSystem.Data.ParameterDirection.Output is not (System.Data.ParameterDirection.Input or System.Data.ParameterDirection.Output) will return false,\r\n\r\nbut \r\nSystem.Data.ParameterDirection.Output is not System.Data.ParameterDirection.Input or System.Data.ParameterDirection.Output will return true\r\n\r\nHave in mind that the pattern and the second operand of the or operator need to be the same for this to be reproduced.\r\n\r\n**Expected Behavior**:\r\nWhat I expected from an or operator is for the not to be applied after the or. However, it seems that without the parentheses, this is not the case. This has led to some nasty bugs in our products.\r\n\r\nI tried ParameterDirection.Output is not ParameterDirection.Input or not ParameterDirection.Output, however it returned true as well. Soo it seems that there is some very very tricky moment with the operator precedence. Could you elaborate in what order are the operators resolved, and what is the reason behind it? Or is this not expected? I surely did not expect it.\r\n\r\n**Actual Behavior**:\r\nWell, I stated it in the steps to reproduce :)\r\n\r\nHave a great day :)",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/57575/comments",
+    "author": "X-7r3em",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-11-04T19:49:59Z",
+        "body": "This is def by design, and matches normal expression precedence.  if you have `!a || b` then that is `(!a) || b` *not* `!(a || b)`.  It would both be a bad breaking change to change this, and also very inconsistent with teh general rules of the language here in the parallel expression side of things.\r\n\r\n> This has led to some nasty bugs in our products.\r\n\r\nNote: if we were to change this, it would certainly introduce nasty bugs.  And even if we had had this formalization originally, it would also have led to nasty bugs as it would be reasonable for people to think that pattern precedence worked like expression precedence :)\r\n\r\n> Could you elaborate in what order are the operators resolved\r\n\r\nIn general, this will be resolved similarly to expressions (though @RikkiGibson can def correct me if i'm wrong).   \r\n\r\nFor `not System.Data.ParameterDirection.Input or System.Data.ParameterDirection.Output`\r\n\r\nFirst, we'll see what `System.Data.ParameterDirection.Input` evaluates to.  Then we'll apply the `not` pattern to that to flip it.  If this results in `true` we won't bother with the `or` part (as we shortcircuit here just like with expressions.  If it results in `false`, we will then evaluated `System.Data.ParameterDirection.Output` and return that as the result.\r\n\r\nDoing this evaluation `System.Data.ParameterDirection.Output` being the thing tested produces:\r\n\r\n`System.Data.ParameterDirection.Output is System.Data.ParameterDirection.Input` is `false`.  We negate that with `not` to `true`.  As such we skip the RHS of hte `or` and just return `true` (which is what you saw when you ran this).\r\n\r\n--\r\n\r\nFor `not (System.Data.ParameterDirection.Input or System.Data.ParameterDirection.Output)`\r\n\r\nWe'll first evaluate `System.Data.ParameterDirection.Input`.  If that is `true`, we can shortcircuit the other side (because of `or`) and return `false` immediately (because we `not` the `true`) value.  If `System.Data.ParameterDirection.Input` is `false`, then we execute the rhs and immediately `not` the result of that.\r\n\r\nDoing this evaluation `System.Data.ParameterDirection.Output` being the thing tested produces:\r\n\r\n`System.Data.ParameterDirection.Output is System.Data.ParameterDirection.Input` is `false`.  So we need to check the RHS of the `or` pattern.\r\n`System.Data.ParameterDirection.Output is System.Data.ParameterDirection.Output` is `true`.  So the value of the `or` pattern is `true`.  We then negate this with `not`, producing a final value of `false` (which is what you saw when you ran this).\r\n\r\n\r\n"
+      },
+      {
+        "user": "X-7r3em",
+        "created_at": "2021-11-05T06:50:39Z",
+        "body": "Yes, a few hours after I wrote this, I tried some examples, and I came to the same conclusion that it is as you have written :). It is tricky in the begging before you wrap your head around it though. The tricky part is that \"not\" is not an operator on the \"is\" operator, but rather the result of the \"is\" expression. But eh :D "
+      }
+    ]
+  },
+  {
+    "number": 53965,
+    "title": "How to get all analyzers rules in a solution?",
+    "created_at": "2021-06-09T15:45:58Z",
+    "closed_at": "2021-06-11T11:23:01Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/53965",
+    "body": "Hi!\r\nI have added some analyzer via NuGet in my solution.\r\nHow to get all added analyzer rules from NuGet references?\r\nI need the ID (e.g. CA1001) and descriptions of all my enabled analyzers.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/53965/comments",
+    "author": "p-bojkowski",
+    "comments": [
+      {
+        "user": "jmarolf",
+        "created_at": "2021-06-09T19:13:32Z",
+        "body": "@p-bojkowski can you describe your scenario in more detail? Do you need to get these values programatically or do you just want to see them in a UI?"
+      },
+      {
+        "user": "p-bojkowski",
+        "created_at": "2021-06-09T19:23:52Z",
+        "body": "@jmarolf I need to code this stuff...."
+      },
+      {
+        "user": "jmarolf",
+        "created_at": "2021-06-09T19:26:03Z",
+        "body": "In what context? as a console app? as a Visual Studio extension?"
+      },
+      {
+        "user": "p-bojkowski",
+        "created_at": "2021-06-10T15:00:12Z",
+        "body": "Console  app\n\n---\n\n@jmarolf but I can try it 1st in a VS extension."
+      },
+      {
+        "user": "sharwell",
+        "created_at": "2021-06-10T15:12:26Z",
+        "body": "This data is reported in the binlog with `/p:ReportAnalyzer=true`. The sarif output might have it in JSON form (#37148)."
+      },
+      {
+        "user": "jmarolf",
+        "created_at": "2021-06-10T17:47:33Z",
+        "body": "Here is a sample console application that can programmatically load a solution and print out all the analyzer Ids used in the solution\r\n\r\n```xml\r\n<Project Sdk=\"Microsoft.NET.Sdk\">\r\n\r\n  <PropertyGroup>\r\n    <OutputType>Exe</OutputType>\r\n    <TargetFramework>net5.0</TargetFramework>\r\n    <Nullable>enable</Nullable>\r\n  </PropertyGroup>\r\n\r\n  <ItemGroup>\r\n    <PackageReference Include=\"Microsoft.Build.Locator\" Version=\"1.4.1\" />\r\n    <PackageReference Include=\"Microsoft.CodeAnalysis.Analyzers\" Version=\"3.3.2\" PrivateAssets=\"all\" />\r\n    <PackageReference Include=\"Microsoft.CodeAnalysis.CSharp.Workspaces\" Version=\"3.9.0\" />\r\n    <PackageReference Include=\"Microsoft.CodeAnalysis.VisualBasic.Workspaces\" Version=\"3.9.0\" />\r\n    <PackageReference Include=\"Microsoft.CodeAnalysis.Workspaces.MSBuild\" Version=\"3.9.0\" />\r\n  </ItemGroup>\r\n\r\n</Project>\r\n```\r\n\r\n```csharp\r\nusing System;\r\nusing System.IO;\r\nusing System.Linq;\r\nusing System.Threading.Tasks;\r\nusing Microsoft.Build.Locator;\r\nusing Microsoft.CodeAnalysis;\r\nusing Microsoft.CodeAnalysis.MSBuild;\r\n\r\nnamespace AnalyzerReader\r\n{\r\n    class Program\r\n    {\r\n        static async Task Main(string[] args)\r\n        {\r\n            // Attempt to set the version of MSBuild.\r\n            var instance = MSBuildLocator.RegisterDefaults();\r\n\r\n            Console.WriteLine($\"Using MSBuild at '{instance.MSBuildPath}' to load projects.\");\r\n\r\n            using var workspace = MSBuildWorkspace.Create();\r\n\r\n            // Print message for WorkspaceFailed event to help diagnosing project load failures.\r\n            workspace.WorkspaceFailed += (o, e) => Console.WriteLine(e.Diagnostic.Message);\r\n\r\n            var solutionPath = args[0];\r\n            Console.WriteLine($\"Loading solution '{solutionPath}'\");\r\n\r\n            // Attach progress reporter so we print projects as they are loaded.\r\n            var solution = await workspace.OpenSolutionAsync(solutionPath, new ConsoleProgressReporter());\r\n            Console.WriteLine($\"Finished loading solution '{solutionPath}'\");\r\n\r\n            // Get all analyzers in the project\r\n            var diagnosticDescriptors = solution.Projects\r\n                .SelectMany(project => project.AnalyzerReferences)\r\n                .SelectMany(analyzerReference => analyzerReference.GetAnalyzersForAllLanguages())\r\n                .SelectMany(analyzer => analyzer.SupportedDiagnostics)\r\n                .Distinct().OrderBy(x => x.Id);\r\n\r\n            Console.WriteLine($\"{nameof(DiagnosticDescriptor.Id),-15} {nameof(DiagnosticDescriptor.Title)}\");\r\n            foreach (var diagnosticDescriptor in diagnosticDescriptors)\r\n            {\r\n                Console.WriteLine($\"{diagnosticDescriptor.Id,-15} {diagnosticDescriptor.Title}\");\r\n            }\r\n        }\r\n\r\n        private class ConsoleProgressReporter : IProgress<ProjectLoadProgress>\r\n        {\r\n            public void Report(ProjectLoadProgress loadProgress)\r\n            {\r\n                var projectDisplay = Path.GetFileName(loadProgress.FilePath);\r\n                if (loadProgress.TargetFramework != null)\r\n                {\r\n                    projectDisplay += $\" ({loadProgress.TargetFramework})\";\r\n                }\r\n\r\n                Console.WriteLine($\"{loadProgress.Operation,-15} {loadProgress.ElapsedTime,-15:m\\\\:ss\\\\.fffffff} {projectDisplay}\");\r\n            }\r\n        }\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "p-bojkowski",
+        "created_at": "2021-06-11T11:01:59Z",
+        "body": "@jmarolf thank you very very much !!!!!"
+      }
+    ]
+  },
+  {
+    "number": 52542,
+    "title": "Array of nullable generic parameter has unexpected default value",
+    "created_at": "2021-04-08T20:20:07Z",
+    "closed_at": "2021-04-12T17:22:00Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered",
+      "untriaged"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/52542",
+    "body": "I have the following structure:\r\n```\r\nclass MyClass<T> {\r\n  public T? array;\r\n\r\n  MyClass() {\r\n    array = new T?[1];\r\n  }\r\n}\r\n\r\nstruct MyStruct {\r\n  string fields;\r\n}\r\n```\r\n\r\nNow let's say I do the following:\r\n```\r\nMyClass<MyStruct> instance = new();\r\nConsole.WriteLine(instance.array[0] is null);\r\n```\r\n\r\nI would expect to see `True` however what I get is `False`. The array initializes itself with a bunch of empty structs while I would expect a bunch of `null`.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/52542/comments",
+    "author": "Lancelotbronner",
+    "comments": [
+      {
+        "user": "dotnet-issue-labeler[bot]",
+        "created_at": "2021-04-08T20:20:09Z",
+        "body": "I couldn't figure out the best area label to add to this issue. If you have write-permissions please help me learn by adding exactly one area label."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-04-12T17:22:00Z",
+        "body": "You need to do:\r\n\r\n```c#\r\nclass MyClass<T> where T : struct {\r\n  public T? array;\r\n\r\n  MyClass() {\r\n    array = new T?[1];\r\n  }\r\n}\r\n```\r\n\r\nWithout the `T : struct` constraint, `T?` means: \"can be default(T)\".  `default(MyStruct)` is not nullable, so it can't be null.  With the `T : struct` constraint means `can be Nullable<T>` so it can be null."
+      },
+      {
+        "user": "Lancelotbronner",
+        "created_at": "2021-04-13T19:31:05Z",
+        "body": "But what if I need T to be either a reference or value type? I thought that was the whole point of nullable?\n\n> On Apr 12, 2021, at 1:22 PM, CyrusNajmabadi ***@***.***> wrote:\n> \n> \ufeff\n> You need to do:\n> \n> class MyClass<T> where T : struct {\n>   public T? array;\n> \n>   MyClass() {\n>     array = new T?[1];\n>   }\n> }\n> Without the T : struct constraint, T? means: \"can be default(T)\". default(MyStruct) is not nullable, so it can't be null. With the T : struct constraint means can be Nullable<T> so it can be null.\n> \n> \u2014\n> You are receiving this because you authored the thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2021-04-13T20:22:27Z",
+        "body": "> But what if I need T to be either a reference or value type? \r\n\r\nThen you do just `Foo<T>` with no constraints.  An uncosntrained type parameter can be a reference or value type. \r\n\r\n> I thought that was the whole point of nullable?\r\n\r\nI don't know that means here.  The point of \"nullable value types\" was to allow one to represent a null state for any value type without high overhead.  The point of \"nullalbe reference types\" was to allow annotating your reference type usages to avoid null ref exceptions."
+      },
+      {
+        "user": "Lancelotbronner",
+        "created_at": "2021-04-13T21:43:58Z",
+        "body": "Oh thank you that makes more sense, I just expected it to work more like Swift\u2019s optionals.\n\nI instead made my own Optional<T> which had the behavior I was looking for.\n\nThank you for your explanations!\n\n> On Apr 13, 2021, at 4:22 PM, CyrusNajmabadi ***@***.***> wrote:\n> \n> \ufeff\n> But what if I need T to be either a reference or value type?\n> \n> Then you do just Foo<T> with no constraints. An uncosntrained type parameter can be a reference or value type.\n> \n> I thought that was the whole point of nullable?\n> \n> I don't know that means here. The point of \"nullable value types\" was to allow one to represent a null state for any value type without high overhead. The point of \"nullalbe reference types\" was to allow annotating your reference type usages to avoid null ref exceptions.\n> \n> \u2014\n> You are receiving this because you authored the thread.\n> Reply to this email directly, view it on GitHub, or unsubscribe.\n"
+      }
+    ]
+  },
+  {
+    "number": 48011,
+    "title": "IDE0008 when combining \"type apparent\" expressions with null-coalescing operator",
+    "created_at": "2020-09-24T14:12:00Z",
+    "closed_at": "2020-09-25T16:28:40Z",
+    "labels": [
+      "Question",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/48011",
+    "body": "With the following settings:\r\n``` ini\r\ncsharp_style_var_for_built_in_types = false:warning\r\ncsharp_style_var_when_type_is_apparent = true:suggestion\r\ncsharp_style_var_elsewhere = false:warning\r\n```\r\na false-positive IDE0008 is generated when combining two \"type is apparent\" expressions with the null-coalescing operator `??`, for example:\r\n\r\n``` csharp\r\nvar myList = enumerableOfInt as List<int> ?? enumerableOfInt.ToList();\r\n```\r\nNo warning is generated when using the expressions either side of the `??` in isolation.\r\n\r\n**Version Used**: \r\nMicrosoft Visual Studio Enterprise 2019\r\nVersion 16.7.3\r\nVisualStudio.16.Release/16.7.3+30503.244\r\nMicrosoft .NET Framework\r\nVersion 4.8.04084\r\n\r\n**Steps to Reproduce**:\r\n\r\n1. Create a new console app project\r\n2. Add a new .editorconfig file and ensure the options for `charp_style_var_*` are set as follows:\r\n``` ini\r\n[*.cs]\r\n# var preferences\r\ncsharp_style_var_for_built_in_types = false:warning\r\ncsharp_style_var_when_type_is_apparent = true:suggestion\r\ncsharp_style_var_elsewhere = false:warning\r\n```\r\n3. Add the following code to `Main`\r\n``` csharp\r\nIEnumerable<int> empty = Enumerable.Empty<int>();\r\n\r\nvar emptyAsList = empty as List<int>;\r\nvar emptyToList = empty.ToList();\r\nvar emptyAsListOrToList = empty as List<int> ?? empty.ToList();\r\n```\r\n\r\n**Expected Behavior**:\r\nNo IDE0008, because `csharp_style_var_when_type_is_apparent  = true:suggestion`\r\n\r\n**Actual Behavior**:\r\nIDE0008 on third example of `var` because `csharp_style_var_elsewhere = false:warning`",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/48011/comments",
+    "author": "jimpaton-ufx",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2020-09-24T16:09:04Z",
+        "body": "I don't believe the type is apparent there. Is requires descending into both sides of the expression, then mentally comparing both to know of they're the same. This is not apparent. \r\n\r\nIn general we do not done into expressions on the way you're thinking about. "
+      },
+      {
+        "user": "jimpaton-ufx",
+        "created_at": "2020-09-25T06:15:14Z",
+        "body": "I'm sorry, but I disagree. Given the following lines of code:\r\n\r\n``` csharp\r\nvar first = String.Empty;\r\nvar second = String.Empty;\r\nvar result = first ?? second;\r\n```\r\n\r\nwith  `csharp_style_var_for_built_in_types` to `false:warning`, all three lines generate an IDE0008 warning, as expected. If you change value of the setting to `true:warning` then all three IDE0008 warnings disappear. My expectation is that the rules should behave in a consistent manner. If `var x = expressionA;` and `var y = expressionB;` don't generate warnings under a particular rule, then why should `var z = expressionA ?? expressionB;` be different?\r\n\r\n"
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2020-09-25T08:02:53Z",
+        "body": "> My expectation is that the rules should behave in a consistent manner\r\n\r\nThere is no reason for this to be.  `csharp_style_var_for_built_in_types` depends only on the type of hte variable.  if it is `built in` (i.e. `int`, `string`, etc.) you can use 'var'.  that's the only thing that controls it.\r\n\r\n`csharp_style_var_when_type_is_apparent` is entirely unrelated.  It says \"you can use `var` if the type is apparent/obvious from the expression\".  When you have `expr1 ?? expr2` the type is not apparent/obvious, so you cannot use 'var' here.\r\n\r\n> then why should `var z = expressionA ?? expressionB`; be different?\r\n\r\nYou'd have to explain why `var z = expressionA ?? expressionB;` would be the same.  it's a `??` expression, nothing about it make the type `apparent`.  The same is true for things like `x ? y : z`.  Is the type of that apparent just by looking at it?  No.  So you can't use 'var' there."
+      },
+      {
+        "user": "jimpaton-ufx",
+        "created_at": "2020-09-25T08:58:59Z",
+        "body": "I understand. My (I think reasonable) assumption was that both rules would be looking at the type of the RHS of the assignment - from a human being's point of view, I can't tell whether `var x` is a built-in type or not!\r\nThanks for clarifying."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2020-09-25T16:28:40Z",
+        "body": "Yup yup. I'm going to close this as by design. Glad this could be cleared up for you. "
+      }
+    ]
+  },
+  {
+    "number": 47884,
+    "title": "How to tell the analyzer to ignore generated code?",
+    "created_at": "2020-09-21T09:44:14Z",
+    "closed_at": "2020-09-21T10:20:46Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/47884",
+    "body": "Hello, I wrote a custom code analyzer and it runs on my solution code, but it also runs on generated code.\r\nFor example when `AssemblyInfo.cs` files get generated, my analyzer also analyzes these files and throws warnings inside of them. How can I tell my custom analyzer to not analyze generated code?\r\n\r\nI know I could add something like this into my `.editorconfig`:\r\n```\r\n[*.{AssemblyAttributes.cs,AssemblyInfo.cs}]\r\ngenerated_code = true\r\ndotnet_diagnostic.***.severity = none\r\n...\r\n```\r\nBut is there a better way to do it?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/47884/comments",
+    "author": "DasOhmoff",
+    "comments": [
+      {
+        "user": "Youssef1313",
+        "created_at": "2020-09-21T09:57:05Z",
+        "body": "You can do that using `ConfigureGeneratedCodeAnalysis` on the `AnalysisContext` (that is the parameter of the `Initialize` method):\r\n\r\n```csharp\r\ncontext.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 47759,
+    "title": "Adding analyzer to analyze its own project in which it is created?",
+    "created_at": "2020-09-16T19:10:08Z",
+    "closed_at": "2020-09-22T17:32:38Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/47759",
+    "body": "Hello, thank you for your help.\r\n\r\nImagine the following scenario: I create a project called \"AnalyzerProject\" in which a analyzer gets defined.\r\nIs it possible to use this very same analyzer to analyze the very same project?\r\nSo that this analyzer that gets build analyzes the project \"AnalyzerProject\"?\r\n\r\nIf so, how can I make this happen?\r\nI have three projects in my solution, a analyzer project (net standard 2.0), a code fixes project (net standard 2.0), a package project (which combines both, and is also net standard 2.0), and a vsix project (so that I can test the analyzer by starting another visual studio instance. This one is a net472 project). I am sure you know what I mean. How can I make it happen so that all these 4 projects inside my solution are analyzed by the analyzer that is defined inside the projects themselves?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/47759/comments",
+    "author": "DasOhmoff",
+    "comments": [
+      {
+        "user": "mavasani",
+        "created_at": "2020-09-16T19:50:14Z",
+        "body": "@DasOhmoff You can add a package reference to an older/published version of AnalyzerProject NuGet package to the project itself. This will ensure the already published version of the analyzer packages runs on your AnalyzerProject. You would then publish a new analyzer package with your changes, and upgrade your package reference to the latest version to get later changes."
+      }
+    ]
+  },
+  {
+    "number": 45745,
+    "title": "Compiler warning CS8618: How can I get around it.",
+    "created_at": "2020-07-07T16:38:33Z",
+    "closed_at": "2020-08-12T19:55:25Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Feature - Nullable Reference Types"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/45745",
+    "body": "**Net Standard 2.1**: \r\n\r\n**Steps to Reproduce**:\r\nSee following code:\r\n```\r\npublic class Class1\r\n{\r\n  public string MyProperty { get; set; }\r\n  public string MyProperty2 { get; set; }\r\n  public string MyProperty3 { get; set; }\r\n\r\n  public Class1() //Warning CS8618\r\n  {\r\n    Init();\r\n  }\r\n\r\n  public Class1(string myproperty2) //Warning CS8618\r\n  {\r\n    Init();\r\n    MyProperty2 = myproperty2;\r\n  }\r\n\r\n  private void Init()\r\n  {\r\n    MyProperty = \"\";\r\n    MyProperty2 = \"\";\r\n    MyProperty3 = \"\";\r\n  }\r\n}\r\n```\r\n\r\nIs there a way to tell the compiler that the Init() function takes care of initializing the properties?\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/45745/comments",
+    "author": "FStapenhorst",
+    "comments": [
+      {
+        "user": "RikkiGibson",
+        "created_at": "2020-07-07T16:58:02Z",
+        "body": "In your scenario you may consider applying `[MemberNotNull(nameof(MyProperty), nameof(MyProperty2), nameof(MyProperty3)]` to your `Init()` method."
+      },
+      {
+        "user": "FStapenhorst",
+        "created_at": "2020-07-07T17:12:58Z",
+        "body": "Thank you!\r\n\r\nI did this:\r\n```\r\n[MemberNotNull(nameof(MyProperty), nameof(MyProperty2), nameof(MyProperty3))]       \r\nprivate void Init()\r\n{   \r\n  MyProperty = \"\";\r\n  MyProperty2 = \"\";\r\n  MyProperty3 = \"\";\r\n}\r\n```\r\nBut now I get error CS0246 - it doesn't recognize the MemberNotNull attribute. Do I need any additional reference or using statement?\r\n\r\n\r\n"
+      },
+      {
+        "user": "RikkiGibson",
+        "created_at": "2020-07-07T17:32:04Z",
+        "body": "The attribute seems to be only present in .NET 5, and requires `<LangVersion>preview</LangVersion>`. The feature will be part of C# 9 once that officially ships.\r\n\r\nYou can declare the attribute internally in your project (not officially supported):\r\n\r\n```cs\r\nnamespace System.Diagnostics.CodeAnalysis\r\n{\r\n    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property, AllowMultiple = true)]\r\n    internal sealed class MemberNotNullAttribute : Attribute\r\n    {\r\n        public MemberNotNullAttribute(params string[] members) { }\r\n        public MemberNotNullAttribute(string member) { }\r\n    }\r\n}\r\n\r\nnamespace System.Diagnostics.CodeAnalysis\r\n{\r\n    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property, AllowMultiple = true)]\r\n    internal sealed class MemberNotNullWhenAttribute : Attribute\r\n    {\r\n        public MemberNotNullWhenAttribute(bool when, params string[] members) { }\r\n        public MemberNotNullWhenAttribute(bool when, string member) { }\r\n    }\r\n}\r\n```\r\n\r\nYou can also use`= null!` initializers on your properties instead, which are expected to be elided in codegen in Release mode. This has the effect of just suppressing the CS8618 (uninitialized non-nullable member) warnings.\r\n\r\n```cs\r\npublic class Class1\r\n{\r\n  public string MyProperty { get; set; } = null!;\r\n  public string MyProperty2 { get; set; } = null!;\r\n  public string MyProperty3 { get; set; } = null!;\r\n}\r\n```"
+      },
+      {
+        "user": "FStapenhorst",
+        "created_at": "2020-07-08T10:33:02Z",
+        "body": "I installed .NET Runtime 5.0.0-preview.6.20305.6 and added the following in my csproj file:\r\n```\r\n  <PropertyGroup>\r\n    <LangVersion>preview</LangVersion>\r\n  </PropertyGroup>\r\n```\r\nBut still \r\n`[MemberNotNull(nameof(MyProperty), nameof(MyProperty2), nameof(MyProperty3))] `\r\nis unknown.\r\nMaybe it is not yet in the latest preview.\r\nI'll stick with `= null!;` for now"
+      },
+      {
+        "user": "RikkiGibson",
+        "created_at": "2020-08-12T19:55:25Z",
+        "body": "Closing out since the question appears to have been addressed. Feel free to follow up here if needed. Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 44427,
+    "title": "IBuildEngine7 is not provided in Microsoft.Build.Framework",
+    "created_at": "2020-05-20T18:20:08Z",
+    "closed_at": "2020-07-29T21:42:47Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "IDE-MSBuildWorkspace"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/44427",
+    "body": "**Version Used**: 16.5.0\r\n\r\n**Steps to Reproduce**:\r\n\r\n1. Use 3.6 version of roslyn nuget packages which are using IBuildEngine7 under the hood.\r\n\r\n**Expected Behavior**:\r\n\r\nMsbuildWorkspace and other roslyn features should work\r\n\r\n**Actual Behavior**:\r\n\r\nTypeLoadException because IBuildEngine7 is not located in Microsoft.Build.Framework\r\n\r\nIt's not complicated to test! just install Microsoft.Build.Framework in any project and IBuildEngine6 is the most recent version of IBuildEngine you can find!",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/44427/comments",
+    "author": "ysmoradi",
+    "comments": [
+      {
+        "user": "jmarolf",
+        "created_at": "2020-07-29T20:31:01Z",
+        "body": "@ysmoradi looking into fixing this but could use some help. Are you referencing _both_ the latest MSBuildWorkspace version and Microsoft.Build.Framework? Can you explain to me why you are doing that?"
+      },
+      {
+        "user": "ysmoradi",
+        "created_at": "2020-07-29T21:39:45Z",
+        "body": "I'm fine with 3.7"
+      },
+      {
+        "user": "jmarolf",
+        "created_at": "2020-07-29T21:42:47Z",
+        "body": "ah, I'll close this as fixed than"
+      }
+    ]
+  },
+  {
+    "number": 41980,
+    "title": "Not all InvocationExpression are rewritten",
+    "created_at": "2020-02-27T07:14:38Z",
+    "closed_at": "2020-02-29T07:56:03Z",
+    "labels": [
+      "Question",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/41980",
+    "body": "**Version Used**: \r\nCore3.1 ConsoleApp\r\n**Steps to Reproduce**:\r\n\r\n```cs\r\nprivate class Rewriter : CSharpSyntaxRewriter\r\n    {\r\n        public int Id { get; set; }\r\n        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)\r\n        {\r\n            var invokName = node.Expression.ToString();\r\n            if (invokName == \"MyMethod\")\r\n            {\r\n                var argus = node.ArgumentList.AddArguments(\r\nSyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(Id))));\r\n                return node.Update((ExpressionSyntax)Visit(node.Expression), argus);\r\n            }\r\n            return node;\r\n        }\r\n    }\r\n    static void Main(string[] args)\r\n    {\r\n        SyntaxTree oriTree = CSharpSyntaxTree.ParseText(@\"\r\n        public class MyClass\r\n        {\r\n            public string MyMethod(int id)\r\n            {\r\n                return $\"\"{id}\"\";\r\n            }\r\n            public void Say()\r\n            {\r\n                var tmp = MyMethod();//worked\r\n                var tmp1 = MyMethod();//worked\r\n                var tmp2 = \"\"Hi \"\" + MyMethod();//worked\r\n                Console.WriteLine($\"\"Say {MyMethod()}\"\");//Not worked\r\n                Console.WriteLine(\"\"Hello \"\" + MyMethod());//Not worked                    \r\n            }\r\n        }\");\r\n        var syntaxRoot = oriTree.GetCompilationUnitRoot();\r\n        var visitor = new Rewriter();\r\n        visitor.Id = 0;\r\n        var changedSyntaxTree = visitor.Visit(syntaxRoot).SyntaxTree;\r\n    }\r\n```\r\n\r\n**Expected Behavior**:\r\nI want to rewrite all InvocationExpression of \"MyMethod\" in a SyntaxTree to add a literal param 0\r\n**Actual Behavior**:\r\nNot all InvocationExpression are rewritten.\r\n\r\n`var methods = syntaxRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(o => o.Expression.ToString() == \"MyMethod\");` can enumerate all InvocationExpression of \"MyMethod\".",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/41980/comments",
+    "author": "zhusheping",
+    "comments": [
+      {
+        "user": "RikkiGibson",
+        "created_at": "2020-02-28T23:29:17Z",
+        "body": "do you need to call `base.Visit(node)` in order to visit nested invocation expressions?"
+      },
+      {
+        "user": "zhusheping",
+        "created_at": "2020-02-29T05:47:24Z",
+        "body": "> do you need to call `base.Visit(node)` in order to visit nested invocation expressions?\r\n```\r\nif (invokName == \"MyMethod\")\r\n {\r\n    var argus = node.ArgumentList.AddArguments(\r\nSyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(Id))));\r\n    return node.Update((ExpressionSyntax)Visit(node.Expression), argus);\r\n }\r\n//???\r\nelse if (node.ArgumentList.Arguments.Any(o => o.Expression.ToString().Contains(\"MyMethod\")))\r\n {\r\n     //???\r\n }\r\nreturn node;\r\n```\r\n"
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2020-02-29T07:38:59Z",
+        "body": "you need to do this instead:\r\n\r\n```c#\r\n        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)\r\n        {\r\n            node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);\r\n            // now, the rest of your code:\r\n            var invokName = node.Expression.ToString();\r\n            // etc.\r\n```\r\n\r\nNote: i would recomment using SyntaxEditor instead of a rewriter here.  it will make the code a lot easier and cleaner."
+      },
+      {
+        "user": "zhusheping",
+        "created_at": "2020-02-29T07:56:03Z",
+        "body": "@CyrusNajmabadi \r\nWow, It's done. Thands a lot!\r\nI haven't learned to use the syntax editor yet, and I can find very little information\r\n"
+      }
+    ]
+  },
+  {
+    "number": 41932,
+    "title": " [loc][Query][Roslyn] Localizability of 0; \"Found_0_assemblies_for_1\"",
+    "created_at": "2020-02-25T13:03:17Z",
+    "closed_at": "2020-03-10T12:55:09Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/41932",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nFound '{0}' assemblies for '{1}':\r\n\r\nFile Name:\r\nEditorFeatures\\CSharp\\xlf\\CSharpEditorResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nPlease specify the meaning of the placeholders.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/41932/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "sharwell",
+        "created_at": "2020-02-26T16:03:49Z",
+        "body": "{0}: The number of matching assemblies (non-negative integer)\r\n{1}: An assembly name, such as `System` or `Microsoft.CodeAnalysis.Workspaces`"
+      }
+    ]
+  },
+  {
+    "number": 41651,
+    "title": "Cannot find the controlFlowGraph class in roslyn flow analysis package",
+    "created_at": "2020-02-13T13:14:07Z",
+    "closed_at": "2020-02-14T11:12:49Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Concept-API"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/41651",
+    "body": "I cannot understand why I am getting an error (using VS2017) for the code in below related to not finding the class ControlFlowGraph which is supposed to be part of the package Microsoft.CodeAnalysis.FlowAnalysis:\r\n\r\n```csharp\r\nusing System;\r\nusing System.Collections.Generic;\r\nusing System.IO;\r\nusing System.Linq;\r\nusing System.Threading.Tasks;\r\nusing Microsoft.Build.Locator;\r\nusing Microsoft.CodeAnalysis;\r\nusing Microsoft.CodeAnalysis.CSharp;\r\nusing Microsoft.CodeAnalysis.CSharp.Symbols;\r\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\r\nusing Microsoft.CodeAnalysis.MSBuild;\r\nusing Microsoft.CodeAnalysis.FlowAnalysis;\r\n\r\nnamespace CodeAnalysisApp3\r\n{\r\n    class Program\r\n    {\r\n        static async Task Main(string[] args)\r\n        {\r\n            // Attempt to set the version of MSBuild.\r\n            var visualStudioInstances = MSBuildLocator.QueryVisualStudioInstances().ToArray();\r\n            var instance = visualStudioInstances[0];\r\n\r\n            Console.WriteLine($\"Using MSBuild at '{instance.MSBuildPath}' to load projects.\");\r\n\r\n            // NOTE: Be sure to register an instance with the MSBuildLocator \r\n            //       before calling MSBuildWorkspace.Create()\r\n            //       otherwise, MSBuildWorkspace won't MEF compose.\r\n            MSBuildLocator.RegisterInstance(instance);\r\n\r\n            using (var workspace = MSBuildWorkspace.Create())\r\n            {\r\n                // Print message for WorkspaceFailed event to help diagnosing project load failures.\r\n                workspace.WorkspaceFailed += (o, e) => Console.WriteLine(e.Diagnostic.Message);\r\n\r\n                var solutionPath = args[0];\r\n                Console.WriteLine($\"Loading solution '{solutionPath}'\");\r\n\r\n                // Attach progress reporter so we print projects as they are loaded.\r\n                var solution = await workspace.OpenSolutionAsync(solutionPath, new ConsoleProgressReporter());\r\n                Console.WriteLine($\"Finished loading solution '{solutionPath}'\");\r\n\r\n                // TODO: Do analysis on the projects in the loaded solution\r\n                CSharpParseOptions options = CSharpParseOptions.Default\r\n                .WithFeatures(new[] { new KeyValuePair<string, string>(\"flow-analysis\", \"\") });\r\n\r\n                var projIds = solution.ProjectIds;\r\n\r\n                var project = solution.GetProject(projIds[0]);\r\n\r\n                Compilation compilation = await project.GetCompilationAsync();\r\n\r\n                if (compilation != null && !string.IsNullOrEmpty(compilation.AssemblyName))\r\n                {\r\n                    var mySyntaxTree = compilation.SyntaxTrees.First();\r\n\r\n                    // get syntax nodes for methods\r\n                    var methodNodes = from methodDeclaration in mySyntaxTree.GetRoot().DescendantNodes()\r\n                               .Where(x => x is MethodDeclarationSyntax)\r\n                                      select methodDeclaration;\r\n\r\n                    foreach (MethodDeclarationSyntax node in methodNodes)\r\n                    {\r\n                        var model = compilation.GetSemanticModel(node.SyntaxTree);\r\n                        node.Identifier.ToString();\r\n                        if (node.SyntaxTree.Options.Features.Any())\r\n                        {\r\n                            var graph = ControlFlowGraph.Create(node, model); // CFG is here\r\n                        }\r\n                    }\r\n                }\r\n            }\r\n        }\r\n\r\n        private class ConsoleProgressReporter : IProgress<ProjectLoadProgress>\r\n        {\r\n            public void Report(ProjectLoadProgress loadProgress)\r\n            {\r\n                var projectDisplay = Path.GetFileName(loadProgress.FilePath);\r\n                if (loadProgress.TargetFramework != null)\r\n                {\r\n                    projectDisplay += $\" ({loadProgress.TargetFramework})\";\r\n                }\r\n\r\n                Console.WriteLine($\"{loadProgress.Operation,-15} {loadProgress.ElapsedTime,-15:m\\\\:ss\\\\.fffffff} {projectDisplay}\");\r\n            }\r\n        }\r\n    }\r\n}\r\n```\r\nHowever, when I compile the above code I am getting the following error message with VS2017:\r\n\r\n```\r\n1>Program.cs(67,41,67,57): error CS0103: The name 'ControlFlowGraph' does not exist in the current context\r\n1>Done building project \"CodeAnalysisApp3.csproj\" -- FAILED.\r\n========== Rebuild All: 0 succeeded, 1 failed, 0 skipped ==========\r\n```\r\n\r\n**Version Used**: \r\n```\r\nMicrosoft (R) Visual C# Compiler version 4.8.3761.0\r\nfor C# 5\r\n```\r\n\r\n**Steps to Reproduce**:\r\n\r\n1. compiling the code in above with VS 2017\r\n\r\n\r\n**Expected Behavior**:\r\n\r\ncorrect compilation \r\n\r\n**Actual Behavior**:\r\n```\r\n1>Program.cs(67,41,67,57): error CS0103: The name 'ControlFlowGraph' does not exist in the current context\r\n1>Done building project \"CodeAnalysisApp3.csproj\" -- FAILED.\r\n========== Rebuild All: 0 succeeded, 1 failed, 0 skipped ==========\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/41651/comments",
+    "author": "beillahi",
+    "comments": [
+      {
+        "user": "jmarolf",
+        "created_at": "2020-02-13T15:08:16Z",
+        "body": "could you list which nuget package versions you are using? I would assume you are on the latest?"
+      },
+      {
+        "user": "beillahi",
+        "created_at": "2020-02-13T15:21:12Z",
+        "body": "I am using the following packages:\r\n```\r\nCodeAnalysis.CSharp.Workspaces (2.9.0-beta4-63006-05)\r\nCodeAnalysis.FlowAnalysis.Utilities (2.9.6)\r\nCodeAnalysis.Workspaces.MSBuild (2.9.0-beta4-63006-05)\r\n```\r\n"
+      },
+      {
+        "user": "mavasani",
+        "created_at": "2020-02-13T19:28:21Z",
+        "body": "Can you please switch to version 3.x of `CodeAnalysis.CSharp.Workspaces`? ControlFlowGraph was an experimental API in 2.9 and was made a supported public API in 3.0"
+      },
+      {
+        "user": "beillahi",
+        "created_at": "2020-02-14T11:12:49Z",
+        "body": "Changing to the following packages:\r\n```\r\nCodeAnalysis.CSharp.Workspaces (3.4.0)\r\nCodeAnalysis.FlowAnalysis.Utilities (2.9.6)\r\nCodeAnalysis.Workspaces.MSBuild (3.4.0)\r\n```\r\nIt fixes the problem when using as the target framework ```.NETFramework 4.7.2```\r\n\r\nThanks for help.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 41386,
+    "title": "[loc][Query][Roslyn] Localizability of 0; \"ERR_AssgReadonly\"",
+    "created_at": "2020-02-04T08:52:01Z",
+    "closed_at": "2020-02-06T12:21:32Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Globalization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/41386",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nA readonly field cannot be assigned to (except in a constructor of the class in which the field is defined or a variable initializer))\r\n\r\nFile Name:\r\nCompilers\\CSharp\\Portable\\xlf\\CSharpResources.xlf\r\n\r\n==========================================\r\nQuery:\r\ncan the sentence be rephrased as \"A readonly field cannot be assigned (...)\", as the object the field can not be assigned to does not exist?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/41386/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "ryzngard",
+        "created_at": "2020-02-04T20:16:18Z",
+        "body": "@PDostalek It might be more helpful to reword entirely. \"A readonly field cannot be assigned a value (except in a constructor of the class in which the field is defined or a variable initializer)\" \r\n\r\n\"A readonly field cannot be assigned (...)\" still gives the same meaning and is more correct grammatically than the original.  \r\n\r\nEdit: \r\n\r\nAfter consideration and some research, I believe \"assigned to\" to be more common usage. It has implicit indication that there is an item altering the state of the field. Without the \"to\", that relation isn't know. \r\n\r\nThat said, this sentence should be interpreted as \"A readonly field cannot be assigned a value (except in a constructor of the class in which the field is defined or a variable initializer)\"  for the purposes of translation. All present English usages will be interpreted correctly. \r\n"
+      },
+      {
+        "user": "PDostalek",
+        "created_at": "2020-02-06T12:21:32Z",
+        "body": "Many thanks"
+      }
+    ]
+  },
+  {
+    "number": 40810,
+    "title": " [loc][Query][Roslyn] Localizability of 0; \"Error_reading_content_of_source_file_0_1\"",
+    "created_at": "2020-01-08T13:55:21Z",
+    "closed_at": "2020-01-20T13:03:08Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/40810",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nError reading content of source file '{0}' -- '{1}'.\r\n\r\nID:\r\n0; \"Error_reading_content_of_source_file_0_1\"\r\n\r\nFile Name:\r\nWorkspaces\\Core\\Portable\\xlf\\WorkspacesResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nWhat does the placeholders stand for?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/40810/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "jasonmalinowski",
+        "created_at": "2020-01-17T00:46:02Z",
+        "body": "@tmat may want to confirm, but the {0} place holder is the path to the file on the user's machine. The {1} is filled in with an exception message. So you might see something like:\r\n\r\n> Error reading content of source file 'Foo.cs' -- 'Access denied'."
+      },
+      {
+        "user": "PDostalek",
+        "created_at": "2020-01-20T13:03:08Z",
+        "body": "Thanks @jasonmalinowski "
+      }
+    ]
+  },
+  {
+    "number": 40808,
+    "title": " [loc][Query][Roslyn] Localizability of 0; \"Extract_method_plus_local\"",
+    "created_at": "2020-01-08T13:49:26Z",
+    "closed_at": "2020-02-25T07:26:27Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/40808",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nExtract method + local\r\n\r\nID:\r\n0; \"Extract_method_plus_local\"\r\n\r\nFile Name:\r\nFeatures\\Core\\Portable\\xlf\\FeaturesResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nDoes \"local\" mean \"local data?\"",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/40808/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "ryzngard",
+        "created_at": "2020-02-22T03:46:53Z",
+        "body": "In this case local is a local variable that may be moved into the extracted method "
+      }
+    ]
+  },
+  {
+    "number": 40807,
+    "title": "[loc][Query][Roslyn] Localizability of 0; \"Extract_interface\"",
+    "created_at": "2020-01-08T13:42:34Z",
+    "closed_at": "2020-01-20T14:00:43Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/40807",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nExtract interface...\r\n\r\nID:\r\n0; \"Extract_interface\"\r\n\r\nFile Name:\r\nFeatures\\Core\\Portable\\xlf\\FeaturesResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nIs \"Extract\" an imperative, infinitive or noun?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/40807/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "ryzngard",
+        "created_at": "2020-01-14T21:16:58Z",
+        "body": "@PDostalek \"Extract\" is a commanding verb in this context, which makes it imperative. "
+      },
+      {
+        "user": "PDostalek",
+        "created_at": "2020-01-20T14:00:43Z",
+        "body": "thanks"
+      }
+    ]
+  },
+  {
+    "number": 40805,
+    "title": "[loc][Query][Roslyn] Localizability of 0; \"Convert_to_switch_expression\"",
+    "created_at": "2020-01-08T13:31:44Z",
+    "closed_at": "2020-01-15T16:52:29Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Resolution-Answered",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/40805",
+    "body": "Hello developers,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nConvert to 'switch' expression\r\n\r\nID:\r\n0; \"Convert_to_switch_expression\"\r\n\r\nFile Name:\r\nVisualStudio\\Core\\Def\\xlf\\Commands.vsct.xlf\r\n\r\n==========================================\r\nQuery:\r\nWe assume \"switch\" is not localizable. Just an expression . Please confirm",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/40805/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "dpoeschl",
+        "created_at": "2020-01-15T16:48:58Z",
+        "body": "Hi @PDostalek,\r\n\r\n`switch` is a keyword in C#, and should not be localized."
+      }
+    ]
+  },
+  {
+    "number": 40423,
+    "title": "Question: Indirect References for a DTO and Entity",
+    "created_at": "2019-12-16T22:16:55Z",
+    "closed_at": "2019-12-19T18:59:29Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/40423",
+    "body": "Dear fellows, \r\n\r\nI was wondering if is it possible to create an indirect connection between two properties at different classes, so  Intelisense would recognizes as one for indication 'references count'? (without inheritance or other language feature)\r\n\r\nLike (concept):\r\n\r\n```csharp\r\nclass Person {\r\n  string Name {get; set;}\r\n}\r\n\r\n\r\nclass PersonDto {\r\n  ///<feature-connect>Person.Name</feature-connect> // or any other thing  \r\n  string Name {get; set;}\r\n}\r\n```\r\n\r\nSo when I see though IDE would appear 1 references at Name property.\r\n\r\nHow could that be achieved?\r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/40423/comments",
+    "author": "lixaotec",
+    "comments": [
+      {
+        "user": "sharwell",
+        "created_at": "2019-12-19T18:50:35Z",
+        "body": "You can use the `seealso` documentation element for this:\r\n\r\n```\r\n/// <seealso cref=\"Person.Name\"/>\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 38368,
+    "title": " [loc][Query][Roslyn] Localizability of \"0; \"IDS_CSCHelp\"",
+    "created_at": "2019-08-29T08:15:44Z",
+    "closed_at": "2019-09-09T21:25:53Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/38368",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\n\\r\\n                             Visual C# Compiler Options\\r\\n\\r\\n                       - OUTPUT FILES -\\r\\n-out:<file>                   Specify output file name (default: base name of\\r\\n                              file with main class or first file)\\r\\n-target:exe                   Build a console executable (default) (Short\\r\\n                              form: -t:exe)\\r\\n-target:winexe                Build a Windows executable (Short form:\\r\\n                              -t:winexe)\\r\\n-target:library               Build a library (Short form: -t:library)\\r\\n-target:module                Build a module that can be added to another\\r\\n                              assembly (Short form: -t:module)\\r\\n-target:appcontainerexe       Build an Appcontainer executable (Short form:\\r\\n                              -t:appcontainerexe)\\r\\n-target:winmdobj              Build a Windows Runtime intermediate file that\\r\\n                              is consumed by WinMDExp (Short form: -t:winmdobj)\\r\\n-doc:<file>                   XML Documentation file to generate\\r\\n-refout:<file>                Reference assembly output to generate\\r\\n-platform:<string>            Limit which platforms this code can run on: x86,\\r\\n                              Itanium, x64, arm, arm64, anycpu32bitpreferred, or\\r\\n                              anycpu. The default is anycpu.\\r\\n\\r\\n                       - INPUT FILES -\\r\\n-recurse:<wildcard>           Include all files in the current directory and\\r\\n                              subdirectories according to the wildcard\\r\\n                              specifications\\r\\n-reference:<alias>=<file>     Reference metadata from the specified assembly\\r\\n                              file using the given alias (Short form: -r)\\r\\n-reference:<file list>        Reference metadata from the specified assembly\\r\\n                              files (Short form: -r)\\r\\n-addmodule:<file list>        Link the specified modules into this assembly\\r\\n-link:<file list>             Embed metadata from the specified interop\\r\\n                              assembly files (Short form: -l)\\r\\n-analyzer:<file list>         Run the analyzers from this assembly\\r\\n                              (Short form: -a)\\r\\n-additionalfile:<file list>   Additional files that don't directly affect code\\r\\n                              generation but may be used by analyzers for producing\\r\\n                              errors or warnings.\\r\\n-embed                        Embed all source files in the PDB.\\r\\n-embed:<file list>            Embed specific files in the PDB.\\r\\n\\r\\n                       - RESOURCES -\\r\\n-win32res:<file>              Specify a Win32 resource file (.res)\\r\\n-win32icon:<file>             Use this icon for the output\\r\\n-win32manifest:<file>         Specify a Win32 manifest file (.xml)\\r\\n-nowin32manifest              Do not include the default Win32 manifest\\r\\n-resource:<resinfo>           Embed the specified resource (Short form: -res)\\r\\n-linkresource:<resinfo>       Link the specified resource to this assembly\\r\\n                              (Short form: -linkres) Where the resinfo format\\r\\n                              is <file>[,<string name>[,public|private]]\\r\\n\\r\\n                       - CODE GENERATION -\\r\\n-debug[+|-]                   Emit debugging information\\r\\n-debug:{full|pdbonly|portable|embedded}\\r\\n                              Specify debugging type ('full' is default,\\r\\n                              'portable' is a cross-platform format,\\r\\n                              'embedded' is a cross-platform format embedded into\\r\\n                              the target .dll or .exe)\\r\\n-optimize[+|-]                Enable optimizations (Short form: -o)\\r\\n-deterministic                Produce a deterministic assembly\\r\\n                              (including module version GUID and timestamp)\\r\\n-refonly                      Produce a reference assembly in place of the main output\\r\\n-instrument:TestCoverage      Produce an assembly instrumented to collect\\r\\n                              coverage information\\r\\n-sourcelink:<file>            Source link info to embed into PDB.\\r\\n\\r\\n                       - ERRORS AND WARNINGS -\\r\\n-warnaserror[+|-]             Report all warnings as errors\\r\\n-warnaserror[+|-]:<warn list> Report specific warnings as errors\\r\\n-warn:<n>                     Set warning level (0-4) (Short form: -w)\\r\\n-nowarn:<warn list>           Disable specific warning messages\\r\\n-ruleset:<file>               Specify a ruleset file that disables specific\\r\\n                              diagnostics.\\r\\n-errorlog:<file>              Specify a file to log all compiler and analyzer\\r\\n                              diagnostics.\\r\\n-reportanalyzer               Report additional analyzer information, such as\\r\\n                              execution time.\\r\\n\\r\\n                       - LANGUAGE -\\r\\n-checked[+|-]                 Generate overflow checks\\r\\n-unsafe[+|-]                  Allow 'unsafe' code\\r\\n-define:<symbol list>         Define conditional compilation symbol(s) (Short\\r\\n                              form: -d)\\r\\n-langversion:?                Display the allowed values for language version\\r\\n-langversion:<string>         Specify language version such as\\r\\n                              `latest` (latest version, including minor versions),\\r\\n                              `default` (same as `latest`),\\r\\n                              `latestmajor` (latest version, excluding minor versions),\\r\\n                              `preview` (latest version, including features in unsupported preview),\\r\\n                              or specific versions like `6` or `7.1`\\r\\n-nullable[+|-]                Specify nullable context option enable|disable.\\r\\n-nullable:{enable|disable|warnings|annotations}\\r\\n                              Specify nullable context option enable|disable|warnings|annotations.\\r\\n\\r\\n                       - SECURITY -\\r\\n-delaysign[+|-]               Delay-sign the assembly using only the public\\r\\n                              portion of the strong name key\\r\\n-publicsign[+|-]              Public-sign the assembly using only the public\\r\\n                              portion of the strong name key\\r\\n-keyfile:<file>               Specify a strong name key file\\r\\n-keycontainer:<string>        Specify a strong name key container\\r\\n-highentropyva[+|-]           Enable high-entropy ASLR\\r\\n\\r\\n                       - MISCELLANEOUS -\\r\\n@<file>                       Read response file for more options\\r\\n-help                         Display this usage message (Short form: -?)\\r\\n-nologo                       Suppress compiler copyright message\\r\\n-noconfig                     Do not auto include CSC.RSP file\\r\\n-parallel[+|-]                Concurrent build.\\r\\n-version                      Display the compiler version number and exit.\\r\\n\\r\\n                       - ADVANCED -\\r\\n-baseaddress:<address>        Base address for the library to be built\\r\\n-checksumalgorithm:<alg>      Specify algorithm for calculating source file\\r\\n                              checksum stored in PDB. Supported values are:\\r\\n                              SHA1 or SHA256 (default).\\r\\n-codepage:<n>                 Specify the codepage to use when opening source\\r\\n                              files\\r\\n-utf8output                   Output compiler messages in UTF-8 encoding\\r\\n-main:<type>                  Specify the type that contains the entry point\\r\\n                              (ignore all other possible entry points) (Short\\r\\n                              form: -m)\\r\\n-fullpaths                    Compiler generates fully qualified paths\\r\\n-filealign:<n>                Specify the alignment used for output file\\r\\n                              sections\\r\\n-pathmap:<K1>=<V1>,<K2>=<V2>,...\\r\\n                              Specify a mapping for source path names output by\\r\\n                              the compiler.\\r\\n-pdb:<file>                   Specify debug information file name (default:\\r\\n                              output file name with .pdb extension)\\r\\n-errorendlocation             Output line and column of the end location of\\r\\n                              each error\\r\\n-preferreduilang              Specify the preferred output language name.\\r\\n-nosdkpath                    Disable searching the default SDK path for standard library assemblies.\\r\\n-nostdlib[+|-]                Do not reference standard library (mscorlib.dll)\\r\\n-subsystemversion:<string>    Specify subsystem version of this assembly\\r\\n-lib:<file list>              Specify additional directories to search in for\\r\\n                              references\\r\\n-errorreport:<string>         Specify how to handle internal compiler errors:\\r\\n                              prompt, send, queue, or none. The default is\\r\\n                              queue.\\r\\n-appconfig:<file>             Specify an application configuration file\\r\\n                              containing assembly binding settings\\r\\n-moduleassemblyname:<string>  Name of the assembly which this module will be\\r\\n                              a part of\\r\\n-modulename:<string>          Specify the name of the source module\\r\\n\r\n\r\nFile Name:\r\nCompilers\\CSharp\\Portable\\xlf\\CSharpResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nWould you please check if the elements wihtin angle brackets can be translated?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/38368/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "miloush",
+        "created_at": "2019-08-29T12:10:22Z",
+        "body": "At least make sure someone will be willing to read your question...\r\n\r\n```\r\n\r\n Visual C# Compiler Options\r\n\r\n - OUTPUT FILES -\r\n-out: Specify output file name (default: base name of\r\n file with main class or first file)\r\n-target:exe Build a console executable (default) (Short\r\n form: -t:exe)\r\n-target:winexe Build a Windows executable (Short form:\r\n -t:winexe)\r\n-target:library Build a library (Short form: -t:library)\r\n-target:module Build a module that can be added to another\r\n assembly (Short form: -t:module)\r\n-target:appcontainerexe Build an Appcontainer executable (Short form:\r\n -t:appcontainerexe)\r\n-target:winmdobj Build a Windows Runtime intermediate file that\r\n is consumed by WinMDExp (Short form: -t:winmdobj)\r\n-doc: XML Documentation file to generate\r\n-refout: Reference assembly output to generate\r\n-platform: Limit which platforms this code can run on: x86,\r\n Itanium, x64, arm, arm64, anycpu32bitpreferred, or\r\n anycpu. The default is anycpu.\r\n\r\n - INPUT FILES -\r\n-recurse: Include all files in the current directory and\r\n subdirectories according to the wildcard\r\n specifications\r\n-reference:= Reference metadata from the specified assembly\r\n file using the given alias (Short form: -r)\r\n-reference: Reference metadata from the specified assembly\r\n files (Short form: -r)\r\n-addmodule: Link the specified modules into this assembly\r\n-link: Embed metadata from the specified interop\r\n assembly files (Short form: -l)\r\n-analyzer: Run the analyzers from this assembly\r\n (Short form: -a)\r\n-additionalfile: Additional files that don't directly affect code\r\n generation but may be used by analyzers for producing\r\n errors or warnings.\r\n-embed Embed all source files in the PDB.\r\n-embed: Embed specific files in the PDB.\r\n\r\n - RESOURCES -\r\n-win32res: Specify a Win32 resource file (.res)\r\n-win32icon: Use this icon for the output\r\n-win32manifest: Specify a Win32 manifest file (.xml)\r\n-nowin32manifest Do not include the default Win32 manifest\r\n-resource: Embed the specified resource (Short form: -res)\r\n-linkresource: Link the specified resource to this assembly\r\n (Short form: -linkres) Where the resinfo format\r\n is [,[,public|private]]\r\n\r\n - CODE GENERATION -\r\n-debug[+|-] Emit debugging information\r\n-debug:{full|pdbonly|portable|embedded}\r\n Specify debugging type ('full' is default,\r\n 'portable' is a cross-platform format,\r\n 'embedded' is a cross-platform format embedded into\r\n the target .dll or .exe)\r\n-optimize[+|-] Enable optimizations (Short form: -o)\r\n-deterministic Produce a deterministic assembly\r\n (including module version GUID and timestamp)\r\n-refonly Produce a reference assembly in place of the main output\r\n-instrument:TestCoverage Produce an assembly instrumented to collect\r\n coverage information\r\n-sourcelink: Source link info to embed into PDB.\r\n\r\n - ERRORS AND WARNINGS -\r\n-warnaserror[+|-] Report all warnings as errors\r\n-warnaserror[+|-]: Report specific warnings as errors\r\n-warn: Set warning level (0-4) (Short form: -w)\r\n-nowarn: Disable specific warning messages\r\n-ruleset: Specify a ruleset file that disables specific\r\n diagnostics.\r\n-errorlog: Specify a file to log all compiler and analyzer\r\n diagnostics.\r\n-reportanalyzer Report additional analyzer information, such as\r\n execution time.\r\n\r\n - LANGUAGE -\r\n-checked[+|-] Generate overflow checks\r\n-unsafe[+|-] Allow 'unsafe' code\r\n-define: Define conditional compilation symbol(s) (Short\r\n form: -d)\r\n-langversion:? Display the allowed values for language version\r\n-langversion: Specify language version such as\r\n latest (latest version, including minor versions),\r\n default (same as latest),\r\n latestmajor (latest version, excluding minor versions),\r\n preview (latest version, including features in unsupported preview),\r\n or specific versions like 6 or 7.1\r\n-nullable[+|-] Specify nullable context option enable|disable.\r\n-nullable:{enable|disable|warnings|annotations}\r\n Specify nullable context option enable|disable|warnings|annotations.\r\n\r\n - SECURITY -\r\n-delaysign[+|-] Delay-sign the assembly using only the public\r\n portion of the strong name key\r\n-publicsign[+|-] Public-sign the assembly using only the public\r\n portion of the strong name key\r\n-keyfile: Specify a strong name key file\r\n-keycontainer: Specify a strong name key container\r\n-highentropyva[+|-] Enable high-entropy ASLR\r\n\r\n - MISCELLANEOUS -\r\n@ Read response file for more options\r\n-help Display this usage message (Short form: -?)\r\n-nologo Suppress compiler copyright message\r\n-noconfig Do not auto include CSC.RSP file\r\n-parallel[+|-] Concurrent build.\r\n-version Display the compiler version number and exit.\r\n\r\n - ADVANCED -\r\n-baseaddress:\r\nBase address for the library to be built\r\n-checksumalgorithm: Specify algorithm for calculating source file\r\n checksum stored in PDB. Supported values are:\r\n SHA1 or SHA256 (default).\r\n-codepage: Specify the codepage to use when opening source\r\n files\r\n-utf8output Output compiler messages in UTF-8 encoding\r\n-main: Specify the type that contains the entry point\r\n (ignore all other possible entry points) (Short\r\n form: -m)\r\n-fullpaths Compiler generates fully qualified paths\r\n-filealign: Specify the alignment used for output file\r\n sections\r\n-pathmap:=,=,...\r\n Specify a mapping for source path names output by\r\n the compiler.\r\n-pdb: Specify debug information file name (default:\r\n output file name with .pdb extension)\r\n-errorendlocation Output line and column of the end location of\r\n each error\r\n-preferreduilang Specify the preferred output language name.\r\n-nosdkpath Disable searching the default SDK path for standard library assemblies.\r\n-nostdlib[+|-] Do not reference standard library (mscorlib.dll)\r\n-subsystemversion: Specify subsystem version of this assembly\r\n-lib: Specify additional directories to search in for\r\n references\r\n-errorreport: Specify how to handle internal compiler errors:\r\n prompt, send, queue, or none. The default is\r\n queue.\r\n-appconfig: Specify an application configuration file\r\n containing assembly binding settings\r\n-moduleassemblyname: Name of the assembly which this module will be\r\n a part of\r\n-modulename: Specify the name of the source module\r\n```\n\n---\n\nAnd if by angle brackets you mean `[]` there is only two words in the whole text you are asking about, which are ` [,[,public|private]]`, which are command line parameters and should not be translated.\r\n\r\nI hope you are not translating any of the words after hyphen either."
+      },
+      {
+        "user": "jaredpar",
+        "created_at": "2019-09-09T21:26:10Z",
+        "body": "Please let us know if you need anything beyond @miloush answer."
+      },
+      {
+        "user": "PDostalek",
+        "created_at": "2019-09-12T12:34:14Z",
+        "body": "Thanks for now"
+      }
+    ]
+  },
+  {
+    "number": 35625,
+    "title": " [loc][Query][Roslyn] Localizability of \"TypeOrNamespaceUsageInfo_Qualify\" ",
+    "created_at": "2019-05-10T08:20:04Z",
+    "closed_at": "2019-05-29T10:31:04Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Tenet-Localization"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/35625",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nQualify\r\n\r\nFile Name:\r\nWorkspaces\\Core\\Portable\\xlf\\WorkspacesResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nWould you please let me know if this string is translatable? If yes, would you please clarify its meaning?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/35625/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "jcouv",
+        "created_at": "2019-05-10T19:13:19Z",
+        "body": "Tagging @mavasani to comment"
+      },
+      {
+        "user": "mavasani",
+        "created_at": "2019-05-14T22:04:30Z",
+        "body": "Qualify: This string is used as one of the possible values of Find All References \"Kind\" column to indicate a reference to a type or namespace when used as a left hand side of a member access or qualification, such as 'x' in 'x.Method()' or 'NS1' in 'NS1.Type1'"
+      },
+      {
+        "user": "PDostalek",
+        "created_at": "2019-05-29T10:31:04Z",
+        "body": "Thanks for clarification"
+      }
+    ]
+  },
+  {
+    "number": 35624,
+    "title": "[loc][Query][Roslyn] Localizability of \"ref_local_or_expression\" ",
+    "created_at": "2019-05-10T08:11:34Z",
+    "closed_at": "2019-05-15T11:07:32Z",
+    "labels": [
+      "Question",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/35624",
+    "body": "Hi,\r\nplease help localization team to answer question from translator.\r\nIn case translator is not sure about context/meaning/localizability of string we raise a question.\r\n\r\nSource:\r\nref local or expression\r\n\r\nFile Name:\r\nFeatures\\CSharp\\Portable\\xlf\\CSharpFeaturesResources.xlf\r\n\r\n==========================================\r\nQuery:\r\nWhat does \"local\" mean here?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/35624/comments",
+    "author": "PDostalek",
+    "comments": [
+      {
+        "user": "jcouv",
+        "created_at": "2019-05-10T17:58:49Z",
+        "body": "\"local\" means \"local variable\".\r\n\r\nFor example, `x` is a local and `y` is a ref local in:\r\n```C#\r\nclass C\r\n{\r\n  void M()\r\n  {\r\n    string x = \"\";\r\n    ref string y = x;\r\n  }\r\n}\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 31939,
+    "title": "local variable messes up async result (goto loop vs. scope of captured variable)",
+    "created_at": "2018-12-19T15:27:01Z",
+    "closed_at": "2018-12-21T11:18:50Z",
+    "labels": [
+      "Question",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/31939",
+    "body": "**Version Used**: \r\nVisual Studio Professional 2017 15.9.4\r\n\r\n**Steps to Reproduce**:\r\n- Console Application\r\n- .NET Framework 4.7.1\r\n- Any CPU  \r\n\r\nCompile and run following code:\r\n\r\n```\r\nusing System;\r\nusing System.Threading.Tasks;\r\n\r\nclass Program\r\n{\r\n\tstatic void Main()\r\n\t{\r\n\t\tTask.Run(async () =>\r\n\t\t{\r\n\t\t\tBegin:\r\n\t\t\tvar result = await FooAsync();\r\n\t\t\tTask.Run(async () =>\r\n\t\t\t{\r\n\t\t\t\tawait Task.Yield();\r\n\t\t\t\tConsole.WriteLine(result);\r\n\t\t\t});\r\n\t\t\tif (result < 9) goto Begin;\r\n\t\t}).Wait();\r\n\t\tConsole.ReadKey();\r\n\t}\r\n\r\n\tstatic int i = 0;\r\n\tstatic object o = new object();\r\n\r\n\tstatic async Task<int> FooAsync()\r\n\t{\r\n\t\tawait Task.Yield();\r\n\t\tlock (o)\r\n\t\t\treturn i++;\r\n\t}\r\n}\r\n```\r\n\r\n**Expected Behavior**:\r\nNumbers 0...9 are displayed once.\r\n\r\n**Actual Behavior**:\r\nSome numbers are missing and some numbers are displayed more than once.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/31939/comments",
+    "author": "maggo23",
+    "comments": [
+      {
+        "user": "0xd4d",
+        "created_at": "2018-12-19T17:20:34Z",
+        "body": "`result` is a captured variable and can get overwritten by the 1st Task.Run(). You can extract out the 2nd Task.Run() to a new method with `result` as an argument and you should get the result you expect. You can also await the 2nd Task.Run() call."
+      },
+      {
+        "user": "maggo23",
+        "created_at": "2018-12-20T08:02:37Z",
+        "body": "Thanks for the quick response and your proposal. I found another workaround too (see example below). With this modification the output is as expected. I think this should not be the solution and I want to point to a possible bug.\r\n\r\n\r\n```\r\nusing System;\r\nusing System.Threading.Tasks;\r\n\r\nclass Program\r\n{\r\n\tstatic void Main()\r\n\t{\r\n\t\tTask.Run(async () =>\r\n\t\t{\r\n\t\t\tfor (; ; )\r\n\t\t\t{\r\n\t\t\t\tvar result = await FooAsync();\r\n\t\t\t\tTask.Run(async () =>\r\n\t\t\t\t{\r\n\t\t\t\t\tawait Task.Yield();\r\n\t\t\t\t\tConsole.WriteLine(result);\r\n\t\t\t\t});\r\n\t\t\t\tif (result >= 9) break;\r\n\t\t\t}\r\n\t\t}).Wait();\r\n\t\tConsole.ReadKey();\r\n\t}\r\n\r\n\tstatic int i = 0;\r\n\tstatic object o = new object();\r\n\r\n\tstatic async Task<int> FooAsync()\r\n\t{\r\n\t\tawait Task.Yield();\r\n\t\tlock (o)\r\n\t\t\treturn i++;\r\n\t}\r\n}\r\n```"
+      },
+      {
+        "user": "HaloFour",
+        "created_at": "2018-12-21T00:31:36Z",
+        "body": "This behavior is expected.  Captures are by reference, not value.  When you modify `result` all lambdas that have captured that variable will immediately see that change.  When you add a `for` loop you are introducing a new scope so the compiler allocates a separate version of `result` for each capture."
+      },
+      {
+        "user": "maggo23",
+        "created_at": "2018-12-21T11:15:17Z",
+        "body": "Thank you for the explanation and hint. It was not clear to me that implementing a loop with ```goto``` could lead to problems with scope. Now I found a simpler example to illustrate the problem and solution:\r\n\r\n```\r\nusing System;\r\nusing System.Collections.Generic;\r\nclass Program\r\n{\r\n       static void Main()\r\n       {\r\n             var l = new List<Func<int>>();\r\n             var i = 0;\r\n             start:\r\n             var v = i; // not in separate scope\r\n             l.Add(() => v);\r\n             if (++i <= 9) goto start;\r\n             foreach (var f in l)\r\n                    Console.Write(f());\r\n             Console.ReadLine();\r\n       }\r\n}\r\n```\r\nOutput: 9999999999\r\n\r\n\r\n```\r\nusing System;\r\nusing System.Collections.Generic;\r\nclass Program\r\n{\r\n       static void Main()\r\n       {\r\n             var l = new List<Func<int>>();\r\n             var i = 0;\r\n             start:\r\n             {\r\n                    var v = i;\r\n                    l.Add(() => v);\r\n             }\r\n             if (++i <= 9) goto start;\r\n             foreach (var f in l)\r\n                    Console.Write(f());\r\n             Console.ReadLine();\r\n       }\r\n}\r\n```\r\nOutput: 0123456789\r\n"
+      }
+    ]
+  },
+  {
+    "number": 25745,
+    "title": "Add a cs file as reference to a CSharpCompilation",
+    "created_at": "2018-03-27T12:17:35Z",
+    "closed_at": "2018-03-28T07:57:14Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/25745",
+    "body": "I am reading a cs file and use its content SyntaxTree to create its CSharpCompilation instance. here is the cs file : \r\n\r\n```\r\nusing System;\r\nnamespace appconsole\r\n{\r\n    public class CallerClass\r\n    {      \r\n        public void CallerMethod()\r\n        {\r\n            TestClass obj = new TestClass();\r\n            obj.TestMethod();\r\n        }       \r\n    }\r\n}\r\n```\r\n\r\nand here is way i use to get CSharpCompilation of this file : \r\n\r\n```\r\nvar compilation = CSharpCompilation.Create(\"name\")\r\n    .AddReferences(\r\n    MetadataReference.CreateFromFile(\r\n    typeof(object).Assembly.Location))\r\n    .AddSyntaxTrees(this.Tree);    \r\nvar semantic = compilation.GetSemanticModel(this.Tree);\r\n```\r\n\r\nAs you can see there is an object of the class TestClass. if I use the following code to get the ISymbole of `obj` object it returns `Error TestClass` which the ContaningNamespace property is null.\r\n\r\n`semantic.GetTypeInfo({obj node}).Type`\r\n\r\n\r\nSo I need to add my TestClass file to this CSharpCompilation somehow. is it possible to do this?so when I get `semantic.GetTypeInfo({obj node}).Type.ContaningNamespace` it should return the namespace of the file containing `TestClass` class\r\n\r\nFYI here is my TestClass file : \r\n\r\n```\r\nusing System;\r\nnamespace appconsole\r\n{\r\n    public class TestClass\r\n    {        \r\n        public void TestMethod()\r\n        {            \r\n        }        \r\n    }\r\n}\r\n```\r\n\r\nso in this case semantic.GetTypeInfo({obj node}).Type.ContaningNamespace should returns `appconsole`. Obviusly this behavoir is correct because `semantic` doesnt know anything about TestClass. thats the reason i want to add that file as a reference to my CSharpCompilation\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/25745/comments",
+    "author": "Foroughi",
+    "comments": [
+      {
+        "user": "jcouv",
+        "created_at": "2018-03-27T16:36:20Z",
+        "body": "You need to pass a second syntax tree (the one with `TestClass` definition) into the compilation.\r\nYou can do that by passing an enumerable of syntax trees when you create the compilation, or in your call to `AddSyntaxTrees`."
+      },
+      {
+        "user": "Foroughi",
+        "created_at": "2018-03-28T07:57:14Z",
+        "body": "@jcouv  thanks. that worked."
+      }
+    ]
+  },
+  {
+    "number": 23902,
+    "title": "Cannot obtain symbol for nameof(Method)",
+    "created_at": "2017-12-21T13:43:34Z",
+    "closed_at": "2018-01-08T18:24:52Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/23902",
+    "body": "**Version Used**: VS 15.5.2\r\n\r\n**Steps to Reproduce**:\r\n```csharp\r\nclass Foo\r\n{\r\n    void Method()\r\n    {\r\n        string methodName = nameof(Method);\r\n    }\r\n}\r\n```\r\n**Expected Behavior**:\r\nSemanticModel should return symbol for expression 'Method' inside nameof.\r\n\r\n**Actual Behavior**:\r\nSemanticModel returns null.\r\n\r\nI tested property, field and event inside nameof and they all return a symbol.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/23902/comments",
+    "author": "josefpihrt",
+    "comments": [
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2017-12-27T19:14:37Z",
+        "body": "It may be because this is a method group."
+      },
+      {
+        "user": "agocke",
+        "created_at": "2018-01-08T18:24:27Z",
+        "body": "@JosefPihrt Cyrus is right -- this is because `Method` is a method group. The reason why it works this way is because method groups don't have their own symbol, they are instead a group of individual method symbols.\r\n\r\nConsider what would happen if you had overloads for your method, e.g.\r\n\r\n```csharp\r\nclass Foo\r\n{\r\n    void Method()\r\n    {\r\n        string methodName = nameof(Method);\r\n    }\r\n    void Method(string s) { }\r\n    void Method(int i) { }\r\n}\r\n```\r\n\r\nThere's no single method to choose from -- `Method` could refer to any of those methods. Rather than have different behavior when there are no overloads, the compiler provides the same behavior each time: GetSymbolInfo on a method group produces a SymbolInfo where the `Symbol` property returns `null`, but `CandidateSymbols` returns all the methods (overloads) in the method group.\r\n\r\nThe reason why fields, events, and properties behave differently is that there is no way to overload those members, so there is only ever a single symbol.\r\n\r\nThe preferred way of dealing with method groups would be to normally look at `Symbol`, but if `Symbol` is null and `CandidateReason` is `MemberGroup`, then you know that the target is a method group and all the method symbols you're interested in will be in `CandidateSymbols`.\r\n  "
+      },
+      {
+        "user": "josefpihrt",
+        "created_at": "2018-01-08T21:03:56Z",
+        "body": "That makes sense, thanks for explanation @agocke."
+      }
+    ]
+  },
+  {
+    "number": 22629,
+    "title": "How to get the actual StartLine of a Method/Class having attributes",
+    "created_at": "2017-10-10T05:51:44Z",
+    "closed_at": "2018-02-09T22:54:41Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/22629",
+    "body": "**Version Used**: \r\n2.3.2\r\n\r\n**Steps to Reproduce**:\r\n\r\n1. In our code we are finding the start line of a Method or a Class based on the below code:\r\n`node.GetLocation().GetMappedLineSpan().StartLinePosition.Line;`\r\nhere the node is SyntaxNode for the class/method in picture.\r\n2. The above code works well for all the methods and classes who do not have any attribute decoration associated with it. But in case if the class / method is decorated with an attribute, the above code returns the start line as the first attribute decorated above the class /method.\r\n3. We understand that when we have a attribute for a given class or a method, the attribute is part of the class / method declaration. \r\n```\r\n1        using System;\r\n2        using System.Threading.Tasks;\r\n3        using NUnit.Framework;\r\n4        namespace Quartz.Tests.Unit\r\n5        {\r\n6              [DisallowConcurrentExecution]\r\n7              [PersistJobDataAfterExecution]\r\n8              public class TestAnnotatedJob : IJob\r\n9              {\r\n10                   public Task Execute(IJobExecutionContext context)\r\n11                    {\r\n12                        return Task.FromResult(0);\r\n13                     }\r\n14              }\r\n15                  \r\n16              public class TestJob : IJob\r\n17              {\r\n18                     public Task Execute(IJobExecutionContext context)\r\n19                    {\r\n20                         return Task.FromResult(0);\r\n21                     }\r\n22             }\r\n23        }\r\n```\r\n4. In the above class, when we try to find the start line of the class **TestJob** using the code `node.GetLocation().GetMappedLineSpan().StartLinePosition.Line` we get the start line as 16 which is logical. \r\nBut when we try to find the start line of the class **TestAnnotatedJob** using the code `node.GetLocation().GetMappedLineSpan().StartLinePosition.Line` we get the start line as 6 instead of 8, which though logical, but does not give the exact line number.\r\n\r\n**Expected Behavior**:\r\nSome mechanism in which we can get the actual line number of the start line for a class/method decorated with attribute.\r\n \r\n**Actual Behavior**:\r\nThere is no mechanism which we can use.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/22629/comments",
+    "author": "abhijitparkhi1983",
+    "comments": [
+      {
+        "user": "alrz",
+        "created_at": "2017-10-10T06:10:56Z",
+        "body": "probably you should get the line number off of the Identifier (method name), since attributes are part of that node and `6` is correct as its start line."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2017-10-10T08:23:11Z",
+        "body": "> get the actual line number of the start line\r\n\r\nAs you mentioned, you are getting the actual line number :)   If you want a different line number, you'll have to be more specific about what you want.  For example, a method might look like:\r\n\r\n```c#\r\n[attr1]\r\n[attr2]\r\npublic\r\nstatic\r\nvoid\r\nMain\r\n(\r\n)\r\n{\r\n     Console.WriteLine(\r\n          0);\r\n}\r\n```\r\n\r\nWhich of these lines do you consider the \"actual line\" that the method starts on?\r\n\r\nOnce you answer that, you'll likely be able to trivially write the code that gives you the value you want :)"
+      },
+      {
+        "user": "abhijitparkhi1983",
+        "created_at": "2017-10-10T09:25:44Z",
+        "body": "@alrz this is what it should be. Thanks for your quick reply.\r\n\r\n@CyrusNajmabadi very interesting and valid scenario which you have put in. Like i mentioned, the approach suggested by @alrz sounds the way to go. Thanks for your valuable views  "
+      },
+      {
+        "user": "mrn-aglic",
+        "created_at": "2019-12-23T15:53:38Z",
+        "body": "I have a similar question to this one. Looking at the code in Visual studio, the class keyword and name are at line 7, but when I try to get the start of the span, I get the value 6 back (which is the line that contains an open curly bracket). \r\n\r\nIs this by design? I'm a bit confused. I'm loading the code from file. "
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2019-12-23T20:46:36Z",
+        "body": "@mrn-aglic you may be confusing Roslyn's 0-based indices with VS' 1-based ui"
+      },
+      {
+        "user": "mrn-aglic",
+        "created_at": "2019-12-23T20:55:32Z",
+        "body": "Yeah, I was... I noticed it a bit too late, and didn't find the time to remove my comment. "
+      }
+    ]
+  },
+  {
+    "number": 22168,
+    "title": "Formatter.FormatAsync does not seem to do anything.",
+    "created_at": "2017-09-18T17:32:40Z",
+    "closed_at": "2017-09-25T20:27:11Z",
+    "labels": [
+      "Question",
+      "Area-IDE"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/22168",
+    "body": "**Version Used**: \r\nDifferent\r\n\r\n**Steps to Reproduce**:\r\n\r\n```cs\r\n    using System;\r\n    using System.Linq;\r\n    using System.Threading;\r\n    using System.Threading.Tasks;\r\n    using Microsoft.CodeAnalysis;\r\n    using Microsoft.CodeAnalysis.CSharp;\r\n    using Microsoft.CodeAnalysis.CSharp.Syntax;\r\n    using Microsoft.CodeAnalysis.Editing;\r\n    using Microsoft.CodeAnalysis.Formatting;\r\n    using Microsoft.CodeAnalysis.Simplification;\r\n    using NUnit.Framework;\r\n\r\n    public class Repro\r\n    {\r\n        [Test]\r\n        public async Task MakeSealed()\r\n        {\r\n            var testCode = @\"\r\nnamespace RoslynSandbox\r\n{\r\n    public class Foo\r\n    {\r\n    }\r\n}\";\r\n\r\n            var projectId = ProjectId.CreateNewId(\"Test\");\r\n            var sln = new AdhocWorkspace()\r\n                .CurrentSolution\r\n                .AddProject(projectId, \"Test\", \"Test\", LanguageNames.CSharp)\r\n                .WithProjectCompilationOptions(\r\n                    projectId,\r\n                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true))\r\n                .AddDocument(DocumentId.CreateNewId(projectId), \"Foo.cs\", testCode);\r\n\r\n            var editor = await DocumentEditor.CreateAsync(sln.Projects.First().Documents.First()).ConfigureAwait(false);\r\n            var type = ((CompilationUnitSyntax)editor.OriginalRoot)\r\n                .Members.OfType<NamespaceDeclarationSyntax>()\r\n                .First()\r\n                .Members.OfType<ClassDeclarationSyntax>()\r\n                .First();\r\n            editor.SetModifiers(type, DeclarationModifiers.From(editor.SemanticModel.GetDeclaredSymbol(type)).WithIsSealed(isSealed: true));\r\n            var expected = @\"\r\nnamespace RoslynSandbox\r\n{\r\n    public sealed class Foo\r\n    {\r\n    }\r\n}\";\r\n            var actual = await GetCodeAsync(editor.GetChangedDocument(), CancellationToken.None);\r\n            Console.Write(actual);\r\n            Assert.AreEqual(expected, actual);\r\n        }\r\n\r\n        private static async Task<string> GetCodeAsync(Document document, CancellationToken cancellationToken)\r\n        {\r\n            var simplifiedDoc = await Simplifier.ReduceAsync(document, Simplifier.Annotation, cancellationToken: cancellationToken).ConfigureAwait(false);\r\n            var formatted = await Formatter.FormatAsync(simplifiedDoc, Formatter.Annotation, cancellationToken: cancellationToken).ConfigureAwait(false);\r\n            var sourceText = await formatted.GetTextAsync(cancellationToken).ConfigureAwait(false);\r\n            return sourceText.ToString();\r\n        }\r\n    }\r\n```\r\n\r\nPrints:\r\n\r\n```\r\nnamespace RoslynSandbox\r\n{\r\n    public sealedclass Foo\r\n    {\r\n    }\r\n}\r\n```\r\n\r\n**Expected Behavior**:\r\n\r\nI expected the formatter to format `public sealedclass Foo`, chances are I used it wrong. Writing this issue any way in case it is a repro for a real bug.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/22168/comments",
+    "author": "JohanLarsson",
+    "comments": [
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T16:02:20Z",
+        "body": "Does it work if you do `.WithAdditionalAnnotations(Formatter.Annotation)` on the node you want formatted?"
+      },
+      {
+        "user": "JohanLarsson",
+        "created_at": "2017-09-25T16:08:01Z",
+        "body": "Does the repro code not compile? Sorry about that if so.\r\nFor the question: I had `.WithAdditionalAnnotations(Formatter.Annotation)` but could not get the formatted output."
+      },
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T16:17:21Z",
+        "body": "Ahh, okay. You're formatting an entire document which isn't decorated with the `Formatter.Annotation`, so just get rid of the `Formatter.Annotation` argument to `Formatter.FormatAsync` to get it to format the whole thing -- that is, `var formatted = await Formatter.FormatAsync(simplifiedDoc, cancellationToken: cancellationToken).ConfigureAwait(false);` -- Does that work for you?\r\n\r\n[Note: updated explanation for clarity]"
+      },
+      {
+        "user": "JohanLarsson",
+        "created_at": "2017-09-25T19:40:30Z",
+        "body": "Yes, removing the `Formatter.Annotation` made it format the document. Do you have a link to relevant docs for this?"
+      },
+      {
+        "user": "DustinCampbell",
+        "created_at": "2017-09-25T20:24:22Z",
+        "body": "I realize that you're looking for something a bit more, and that we could do much, much better with documentation. However, the XML doc comment does have some of this information:\r\n\r\n```C#\r\n/// <summary>\r\n/// Formats the whitespace in areas of a document corresponding to annotated nodes.\r\n/// </summary>\r\n/// <param name=\"document\">The document to format.</param>\r\n/// <param name=\"annotation\">The annotation used to find on nodes to identify spans to format.</param>\r\n/// <param name=\"options\">An optional set of formatting options. If these options are not supplied the current set of options from the document's workspace will be used.</param>\r\n/// <param name=\"cancellationToken\">An optional cancellation token.</param>\r\n/// <returns>The formatted document.</returns>\r\npublic static Task<Document> FormatAsync(Document document, SyntaxAnnotation annotation, OptionSet options = null, CancellationToken cancellationToken = default)\r\n    => FormatAsync(document, annotation, options, rules: null, cancellationToken: cancellationToken);\r\n```\r\n\r\nNote the documentation for the `annotation` parameter above."
+      },
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T20:27:11Z",
+        "body": "The code is working now, so I'm going to close this. If there's a specific problem with the documentation, let's file and track that separately. Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 21522,
+    "title": "Quick question regarding access to Project object from analyzers",
+    "created_at": "2017-08-15T16:35:09Z",
+    "closed_at": "2017-08-15T16:38:59Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/21522",
+    "body": "Is there any way for analyzers to access the related Microsoft.CodeAnalysis.Project object?  As far as I can tell, this is not possible.  In my very limited understanding of Roslyn, it would seem logical to have the project as a property on Microsoft.CodeAnalysis.Compilation.",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/21522/comments",
+    "author": "jonathanbyrne",
+    "comments": [
+      {
+        "user": "sharwell",
+        "created_at": "2017-08-15T16:37:42Z",
+        "body": "No, analyzers are not allowed to reference Microsoft.CodeAnalysis.Workspaces. Attempts to use a type from that, or any type which depends on it, will result in an exception at runtime. The easiest way to avoid problems is to make sure your analyzer project does not reference this assembly when you compile your analyzers.\r\n\r\n:memo: Implementing this approach requires you move all code fixes to a second assembly, since code fixes do require access to Microsoft.CodeAnalysis.Workspaces."
+      },
+      {
+        "user": "jonathanbyrne",
+        "created_at": "2017-08-15T16:38:53Z",
+        "body": "That is a big help.  Thanks for the fast response!"
+      },
+      {
+        "user": "sharwell",
+        "created_at": "2017-08-15T16:40:33Z",
+        "body": "No problem. If you were trying to accomplish something in particular and running into challenges, let me know your specific question and I can probably point you to either an example where someone did something similar or to a bug related to the issue. :smile:"
+      }
+    ]
+  },
+  {
+    "number": 20392,
+    "title": "How to do multiple replacements in a SyntaxTree correctly?",
+    "created_at": "2017-06-22T13:58:32Z",
+    "closed_at": "2017-06-22T17:28:23Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/20392",
+    "body": "I'm writing a code-fix provider that just wraps a InvocationExpression around a string.\r\nAnd it also adds a `using static ...;` if its not already present.\r\n\r\nSomehow I cannot get the code fix to apply both changes.\r\nOn the first run it adds the using, on the second run (when it detects that it doesn't have to add the using again) it wraps the expression.\r\nBut it never does both at the same time.\r\nI think that's because one change modifies the original tree and thus the second source node cannot be found anymore.\r\n\r\nI read on stackoverflow that using \"ReplaceNodes\" with a dictionary would work, but it doesn't work for me.\r\n\r\nI could reorder my replacements maybe, but that seems to be extremely brittle because I want to add maybe one or two more minor things to the rewriter and I can foresee that it might even become impossible to solve this by only doing my replacement calls in the right order :(\r\n\r\n\r\nHere's what I have\r\n\r\n```csharp\r\n\r\nasync Task<Document> WrapInCallAsync(Document document, ExpressionSyntax syntax, CancellationToken c, string functionName, string usingStatic)\r\n{\r\n\t// Keep track of all replaced nodes\r\n\tDictionary<SyntaxNode, SyntaxNode> dict = new Dictionary<SyntaxNode, SyntaxNode>();\r\n\r\n\t// If the caller provides us with a using to add, we do that here\r\n\tif(usingStatic != null)\r\n\t{\r\n\t\t// Looking upwards, take the first namespace declaration we can see\r\n\t\tvar ns = syntax.Ancestors().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();\r\n\t\tif(ns != null)\r\n\t\t\tif(ns.Usings.All(u => u.StaticKeyword == null || (u.Name as IdentifierNameSyntax)?.Identifier.ValueText != usingStatic))\r\n\t\t\t{\r\n\t\t\t\t// Create our \"using static ...;\"\r\n\t\t\t\tvar u = SyntaxFactory\r\n\t\t\t\t\t.UsingDirective(SyntaxFactory.IdentifierName(usingStatic))\r\n\t\t\t\t\t.WithStaticKeyword(SyntaxFactory.Token(SyntaxKind.StaticKeyword));\r\n\r\n\t\t\t\t// Change the namespace to include that using\r\n\t\t\t\tvar changedNs = ns.WithUsings(ns.Usings.Add(u));\r\n\t\t\t\tdict.Add(ns, changedNs);\r\n\t\t\t}\r\n\t}\r\n\r\n\r\n\t// Step 2: We want to wrap our call around the given expression, first create the call\r\n\tvar memberAccess = SyntaxFactory.ParseExpression(functionName);\r\n\tvar args = SyntaxFactory.SeparatedList(new[] { SyntaxFactory.Argument(syntax) });\r\n\tvar call = SyntaxFactory.InvocationExpression(memberAccess, SyntaxFactory.ArgumentList(args));\r\n\r\n\t// Then replace the original expression with that call\r\n\t// \"text\" --> Method(\"text\")\r\n\tdict.Add(syntax, call);\r\n\r\n\r\n\t// Finally get the root, apply all our changes, and return the changed root.\r\n\tvar root = await document.GetSyntaxRootAsync(c);\r\n\troot = root.ReplaceNodes(dict.Keys, (original, rewritten) => dict[original]);\r\n\treturn document.WithSyntaxRoot(root);\r\n}\r\n```\r\n\r\nI feel like my code just doesn't have the right structure, surely there is some way to maybe find `syntax` again in the newly modified tree, or maybe some other way to avoid this problem altogether?",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/20392/comments",
+    "author": "rikimaru0345",
+    "comments": [
+      {
+        "user": "Pilchie",
+        "created_at": "2017-06-22T16:59:27Z",
+        "body": "At purely the compiler layer, you can use `SyntaxAnnotations` to mark nodes to be able to find them again.\r\n\r\nIf you move up to the workspaces layer, the `SyntaxEditor` class exists to help make this easier."
+      },
+      {
+        "user": "rikimaru0345",
+        "created_at": "2017-06-22T17:28:23Z",
+        "body": "I see, that is good to know. After adding SyntaxAnnotations everything works. Thank you."
+      }
+    ]
+  },
+  {
+    "number": 20241,
+    "title": "CS0465 (Introducing Finalize method) on interfaces",
+    "created_at": "2017-06-15T15:36:15Z",
+    "closed_at": "2017-06-15T17:57:18Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/20241",
+    "body": "**Version Used**: 15.3 Preview 2\r\n\r\n**Steps to Reproduce**:\r\n```C#\r\ninterface IBla\r\n{\r\n    void Finalize();\r\n}\r\n```\r\n**Actual Behavior**:  CS0465: Introducing a 'Finalize' method can interfere with destructor invocation. Did you intend to declare a destructor?\r\n\r\n**Expected Behavior**: Does this warning make sense on interfaces? I definitely can't declare a destructor and I am not exactly sure how the interface declaration could interfere with the destructor invocation either.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/20241/comments",
+    "author": "miloush",
+    "comments": [
+      {
+        "user": "sharwell",
+        "created_at": "2017-06-15T15:46:33Z",
+        "body": ":memo: The internal name for a destructor is `Finalize`. C# uses the `~TypeName()` syntax to define one but the compiler emits the method as one that overrides `Object.Finalize`. Someone from the compiler team will be able to give you more specifics about the intent of this particular warning."
+      },
+      {
+        "user": "jaredpar",
+        "created_at": "2017-06-15T17:57:18Z",
+        "body": "The issue here is more about the problems it will create when the interface is used.  Consider the following:\r\n\r\n``` c#\r\nclass C : IBla {\r\n  ~C() { } \r\n  public void Finalize() { } \r\n}\r\n```\r\n\r\nThis code won't compile because `~C` maps down to `Finalize` (as @sharwell pointed out). Hence this creates a conflict. So while the interface doesn't directly have a problem with `Finalize`, it's indirectly creating one for anyone who implements it. "
+      },
+      {
+        "user": "miloush",
+        "created_at": "2017-06-17T13:32:50Z",
+        "body": "OK so the 'Did you intend to declare a destructor?' part was not intended for interface authors.\r\n\r\n```C#\r\nclass C {\r\n  ~C() { } \r\n  public void Finalize() { } \r\n}\r\n```\r\nwould fail compilation regardless of whether it implements the interface or not.\r\n\r\nSo theoretically all objects would implement such interface, except for that the Finalize method is not public, so it cannot implement interface methods. And directly declaring Finalize method is not allowed.\r\n\r\nBasically the interface can be implemented only explicitly. \r\nThanks!"
+      }
+    ]
+  },
+  {
+    "number": 17254,
+    "title": "Diagnostic clarity: misleading error message",
+    "created_at": "2017-02-20T13:54:27Z",
+    "closed_at": "2017-02-21T11:15:06Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Answered",
+      "Blocked",
+      "Feature - Pattern Matching"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/17254",
+    "body": "Error messages for constant patterns under `is` can be misleading comparing to similar situation with `switch` statement patterns:\r\n```c#\r\nclass C {\r\n  public const int X = 42;\r\n}\r\n\r\nclass D {\r\n  public const string C = \"abc\";\r\n\r\n  // error CS0426: The type name 'X' does not exist in the type 'C'\r\n  public bool M1(object o) => o is C.X;\r\n    \r\n  public bool M2(object o) {\r\n      switch (o) {\r\n          // error CS1061: 'string' does not contain a definition for 'X' and no extension\r\n          // method 'X' accepting a first argument of type 'string' could be found\r\n          // (are you missing a using directive or an assembly reference?)\r\n          case C.X:\r\n              return true;\r\n          default:\r\n              return false;\r\n      }\r\n  }\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/17254/comments",
+    "author": "controlflow",
+    "comments": [
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T18:19:53Z",
+        "body": "The message is different because the meaning is different.\r\n\r\n`e is A.B` looks for a type named `A.B` as its first choice for how to interpret this. That is required for backward compatibility.\r\n\r\n`case A.B` looks for an expression named `A.B` (which is hoped to be a constant). That too is required for backward compatibility.\r\n\r\nThat is the reason the errors are different.\r\n\r\nDoes this answer address your concern/question? What would you prefer to be different?"
+      },
+      {
+        "user": "alrz",
+        "created_at": "2017-02-20T18:29:42Z",
+        "body": ">That is required for backward compatibility.\r\n\r\nCould that be relaxed to allow those cases but with a precedence for binding according to previous versions to retain backward compatibility? e.g. `e is X` first look for a type and then a constant, conversely, `case X` look for a constant and then for a type?"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T18:48:04Z",
+        "body": "@alrz That is exactly what we already do."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-20T18:50:02Z",
+        "body": "@gafter the error states that \"The type name 'X' does not exist in the type 'C'\", so it looks like the `C` reference in `o is C.X` is bound to type `C`, but in fact it is bound to constant `D.C`. Removing `D.C` constant fixes the error."
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-20T19:38:25Z",
+        "body": "@controlflow The name `C.X` must be bound either as a type or as a (constant) expression. As an expression it fails (because there is no constant named `X` inside `D.C`, which is what `C` as an expression binds to). As a type it fails because there is no such type `C.X` anywhere. Since the backward-compatible behavior is to treat it as a type, we select which of these two errors to report by doing so in a way analogous to the way the previous compiler did it, by reporting the error when looking up the type."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-21T00:07:33Z",
+        "body": "@gafter the only confusing part is \"does not exist in the type 'C'\". If expression `C` is bound to `D.C`, it has type `string`, not `C`, isn't it?"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-02-21T01:12:20Z",
+        "body": "@controlflow When we're looking up a type, we don't bind the part before the dot as an expression."
+      },
+      {
+        "user": "controlflow",
+        "created_at": "2017-02-21T11:15:06Z",
+        "body": "OK, I think I finally got it \ud83d\udc4d"
+      }
+    ]
+  },
+  {
+    "number": 10243,
+    "title": "[Question] Pattern matching all kinds of a generic class?",
+    "created_at": "2016-04-01T05:15:17Z",
+    "closed_at": "2016-04-01T15:01:19Z",
+    "labels": [
+      "Question",
+      "Area-Language Design",
+      "Resolution-Answered",
+      "Feature - Pattern Matching"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/10243",
+    "body": "Basically, I want to replicate something like this, from F#:\n\n``` F#\ntype Result<'a> =\n| Success of 'a\n| Error of string\n\nlet print result = \n  match result with\n  | Error(err) -> err\n  | Success(x) -> match box x with // this line in particular\n                  | :? string as str -> str\n                  | :? int as i      -> i.ToString(\"N\")\n                  | _                -> (string x)\n```\n\nIgnoring for a moment there is no discriminated union support in the current \"15\" build, I got this far:\n\n``` C#\nabstract class Result { }\nabstract class Success : Result\n{\n    public static Result From<T>(T val) => new Success<T> { Result = val };\n}\n\nclass Success<T> : Success\n{\n    public T Result { get; set; }\n}\n\nclass Failure : Result\n{\n    public static Result From(string err) => new Failure { Message = err };\n    public string Message { get; set; }\n}\n```\n\nBut I can't figure out how to replicate that one line with the current C# pattern matching syntax. I cannot just simply do this:\n\n``` C#\nlet result = Result.From(25);\n\nif (result is Success<object>) { ... }\n```\n\nSince there needs to be a boxing operation that occurs _after_ the match to `Success`, and one cannot cast `Success<int>` to `Success<object>`. \n\nMaybe it's a generics problem, and that would make sense, since the F# code uses automatic generalization. However, I don't see any way to replicate the mechanics correctly in C# at any level. \n\nAt a rough translation:\n\n``` C#\nstatic string Print<T>(Result res) => res match (\n    case Success<T> succ : ((Object)succ.Result) match (\n        case string s : s\n        case int i: i.ToString(\"N\")\n        case var x: x.ToString()\n    )\n\n    case Failure f: f.Message\n);\n```\n\nThis works, but only if we know the type of what `Success` is, and we're right back to square one. -1 actually, since now we have to specify the type manually when calling the function.\n\nWill there be any way to pattern match against \"all\" kinds of a generic class, like the automatically generic `'a` and friends from F#? Or is this just not ever going to be possible in C# semantics without some kind of kludge, like:\n\n``` C#\nabstract class Success : Result\n{\n    public abstract object GetResult();\n    public static Result From<T>(T val) => new Success<T> { Result = val };\n}\n\nclass Success<T> : Success\n{\n    public T Result { get; set; }\n    public override object GetResult() => Result;\n}\n\nstatic string Print(Result res) => res match (\n    case Success succ : succ.GetResult() match (\n        case string s : s\n        case int i: i.ToString(\"N\")\n        case var x: x.ToString()\n    )\n\n    case Failure f: f.Message\n);\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/10243/comments",
+    "author": "WreckedAvent",
+    "comments": [
+      {
+        "user": "gafter",
+        "created_at": "2016-04-01T15:00:50Z",
+        "body": "In your F# code, Result is generic. In your C# code, it isn't. As a consequence your F# code gets the right kind of result right from the start, but your C# code doesn't. Make Print generic on T and take a `Result<T>`.\n\nThe CLR doesn't have any way of efficiently (i.e. without resorting to reflection) doing the kind of matching you're asking about, which is why you can't do it without having a static type in either F# or C#.\n"
+      },
+      {
+        "user": "WreckedAvent",
+        "created_at": "2016-04-01T16:13:14Z",
+        "body": "Hmm, that seems like it might work. The C# compiler should be able to infer generic of T in that case if Result is also generic on T. \n\nThat would move the problem up one further wherein one couldn't match any `Result` however, but that's probably acceptable for the use cases I'm imagining. \n\nThanks.\n\n\n---\n\nThough slightly verbose and not usual for C#, that did work. Here's what I came up with, in case anyone else tries this:\n\n``` C#\npublic abstract class Result<T>\n{\n    internal Result() { }\n}\n\npublic sealed class Success<T> : Result<T>\n{\n    public T Result { get; set; }\n}\n\npublic sealed class Failure<T> : Result<T>\n{\n    public string Message { get; set; }\n}\n\npublic static class Result\n{\n    public static string GetValue<T>(this Result<T> res) => res match (\n        case Success<T> succ : (Object)succ.Result match (\n            case string s : s\n            case int i : i.ToString(\"N\")\n            case var x : x.ToString()\n        )\n\n        case Failure<T> f : $\"Error: {f.Message}\"\n    );\n\n    public static Result<R> Map<T, R>(this Result<T> r, Func<T, R> transform) => r match (\n        case Success<T> s : Success.From(transform(s.Result))\n        case Failure<T> f : Failure.From<R>(f.Message)\n    );\n}\n```\n\nSignature for `map` is a bloody ripper, but at least the actual implementation is quite simple.\n"
+      }
+    ]
+  },
+  {
+    "number": 7393,
+    "title": "char-based enums",
+    "created_at": "2015-12-10T13:06:58Z",
+    "closed_at": "2015-12-15T14:53:33Z",
+    "labels": [
+      "Question",
+      "Discussion",
+      "Area-Language Design",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/7393",
+    "body": "> Every enumeration type has an underlying type, which can be any integral type except char.\n\nWhy not char as well? You can already cast `int` enum values to `char`, but every explicit cast is a potential code smell.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/7393/comments",
+    "author": "orthoxerox",
+    "comments": [
+      {
+        "user": "svick",
+        "created_at": "2015-12-10T20:44:41Z",
+        "body": "What's the point? You can already have `enum`s with 16-bit underlying type (`ushort`).\n"
+      },
+      {
+        "user": "orthoxerox",
+        "created_at": "2015-12-10T21:05:35Z",
+        "body": "@svick but then I have to cast its values to char every time I need to use them.\n"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2015-12-15T01:40:53Z",
+        "body": "@orthoxerox Enums are not implicitly convertible to their underlying type, so allowing char as an underlying type would not prevent you from having to cast its values to char every time you need to use one.\n"
+      },
+      {
+        "user": "orthoxerox",
+        "created_at": "2015-12-15T07:40:33Z",
+        "body": "@gafter I really shouldn't post issues as soon as I think of them. `ushort`-backed enums are fine.\n"
+      }
+    ]
+  },
+  {
+    "number": 7096,
+    "title": "Should this not be inferable?",
+    "created_at": "2015-11-28T20:38:23Z",
+    "closed_at": "2015-11-29T09:15:38Z",
+    "labels": [
+      "Question",
+      "Area-Language Design"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/7096",
+    "body": "```\nusing System;\nclass p\n{\n    static T Baz<T>(T t) => t;\n    static Func<T, T> Get<T>() => Baz;\n    static void Ork<T>(Func<T, T> f)  {  }\n    static void Main() \n    {\n        Ork<string>(Get()); // cant resolve arg\n        Ork<string>(Baz); // this is fine\n    }\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/7096/comments",
+    "author": "leppie",
+    "comments": [
+      {
+        "user": "HaloFour",
+        "created_at": "2015-11-29T02:21:30Z",
+        "body": "That would require #5429, C# doesn't infer generic type arguments based on the expected target type.  `Get` would need to accept an argument that was either of type `T` or of `Func<T>` which would be used by the compiler to infer the generic type arguments:\n\n``` cs\nstatic Func<T, T> Get<T>(T value) => Baz;\n...\nOrk<string>(Get(\"foo\"));\n```\n"
+      },
+      {
+        "user": "leppie",
+        "created_at": "2015-11-29T09:15:37Z",
+        "body": "@HaloFour Same your linked issue. Closing.\n"
+      }
+    ]
+  },
+  {
+    "number": 6818,
+    "title": "Dynamically bound GetIndex operation doesn't pass lhs struct by ref",
+    "created_at": "2015-11-17T05:43:02Z",
+    "closed_at": "2015-12-17T21:57:14Z",
+    "labels": [
+      "Question",
+      "Resolution-Won't Fix",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/6818",
+    "body": "Unlike dynamically bound `InvokeMember` call sites do. Repro shown below (also applies for the native compiler, so not a regression):\n\n``` csharp\nusing System;\n\nclass Repro\n{\n  static void Main()\n  {\n    Case1();\n    Case2();\n    Case3();\n    Case4(); // ERROR\n    Case5();\n  }\n\n  static void Case1()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    b1.X();\n    b2.X();\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  static void Case2()\n  {\n    Bar b1 = new Bar();\n    Bar b2 = new Bar();\n    int x1 = 0;\n    dynamic x2 = 0;\n\n    b1.X(x1);\n    b2.X(x2);\n\n    Console.WriteLine(b1.Value + \" == \" + b2.Value);\n  }\n\n  static void Case3()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    var i1 = b1[0];\n    var i2 = b2[0];\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  static void Case4()\n  {\n    Bar b1 = new Bar();\n    Bar b2 = new Bar();\n    int x1 = 0;\n    dynamic x2 = 0;\n\n    var i1 = b1[x1];\n    var i2 = b2[x2];\n\n    Console.WriteLine(b1.Value + \" == \" + b2.Value);\n  }\n\n  static void Case5()\n  {\n    Bar b1 = new Bar();\n    dynamic b2 = new Bar();\n\n    var i1 = b1.Y;\n    var i2 = b2.Y;\n\n    Console.WriteLine(b1.Value + \" == \" + ((Bar)b2).Value);\n  }\n\n  struct Bar\n  {\n    public int Value;\n\n    public void X()\n    {\n      Value = 42;\n    }\n\n    public void X(int x)\n    {\n      Value = 42;\n    }\n\n    public int this[int x]\n    {\n      get\n      {\n        Value = 42;\n        return 0;\n      }\n    }\n\n    public int Y\n    {\n      get\n      {\n        Value = 42;\n        return 0;\n      }\n    }\n  }\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/6818/comments",
+    "author": "bartdesmet",
+    "comments": [
+      {
+        "user": "bartdesmet",
+        "created_at": "2015-11-17T05:49:57Z",
+        "body": "If this is deemed a bug indeed, the issue seems to be the lack of a call to `GetReceiverRefKind` in `MakeDynamicGetIndex` (unlike e.g. in `MakeDynamicSetIndex`) in `LoweredDynamicOperationFactory`.\n"
+      },
+      {
+        "user": "jaredpar",
+        "created_at": "2015-12-02T21:09:27Z",
+        "body": "@VSadov, @gafter is this a bug?  \n"
+      },
+      {
+        "user": "VSadov",
+        "created_at": "2015-12-17T21:55:54Z",
+        "body": "It is a bug, in theory, but I think it is the same way as it was emitted by the native compiler.\nChanging this behavior would be a breaking change now. \n\n\n---\n\nYes. It seems to be a long standing bug that indexer receivers do not have byref semantics in dynamic.  That would affect mutating indexers in structs when used dynamically and it seems very uncommon scenario, so fixing it would have very limited benefits while there is a risk of compatibility breaks.\nThat, IMO, makes this Won'tFix\n"
+      },
+      {
+        "user": "bartdesmet",
+        "created_at": "2015-12-17T22:11:12Z",
+        "body": "Ok, my expression tree nodes are bug compatible in that case :-). Thanks!\n"
+      }
+    ]
+  },
+  {
+    "number": 6315,
+    "title": "Unit testing support for <include> documentation elements",
+    "created_at": "2015-10-26T04:51:26Z",
+    "closed_at": "2015-12-04T21:50:20Z",
+    "labels": [
+      "Question",
+      "Area-Compilers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/6315",
+    "body": "I'm having trouble writing a unit test that includes a documentation comment containing an `<include>` element. I tried using `AddAdditionalDocument` to add the included file to the workspace, and I also tried writing the file to disk. In both cases, the expanded documentation simply included a comment saying the `<include>` element could not be expanded. See sharwell/StyleCopAnalyzers@93749a8 for an example.\n\n:question: Does the `AdhocWorkspace` support resolving `<include>` elements in a documentation comment? If so, where do I place the included file such that it will be located?\n\n:memo: This is part of my work to resolve DotNetAnalyzers/StyleCopAnalyzers#1603.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/6315/comments",
+    "author": "sharwell",
+    "comments": [
+      {
+        "user": "jaredpar",
+        "created_at": "2015-12-03T22:46:18Z",
+        "body": "CC @jasonmalinowski as he knows `AdhockWorkspace` the best. \n"
+      },
+      {
+        "user": "daveaglick",
+        "created_at": "2015-12-03T22:49:43Z",
+        "body": "If it helps, I was having this same problem and resolved it by supplying an `XmlReferenceResolver` to the compilation options. Failure to supply one results in the described behavior.\n"
+      },
+      {
+        "user": "jasonmalinowski",
+        "created_at": "2015-12-04T21:41:49Z",
+        "body": "I believe @daveaglick's advice is correct: the compiler/workspace tries to abstract files, and so unless there's a resolver doing something the compiler just will skip them.\n"
+      },
+      {
+        "user": "sharwell",
+        "created_at": "2015-12-04T21:50:19Z",
+        "body": "We successfully implemented unit tests for this functionality in DotNetAnalyzers/StyleCopAnalyzers#1898, based on @daveaglick's suggestions.\n"
+      }
+    ]
+  },
+  {
+    "number": 4969,
+    "title": "Roslyn Semantic Model for Static Constructors does not Match C# Language Spec",
+    "created_at": "2015-09-03T07:26:44Z",
+    "closed_at": "2015-09-03T16:36:31Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Verified",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4969",
+    "body": "## Abstract\n\nIt seems to me, that the semantic model of Roslyn and the ECMA-334 differ when it comes to static constructors.\nPlease clarify.\n## Roslyn and Static Constructors\n\nRoslyn seems to implicitly add a static constructor to a class containing static fields, even if no static constructor was defined in the textual representation of the program. Try the following example. We parse and analyse three classes, the class `OtherStruct` contains a static field but no static constructor. The class `StructWithCCtor` contains a static constructor.\n\n``` C#\nusing System;\nusing System.Linq;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\n\nnamespace RoslynTest\n{\n    public class Program\n    {\n        public static void Main(string[] args)\n        {\n            var syntaxTree = CSharpSyntaxTree.ParseText(\n                @\"\npublic class SomeStruct\n{\n  public void MyMethod(object o) { }\n}\n\npublic class OtherStruct \n{ \n  public static readonly string Field = \" + \"\\\"Test\\\"\" + @\";\n\n  public void MyOtherMethod(object o) { }\n}\n\npublic class StructWithCCtor\n{\n  static StructWithCCtor() { }\n\n  public void YetAnotherMethod(object o) { }\n}\n\");\n\n            var asts = new[] {syntaxTree};\n            var compilation = CSharpCompilation.Create(\"MyCompilation\", asts, new MetadataReference[0]);\n\n            var model = compilation.GetSemanticModel(syntaxTree);\n\n            var allStructSymbols = syntaxTree.GetRoot()\n                .DescendantNodes()\n                .OfType<ClassDeclarationSyntax>()\n                .Select(x => model.GetDeclaredSymbol(x));\n\n            foreach (var symbol in allStructSymbols)\n            {\n                Console.WriteLine(\n                    $\"Class '{symbol.Name}' static constructor count = {symbol.StaticConstructors.Length}\");\n            }\n        }\n    }\n}\n```\n\nThe program outputs:\n\n> Class 'SomeStruct' static constructor count = 0\n> Class 'OtherStruct' static constructor count = 1\n> Class 'StructWithCCtor' static constructor count = 1\n\nThe static constructor for `OtherStruct` is unexpected, but one _could_ argue that adding an empty static constructor is a valid program transformation as it does not introduce different behaviour.\n## What is the Problem?\n\nECMA-334 \u00a717.4.5.1 describes static field initialization:\n\n> If a static constructor (\u00a717.11) exists in the class, execution of the static field initializers occurs immediately prior to executing that static constructor. Otherwise, the static field initializers are executed at an implementation-dependent time prior to the first use of a static field of that class.\n\nThat means it _does_ make a difference if we add an empty static constructor.\nTry the following example first in _Debug configuration_ and then in _Release configuration_. The Debug configuration outputs two initialisation lines---as expected. In the Release configuration some optimisation kicks in, and the \"implementation-dependent time\" can be noticed: it only outputs the line for `MyClassWithCCtor`.\n\n``` C#\nusing System;\n\nnamespace RoslynTest\n{\n    public class TracerClass\n    {\n        public TracerClass(string s)\n        {\n            Console.WriteLine($\"{s} was created\");\n        }\n    }\n\n    public class MyClass\n    {\n        public static readonly TracerClass X = new TracerClass(\"X in MyClass\");\n    }\n\n    public class MyClassWithCCtor\n    {\n        public static readonly TracerClass Y = new TracerClass(\"Y in MyClassWithCCtor\");\n\n        static MyClassWithCCtor() { }\n    }\n\n    public class TestProgram\n    {\n        public static void Main(string[] args)\n        {\n            var x = new MyClass();\n            var y = new MyClassWithCCtor();\n        } \n    }\n}\n```\n## The Actual Question\n\nIs the behaviour of Roslyn intended? If so, why does the _semantic_ model have different semantics than the language?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4969/comments",
+    "author": "cptjazz",
+    "comments": [
+      {
+        "user": "MrJul",
+        "created_at": "2015-09-03T12:22:49Z",
+        "body": "Fields initializers without an explicit static constructor _are_ compiled to a static constructor (and the class is marked with `beforefieldinit`, as you noted). So Roslyn is correct, and that's not the only symbol created by the compiler you'll find in the semantic model.\n\nIf you want to disambiguate between an user-written constructor and a compiler-generated one, use `IsImplicitlyDeclared`.\n\nThat said, the spec is respected: the input produces the correct output, I don't really see what an intermediate representation of the code has to do with the specification.\n"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2015-09-03T16:00:08Z",
+        "body": "@cptjazz Does @MrJul's response answer your question?\n"
+      },
+      {
+        "user": "cptjazz",
+        "created_at": "2015-09-03T16:36:29Z",
+        "body": "Thank you for the response.\nI was not aware that Roslyn distinguishes between implicitly and explicitly implemented cctors.\nIt is now clear to me how this case is handled and I was able to get my code analyser right.\n\nThanks for the fast help!\n"
+      }
+    ]
+  },
+  {
+    "number": 4937,
+    "title": "StringInterpolationText.TextToken.ValueText remaining escaped curly braces.",
+    "created_at": "2015-09-01T23:26:21Z",
+    "closed_at": "2015-09-02T20:23:10Z",
+    "labels": [
+      "Question",
+      "Concept-API",
+      "Area-Compilers",
+      "Verified",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4937",
+    "body": "hello.\n\nI was expected SyntaxToken.ValueText to be unescaped value but StringInterpolationText.TextToken.(Value and ValueText) remaining escaped curly braces.\n\nIs this was intended work?\n\nI wrote a test below.\nThank you.\n\n``` csharp\nusing System;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\nusing Microsoft.CodeAnalysis.Text;\nusing Microsoft.VisualStudio.TestTools.UnitTesting;\n\nnamespace RoslynTest\n{\n    [TestClass]\n    public class RoslynTest\n    {\n        [TestMethod]\n        public void StringInterpolationText_TextToken_ValueText_ExpectedUnescapedValueButRemainingEscapedCurlyBraces()\n        {\n            var test = @\"\nclass A\n{\n    void Main()\n    {\n        var str = $\"\"\\\"\"{{}}\\\"\"\"\";\n    }\n}\";\n\n            var root = SyntaxFactory.ParseCompilationUnit(test);\n            var interpolatedString = root.FindNode(new TextSpan(test.IndexOf(\"$\"), 0)) as InterpolatedStringExpressionSyntax;\n            var interpolatedStringText = interpolatedString.Contents[0] as InterpolatedStringTextSyntax;\n            var token = interpolatedStringText.TextToken;\n\n            Assert.AreEqual(\"\\\\\\\"{{}}\\\\\\\"\", token.Text);\n            Assert.AreEqual(\"\\\"{{}}\\\"\", token.Value);\n            Assert.AreEqual(\"\\\"{{}}\\\"\", token.ValueText);\n            // expected.\n            //Assert.AreEqual(\"\\\"{}\\\"\", token.Value);\n            //Assert.AreEqual(\"\\\"{}\\\"\", token.ValueText);\n        }\n    }\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4937/comments",
+    "author": "miya2000",
+    "comments": [
+      {
+        "user": "gafter",
+        "created_at": "2015-09-02T20:23:10Z",
+        "body": "They are not technically escaped, according to the draft language specification. They are just required to come in pairs except when used for an interpolation. The escaping occurs at runtime when the `string.Format` method is called.\n"
+      },
+      {
+        "user": "miya2000",
+        "created_at": "2015-09-02T23:21:54Z",
+        "body": "Thank you for your reply.\nI've understood this is runtime work .\n"
+      }
+    ]
+  },
+  {
+    "number": 4860,
+    "title": "Making roslyn run in single-thread mode",
+    "created_at": "2015-08-28T08:18:54Z",
+    "closed_at": "2015-09-01T23:59:12Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "4 - In Review",
+      "Verified",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4860",
+    "body": "Roslyn will sometimes use all my cores and disturb other process on my machine.\n\nIs it possible to use configuration to make Roslyn use only one thread?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4860/comments",
+    "author": "roterdam",
+    "comments": [
+      {
+        "user": "gafter",
+        "created_at": "2015-08-29T00:11:02Z",
+        "body": "Are you asking about the compiler specifically?\n"
+      },
+      {
+        "user": "roterdam",
+        "created_at": "2015-08-29T00:33:38Z",
+        "body": "Yes.\n"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2015-08-29T05:49:21Z",
+        "body": "Use the command-line flag `/parallel-` or `/p-`. I believe you can place that in the standard `.rsp` files where the compilers are installed.\n\n\n---\n\nPlease let me know whether or not that addresses your issue.\n"
+      },
+      {
+        "user": "roterdam",
+        "created_at": "2015-09-01T23:59:12Z",
+        "body": "This does, thank you.\n"
+      }
+    ]
+  },
+  {
+    "number": 4377,
+    "title": "Strange compilation error, cannot find attribute reference after applying code fix",
+    "created_at": "2015-08-06T15:58:04Z",
+    "closed_at": "2015-08-06T17:22:09Z",
+    "labels": [
+      "Question",
+      "Concept-API",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4377",
+    "body": "See the code below. What I'm trying to do is fairly simple. Have a code fix which adds an attribute if it's not there. This works fine when I use the non fully qualified name of the attribute, however if I do use the fully qualified name, I'm getting compilation errors. But strangely enough only a single one even when the fully qualified name is used twice. \n\nFor some reason the new attribute is not equivalent to the existing one even though they are equal as a string.\n\nAm I missing something?\n\nHere's the code, needs Roslyn references as well as to the old Composition dll in the GAC (but I'm getting the same results for Obsolete). I've duplicated some code from the template just to make it self-contained.\n\n``` CSharp\nusing System;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\nusing Microsoft.CodeAnalysis.Text;\nusing Microsoft.VisualStudio.TestTools.UnitTesting;\nusing static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;\n\nnamespace Test.CodeFixes\n{\n    [TestClass]\n    public class UnitTest1\n    {\n        internal static readonly MetadataReference CorlibReference = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);\n        internal static readonly MetadataReference SystemCoreReference = MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location);\n        internal static readonly MetadataReference CSharpSymbolsReference = MetadataReference.CreateFromFile(typeof(CSharpCompilation).Assembly.Location);\n        internal static readonly MetadataReference CodeAnalysisReference = MetadataReference.CreateFromFile(typeof(Compilation).Assembly.Location);\n\n        [TestMethod]\n        public void TestCompilationError()\n        {\n            var testCode = @\"\n\nusing System.ComponentModel.Composition;\n\n[System.ComponentModel.Composition.Export(typeof(System.String))]\n[Export(typeof(System.Single))]\npublic class TempClass\n{\n}\";\n\n            var project = CreateProject(testCode);\n\n            var document = project.Documents.Single();\n            CheckForCompilationErrors(project.GetCompilationAsync().Result);\n\n            var newDocument = AddAttributeAsyncFix(document, document.GetSyntaxRootAsync().Result.DescendantNodes().OfType<ClassDeclarationSyntax>().Single()).Result;\n            Console.WriteLine(@\"new code:\n\" + newDocument.GetTextAsync().Result);\n\n            CheckForCompilationErrors(newDocument.Project.GetCompilationAsync().Result);\n        }\n\n        private Project CreateProject(string testCode)\n        {\n            var TestProjectName = \"TestProject\";\n            var projectId = ProjectId.CreateNewId(TestProjectName);\n\n            var solution = new AdhocWorkspace()\n                .CurrentSolution\n                .AddProject(projectId, TestProjectName, TestProjectName, LanguageNames.CSharp)\n                .WithProjectCompilationOptions(projectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))\n                .AddMetadataReference(projectId, CorlibReference)\n                .AddMetadataReference(projectId, SystemCoreReference)\n                .AddMetadataReference(projectId, CSharpSymbolsReference)\n                .AddMetadataReference(projectId, CodeAnalysisReference)\n                .AddMetadataReferences(projectId, GetAdditionalReferences());\n\n\n            var documentId = DocumentId.CreateNewId(projectId);\n            solution = solution.AddDocument(documentId, \"test.cs\", SourceText.From(testCode));\n\n            var project = solution.GetProject(projectId);\n            return project;\n        }\n\n        private async Task<Document> AddAttributeAsyncFix(\n            Document document,\n            ClassDeclarationSyntax classDeclaration)\n        {\n            //Add [Export(typeof(TypeName))]\n            var root = await document.GetSyntaxRootAsync();\n\n            var typeofArgument = AttributeArgument(TypeOfExpression(ParseTypeName(\"System.Double\")));\n            var attributeSyntax = Attribute(IdentifierName(\"System.ComponentModel.Composition.Export\"), AttributeArgumentList().AddArguments(typeofArgument));\n            var attributeListSyntax = AttributeList(SeparatedList(new[] { attributeSyntax }));\n            var newClass = classDeclaration.AddAttributeLists(attributeListSyntax);\n            root = root.ReplaceNode(classDeclaration, newClass);\n\n            return document.WithSyntaxRoot(root);\n        }\n\n        private static void CheckForCompilationErrors(Compilation compilation)\n        {\n            var compilationDiagnositics = compilation.GetDiagnostics();\n            var errorDiagnostics = compilationDiagnositics.Where(x => x.Severity == DiagnosticSeverity.Error);\n            if (errorDiagnostics.Any())\n            {\n                Assert.Fail($@\"There are errors in the code to be analyzed. See below:\n{string.Join(\"\\r\\n\", errorDiagnostics.Select(x => x.GetMessage()))}\");\n            }\n        }\n\n        protected MetadataReference[] GetAdditionalReferences()\n        {\n            return new MetadataReference[]\n            {\n                MetadataReference.CreateFromFile(typeof(System.ComponentModel.Composition.ExportAttribute).Assembly.Location)\n            };\n        }\n    }\n}\n\n\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4377/comments",
+    "author": "hvanbakel",
+    "comments": [
+      {
+        "user": "Pilchie",
+        "created_at": "2015-08-06T17:22:09Z",
+        "body": "You can't create an `IdentifierName` for `System.ComponentModel.Composition.Export`.  An identifier name can only represent a single identifier, not a dotted name.\n\nTry using `ParseName` instead of of `IdentifierName`\n"
+      },
+      {
+        "user": "hvanbakel",
+        "created_at": "2015-08-06T17:39:46Z",
+        "body": "Works like a charm, thanks!\n"
+      }
+    ]
+  },
+  {
+    "number": 4074,
+    "title": "Not found:Diagnostic with Code Fix (NuGet + VSIX) template",
+    "created_at": "2015-07-23T09:34:57Z",
+    "closed_at": "2015-07-23T14:13:13Z",
+    "labels": [
+      "Question",
+      "Area-Analyzers"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4074",
+    "body": "With visual studio 2015 RC, I had used \"Diagnostic with Code Fix (NuGet + VSIX) template\" to create live code analyser where I could generate a nugget package as well as VSIX file.\n\nThe template is not available after the release of VS 2015 RTM. I have explicitly installed Roslyn SDK but still the template is not there in my Visual Studio 2015 RTM\n\nWhere can I get the similar template for visual studio 2015\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4074/comments",
+    "author": "balubchand",
+    "comments": [
+      {
+        "user": "bkoelman",
+        "created_at": "2015-07-23T13:25:13Z",
+        "body": "Maybe this helps? #4051\n"
+      },
+      {
+        "user": "Pilchie",
+        "created_at": "2015-07-23T14:01:35Z",
+        "body": "We've updated the template to indicate that it is only applicable with a Target Framework of .NET 4.5.2 or higher.  Take a look at the Target Framework dropdown at the top of the New Project dialog.\n"
+      },
+      {
+        "user": "balubchand",
+        "created_at": "2015-07-23T14:13:13Z",
+        "body": "Thanks the framework change option helped\n"
+      }
+    ]
+  },
+  {
+    "number": 3960,
+    "title": "Generate object creation expression",
+    "created_at": "2015-07-15T10:40:30Z",
+    "closed_at": "2015-07-16T08:16:10Z",
+    "labels": [
+      "Question",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3960",
+    "body": "Hi,\nBasically I am trying to generate `new System.DateTime(ticks)`\n\nHere is code I am using:\n\n```\nSyntaxFactory.ObjectCreationExpression(\n    SyntaxFactory.QualifiedName(SyntaxFactory.IdentifierName(nameof(System)), SyntaxFactory.IdentifierName(nameof(DateTime))),\n    SyntaxFactory.ArgumentList().AddArguments(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(\"ticks\"))),\n    null);\n```\n\nBut it generates `newSystem.DateTime(ticks)` - note missing space between `new` and `System`.\nNow, I know I can use different overload and provide my own new token with space in trailing trivia, but I think above should work too. Am I doing something wrong here?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3960/comments",
+    "author": "Przemyslaw-W",
+    "comments": [
+      {
+        "user": "bkoelman",
+        "created_at": "2015-07-15T13:49:49Z",
+        "body": "To get whitespace inserted, I believe you need to tag your new nodes for auto-formatting.\n\n``` csharp\nnewSyntaxNode = newSyntaxNode.WithAdditionalAnnotations(Formatter.Annotation);\n```\n\nThen, depending on your scenario (for example, if you are writing a code fix provider), VS runs the formatter over your code. If not, you can do that yourself, like this:\n\n``` csharp\nvar newRoot = root.ReplaceNode(method, newMethod);\nvar formattedRoot = Formatter.Format(newRoot, Formatter.Annotation, document.Project.Workspace);\n```\n"
+      },
+      {
+        "user": "Przemyslaw-W",
+        "created_at": "2015-07-16T08:16:10Z",
+        "body": "That worked, thanks :)\n"
+      }
+    ]
+  },
+  {
+    "number": 3938,
+    "title": "Rename class name or namespace",
+    "created_at": "2015-07-14T08:50:10Z",
+    "closed_at": "2015-07-15T09:46:25Z",
+    "labels": [
+      "Question",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3938",
+    "body": "Hi,\n\nFrom example that I see, Renamer only work with SyntaxToken. Can Renamer be used to rename class or namespace like ReSharper does? I have this snippet but it does not work. Thanks\n\n```\n        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);\n        ITypeSymbol typeSymbol = semanticModel.GetTypeInfo(identifierNameSyntax, cancellationToken).Type;\n        string thisNamespace = SyntaxNodeHelper.GetNamespaceName(document);\n        string className = typeSymbol.ToString();\n        string newName = className.Replace(typeSymbol.ContainingNamespace.ToString(), thisNamespace);\n        var originalSolution = document.Project.Solution;\n        var optionSet = originalSolution.Workspace.Options;\n        var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, typeSymbol, newName, optionSet, cancellationToken).ConfigureAwait(false);\n        return newSolution;\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3938/comments",
+    "author": "ndung",
+    "comments": [
+      {
+        "user": "jmarolf",
+        "created_at": "2015-07-14T20:07:22Z",
+        "body": "The Renamer cannot rename tokens, it accepts symbols and then renames all instances of that symbol across the solution.\n\nA few quick questions:\n\n``` C#\nstring newName = className.Replace(typeSymbol.ContainingNamespace.ToString(), thisNamespace);\n```\n\nIn the snippet above I assume that class name contains the same name as its containing namespace? Like this?\n\n``` C#\nnamespace My\n{\n    class MyClass\n}\n```\n\nand you want to rename the class to be whatever the value of thisNamespace is? So if it was \"ThisNamespace\" the result should be:\n\n``` C#\nnamespace My\n{\n    class ThisNamespaceClass\n}\n```\n\nOr is your goal to change the name of the namespace itself?\n"
+      },
+      {
+        "user": "ndung",
+        "created_at": "2015-07-14T21:01:44Z",
+        "body": "Hi @jmarolf,\n\nI want to change the name of the namespace itself. The result should be\n\n```\n   namespace ThisNamespace\n   {\n        class MyClass\n   }\n```\n\nI thought I can do it by renaming the full class name.\n\nThanks.\n"
+      },
+      {
+        "user": "jmarolf",
+        "created_at": "2015-07-15T01:06:31Z",
+        "body": "@ndung The symbol for the class and the symbol for the namespace are two separate things.  You can acquire the fully qualified name of a symbol including its containing namespace, but this is just a string. Modifying it does not cause anything to happen to the namespace itself.  Looks like you want to pass the namespace symbol to the Rename class like this:\n\n``` C#\nvar semanticModel = await document.GetSemanticModelAsync(cancellationToken);\nITypeSymbol typeSymbol = semanticModel.GetTypeInfo(identifierNameSyntax, cancellationToken).Type;\nstring thisNamespace = SyntaxNodeHelper.GetNamespaceName(document);\nvar namespaceSymbol = typeSymbol.ContainingNamespace;\nvar originalSolution = document.Project.Solution;\nvar optionSet = originalSolution.Workspace.Options;\nvar newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, namespaceSymbol , thisNamespace, optionSet, cancellationToken).ConfigureAwait(false);\nreturn newSolution;\n```\n\nThough it depends on the actual shape of the namespace.\n"
+      },
+      {
+        "user": "mattwar",
+        "created_at": "2015-07-15T01:20:55Z",
+        "body": "I suspect he just wants to put the class in a different namespace, and not rename all other occurrences of the original namespace.\n"
+      },
+      {
+        "user": "jmarolf",
+        "created_at": "2015-07-15T01:27:25Z",
+        "body": "@mattwar good point.  @ndung  please let us know what the end goal is here.  Renamer.RenameSymbolAsync is going to rename every location in your solution that mentions that namespace.  If you just want to rename something in one place, you can replace the single node or token at that location.\n"
+      },
+      {
+        "user": "ndung",
+        "created_at": "2015-07-15T09:46:25Z",
+        "body": "Hi @jmarolf, I want to rename all other occurrences of the original namespace as well, and your solution works. Thanks!\nThanks also to @mattwar \n"
+      }
+    ]
+  },
+  {
+    "number": 3916,
+    "title": "String Interpolation Question",
+    "created_at": "2015-07-12T13:16:54Z",
+    "closed_at": "2015-07-12T16:16:18Z",
+    "labels": [
+      "Question",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3916",
+    "body": "Hi,\n\nHow can I do such a simple thing like this, is it meant to work, is it working, can it work?\n\n```\n..\nstring welcome = \"\";\nif (lang==\"en\") { welcome = \"Hello, {name}. How are you?\"; }\nelse if (lang==\"es\") { welcome = \"Hola {name}. Como estas?\"; } \n..\nreturn welcome;\n```\n\nAnd somewhere else in the code I would simple request the string which could come from anywhere, e.g. database, ..\n\n```\npublic void Main()\n{\n  string intro = GiveMeIntro(\"en\");\n  string name = \"Vaclav\";\n  Console.WriteLine($intro);\n}\n```\n\nLet's do not assume that I can send the name here\n\n```\nstring intro = GiveMeIntro(\"en\", \"Vaclav\");\n```\n\nLet's assume that these are coming from database\n\n```\n01 intro en \"Hello, {name}. How are you?\"\n02 intro es \"Hola {name}. Como estas?\"\n```\n\nIf I am right, the old school way it would be working?\n\n```\n..\nstring welcome = \"\";\nif (lang==\"en\") { welcome = \"Hello, {0}. How are you?\"; }\nelse if (lang==\"es\") { welcome = \"Hola {0}. Como estas?\"; } \n..\nreturn welcome;\n```\n\n```\npublic void Main()\n{\n  string intro = GiveMeIntroOldWay(\"en\");\n  string name = \"Vaclav\";\n  Console.WriteLine(intro, name);\n}\n```\n\nIs there any way to make c# 6.0 to work that $ followed by string would interpolate that string? Any work around I am not aware of?\n\nIf that is not possible, don't you think that the new functionality lost a certain feature it could have?\n\nHope that all I wrote makes sense?\n\n**Update**: Just realized, that maybe it is for security reason as I could inject e.g this {DateTime.Now} or anything to such a string if it worked as I would like.\n\n```\n01 intro en \"Hello, {name}. How are you?\"\n02 intro es \"Hola {name}. Como estas?\"\n03 intro fr \"Hola {DateTime.Now}. Got ya?\"\n```\n\nThanks :)\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3916/comments",
+    "author": "VaclavElias",
+    "comments": [
+      {
+        "user": "AdamSpeight2008",
+        "created_at": "2015-07-12T14:52:05Z",
+        "body": "Have you considered multiple argument in the format string?\n"
+      },
+      {
+        "user": "VaclavElias",
+        "created_at": "2015-07-12T15:00:12Z",
+        "body": "Sure, one argument or multiple I would have the same query about this for c# experts and creators. I just demonstrated one argument :)\n"
+      },
+      {
+        "user": "Bill-McC",
+        "created_at": "2015-07-12T15:50:53Z",
+        "body": "I doubt thus would be possible as such unless you are doing some on the fly lookup of local variables and parsing of resource strings for code expressions: such a thing would be relatively expensive. So instead of named placeholders you'd have to use {1} etc with string.format.  I guess you could have the resource strings use named placeholders, and at runtime do a replace of {name} with {1} etc.\n"
+      },
+      {
+        "user": "Joe4evr",
+        "created_at": "2015-07-12T15:52:18Z",
+        "body": "You can't put a `$` in front of a string reference and \"magically\" make it an interpolated string. This is better solved by rewriting it more like this:\n\n``` C#\npublic string Greet(string lang, string name)\n{\n    if(lang == \"en\") return $\"Hello, {name}. How are you?\";\n    else if(lang == \"es\") return $\"Hola {name}. Como estas?\";\n    //etc.\n}\n```\n"
+      },
+      {
+        "user": "VaclavElias",
+        "created_at": "2015-07-12T15:58:51Z",
+        "body": "Thank you Bill-McC and Joe4evr, both your suggestions would do it and I will stick with them. Thank you for your help. I agree, let's don't do magic :) and let's close this thread.\n"
+      },
+      {
+        "user": "ufcpp",
+        "created_at": "2015-07-12T16:25:55Z",
+        "body": "``` cs\nusing System;\n\nclass Program\n{\n    static void Main(string[] args)\n    {\n        Console.WriteLine(Greet(\"en\")); // Hello, {0}. How are you?\n        Console.WriteLine(Greet(\"es\")); // Halo {0}. Como estas?\n    }\n\n    public static string Greet(string lang)\n    {\n        Func<string, FormattableString> f = name =>\n        {\n            if (lang == \"en\") return $\"Hello, {name}. How are you?\";\n            else if (lang == \"es\") return $\"Hola {name}. Como estas?\";\n            //etc.\n            return $\"{name}\";\n        };\n\n        return f(null).Format;\n    }\n    }\n}\n```\n"
+      },
+      {
+        "user": "VaclavElias",
+        "created_at": "2015-07-12T17:09:02Z",
+        "body": "Thank you ufcpp :+1: I take this also as a very nice option! :)\n"
+      }
+    ]
+  },
+  {
+    "number": 3882,
+    "title": "Optimize away redundant field initializers",
+    "created_at": "2015-07-09T17:06:00Z",
+    "closed_at": "2015-08-13T06:16:37Z",
+    "labels": [
+      "Question",
+      "Area-Compilers",
+      "Resolution-Not Reproducible"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3882",
+    "body": "Code in the wild often has redundant field initializers:\n\n```\nclass C {\n    int x = 0;\n    public C() {\n    }\n}\n```\n\nSometimes this is written for bad reasons, sometimes this actually increases clarity (e.g. in the presence of many initialized fields).\n\nRoslyn should optimize this away. This should result in identical semantics.\n\nIn case you wonder: All JITs (x86, x64 and RyuJIT) do not optimize this away. Our .NET JITs are very poor at optimizing in general. Relying on that happening is probably not a good choice.\n\nThis optimization should work for instance fields and for static fields. As far as I can tell the readonly and volatile modifiers don't have any impact here.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3882/comments",
+    "author": "GSPP",
+    "comments": [
+      {
+        "user": "mikedn",
+        "created_at": "2015-07-09T20:46:02Z",
+        "body": "Roslyn already optimizes the code in your example. When optimizations are enabled the following IL is produced:\n\n```\n.method public hidebysig specialname rtspecialname instance void .ctor() cil managed\n{\n    .maxstack 8\n    L_0000: ldarg.0 \n    L_0001: call instance void [mscorlib]System.Object::.ctor()\n    L_0006: ret \n}\n```\n\nIt also optimizes static the initialization of static fields but it appears that in that case an empty static constructor is still generated:\n\n```\n.method private hidebysig specialname rtspecialname static void .cctor() cil managed\n{\n    .maxstack 8\n    L_0000: ret \n}\n```\n"
+      },
+      {
+        "user": "GSPP",
+        "created_at": "2015-07-09T21:04:46Z",
+        "body": "Good! The try Roslyn online service apparently has Debug mode on or an old version. Or, I did something wrong.\n"
+      },
+      {
+        "user": "Joe4evr",
+        "created_at": "2015-07-10T06:52:38Z",
+        "body": "Try Roslyn also has an option to switch between Debug and Release mode.\n"
+      },
+      {
+        "user": "GSPP",
+        "created_at": "2015-07-10T08:55:45Z",
+        "body": "OK, I see it now. What's the process to close this issue? Am I supposed to do that?\n"
+      },
+      {
+        "user": "mikedn",
+        "created_at": "2015-07-10T10:21:25Z",
+        "body": "I suggest you leave it open, perhaps someone from the Roslyn team can comment about the empty static constructor. I don't think it should be generated when all the static initializers are optimized away.\n"
+      }
+    ]
+  },
+  {
+    "number": 3468,
+    "title": "Question: Code generation",
+    "created_at": "2015-06-12T07:46:50Z",
+    "closed_at": "2015-06-12T16:12:27Z",
+    "labels": [
+      "Question",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3468",
+    "body": "Are any parts of Roslyn's codebase auto-generated?\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3468/comments",
+    "author": "YaakovDavis",
+    "comments": [
+      {
+        "user": "Pilchie",
+        "created_at": "2015-06-12T16:12:19Z",
+        "body": "The syntax model and visitors, as well as the bound tree model are generated.  See src\\Tools\\Source for the source code used to generate things.\n"
+      }
+    ]
+  },
+  {
+    "number": 3336,
+    "title": "Formatter doesn't work with empty workspace",
+    "created_at": "2015-06-05T05:52:05Z",
+    "closed_at": "2015-06-05T19:11:55Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3336",
+    "body": "The following doesn't format the code. Tried also with AdHocWrkspace to no avail.\n\n```\n        var tree = CSharpSyntaxTree.ParseText(code);\n        var ws = MSBuildWorkspace.Create();\n        var root = Formatter.Format(tree.GetRoot(), ws);\n        code = root.ToString();\n```\n\nTried with latest version (6df49c669c3364326830d6156f4ef95221b60c24).\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3336/comments",
+    "author": "YaakovDavis",
+    "comments": [
+      {
+        "user": "mattwar",
+        "created_at": "2015-06-05T15:11:03Z",
+        "body": "Can you give an example of source text this is not formatting?\n"
+      },
+      {
+        "user": "YaakovDavis",
+        "created_at": "2015-06-05T15:40:40Z",
+        "body": "```\n            namespace N1\n            {      \n\n            enum E { A, B, C }\n\n            public class C1\n            {\n            public   object P1 {get;set;}\n            }\n\n            }\n```\n\nThe indentations/spaces aren't corrected.\n"
+      },
+      {
+        "user": "mattwar",
+        "created_at": "2015-06-05T17:22:28Z",
+        "body": "I tried this and it succeeds:\n\n``` C#\n        [Fact]\n        public void FormatNode()\n        {\n            var code = @\"\n            namespace N1\n            {      \n\n            enum E { A, b, C }\n\n            public class C1\n            {\n            public   object P1 {get;set;}\n            }\n\n            }\n\";\n\n            var expected = @\"\nnamespace N1\n{\n\n    enum E { A, b, C }\n\n    public class C1\n    {\n        public object P1 { get; set; }\n    }\n\n}\n\";\n\n            var root = SyntaxFactory.ParseCompilationUnit(code);\n            var ws = new AdhocWorkspace();\n            var formattedRoot = Formatter.Format(root, ws);\n            var formattedText = formattedRoot.ToFullString();\n            Assert.Equal(expected, formattedText);\n        }\n```\n"
+      },
+      {
+        "user": "YaakovDavis",
+        "created_at": "2015-06-05T18:07:54Z",
+        "body": "Weird, I tried your snippet, and I get `NotSupportedException`:\n\n```\nAdditional information: The language 'C#' is not supported.\n```\n\nStack trace:\n`at Microsoft.CodeAnalysis.Host.HostWorkspaceServices.GetLanguageServices(String languageName) \n   at Microsoft.CodeAnalysis.Host.Mef.MefWorkspaceServices.GetLanguageServices(String languageName) \n   at Microsoft.CodeAnalysis.Formatting.Formatter.Format(SyntaxNode node, IEnumerable``1 spans, Workspace workspace, OptionSet options, IEnumerable``1 rules, CancellationToken cancellationToken) \n   at Microsoft.CodeAnalysis.Formatting.Formatter.Format(SyntaxNode node, Workspace workspace, OptionSet options, CancellationToken cancellationToken)`\n\nPerhaps you have some uncommitted modifications which address this?\n"
+      },
+      {
+        "user": "Pilchie",
+        "created_at": "2015-06-05T19:08:35Z",
+        "body": "You need to make sure that `Microsoft.CodeAnalysis.Workspaces.CSharp.dll` is deployed beside `Microsoft.CodeAnalysis.Workspaces.dll` so that it can find C# support.\n"
+      },
+      {
+        "user": "YaakovDavis",
+        "created_at": "2015-06-05T19:11:55Z",
+        "body": "Adding the dll solved the issue, thanks.\n"
+      }
+    ]
+  },
+  {
+    "number": 3213,
+    "title": "Remove node fails in Visual Basic.",
+    "created_at": "2015-06-01T12:36:24Z",
+    "closed_at": "2015-06-02T06:26:25Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3213",
+    "body": "Fails while generating preview. \n\n```\n<ExportCodeRefactoringProvider(LanguageNames.VisualBasic, Name:=NameOf(MoveClassToFileCodeRefactoringProvider)), [Shared]>\nFriend Class MoveClassToFileCodeRefactoringProvider\nInherits CodeRefactoringProvider\n\nPublic NotOverridable Overrides Async Function ComputeRefactoringsAsync(context As CodeRefactoringContext) As Task\n    ' TODO: Replace the following code with your own analysis, generating a CodeAction for each refactoring to offer\n\n    Dim root = Await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(False)\n\n    ' Find the node at the selection.\n    Dim node = root.FindNode(context.Span)\n\n    ' Only offer a refactoring if the selected node is a type statement node.\n    Dim typeDecl = TryCast(node, ClassStatementSyntax)\n    If typeDecl Is Nothing Then\n        Return\n    End If\n\n\n    Dim a2 = CodeAction.Create(\"Delete class\", Function(c) MoveClassToFile(context.Document, typeDecl, c))\n\n    ' Register this code action.\n    context.RegisterRefactoring(a2)\n\nEnd Function\n\nPrivate Async Function MoveClassToFile(document As Document, typeDecl As ClassStatementSyntax, cancellationToken As CancellationToken) As Task(Of Document)\n\n    Dim currentSyntaxTree = document.GetSyntaxTreeAsync().Result\n    Dim currentRoot = currentSyntaxTree.GetRootAsync().Result\n    Dim replacedRoot = currentRoot.RemoveNode(typeDecl, SyntaxRemoveOptions.KeepNoTrivia)\n\n    Dim ret = document.WithSyntaxRoot(replacedRoot)\n\n    Return ret\nEnd Function\n\n\nEnd Class\n```\n\nTested in c# by altering the Language to CSharp and the ClassStatementSyntax to ClassDeclarationSyntax, it's working fine :(\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3213/comments",
+    "author": "petterek",
+    "comments": [
+      {
+        "user": "mattwar",
+        "created_at": "2015-06-02T01:12:33Z",
+        "body": "VB is trickier to get right since there are both xxxStatementSyntax nodes and xxxBlockSyntax nodes. You cannot remove a xxxStatementSyntax node if it's part of a xxxBlockSyntax, you have to remove the xxxBlockSyntax node instead.\n\n\n---\n\nYou will need to remove the ClassBlockSyntax node that is the ClassStatementSyntax's parent.\n"
+      },
+      {
+        "user": "petterek",
+        "created_at": "2015-06-02T06:26:23Z",
+        "body": "OK.. I will try it out\n\n\n---\n\nThat worked  :+1: Thank you very much\n"
+      }
+    ]
+  },
+  {
+    "number": 12214,
+    "title": "Strange syntax error in interpolated string when using ?:",
+    "created_at": "2016-06-27T08:04:59Z",
+    "closed_at": "2017-11-21T19:31:32Z",
+    "labels": [
+      "Bug",
+      "help wanted",
+      "Area-Compilers",
+      "4 - In Review",
+      "Concept-Diagnostic Clarity"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/12214",
+    "body": "```\n$\"{1 / Environment.TickCount == 0 ? 1 : 2}\"\n```\n\nHere, the \"1 \" part has a red squiggly saying \": expected\". I don't know whether this code is supposed to compile or not but the message does not make sense to me. I would not \"expect\" a \":\" character right after the question mark under any circumstances.\n\nThe workaround `$\"{(1 / Environment.TickCount == 0 ? 1 : 2)}\"` works fine.\n\nI guess this is a low priority issue but I still wanted to report it so that it can be triaged and tracked.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/12214/comments",
+    "author": "GSPP",
+    "comments": [
+      {
+        "user": "AdamSpeight2008",
+        "created_at": "2016-06-27T08:15:59Z",
+        "body": "I don't think this is a bug, as it has been encountered before.  As String Interpolation uses the syntax from `String.Format`, thus the `:` is being seen as part of the Argument Hole (spefically the formatting ).\nBy enclosing it in parenthesis, it gets treated as an expression.\n"
+      },
+      {
+        "user": "GSPP",
+        "created_at": "2016-06-27T08:39:52Z",
+        "body": "Yes, that makes sense to me. But why does the error demand a \":\" after the \"?\"?\n"
+      },
+      {
+        "user": "AdamSpeight2008",
+        "created_at": "2016-06-27T09:07:34Z",
+        "body": "I did't know. Guess would it be ambiguous \n"
+      },
+      {
+        "user": "miloush",
+        "created_at": "2016-06-27T09:58:58Z",
+        "body": "@GSPP that is because the `:` is treated as part of the string, not the expression, so the expression is missing a colon (which you cannot add without using parenthesis).\n"
+      },
+      {
+        "user": "GSPP",
+        "created_at": "2016-06-27T10:06:30Z",
+        "body": "I see. So the error is trying to say that the colon is expected _after_ the \"1\" and not instead of it. I guess there is nothing to do here so I'm closing this.\n"
+      },
+      {
+        "user": "miloush",
+        "created_at": "2016-06-27T10:25:12Z",
+        "body": "@GSPP yep, not sure what build are you using but for\n\n``` C#\nstatic void Main(string[] args)\n{\n    var s = $\"{1 / Environment.TickCount == 0 ? 1 |: 2}\";\n}\n```\n\nI get the \": expected\" error before the colon as denoted by |  which looks ok to me.\n"
+      },
+      {
+        "user": "svick",
+        "created_at": "2016-06-27T10:52:48Z",
+        "body": "I think the error message is very confusing (\"Colon expected? But I have a colon exactly where it should be.\"). Maybe it's worth keeping this open for the request to make the message better?\n"
+      },
+      {
+        "user": "miloush",
+        "created_at": "2016-06-27T11:04:14Z",
+        "body": "Well :-) turns out I have run into this myself: #4829 and suggested\n\n>  If nothing else, it shouldn't say a colon is expected when there is a colon.\n\n@gafter Might be worth having a less confusing error...\n"
+      },
+      {
+        "user": "AdamSpeight2008",
+        "created_at": "2016-06-27T17:56:51Z",
+        "body": "If it being the current state of the parser is that it is parsing the `cond ? truth : falsehood` why is the error being reported, Shouldn't it be seen it as part of that rather than the Argument Hole?\n"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2016-06-27T18:04:58Z",
+        "body": "@AdamSpeight2008 Unfortunately, no. This is per the language specification. The parts of the interpolated string need to be identified during lexical analysis, which occurs long before parsing.\n"
+      },
+      {
+        "user": "WrongBit",
+        "created_at": "2016-07-06T14:44:39Z",
+        "body": "I insist that using \"?:\" operator inside an interpolated string handled WRONG WAY. We waited year while you discussing proper syntax for interpolation, and now, when you introduced these clumsy {} (instead of one symbol $ ), you say \"it's not a bug\". IT IS a bug. Once you limit substitution expression with braces {}, take full responsibility to handle it properly. And nobody care on what you base your formatting - we didn't ask you to use \"string.Format\" - we asked just simple substitution, like \"Hello, $UserName!\".\n"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-11-17T22:35:27Z",
+        "body": "The error will be\r\n\r\n`error CS8361: A conditional expression cannot be used directly in a string interpolation because the ':' ends the interpolation. Parenthesize the conditional expression.`\r\n"
+      },
+      {
+        "user": "svick",
+        "created_at": "2017-11-18T15:54:46Z",
+        "body": "@gafter If the error message suggests a way to fix it, should the compiler also include a code fix that can do it automatically?"
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2017-11-19T00:23:47Z",
+        "body": ">  If the error message suggests a way to fix it, should the compiler also include a code fix that can do it automatically?\r\n\r\nPRs welcome @svick :)"
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-11-21T06:24:40Z",
+        "body": "@svick @CyrusNajmabadi Created issue #23323 to track the suggested code fix."
+      },
+      {
+        "user": "WrongBit",
+        "created_at": "2017-11-25T18:42:18Z",
+        "body": "Any expression, unary or sixnary, have to be completely parsed in interpolation string as a whole expression, NOT to intersecting with any \"formatting\" characters. It's just stupid - introduce feature to SIMPLIFY our life and make it so abstract/clumsy that it become UNUSABLE. What organ you use to think, team?? Just keep in your student head: $\"... {a ? b : c}...\" MUST WORK. Period. No excuses, no annoying explanations why you didn't make it properly."
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-11-25T22:43:27Z",
+        "body": "@WrongBit can you please draft the language specification you prefer we use for the feature?"
+      },
+      {
+        "user": "WrongBit",
+        "created_at": "2017-12-14T22:00:26Z",
+        "body": "@gafter: I offered same solution like Nemerle has: dollar sign + verbatim mode. Better if these strings will have different quotes. Say, backtick (like in D). Finally it will look like this:\r\n\r\nvar s = ~bacltick here~ Today is $day\r\nTemp is $temp\r\nLast line of string~bacltick here~;\r\n\r\nIt's simple, CLEAR, obvious solution, usable for 99% cases. Where not, use old, good strings, Format(), etc.\r\nYes, it's not \"hyper universal solution\", but I'm tired of \"universal architectors\", who convert every task into idiotically complex solution (his code) and same idiotically complex usage (my code). Overengineering in other words."
+      },
+      {
+        "user": "gafter",
+        "created_at": "2017-12-14T22:12:53Z",
+        "body": "@WrongBit that would be a completely new and different language construct, not a bug fix to the spec. New feature proposals belong in the csharplang repo, not here."
+      },
+      {
+        "user": "CyrusNajmabadi",
+        "created_at": "2017-12-14T22:13:54Z",
+        "body": "@WrongBit Note that nemerle has issues on its own (for example if you need an embedded string in your interpolation).  \r\n\r\n> Any expression can be used in $(...), but there might be problems with embedded strings and so on.\r\n\r\nThat's similar to the case we have here in C#.  In both languages you can type nearly anything in the interpolation.  However, there are some cases that you need to provide additional syntax around.\r\n\r\n> It's simple, CLEAR, obvious solution, usable for 99% cases.\r\n\r\nC#'s solution works for 99% of all cases as well :)   Just for the case of ternary (where you just need to wrap things in parentheses to make it work).  Seems similar to nemerle here :)"
+      }
+    ]
+  },
+  {
+    "number": 2666,
+    "title": "MefHostServices fails loading unsigned assemblies.",
+    "created_at": "2015-05-12T01:43:44Z",
+    "closed_at": "2015-05-13T03:22:39Z",
+    "labels": [
+      "Bug",
+      "help wanted",
+      "Area-IDE",
+      "Verified"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/2666",
+    "body": "When using unsigned roslyn assemblies, MefHostServices creates an invalid assembly name, which causes an exception to be thrown.\n\nFrom MefHostServices.cs:\n\n``` csharp\n\nprivate static Assembly TryLoadNearbyAssembly(string assemblySimpleName)\n{\n    var thisAssemblyName = typeof(MefHostServices).GetTypeInfo().Assembly.GetName();\n    var assemblyShortName = thisAssemblyName.Name;\n    var assemblyVersion = thisAssemblyName.Version;\n    var publicKeyToken = thisAssemblyName.GetPublicKeyToken().Aggregate(string.Empty, (s, b) => s + b.ToString(\"x2\"));\n    var assemblyName = new AssemblyName(string.Format(\"{0}, Version={1}, Culture=neutral, PublicKeyToken={2}\", assemblySimpleName, assemblyVersion, publicKeyToken));\n\n    try\n    {\n        return Assembly.Load(assemblyName);\n    }\n    catch (Exception)\n    {\n        return null;\n    }\n}\n\n```\n\nWhen an unsigned assembly is loaded, `publicKeyToken` is `\"\"` instead of `null`.\n\nA proposed solution:\nadd\n\n``` csharp\n\n    if (string.IsNullOrEmpty(publicKeyToken))\n    {\n        publicKeyToken = \"null\";\n    }\n\n```\n\nafter `publicKeyToken` is initially set.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/2666/comments",
+    "author": "jakesays-old",
+    "comments": [
+      {
+        "user": "jasonmalinowski",
+        "created_at": "2015-06-15T23:47:24Z",
+        "body": "And @jakesys fixed this with pull request #2669.\n\n\n---\n\n@jakesays, this is working for you now?\n"
+      },
+      {
+        "user": "jakesays-old",
+        "created_at": "2015-07-02T23:22:00Z",
+        "body": "@jasonmalinowski yes. works great. sorry for the late reply - wasn't paying attention.\n"
+      }
+    ]
+  }
+]

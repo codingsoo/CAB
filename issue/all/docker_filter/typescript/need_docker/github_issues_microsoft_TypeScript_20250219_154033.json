@@ -1,0 +1,484 @@
+[
+  {
+    "number": 33203,
+    "title": "Compiler API: getConstantValue() can't get a real value from enum's PropertyAccessExpression",
+    "created_at": "2019-09-03T03:48:37Z",
+    "closed_at": "2019-09-04T01:43:49Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/33203",
+    "body": "<!-- Please try to reproduce the issue with `typescript@next`. It may have already been fixed. -->\r\n**TypeScript Version:**  3.5.3\r\n\r\n<!-- Search terms you tried before logging this (so others can find this issue more easily) -->\r\n**Search Terms:**\r\n\r\nCompiler API, getConstantValue, PropertyAccessExpression\r\n\r\n**Code**\r\n\r\n```ts\r\nimport * as ts from \"typescript\";\r\n\r\n\r\nlet program = ts.createProgram(['/src/sandbox/test.ts'], {});\r\nlet checker = program.getTypeChecker();\r\n\r\nlet source = program.getSourceFile('/src/sandbox/test.ts')!;\r\n\r\nsource.forEachChild(node => {\r\n  switch (node.kind) {\r\n    case ts.SyntaxKind.EnumDeclaration:\r\n      (() => {\r\n        const real = node as ts.EnumDeclaration;\r\n        real.members.forEach(item => {\r\n          console.log(item.name.getText(), checker.getConstantValue(item))\r\n        })\r\n      })()\r\n      break;\r\n    case ts.SyntaxKind.ExpressionStatement:\r\n      (() => {\r\n        const a = node as ts.ExpressionStatement;\r\n        const real = a.expression as ts.PropertyAccessExpression;\r\n        console.log(checker.getConstantValue(real)) // ------------------------> Undefined\r\n      })()\r\n      break\r\n  }\r\n});\r\n```\r\n\r\nThe '/src/sandbox/test.ts':\r\n```ts\r\nenum Test {\r\n    A = 100,\r\n    B,\r\n}\r\n\r\nTest.A;\r\n```\r\n\r\n**Expected behavior:**\r\n\r\nTell me `100`\r\n\r\n**Actual behavior:**\r\n\r\nReturns `undefined`\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/33203/comments",
+    "author": "mohanson",
+    "comments": [
+      {
+        "user": "sandersn",
+        "created_at": "2019-09-03T23:08:50Z",
+        "body": "getConstantValue doesn't follow references back to their declaration. You have to do that yourself by looking at the symbol's declaration. Something like\r\n\r\n`checker.getConstantValue(checker.getSymbolAtLocation(real))`"
+      },
+      {
+        "user": "mohanson",
+        "created_at": "2019-09-04T01:43:49Z",
+        "body": "Got it!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to resolve enum member references through PropertyAccessExpression nodes",
+      "Clarification that getConstantValue requires working with declaration nodes rather than reference sites",
+      "Demonstration of symbol resolution workflow for enum member accesses"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:50:55"
+    }
+  },
+  {
+    "number": 28593,
+    "title": "Classes cannot satisfy Constructor<Itself> bound",
+    "created_at": "2018-11-18T21:28:08Z",
+    "closed_at": "2018-11-19T18:41:55Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/28593",
+    "body": "<!-- Please try to reproduce the issue with `typescript@next`. It may have already been fixed. -->\r\n**TypeScript Version:**  3.2.0-dev.201xxxxx\r\n\r\n<!-- Search terms you tried before logging this (so others can find this issue more easily) -->\r\n**Search Terms:** generics mixin classes interfaces constructor\r\n\r\n**Code**\r\n\r\n```ts\r\ntype Constructor<T> = new(...args: any[]) => T;\r\n\r\ninterface XInterface {}\r\nfunction make<T extends Constructor<XInterface>>(Base: T) {\r\n    return class extends Base implements XInterface {}\r\n}\r\n\r\n// This is ok.\r\nclass X extends make(Function) { }\r\n\r\n// But this fails.\r\nclass X2 extends make(Function) implements Constructor<XInterface> { }\r\n```\r\n\r\n**Expected behavior:** \r\nCode should compile\r\n\r\n**Actual behavior:**\r\nCompiler error: X2 provides no match for signature `new(...args: any[]) => XInterface`\r\n\r\n\r\n--- \r\n\r\n**Edit 1:**\r\nLooks like even something more basic like \r\n\r\n```ts\r\nclass Y implements XInterface, Constructor<XInterface> {}\r\n```\r\n\r\nfails to compile. This makes it difficult to chain together a set of mixin extending through another mixin function. \r\n\r\n**Edit 2**\r\n\r\nLooks like even the simplest case of\r\n\r\n```ts\r\nclass Y implements Constructor<Y>\r\n```\r\n\r\nfails.",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/28593/comments",
+    "author": "prasannavl",
+    "comments": [
+      {
+        "user": "weswigham",
+        "created_at": "2018-11-19T18:29:30Z",
+        "body": "@prasannavl the `implements` clause constrains the instance shape of a class - the constructor signature of a class is associate with its static side (it returns the instance), therefore isn't constrainable via `implements`.\r\n\r\n```ts\r\nclass X2 extends make(Function) implements Constructor<XInterface> { }\r\n```\r\nis saying the class X2 extends a `Constructor<XInterface>` and its instance is a `Constructor<XInterface>` - meaning that when you say `new X2()`, the result is something you can use `new` on and get an `XInterface`, which is, ofc, not the case here."
+      },
+      {
+        "user": "prasannavl",
+        "created_at": "2018-11-19T18:41:55Z",
+        "body": "Thank you @weswigham  -- That makes a lot of sense. I feel rather silly now after reading the reply. Thanks again for taking the time to explain this! :) "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why classes cannot implement constructor interfaces via `implements` clause",
+      "Clarification of the difference between instance interfaces and constructor interfaces",
+      "Explanation of TypeScript's static vs instance type checking mechanisms"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:52:15"
+    }
+  },
+  {
+    "number": 18973,
+    "title": "compiler hide errors in tsx files, if there is \"import\"",
+    "created_at": "2017-10-05T20:02:24Z",
+    "closed_at": "2017-10-06T08:32:57Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/18973",
+    "body": "**TypeScript Version:**  2.5.3\r\n\r\n**Code**\r\n\r\n1.tsx\r\n```ts\r\nimport Test from \"./2\"\r\n\r\ndeclare namespace JSX {\r\n  interface IntrinsicElements {\r\n    foo: { requiredProp: string; optionalProp?: number }\r\n  }\r\n}\r\nclass React {  static Render(a?: any, b?: any, c?: any) {} }\r\n\r\nfunction xxxxx() {\r\n  <foo />;\r\n}\r\n```\r\n2.ts\r\n```ts\r\nexport default class Test {}\r\n```\r\ncommand line\r\n``` tsc 1.tsx --jsx react```\r\n\r\n**Expected behavior:**\r\n```error TS2322: Type '{}' is not assignable to type '{ requiredProp: string; optionalProp?: number; }'.\r\n  Property 'requiredProp' is missing in type '{}'\r\n```\r\n\r\n**Actual behavior:**\r\ncompilation is success\r\n\r\n**Note:**  \r\nif I comment line 'import Test from \"./2\"', I get error as expected.",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/18973/comments",
+    "author": "jack128",
+    "comments": [
+      {
+        "user": "mhegazy",
+        "created_at": "2017-10-05T20:18:49Z",
+        "body": "once a file has a top-level `import` or `export` it becomes a module. modules have their own scope. declarations within this module do not merge with declarations in the global scope.\r\n\r\nUse `declare global` instead:\r\n\r\n```ts\r\ndeclare global {\r\n  namespace JSX {\r\n    interface IntrinsicElements {\r\n      foo: { requiredProp: string; optionalProp?: number }\r\n    }\r\n  }\r\n}\r\n```"
+      },
+      {
+        "user": "jack128",
+        "created_at": "2017-10-06T08:32:57Z",
+        "body": "Oh, I see. Thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explains why module scope affects JSX type declarations",
+      "Demonstrates how to make declarations available globally in modules",
+      "Clarifies relationship between imports and declaration scoping"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:55:52"
+    }
+  },
+  {
+    "number": 15994,
+    "title": "Control flow type narrowing doesn't work",
+    "created_at": "2017-05-22T15:24:34Z",
+    "closed_at": "2017-05-22T16:00:06Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/15994",
+    "body": "**TypeScript Version:**  2.3.2\r\n\r\n**Code**\r\n\r\n```ts\r\ntype JoinModels<A, K extends string, B> = A & {\r\n    [k in K]: B;\r\n};\r\n\r\ninterface User {\r\n    username: string;\r\n}\r\n\r\ninterface Post {\r\n    title: string;\r\n}\r\n\r\ntype UserWithPosts = JoinModels<User, \"posts\", Post[]> | null;\r\n\r\nlet userWithPosts: UserWithPosts = null;\r\nif (userWithPosts == null) {\r\n    console.log(userWithPosts.posts[0].title);\r\n}\r\n```\r\n\r\n**Expected behavior:**\r\n`userWithPosts` should be narrowed to null;\r\n\r\n**Actual behavior:**\r\nNo error occurs",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/15994/comments",
+    "author": "CurlerRoo",
+    "comments": [
+      {
+        "user": "blakeembrey",
+        "created_at": "2017-05-22T15:32:21Z",
+        "body": "@pc-lover If you enable `strictNullChecks`, this should work as expected. Without it, there is no `null` or `undefined` types used. Do you have an expected behaviour without `strictNullChecks` enabled?"
+      },
+      {
+        "user": "CurlerRoo",
+        "created_at": "2017-05-22T16:00:03Z",
+        "body": "@blakeembrey I'm sorry, my mistake"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why strictNullChecks is required for null type narrowing",
+      "Clarification of how TypeScript compiler flags affect type narrowing logic",
+      "Identification of required compiler options for null type safety"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:58:35"
+    }
+  },
+  {
+    "number": 15801,
+    "title": "--allowJs Unexpected behavior",
+    "created_at": "2017-05-12T16:54:18Z",
+    "closed_at": "2017-05-30T18:59:14Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/15801",
+    "body": "Hello mates, \r\nI have a problem, when enable option \"allowJs\" , The ts compiler goes crazy \r\ntrying to compile again and again the same files \ud83d\udc4e \r\n\r\nThey could tell me why, Thanks for your time greetings!\r\n\r\nTypescript 2.3.2 \r\nvscode 1.12.1",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/15801/comments",
+    "author": "11ume",
+    "comments": [
+      {
+        "user": "aaronbeall",
+        "created_at": "2017-05-12T18:04:24Z",
+        "body": "Are you outputting the JS in the same folder you are compiling?"
+      },
+      {
+        "user": "mhegazy",
+        "created_at": "2017-05-12T18:35:55Z",
+        "body": "make sure you have your output folder in your `exclude` property."
+      },
+      {
+        "user": "11ume",
+        "created_at": "2017-05-12T19:22:06Z",
+        "body": "I have included the output folder in my exclude property and now works perfectly thank you for your time\r\nregards!!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent TypeScript compiler from processing output files",
+      "Ensure proper configuration to avoid infinite compilation loops",
+      "Provide guidance on managing compilation scope with allowJs"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:59:12"
+    }
+  },
+  {
+    "number": 11887,
+    "title": "Typescript error TS5055",
+    "created_at": "2016-10-27T12:49:27Z",
+    "closed_at": "2016-10-27T18:34:15Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/11887",
+    "body": "**TypeScript Version:**  nightly (2.1.0-dev.20161027)\n\n**Simulation**\n\nCreate a project with the following configuration:\n\n``` json\n{\n  \"compilerOptions\": {\n    \"module\": \"commonjs\",\n    \"target\": \"es5\",\n    \"experimentalDecorators\": true,\n    \"emitDecoratorMetadata\": true,\n    \"noImplicitAny\": true,\n    \"noUnusedParameters\": true,\n    \"noUnusedLocals\": true,\n    \"noEmitOnError\": true,\n    \"skipLibCheck\": true,\n    \"declaration\": true,\n    \"sourceMap\": true,\n    \"outDir\": \"out/\",\n    \"rootDir\": \"src\",\n    \"baseUrl\": \"src\",\n    \"moduleResolution\": \"node\",\n    \"lib\": [\n      \"es5\",\n      \"es2015\",\n      \"dom\"\n    ]\n  },\n  \"exclude\": [\n    \"node_modules\"\n  ]\n}\n```\n\nThe directory structure should be:\n- project\n  - src\n    - index.ts\n    - hello.ts\n  - out\n\nThe content of the `hello.ts` could be:\n\n``` typescript\nexport function hello(name: string) {\n  return `Hello, ${name}`;\n}\n```\n\nThe `index.ts` should re-export the hello module contents:\n\n``` typescript\nexport * from \"./hello\";\n```\n\nAfter that, compile twice using the vscode or the tsc:\n- `tsc -p .`\n- `tsc -p .`\n\n**Expected behavior:**\n\nCompile and produce again the js and the definitions.\n\n**Actual behavior:** \n\nIn the first compilation, it will compile normally. But at the second one, it will file with a message like `error TS5055: Cannot write file '.../hello.d.ts' because it would overwrite input file.\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/11887/comments",
+    "author": "danfma",
+    "comments": [
+      {
+        "user": "danfma",
+        "created_at": "2016-10-27T12:55:40Z",
+        "body": "Just to point out, it works with the current production release version.\n"
+      },
+      {
+        "user": "mhegazy",
+        "created_at": "2016-10-27T18:34:14Z",
+        "body": "add your  `\"outDir\"` to your exclude list. i.e.:   `\"exclude\": [\"node_modules\", \"out\"]`\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent generated declaration files from being treated as input files during subsequent compilations",
+      "Maintain strict compiler options while resolving the conflict",
+      "Ensure compatibility with TypeScript's file input/output handling logic",
+      "Avoid manual file management outside compiler configuration"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:03:59"
+    }
+  },
+  {
+    "number": 4710,
+    "title": "Ability to exclude some compiled .ts files from output",
+    "created_at": "2015-09-09T14:33:26Z",
+    "closed_at": "2015-09-10T16:10:07Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/4710",
+    "body": "It would be good (and probably necessary for big projects) to have implementation that supports the following (I will provide a concreate example) use case:\n1. I have the terminal.ts file that depends on the core.ts, env.ts files:\n\n```\n///<reference path=\"env\">\n///<reference path=\"core\">\n\n// this is terminal.ts\n```\n1. I already included the compiled version of it in the main index.html file:\n\n``` html\n<html>\n...\n<script src=\"env-core-terminal_merged.js\"></script>\n</html>\n```\n\nThe env-core-terminal_merged.js contains compiled content of the following files: env.ts, core.ts, terminal.ts. I created the env-core-terminal_merged.js file with the following command:\n\n```\ntsc --out public/js/env-core-terminal_merged.js terminal.ts\n```\n\nIn this case the tsc will find all files (env.ts and core.ts) using ///reference directive and merge them into one.\n3. Now for some area of the site I need other files, say editor.ts that depends on env.ts, core.ts and other editor specic files: color.ts, mode.ts:\n\n```\n///<reference path=\"env\">\n///<reference path=\"core\">\n///<reference path=\"color\">\n///<reference path=\"mode\">\n\n// this is editor.ts\n```\n\nI want to include it like this:\n\n``` html\n<html>\n...\n<script src=\"env-core-terminal-merged.js\"></script>\n<script src=\"color-mode-editor_merged.js\"></script>\n</html>\n```\n\nand I created it with the following command:\n\n```\ntsc --out public/js/color-mode-editor_merge.js editor.ts\n```\n\nBut now there is a problem: as the editor.ts depends on the core.ts and env.ts the tsc will paste the compiled content of them into the color-mode-editor_merged.js again. But I need to have only one the compiled content of the core.ts, env.ts be included. I can't include only one file that will have compiled content for the all .ts files and replace the env-core-terminal-merged.js with it, because the site has block architecture and each block can define its own javascript files and have a common part for all blocks (in this case the common part is defined in the env-core-terminal-merged.js) For now to resolve of this problem I can only open the color-mode-editor_merged.js with editor and delete the compiled content of the core.ts and env.ts by hand (manually).\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/4710/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "weswigham",
+        "created_at": "2015-09-09T17:24:18Z",
+        "body": "I believe the conventional wisdom right now is to reference the generated `.d.ts` files for the files whose sources you don't wish to compile, rather than the original sources.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2015-09-10T16:09:58Z",
+        "body": "@weswigham, yes it works, thanks.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Mechanism to exclude already-compiled dependencies from merged output files",
+      "Support for modular code splitting across different page sections",
+      "Automated exclusion of dependencies without manual file editing",
+      "Maintain type checking for excluded files"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:11:39"
+    }
+  },
+  {
+    "number": 3021,
+    "title": "Getting \"Maximum call stack size exceeded\" when using \"getDocumentHighlights\" with reference paths and modules in 1.5.0-beta",
+    "created_at": "2015-05-04T17:29:01Z",
+    "closed_at": "2015-05-05T17:07:59Z",
+    "labels": [
+      "Question",
+      "Fixed"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/3021",
+    "body": "If I have code that looks something like this: \n\n``` typescript\n/// <reference path=\"nounreachable.test.ts\" />\n\nmodule S {\n  var template = '';\n}\n```\n\nand I try to do getDocumentHighlights on \"template\" in just that one file, I get a \"Maximum call stack size exceeded\" error. Am I doing something wrong? Or can you guys fix this, please? Thanks!\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/3021/comments",
+    "author": "gscshoyru",
+    "comments": [
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-04T17:52:09Z",
+        "body": "Hey @gscshoyru, is the definition file required to reproduce this error?\n"
+      },
+      {
+        "user": "gscshoyru",
+        "created_at": "2015-05-04T17:54:14Z",
+        "body": "The definition file isn't necessary, it's just the existence of a reference path that causes the bug. It's the combination of the module and the reference path that does it for some reason, if you don't have have one or the other the bug doesn't happen. \n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-04T18:52:48Z",
+        "body": "Got it, I'll try to look into it as soon as I get in.\n\n\n---\n\nNot able to repro - can you supply both a call stack and the original call that's triggering it? What set of parameters are you passing in when calling?\n"
+      },
+      {
+        "user": "gscshoyru",
+        "created_at": "2015-05-04T21:38:40Z",
+        "body": "Ok, sorry, I apparently I copied the wrong thing since it was failing that way before. Now it's failing if there's a ../ in the reference path, like `/// <reference path=\"../nounreachable.test.ts\" />`. It may also have something to with how we're doing it, though, since we are creating our own language service host and whatnot -- I can add the code for that if it's necessary, and you still can't repro. \n\n\n---\n\nActually, here:\n\n``` typescript\nmodule Lint {\n    export function createLanguageServiceHost(fileName: string, source: string) {\n        var host: ts.LanguageServiceHost = {\n            getScriptFileNames: () => [fileName],\n            getScriptVersion: () => \"1\",\n            getScriptSnapshot: () => {\n                return {\n                    getText: (start, end) => source.substring(start, end),\n                    getLength: () => source.length,\n                    getLineStartPositions: () => ts.computeLineStarts(source),\n                    getChangeRange: (oldSnapshot) => undefined\n                };\n            },\n            getCurrentDirectory: () => \"\",\n            getScriptIsOpen: () => true,\n            getCompilationSettings: () => Lint.createCompilerOptions(),\n            getDefaultLibFileName: () => \"lib.d.ts\",\n            log: (message) => { /* */ }\n        };\n\n        return host;\n    }\n}\n\nvar documentRegistry = ts.createDocumentRegistry();\nvar languageServiceHost = Lint.createLanguageServiceHost(\"file.ts\", sourceFile.getFullText());\nvar languageService = ts.createLanguageService(languageServiceHost, documentRegistry);\nlanguageService.getDocumentHighlights(\"file.ts\", position, [\"file.ts\"]);\n```\n\nThis is what we're doing (paraphrased a little) that's causing the issue. \n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-04T22:05:59Z",
+        "body": "Still not able to repro.\n\n> `ts.computeLineStarts(source)`\n\nDoesn't seem to be publicly exposed anymore, how are you doing this?\n\n> `Lint.createCompilerOptions()`\n\nNot sure what we get back from this, could be useful for the repro\n\n---\n\nHere's what I'm currently working with:\n\n``` TypeScript\n/// <reference path=\"built/local/typescript.d.ts\" />\n\nimport * as ts from \"typescript\"\n\nmodule Lint {\n    export function createLanguageServiceHost(fileName: string, source: string) {\n        var host: ts.LanguageServiceHost = {\n            getScriptFileNames: () => [fileName],\n            getScriptVersion: () => \"1\",\n            getScriptSnapshot: () => {\n                return {\n                    getText: (start, end) => source.substring(start, end),\n                    getLength: () => source.length,\n                    getLineStartPositions: () => (<any>ts).computeLineStarts(source),\n                    getChangeRange: (oldSnapshot) => undefined\n                };\n            },\n            getCurrentDirectory: () => \"\",\n            getScriptIsOpen: () => true,\n            getCompilationSettings: () => ({}),\n            getDefaultLibFileName: () => \"lib.d.ts\",\n            log: (message) => { /* */ }\n        };\n\n        return host;\n    }\n}\n\nvar sourceText = \"/// <reference path=\\\"../TypeScript3/foo.ts\\\" />\\n\\nmodule m {\\n    var s;\\n}\\n\";\n\nvar documentRegistry = ts.createDocumentRegistry();\nvar languageServiceHost = Lint.createLanguageServiceHost(\"boo.ts\", sourceText);\nvar languageService = ts.createLanguageService(languageServiceHost, documentRegistry);\n\nfor (var i = 0; i < sourceText.length; i++) {\n    console.log(JSON.stringify(languageService.getDocumentHighlights(\"boo.ts\", i, [\"boo.ts\"])));\n}\n```\n\nI'm asking for highlights at every position in the document and I'm still not running into any problems.\n"
+      },
+      {
+        "user": "gscshoyru",
+        "created_at": "2015-05-04T22:24:34Z",
+        "body": "Sorry, create compiler options is just \n\n``` typescript\nexport function createCompilerOptions(): ts.CompilerOptions {\n        return {\n            target: ts.ScriptTarget.ES5\n        };\n    }\n```\n\nso shouldn't be anything special.\n\nYou're right that it doesn't blow up that way, but it does blow up if you do `/// <reference path=\\\"../foo.ts` instead. Not entirely sure why. \n\nIt also seems to blow up without reference paths if you have imports with the same problem, such as `import xyz = require(\"../xyz\");` instead of the reference path.\n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-05T02:11:50Z",
+        "body": "@gscshoyru the problem is that your `getScriptSnapshot` is not actually using its given parameters, nor is it trying to appropriately resolve the filename it is given.\n\n---\n\nEdit: Specifically, you're just returning the same source file as the root, so when requesting the file `../foo.ts`, you'll end up with the original file contents that have a reference comment asking for `../foo.ts` which is, relative to the original root, `../../foo.ts`.\n"
+      },
+      {
+        "user": "ashwinr",
+        "created_at": "2015-05-05T04:16:05Z",
+        "body": "@DanielRosenwasser Thanks for the reply. Is there any way to ignore imports/references when calling this LS API (or other LS APIs in general)? TSLint doesn't actually need to resolve imports since it works on a file-by-file basis. Thanks again!\n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-05T05:57:10Z",
+        "body": "@ashwinr you should be able to just return an empty string if it's not one of the files you're interested in. Let us know how that works out.\n"
+      },
+      {
+        "user": "vladima",
+        "created_at": "2015-05-05T06:19:53Z",
+        "body": "@ashwinr you can set `noResolve` to `true` in compilation options to tell compiler that it should not do any file resolutions except files that were provided explicitly\n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-05-05T06:31:50Z",
+        "body": "^^^ Do what Vlad said.\n"
+      },
+      {
+        "user": "gscshoyru",
+        "created_at": "2015-05-05T13:15:22Z",
+        "body": "Looks like setting noResolve to true does the trick. Thanks ever so much, and sorry for the confusion! \n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent infinite resolution loops caused by relative path references in language service operations",
+      "Configure language service to avoid resolving external dependencies when unnecessary",
+      "Handle custom language service host configurations safely"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:14:23"
+    }
+  },
+  {
+    "number": 2373,
+    "title": "Passthrough require(\"jsfile\") for commonjs",
+    "created_at": "2015-03-16T16:53:03Z",
+    "closed_at": "2015-03-16T22:01:36Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/2373",
+    "body": "Hello Typescipters,\n\nI'm using the `Q` library with its typings installed via `tsd`.\nIn a module I'm using\n\n``` typescript\n/// <reference path=\"../typings/q/Q.d.ts\"/>\n// ...\n```\n\ncompiled with\n\n``` bash\ntsc -m commonjs --out test.js test.ts\ntsc --version\nmessage TS6029: Version 1.4.1.0\n```\n\nand would like `test.js` to contain a line like\n\n``` javascript\nvar Q = require(\"path/to/q\"); // to be executed by nodejs\n```\n\nwhere `path/to/q` points to the javascript file and has nothing to do with `../typings/q/Q.d.ts`.\nUsing `import Q = require(\"path/to/q\");` won't work as it probably expects a typescript module.\n\n``` bash\nbuilder.ts(5,32): error TS2307: Cannot find external module './../bower_components/q/q'.\n```\n\nI haven't found how to achieve this without rolling out some hackish _ad-hoc_ source markup/parse/replace. Have I overlooked something?\n\nIn a way I'm trying to \"link\" to the library code (in the C meaning) with node's `require` after having included the declarations (references to the `d.ts`).\n\nIf this is not currently possible, may I suggest a pass-through version of `require()` which kicks in when `-m commonjs` is used? Perhaps `js_require(\"blabla\")` which would be emitted as node's `require(\"blabla\")`. This would make it a lot easier to leverage other tools which analyze `require` statements.\n\nGreetings\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/2373/comments",
+    "author": "dbarbeau",
+    "comments": [
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-03-16T17:29:13Z",
+        "body": "> Using `import Q = require(\"path/to/q\");` won't work as it probably expects a typescript module.\n\nThe `import` keyword with a `require(...)` on the RHS works the same way as if you'd used a `var` except that it also brings in type information at compile time. What you can do in `test.js` is include both the `/// <reference path=\"../typings/q/Q.d.ts\"/>` and then `import Q = require(\"path/to/q\");`. Give it a try and let us know. If not, maybe there's some information I'm missing.\n"
+      },
+      {
+        "user": "dbarbeau",
+        "created_at": "2015-03-16T18:44:34Z",
+        "body": "Hi! And thanks!\nI think you meant using `var` instead of `import`, because\n\n``` typescript\n/// <reference path='typings/q/Q.d.ts'/>\nimport q = require(\"bower_components/q/q\");\nvar deferred = Q.Promise(function(a,b,c){});\n```\n\nthrows `error TS2307: Cannot find external module 'bower_components/q/q'` and no code is generated (the output file is blank) while\n\n``` typescript\n/// <reference path='typings/q/Q.d.ts'/>\nvar q = require(\"bower_components/q/q\");\nvar deferred = Q.Promise(function(a,b,c){});\n```\n\nthrows `error TS2304: Cannot find name 'require'` and... the compiler does output the code I want :)\nSo it does work, though user feedback is a bit misleading!\n\n**EDIT:** To remove the TS2304 error, I had to add a reference tag to `node.d.ts`. Changing `import` to `var` has some consequences!\n\nThanks again ;)\n\n\n---\n\nI should have done a few more tests, because there is a catch:\n\n``` typescript\n/// <reference path=\"typings/node/node.d.ts\"/>\n/// <reference path=\"typings/q/Q.d.ts\"/>\n\nvar Q            = require(\"./../bower_components/q/q\");   /* LINE X */\nimport path   = require(\"path\"); /* LINE Y */\n\nvar qprom = Q.Promise(function(a,b,c){\n    var dummy = path.join(__dirname, \"yo\");  /* LINE Z */\n});\n```\n\nThe reference tag will declare Q with the type information.\n**LINE X** will declare another Q.\n\nIf you compile it like this, tsc 1.4.1.0 will emit no error, but also no code :)\nRemove **LINE Y** and **LINE Z** and you'll get.\n\n``` bash\nrequiretest2.ts(4,5): error TS2300: Duplicate identifier 'Q'.\ntypings/q/Q.d.ts(10,18): error TS2300: Duplicate identifier 'Q'.\ntypings/q/Q.d.ts(14,18): error TS2300: Duplicate identifier 'Q'.\ntypings/q/Q.d.ts(16,16): error TS2300: Duplicate identifier 'Q'.\n```\n\nSeems reasonable enough, although the compiler does emit the code I want. \n\nNow, suppose that TS2300 didn't emit code (or that I simply want to avoid having errors in my code). I'd have to write my typescript code against the Q declared in the 'Q.d.ts' file, but this would conflict with the Q created on the `require(...)` line. So, I'd have to write `var smallq = require(...);` instead of **LINE X**, but then at runtime nodejs would complain that `Q` doesn't exist. Or I write against `smallq` and lose the benefit of types.\n\nI'm in a deadlock :)\n"
+      },
+      {
+        "user": "danquirk",
+        "created_at": "2015-03-16T20:13:13Z",
+        "body": "You absolutely want to use `import` and not `var`. Without `import` there is no type information associated with the `Q` you declared. You also just want to require the name as `'q'` and not the relative path. The last 3 lines of Q.d.ts are written to enable this pattern, similar to why you can require `\"path\"` like that from node.d.ts. This is how it should look:\n\n``` ts\n/// <reference path=\"Q.d.ts\"/>\nimport Q = require('q');\n\nvar aprom = Q.Promise((a,b,c) => {\n    console.log('hi');\n});\n```\n\nemits:\n\n```\n> tsc a.ts -m commonjs\n> type a.js\n/// <reference path=\"Q.d.ts\"/>\nvar Q = require('q');\nvar aprom = Q.Promise(function (a, b, c) {\n    console.log('hi');\n});\n```\n"
+      },
+      {
+        "user": "dbarbeau",
+        "created_at": "2015-03-16T22:01:36Z",
+        "body": "Thank you @DanielRosenwasser and @danquirk  for the clear instructions, I wasn't going the right way. Now, I just had one issue in that compiling that exact file (`a.ts`) with:\n\n``` bash\ntsc a.ts -m commonjs --out a.js\n```\n\n(notice the --out flag) produced an empty `a.js`, whereas just omitting the `--out a.js` flag worked. I'm a bit confused, I'll need to check my installation, there's something fishy. Regarding the initial question I think it has been answered so this issue is closed.\n\n### LAST MINUTE OMG\n\nThe `--out` doesn't do what I expected it to do!\n\n``` bash\n> rm *.js\n> tsc a.ts -m commonjs --out ahaha.js\n> ls -l\ntotal 8\n-rw-rw-r--. 1 d d 136 16 mars  22:51 a.js\n-rw-rw-r--. 1 d d 131 16 mars  22:40 a.ts\n-rw-rw-r--. 1 d d   0 16 mars  22:51 ahaha.js\n```\n\nI was NOT expecting `a.js`, I thought the output would just end up in `ahaha.js`. So by specifiying that flag, I was overwriting tsc's output with a blank file. But why is it blank?\nI'll need to check my basic assumptions of life (like does `gcc -o` behave like this?)... wow!\n\nThanks again!\nDaniel\n"
+      },
+      {
+        "user": "danquirk",
+        "created_at": "2015-03-16T23:02:46Z",
+        "body": "You generally don't want to use --out with external modules like you have. The target file for --out only gets whatever is in the global namespace. This is good when you're concatenating multiple internal modules together but it doesn't support concatenating multiple files together into a single external module. So most of the time you'll get 1 js file per ts file and an empty file that you asked --out for. We have an issue logged somewhere around here to consider just making it an error if --out creates an empty file since other people also get confused by this behavior .\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow using external JS libraries with their typings without causing identifier conflicts",
+      "Must preserve type information while generating correct CommonJS require statements",
+      "Should explain proper module resolution strategy for external dependencies",
+      "Must clarify when to use/avoid --out flag with external modules",
+      "Should prevent type declaration conflicts between .d.ts files and runtime imports",
+      "Must enable using TypeScript's type system with existing CommonJS module patterns"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:16:51"
+    }
+  },
+  {
+    "number": 2067,
+    "title": "--mapRoot doesn't seem to work",
+    "created_at": "2015-02-18T22:21:10Z",
+    "closed_at": "2015-02-28T11:13:45Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/2067",
+    "body": "`tsc --sourceMap --mapRoot maproot/ --out a.js t.ts`\n\nIt simply places the .js.map files in the same directory as the --out file.\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/2067/comments",
+    "author": "danihodovic",
+    "comments": [
+      {
+        "user": "mhegazy",
+        "created_at": "2015-02-26T07:00:24Z",
+        "body": "maproot does not place the files in a different place, it just controls the reference to the map file in the .js file. the assumption here is that you will move the map files to a different location, possibly a local directory, where as the other .js files are on your server, or a different server, etc.. it just tells the debugger where to look for the map files instead of next to the .js files.\n"
+      },
+      {
+        "user": "danihodovic",
+        "created_at": "2015-02-27T11:28:52Z",
+        "body": "So the maproot command is there for the debugger to locate the map files, not for moving them anywhere? \n"
+      },
+      {
+        "user": "mhegazy",
+        "created_at": "2015-02-27T18:33:18Z",
+        "body": "correct. if you look at the javascript output, last line of your file, you will find the reference to the map file. this is what maproot controls. e.g.:\n\n``` TypeScript\n//# sourceMappingURL=rooot\\t1.js.map\n```\n"
+      },
+      {
+        "user": "danihodovic",
+        "created_at": "2015-02-28T11:13:44Z",
+        "body": "I see. Thanks! Closing.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarifies the purpose of --mapRoot in controlling source map references rather than file placement",
+      "Explains how source map URLs are generated relative to the debugger's expected path structure",
+      "Differentiates between file system paths and debugger-accessible URL paths"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:17:31"
+    }
+  },
+  {
+    "number": 8742,
+    "title": "tsc truncates type errors longer than 100 chars with triple-dots",
+    "created_at": "2016-05-22T20:18:05Z",
+    "closed_at": "2017-10-02T11:59:53Z",
+    "labels": [
+      "Suggestion",
+      "Help Wanted"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/8742",
+    "body": "I'd like to see the entire error message.\n\nIn `tsc.js`:\n\n```\n        function typeToString(type, enclosingDeclaration, flags) {\n            var writer = ts.getSingleLineStringWriter();\n            getSymbolDisplayBuilder().buildTypeDisplay(type, writer, enclosingDeclaration, flags);\n            var result = writer.string();\n            ts.releaseStringWriter(writer);\n            var maxLength = compilerOptions.noErrorTruncation || flags & 4 ? undefined : 100;\n            if (maxLength && result.length >= maxLength) {\n                result = result.substr(0, maxLength - \"...\".length) + \"...\";\n            }\n            return result;\n        }\n```\n\nBut adding in `tsconfig.json`:\n\n```\n{\n  \"compilerOptions\": {\n    \"noErrorTruncation\": true\n  }\n}\n```\n\nhas no effect.\n\nIt seems that there's no other mention of that `noErrorTruncation` in the file -- I assume it's simply undefined (and I could also find no documentation about it).\n\nAdding to `ts.optionDeclarations` this entry:\n\n```\n        {\n            name: \"noErrorTruncation\",\n            type: \"boolean\"\n        },\n\n```\n\nmakes it work.\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/8742/comments",
+    "author": "nh2",
+    "comments": [
+      {
+        "user": "mhegazy",
+        "created_at": "2016-05-23T16:59:58Z",
+        "body": "noErrorTrunction was meant for the API users calling directly into the API with CompilerOptions object, e.g. IDE's, and not from the commandline. \nThe asumption is on the commandline no one wants to see the full error, as serlized types can be huge. \nSo can you elaborate on why this is needed? and would you use this all the time? do you use `--pretty` as well?\n"
+      },
+      {
+        "user": "nh2",
+        "created_at": "2016-05-23T17:32:51Z",
+        "body": "@mhegazy I definitely want to see the full error. The types I'm using (provided by others, so I cannot change them easily) are very long, and typically contain the `... & type & type` unions I care about at the end. It's OK if the errors are shortened by default, but when trying to solve type errors like in my case, it can be really hard if you can only see the first 100 chars of a 200 char type.\n"
+      },
+      {
+        "user": "mhegazy",
+        "created_at": "2016-05-23T17:36:01Z",
+        "body": "A PR to add the compiler option would be appreciated.\n\n\n---\n\nso do you use an IDE? would getting the errors there be a better option?\n"
+      },
+      {
+        "user": "nicksnyder",
+        "created_at": "2017-04-27T17:13:53Z",
+        "body": "@nh2 can you clarify how you worked around this? I have a similar error that I want to see the full error for.\n\n---\n\nOh, it looks like adding this to `tsconfig.json` works now\r\n\r\n```\r\n{\r\n  \"compilerOptions\": {\r\n    \"noErrorTruncation\": true\r\n  }\r\n}\r\n```\r\n\r\nI think this issue can be closed."
+      },
+      {
+        "user": "another-guy",
+        "created_at": "2017-10-02T05:15:44Z",
+        "body": "@nicksnyder I confirm that the compiler option you mentioned is working for me too. I can't speak for @nh2 but IMO this issue is fixed in the compiler."
+      },
+      {
+        "user": "nh2",
+        "created_at": "2017-10-02T11:59:53Z",
+        "body": "OK great, let's close this then -- we can reopen it if we find that something doesn't work yet."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Full type error messages must be displayed without truncation",
+      "Official support for disabling error truncation through standard configuration",
+      "Solution must work in command-line compiler context",
+      "Persistent configuration option for error display"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:19:24"
+    }
+  }
+]

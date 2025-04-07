@@ -1,0 +1,58 @@
+{
+  "number": 17054,
+  "title": "why the first 1e8 rows inserted and the 2nd 1e8 rows failed",
+  "created_at": "2020-11-16T05:12:07Z",
+  "closed_at": "2020-11-17T22:05:19Z",
+  "labels": [
+    "question",
+    "question-answered"
+  ],
+  "url": "https://github.com/ClickHouse/ClickHouse/issues/17054",
+  "body": "```\r\ncreate table sfz15y engine=MergeTree()order by id as select a.number*10000+b.number id from numbers(50000)a,numbers(10000)b;\r\ninsert into  sfz15y select (a.number+50000)*10000+b.number id from numbers(50000)a,numbers(10000)b;\r\ninsert into  sfz15y select (a.number)*10000+b.number id from numbers(50000)a,numbers(10000)b where b.number%5=0;\r\ncreate table sfzcm engine=MergeTree()order by id as select id,count(*)c from sfz15y group by id having count(*)>1;\r\n```\r\n**failed, but the table was created** , then i try to reduce the rows.\r\n```\r\ninsert into sfzcm select id,count(*)c from sfz15y where id<100000000  group by id having count(*)>1;\r\nQuery id: da659738-3916-466c-a392-718224d9e178\r\n\r\nOk.\r\n\r\n0 rows in set. Elapsed: 10.615 sec. Processed 120.01 million rows, 960.10 MB (11.31 million rows/s., 90.45 MB/s.)\r\n\r\nDESKTOP-RS3EG9A.localdomain :) select count(*) from sfzcm;\r\n\r\nQuery id: bd043a67-f81a-475e-90da-ebc6a44aabef\r\n\r\n\u250c\u2500\u2500count()\u2500\u2510\r\n\u2502 20000000 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 rows in set. Elapsed: 0.002 sec.\r\n\r\ninsert into sfzcm select id,count(*)c from sfz15y where id>=100000000 and id<200000000  group by id having count(*)>1;\r\n```\r\nReceived exception from server (version 20.11.3):\r\nCode: 241. DB::Exception: Received from localhost:9000. DB::Exception: Memory limit (total) exceeded: would use 11.08 GiB (attempt to allocate chunk of 6291456 bytes), maximum: 11.08 GiB: While executing AggregatingTransform.\r\n\r\n0 rows in set. Elapsed: 2.440 sec. Processed 92.93 million rows, 743.44 MB (38.08 million rows/s., 304.67 MB/s.)",
+  "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/17054/comments",
+  "author": "l1t1",
+  "comments": [
+    {
+      "user": "den-crane",
+      "created_at": "2020-11-16T18:41:10Z",
+      "body": "```\r\nset max_memory_usage='10G', max_bytes_before_external_group_by='3G';\r\n\r\nCREATE TABLE sfz15y\r\nENGINE = MergeTree()\r\nORDER BY id AS\r\nSELECT (a.number * 10000) + b.number AS id\r\nFROM numbers(50000) AS a\r\n, numbers(10000) AS b\r\n\r\n0 rows in set. Elapsed: 10.107 sec.\r\n\r\n\r\n\r\nINSERT INTO sfz15y SELECT (a.number * 10000) + b.number AS id\r\nFROM numbers(50000) AS a\r\n, numbers(10000) AS b\r\nWHERE (b.number % 5) = 0\r\n\r\n0 rows in set. Elapsed: 4.232 sec.\r\n\r\n\r\nCREATE TABLE sfzcm\r\nENGINE = MergeTree()\r\nORDER BY id AS\r\nSELECT\r\n    id,\r\n    count(*) AS c\r\nFROM sfz15y\r\nGROUP BY id\r\nHAVING count(*) > 1\r\n\r\n0 rows in set. Elapsed: 53.631 sec.\r\n\r\n\r\ninsert into sfzcm select id,count(*)c from sfz15y where id<100000000  group by id having count(*)>1;\r\n\r\n0 rows in set. Elapsed: 11.482 sec.\r\n\r\n\r\nselect count(*) from sfzcm;\r\n\r\n\u250c\u2500\u2500\u2500count()\u2500\u2510\r\n\u2502 120000000 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n\r\ninsert into sfzcm select id,count(*)c from sfz15y where id>=100000000 and id<200000000  group by id having count(*)>1;\r\n\r\n0 rows in set. Elapsed: 11.149 sec.\r\n\r\n```\r\n"
+    },
+    {
+      "user": "den-crane",
+      "created_at": "2020-11-17T00:29:44Z",
+      "body": "```\r\nSET send_logs_level = 'debug'\r\n\r\n1 insert : MemoryTracker: Peak memory usage (for query): 4.93 GiB.\r\n2 insert : MemoryTracker: Peak memory usage (for query): 4.02 GiB.\r\n\r\nset max_memory_usage='40G', max_bytes_before_external_group_by=0\r\n\r\n1 insert : MemoryTracker: Peak memory usage (for query): 5.06 GiB.\r\n2 insert : MemoryTracker: Peak memory usage (for query): 5.06 GiB.\r\n```"
+    },
+    {
+      "user": "l1t1",
+      "created_at": "2020-11-17T00:57:49Z",
+      "body": "thanks, one more question\r\nhow to check the current value of  `max_memory_usage, max_bytes_before_external_group_by` etc"
+    },
+    {
+      "user": "den-crane",
+      "created_at": "2020-11-17T19:37:55Z",
+      "body": "```sql\r\nSELECT\r\n    name,\r\n    value\r\nFROM system.settings\r\nWHERE name IN ('max_memory_usage', 'max_bytes_before_external_group_by')\r\n\r\n\u250c\u2500name\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500value\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\r\n\u2502 max_bytes_before_external_group_by \u2502 76027960320  \u2502\r\n\u2502 max_memory_usage                   \u2502 152055920640 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n```"
+    }
+  ],
+  "git_commit_info": {
+    "sha": "045fd6f55db37059c97c0c276e8914b096e1f6bb",
+    "date": "2017-02-07T22:40:08Z",
+    "message": "fix build without readline",
+    "author": "proller"
+  },
+  "repository_info": {},
+  "llm_calls_before_build": 0,
+  "dockerfile_attempt_1": 1,
+  "dockerfile_attempt_1_failed": true,
+  "dockerfile_build_success": true,
+  "llm_calls_total": 10,
+  "dockerfile": "FROM ubuntu:20.04\n\n# Avoid interactive prompts during package installation\nENV DEBIAN_FRONTEND=noninteractive\n\n# Install dependencies for ClickHouse\nRUN apt-get update && apt-get install -y \\\n    apt-transport-https \\\n    ca-certificates \\\n    dirmngr \\\n    gnupg \\\n    wget \\\n    sudo \\\n    git \\\n    cmake \\\n    build-essential \\\n    gcc-9 \\\n    g++-9 \\\n    libicu-dev \\\n    libreadline-dev \\\n    libmysqlclient-dev \\\n    unixodbc-dev \\\n    libltdl-dev \\\n    libssl-dev \\\n    libgoogle-perftools-dev \\\n    libbz2-dev \\\n    libzstd-dev \\\n    libboost-dev \\\n    libboost-system-dev \\\n    libboost-filesystem-dev \\\n    libboost-thread-dev \\\n    libboost-program-options-dev \\\n    zlib1g-dev \\\n    liblz4-dev \\\n    libdouble-conversion-dev \\\n    libzookeeper-mt-dev \\\n    libsparsehash-dev \\\n    librdkafka-dev \\\n    libcapnp-dev \\\n    libpoco-dev \\\n    libunwind-dev \\\n    libxml2-dev \\\n    libpcre3-dev \\\n    ninja-build \\\n    python3 \\\n    python3-pip \\\n    && rm -rf /var/lib/apt/lists/*\n\n# Set gcc-9 as default compiler\nRUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \\\n    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 90 \\\n    && update-alternatives --set gcc /usr/bin/gcc-9 \\\n    && update-alternatives --set g++ /usr/bin/g++-9\n\n# Create build directory\nWORKDIR /build\n\n# Clone ClickHouse repository and checkout specific commit\nRUN git clone https://github.com/ClickHouse/ClickHouse.git \\\n    && cd ClickHouse \\\n    && git checkout 045fd6f55db37059c97c0c276e8914b096e1f6bb\n\n# Create build directory\nWORKDIR /build/ClickHouse/build\n\n# Configure cmake for the build\nRUN cmake .. -DCMAKE_BUILD_TYPE=Release\n\n# Build ClickHouse (with retry mechanism to handle potential build failures)\nRUN for i in 1 2 3; do \\\n        cmake --build . -- -j$(nproc) && break || \\\n        echo \"Build attempt $i failed, retrying with less parallelism...\" && \\\n        cmake --build . -- -j2 && break || \\\n        echo \"Build attempt $i failed, retrying with single thread...\" && \\\n        cmake --build . -- -j1 && break || \\\n        echo \"Build attempt $i failed, will retry...\" && \\\n        sleep 5; \\\n    done\n\n# Add the build directory to PATH\nENV PATH=\"/build/ClickHouse/build/programs:${PATH}\"\n\n# Create directories for ClickHouse data and configuration\nRUN mkdir -p /etc/clickhouse-server/config.d \\\n    && mkdir -p /etc/clickhouse-server/users.d \\\n    && mkdir -p /var/lib/clickhouse \\\n    && mkdir -p /var/lib/clickhouse/tmp\n\n# Create a basic configuration file for ClickHouse server\nRUN echo '<clickhouse>\\n\\\n    <logger>\\n\\\n        <level>trace</level>\\n\\\n        <console>true</console>\\n\\\n    </logger>\\n\\\n    <listen_host>0.0.0.0</listen_host>\\n\\\n    <path>/var/lib/clickhouse/</path>\\n\\\n    <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>\\n\\\n    <max_server_memory_usage>12000000000</max_server_memory_usage>\\n\\\n</clickhouse>' > /etc/clickhouse-server/config.xml\n\n# Create a users.xml file with increased memory limits\nRUN echo '<clickhouse>\\n\\\n    <profiles>\\n\\\n        <default>\\n\\\n            <max_memory_usage>12000000000</max_memory_usage>\\n\\\n            <max_bytes_before_external_group_by>6000000000</max_bytes_before_external_group_by>\\n\\\n            <max_bytes_before_external_sort>6000000000</max_bytes_before_external_sort>\\n\\\n        </default>\\n\\\n    </profiles>\\n\\\n    <users>\\n\\\n        <default>\\n\\\n            <password></password>\\n\\\n            <profile>default</profile>\\n\\\n            <networks>\\n\\\n                <ip>::/0</ip>\\n\\\n            </networks>\\n\\\n        </default>\\n\\\n    </users>\\n\\\n</clickhouse>' > /etc/clickhouse-server/users.xml\n\n# Create a test script to reproduce the issue\nRUN echo '#!/bin/bash\\n\\\necho \"Starting ClickHouse server...\"\\n\\\nclickhouse-server --config=/etc/clickhouse-server/config.xml &\\n\\\nsleep 5\\n\\\n\\n\\\necho \"Creating test tables and inserting data...\"\\n\\\nclickhouse-client --query \"create table sfz15y engine=MergeTree() order by id as select a.number*10000+b.number id from numbers(50000)a,numbers(10000)b;\"\\n\\\nclickhouse-client --query \"insert into sfz15y select (a.number+50000)*10000+b.number id from numbers(50000)a,numbers(10000)b;\"\\n\\\nclickhouse-client --query \"insert into sfz15y select (a.number)*10000+b.number id from numbers(50000)a,numbers(10000)b where b.number%5=0;\"\\n\\\nclickhouse-client --query \"create table sfzcm engine=MergeTree() order by id as select id,count(*) c from sfz15y group by id having count(*)>1;\"\\n\\\n\\n\\\necho \"Testing first 100M rows (should succeed):\"\\n\\\nclickhouse-client --query \"insert into sfzcm select id,count(*) c from sfz15y where id<100000000 group by id having count(*)>1;\"\\n\\\n\\n\\\necho \"Testing second 100M rows (would fail with memory limit):\"\\n\\\nclickhouse-client --query \"insert into sfzcm select id,count(*) c from sfz15y where id>=100000000 and id<200000000 group by id having count(*)>1;\"\\n\\\n\\n\\\necho \"Checking results:\"\\n\\\nclickhouse-client --query \"select count(*) from sfzcm;\"\\n\\\n\\n\\\necho \"Test completed.\"\\n\\\n' > /test-issue-17054.sh\n\n# Make the test script executable\nRUN chmod +x /test-issue-17054.sh\n\n# Set working directory\nWORKDIR /\n\n# Default command\nCMD [\"echo\", \"ClickHouse environment prepared for testing issue #17054. Run /test-issue-17054.sh to test the memory limit issue.\"]",
+  "successful_candidate_index": 1,
+  "successful_candidate_attempt": 1,
+  "successful_candidate_improvement_attempt": 0,
+  "satisfaction_conditions": [
+    "Memory settings must be sufficient to handle the large aggregation operation",
+    "Query must successfully process and aggregate data for the full range of IDs",
+    "System settings must be queryable to verify configuration",
+    "Memory usage must be monitorable during query execution"
+  ]
+}

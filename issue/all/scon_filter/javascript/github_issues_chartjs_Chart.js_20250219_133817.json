@@ -1,0 +1,87 @@
+[
+  {
+    "number": 3606,
+    "title": "Exception when clicking on a chart in version 2.4.0",
+    "created_at": "2016-11-16T08:50:15Z",
+    "closed_at": "2016-11-16T13:16:49Z",
+    "labels": [
+      "type: bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/chartjs/Chart.js/issues/3606",
+    "body": "Hi all !\r\n\r\nWhen I click on a chart the following exception is raised:\r\n> core.umd.js:3376 TypeError: Cannot read property 'intersect' of undefined\r\n>     at Object.dataset (Chart.js:6252)\r\n>     at Chart.Controller.getDatasetAtEvent (Chart.js:4418)\r\n>     at UIChart.onCanvasClick (chart.ts:57)\r\n>     at _View_UIChart0._handle_click_3_0 (UIChart.ngfactory.js:63)\r\n>     at eval (core.umd.js:9602)\r\n>     at eval (platform-browser.umd.js:1716)\r\n>     at eval (platform-browser.umd.js:1829)\r\n>     at ZoneDelegate.invoke (zone.js:232)\r\n>     at Object.onInvoke (core.umd.js:6158)\r\n>     at ZoneDelegate.invoke (zone.js:231)\r\n\r\nIndeed it appears that no check is made with the parameter _**options**_ of function _**dataset**_:\r\n```\r\ndataset: function(chart, e, options) {\r\n   var position = helpers.getRelativePosition(e, chart.chart);\r\n   var items = options.intersect ? getIntersectItems(chart, position) : getNearestItems(chart, position, false);\r\n  ...\r\n}\r\n```\r\n**_Options_** is undefined because it is not input as parameter when calling **_dataset_**:\r\n```\r\ngetDatasetAtEvent: function(e) {\r\n     return Chart.Interaction.modes.dataset(this, e);\r\n},\r\n```\r\nSo one fix should be to check if options is defined like this:\r\n```\r\nvar items = options && options.intersect ? ...\r\n```\r\nWhat are you thinking about ?\r\n",
+    "comments_url": "https://api.github.com/repos/chartjs/Chart.js/issues/3606/comments",
+    "author": "Seb92130",
+    "comments": [
+      {
+        "user": "etimberg",
+        "created_at": "2016-11-16T12:19:48Z",
+        "body": "I think it's fine to pass the options in `getDatasetAtEvent`. Feel free to PR this\n"
+      },
+      {
+        "user": "Seb92130",
+        "created_at": "2016-11-16T13:16:49Z",
+        "body": "Fix proposed by ypkkhatri is the right one, so I will close this issue.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures the 'options' parameter is properly validated before accessing its properties",
+      "Maintains compatibility with existing chart interaction patterns",
+      "Provides error handling for undefined parameters in chart event handling"
+    ]
+  },
+  {
+    "number": 3274,
+    "title": "How to set custom y-axis range?",
+    "created_at": "2016-09-07T18:22:43Z",
+    "closed_at": "2017-03-21T10:44:46Z",
+    "labels": [
+      "type: bug",
+      "help wanted",
+      "type: documentation"
+    ],
+    "url": "https://github.com/chartjs/Chart.js/issues/3274",
+    "body": "I like the fact that the chart looks at minimum and maximum values and scales the y-axis so that it just shows the minimum and maximum values.\n\nHowever, I have a situation where I'm drawing multiple charts.  They each have different data, and the min/max Y values will vary, but the domain of all them are related, and it would make more sense if I could determine the min/max of ALL the datasets, and then set the min/max of all of the charts to those values.  It will result in some charts showing points right at the bottom of the chart, but the consistency within the entire set of charts is more valuable.\n\nIt'll be easy enough to iterate through my datasets to determine the min/max values, but how do I set the charts to use those values?\n",
+    "comments_url": "https://api.github.com/repos/chartjs/Chart.js/issues/3274/comments",
+    "author": "davidmichaelkarr",
+    "comments": [
+      {
+        "user": "davidmichaelkarr",
+        "created_at": "2016-09-07T20:34:02Z",
+        "body": "I thought I'd figured this out, but it looks like this will be more complicated to make it \"complete\".  I noticed the example for setting \"ticks: { min: N, max:N }\", but this results in an odd looking Y axis.  I think I have to somehow compute a reasonable step size.  What is a reasonable algorithm to compute that?\n\n\n---\n\nI would think that since charts.js is computing a reasonable step size from the data, I should be able to just ask it to recompute a step size from the custom min/max value, instead of having to implement a similar algorithm to what the code is already doing.\n\n\n---\n\nNote that I'm using charts.js from angular-chart.  I noticed the \"chart.update()\" method, but as I'm using angular-chart, I'm not creating the Chart objects in my javascript, they're created declaratively (by me, at least).  In any case, despite the fact that it seems like calling \"chart.update()\" is the thing to do here, I would think that it would be unnecessary.\n"
+      },
+      {
+        "user": "etimberg",
+        "created_at": "2016-09-07T22:31:31Z",
+        "body": "@davidmichaelkarr using `ticks.min` and `ticks.max` is the way to do this. What looks odd about it?\n\nYou can use `ticks.stepSize` for a fixed step size\n"
+      },
+      {
+        "user": "davidmichaelkarr",
+        "created_at": "2016-09-07T22:45:30Z",
+        "body": "The problem is, it's just not that simple.  A simple-minded approach results in an unpleasing rendering.  I can't just determine the max Y value of my data and set the ticks.max to that.  The proper value to set \"ticks.max\" to is some value larger than that value, which apparently the charts engine usually computes properly so it renders cleanly.\n\nFor instance, let's say a dataset has values ranging from 0 to 480.  When I render that normally, it shows Y axis values of 0, 200, 400, and 600, which looks good.  Essentially, what I need to set \"ticks.max\" to is \"600\", not \"480\".  The effect would be the same as if I had added an additional fake data value of the \"max\" value, with an X axis value one plus the last value.  That would make the chart engine render it in a reasonable fashion (except for one of the data points being fake).\n\n\n---\n\nAnother way to look at is if I could set a \"pretend\" Y axis value, so the chart engine would render the chart with the provided data, but also using that pretend data point in the calculations for determining the Y axis labels.\n"
+      },
+      {
+        "user": "etimberg",
+        "created_at": "2016-09-07T22:52:16Z",
+        "body": "Hmm, have you looked at `ticks.suggestedMin` and `ticks.suggestedMax`? They essentially change the data max and min before the auto fit algorithm runs\n"
+      },
+      {
+        "user": "davidmichaelkarr",
+        "created_at": "2016-09-07T22:58:11Z",
+        "body": "Bingo!  That's exactly what I needed.  It would be useful to rephrase the statement in the docs about these two fields.  What it says now is confusing and doesn't say what you said here, which was exactly what I needed to know.\n"
+      },
+      {
+        "user": "etimberg",
+        "created_at": "2017-03-21T10:44:46Z",
+        "body": "Ok, I'll retag this as a documentation bug.\n\n\n---\n\nFixed in #3751"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Allows setting a shared Y-axis range across multiple charts while preserving automatic step size calculation",
+      "Integrates with Chart.js' auto-fit algorithm for clean axis rendering",
+      "Avoids requiring fake data points to influence axis ranges",
+      "Works declaratively with Angular Chart wrapper",
+      "Clear documentation about influencing axis ranges without overriding auto-calculation"
+    ]
+  }
+]

@@ -1,0 +1,235 @@
+[
+  {
+    "number": 1323,
+    "title": "Disabling cap logs",
+    "created_at": "2023-05-02T22:13:29Z",
+    "closed_at": "2023-05-03T12:07:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/1323",
+    "body": "hi,\r\n\r\nwhile using cap library, it writes a lot of log in addition to my app's logs. Is there a way to disable cap's log?",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/1323/comments",
+    "author": "cagataykiziltan",
+    "comments": [
+      {
+        "user": "3ldar",
+        "created_at": "2023-05-03T10:18:28Z",
+        "body": "Yeap you can do it by modifying `appsettings.json` files logging section like below :\r\n```\r\n\"Logging\": {\r\n    \"LogLevel\": {\r\n      \"Default\": \"Information\",\r\n      \"Microsoft\": \"Warning\",\r\n      \"Microsoft.Hosting.Lifetime\": \"Information\",\r\n      \"DotNetCore.CAP\" : \"Warning\r\n \r\n    }\r\n  }\r\n```"
+      },
+      {
+        "user": "cagataykiziltan",
+        "created_at": "2023-05-03T10:32:04Z",
+        "body": "thanks a lot @3ldar "
+      },
+      {
+        "user": "canperk",
+        "created_at": "2024-04-26T14:32:49Z",
+        "body": "We cannot do that in yaml files like\n\nLogging__LogLevel__DotnetCore.CAP"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2024-04-26T15:18:34Z",
+        "body": "@canperk \r\n \r\n`Logging__LogLevel__DotnetCore.CAP`  -->  `Logging__LogLevel__DotNetCore.CAP` \uff1f\r\n\r\nn to N"
+      },
+      {
+        "user": "canperk",
+        "created_at": "2024-04-30T08:23:10Z",
+        "body": "@yang-xiaodong  This is the full configuration but I suspect there is priority issue here:\r\n\r\n```\r\n- name: Logging__LogLevel__Default\r\n  value: \"Information\"\r\n- name: Logging__LogLevel__DotNetCore.CAP\r\n  value: \"Warning\"\r\n- name: Logging__LogLevel__Microsoft\r\n  value: \"Warning\"\r\n- name: Logging__LogLevel__Microsoft.Hosting.Lifetime\r\n  value: \"Information\"\r\n- name: \"Logging__ApplicationInsights__LogLevel__Default\"\r\n  value: \"Information\"\r\n- name: \"Logging__ApplicationInsights__LogLevel__Microsoft\"\r\n  value: \"Error\"\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must allow configuring the CAP library's logging level independently",
+      "Configuration approach must work with standard .NET logging systems",
+      "Must handle namespace casing correctly in configuration keys",
+      "Solution should maintain existing logging configurations for other components"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:06:05"
+    }
+  },
+  {
+    "number": 1070,
+    "title": "Share the same SQL server as CAP storage for multiple services",
+    "created_at": "2022-01-15T01:14:41Z",
+    "closed_at": "2022-01-18T09:18:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/1070",
+    "body": "Hi, I'm wondering if it's a good practice to share the same message storage for multiple services using CAP? For example, some of our microservices doesn't have a database, it just receives messages from azure service bus and process them. Can I just create a centralised SQL server as CAP message store and share them between these services? \r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/1070/comments",
+    "author": "waterydan",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2022-01-15T09:09:36Z",
+        "body": "Yes, You can use `TableNamePrefix` option to specify that each service uses the different table.\r\n\r\n```\r\npublic void ConfigureServices(IServiceCollection services)\r\n{\r\n    services.AddCap(x =>\r\n    {\r\n        x.UseKafka(\"\");\r\n        x.UseMySql(opt =>\r\n        {\r\n            opt.ConnectionString = \"connection string\";\r\n            opt.TableNamePrefix = \"appone\"; // different table name prefix here\r\n        });\r\n    });\r\n}\r\n```"
+      },
+      {
+        "user": "waterydan",
+        "created_at": "2022-01-18T05:57:15Z",
+        "body": "That worked perfectly. Thanks!"
+      },
+      {
+        "user": "dengyangxi",
+        "created_at": "2023-06-06T03:15:18Z",
+        "body": "@yang-xiaodong  \r\nDoes Microsoft's SQL Server support custom table prefixes         \r\nTableNamePrefix   "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports data isolation between services sharing the same SQL storage",
+      "Validates the architectural practice of centralized CAP storage",
+      "Ensures message processing reliability across services",
+      "Maintains database compatibility"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:06:10"
+    }
+  },
+  {
+    "number": 1067,
+    "title": "Using EF, Configuring DBContext setup OnConfiguring() not in Startup",
+    "created_at": "2022-01-10T03:22:34Z",
+    "closed_at": "2022-01-12T17:48:31Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/1067",
+    "body": "I am using EFCore 6 in a multi-tenant environment so in my startup.cs, I don't configure the Connection String but rather in the OnConfiguring() method of DBContext because there are multiple databases.\r\n\r\nStartup.cs:\r\n\r\n```\r\n            services.AddDbContext<UserPolicyDbContext>();\r\n\r\n            services.AddCap(x =>\r\n            {\r\n                x.UseDashboard();\r\n                x.UseEntityFramework<UserPolicyDbContext>();\r\n                string host = Configuration.GetValue<string>(\"RabbitMQ:Host\");\r\n                x.UseRabbitMQ(host);\r\n            });\r\n```\r\n\r\nUserPolicyDbContext.cs:\r\n```\r\n   protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)\r\n        {\r\n            if (!optionsBuilder.IsConfigured)\r\n            {\r\n                var connectionString = _sharedRepository.GetDistrictConnectionStrings(_authenticatedUser.DistrictId.Value);\r\n                optionsBuilder.UseNpgsql(connectionString.Connections.UserPolicyConnectionString, options =>\r\n                {\r\n                    options.EnableRetryOnFailure();\r\n                });\r\n            }\r\n        }\r\n```\r\n\r\nFrom the documentation, CAP can autodiscover; however, at startup, there is no valid connection string.  Are there any options to configure CAP after startup? \r\n\r\nAdditionally, If I inject ICapPublisher into my DBContext so I can publish messages on the SaveChanges(), I get a stack overflow immediately.  How can I access ICapPublisher  within the context?\r\n",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/1067/comments",
+    "author": "c5racing",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2022-01-10T06:21:15Z",
+        "body": "If you want to use ICapPublisher   in DbContext, you need to configure with `UsePostgreSql(\"Connection String\")` not  `x.UseEntityFramework<UserPolicyDbContext>()`, In fact, we only get the connection string from the DbContext.\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Solution must enable CAP configuration to work with dynamically determined connection strings at runtime",
+      "Must avoid circular dependencies when accessing ICapPublisher from DbContext",
+      "Provide a way to integrate CAP's transactional outbox without requiring connection string during application startup",
+      "Maintain multi-tenant architecture where connection strings are resolved per-request"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:06:21"
+    }
+  },
+  {
+    "number": 386,
+    "title": "How to subscribe multiple message in console app",
+    "created_at": "2019-08-26T06:29:24Z",
+    "closed_at": "2019-08-26T06:51:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/386",
+    "body": "Hi yang-xiaodong\r\n\r\n Follow by issues #275.\r\n I'd like to ask you how to subscribe multiple message in console app?\r\n\r\nTks so much\r\n",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/386/comments",
+    "author": "tuongntk",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2019-08-26T06:42:38Z",
+        "body": "You can add multiple consumer method to subscribe multiple message.\r\n\r\n```cs\r\n[CapSubscribe(\"sample.rabbitmq.mysql.test1\")]\r\npublic void Subscribe1(DateTime time)\r\n{\r\nConsole.WriteLine($@\"{DateTime.Now}, Subscriber1 invoked, Sent time:{time}\");\r\n}\r\n\r\n[CapSubscribe(\"sample.rabbitmq.mysql.test2\")]\r\npublic void Subscribe2(DateTime time)\r\n{\r\nConsole.WriteLine($@\"{DateTime.Now}, Subscriber2 invoked, Sent time:{time}\");\r\n}\r\n```"
+      },
+      {
+        "user": "tuongntk",
+        "created_at": "2019-08-26T06:45:39Z",
+        "body": "Tks yang, but in your sample code i found that:\r\n\r\n```cs\r\n public Task StartAsync(CancellationToken cancellationToken)\r\n{\r\n    _logger.LogInformation(\"Timed Background Service is starting.\");\r\n    _timer = new Timer(Publish, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));\r\n    return Task.CompletedTask;\r\n}\r\n```\r\nYou start timer with Publish callback.\r\n\r\nIs it right if i implement more and more subcribers methods. Does it affect to any method ?\r\nTks so much\r\n\r\n"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2019-08-26T06:49:16Z",
+        "body": "Timer is just to show for example, you can publish or subscribe  messages wherever you want. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrate a pattern for handling multiple independent message subscriptions in a console application",
+      "Clarify the relationship between message publishing mechanics and subscription handlers",
+      "Explain how to maintain subscriber isolation when adding new message handlers"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:06:26"
+    }
+  },
+  {
+    "number": 110,
+    "title": "\u6309\u7167\u6307\u5bfc\u793a\u4f8b\uff0c\u5728SubscriberService \u4e2d\u8fdb\u884c\u6d88\u606f\u5904\u7406",
+    "created_at": "2018-04-16T03:05:34Z",
+    "closed_at": "2018-04-16T03:19:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/110",
+    "body": "  public interface ISubscriberService\r\n    {\r\n        void CheckReceivedMessage(dynamic model);\r\n    }\r\n\r\n\r\n    public class SubscriberService : ISubscriberService, ICapSubscribe\r\n    {\r\n        [CapSubscribe(\"capdemo.values.getmethodevent\")]\r\n        public void CheckReceivedMessage(dynamic model)\r\n        {\r\n            Console.WriteLine($\"[capdemo.values.getmethodevent] message received: Id:{model.Id}  Time:{model.Time}  Message:{model.Message} \");\r\n        }\r\n    }\r\n     services.AddTransient<ISubscriberService, SubscriberService>();\r\n     \u6d88\u8d39\u8005\u4e0d\u4f1a\u83b7\u53d6\u4e0d\u5230\u6d88\u606f\u5462\uff1f\r\n\u540c\u6837\u7684\u4ee3\u7801\uff0c\u5982\u679c\u653e\u5728Controller\u4e2d\uff0c\u5c31\u80fd\u591f\u6267\u884c\r\n     ///// <summary>\r\n        ///// \u5b9a\u4e49\u6d88\u606f\u6d88\u8d39\u8005\r\n        ///// </summary>\r\n        ///// <param name=\"model\"></param>\r\n        [NonAction]\r\n        [CapSubscribe(\"capdemo.values.getmethodevent\")]\r\n        public void ReceiveMessage(dynamic model)\r\n        {\r\n          Console.WriteLine($\"[capdemo.values.getmethodevent] message received: Id:{model.Id}  Time:{model.Time}  Message:{model.Message} \");\r\n       }\r\n\r\n\u8bf7\u95ee\u662f\u6211\u54ea\u91cc\u8bbe\u7f6e\u6ca1\u5bf9\u4e48\uff1f\r\n",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/110/comments",
+    "author": "crashsol",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-16T03:15:45Z",
+        "body": "` services.AddTransient<ISubscriberService, SubscriberService>();` \u7684\u987a\u5e8f\uff0c\u9700\u8981\u5728 services.AddCap\u4e4b\u524d\uff0c\u8bf7\u68c0\u67e5"
+      },
+      {
+        "user": "crashsol",
+        "created_at": "2018-04-16T03:19:32Z",
+        "body": "\u8c22\u8c22\u5927\u4f6c\uff0c\u5df2\u7ecf\u89e3\u51b3\uff01\u5efa\u8bae\u628a\u8fd9\u4e2a\u52a0\u5165\u5230MD\u4e2d"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-04-16T03:26:27Z",
+        "body": "\u6ce8\u610f\u4e8b\u9879\u5df2\u6dfb\u52a0\u5230 readme\uff0c\u8c22\u8c22"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identifies the correct service registration order in dependency injection",
+      "Explains component discovery requirements for CAP event subscribers",
+      "Addresses DI container configuration constraints for message consumers"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:07:16"
+    }
+  },
+  {
+    "number": 79,
+    "title": "Can we use CAP without storing messages to Database?",
+    "created_at": "2018-01-21T15:40:50Z",
+    "closed_at": "2018-01-22T15:43:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnetcore/CAP/issues/79",
+    "body": "I can see it takes benefits store messages to database, but will it make the process slower since we want to use RabbitMQ to fire&forget in many cases?",
+    "comments_url": "https://api.github.com/repos/dotnetcore/CAP/issues/79/comments",
+    "author": "trumhemcut",
+    "comments": [
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-01-22T01:48:28Z",
+        "body": "CAP is designed to maintain data consistency across Microservice or SOA, it depending on the ACID nature of the database to ensure message reliability. If you leave the database, then this solution is only a message queue client encapsulation, it does not make sense, maybe your scene does not require CAP, just send and receive messages only"
+      },
+      {
+        "user": "trumhemcut",
+        "created_at": "2018-01-22T15:43:28Z",
+        "body": "Agree, storage is needed for enterprise level. Thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of CAP's dependency on database storage for data consistency guarantees",
+      "Clarification of scenarios where CAP is unnecessary",
+      "Analysis of performance vs reliability trade-offs"
+    ],
+    "_classification": {
+      "category": "Does not need build environment",
+      "timestamp": "2025-04-05 01:07:22"
+    }
+  }
+]

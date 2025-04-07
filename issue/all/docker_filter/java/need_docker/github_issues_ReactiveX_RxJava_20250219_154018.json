@@ -1,0 +1,692 @@
+[
+  {
+    "number": 6214,
+    "title": "RxJava 2.2.2 startsWith subscribes the subsequence streams without subscribing to the upper stream",
+    "created_at": "2018-09-16T14:58:16Z",
+    "closed_at": "2018-09-16T16:42:26Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/6214",
+    "body": "Hi, I'm not sure if this is a bug or an expected behavior. \r\nSee an example below:\r\n```\r\n        PublishSubject<Integer> subject = PublishSubject.create();\r\n        AtomicBoolean bool = new AtomicBoolean();\r\n        subject\r\n                .doOnSubscribe(s->{}) << not called\r\n                .doOnNext(s->{}) << not called\r\n                .startWith(0)\r\n                .switchMap(o -> Observable\r\n                        .empty()\r\n                        .doOnSubscribe(s -> {\r\n                            if (!bool.get()) {\r\n                                subject.onNext(1); << called\r\n                            }\r\n                        }))\r\n                .subscribe();\r\n```\r\nScenario:\r\nIn my use case, I subscribed to a source that chained with a #startWith operator.\r\nI performed a switchMap, expecting the next value terminates it and starts a new one. \r\nSubject emits something during the switchmap. Happens on both Observable/Flowable.\r\n\r\nExpected: receive the new event\r\nActual: receive nothing due to subject not subscribed yet.\r\n\r\nHave not tested on other version.\r\n\r\nThanks\r\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/6214/comments",
+    "author": "ykinuse",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2018-09-16T16:03:59Z",
+        "body": "This is a valid behavior. The `PublishSubject` is not subscribed at that time because `startWith` hasn't finished yet switching to it. Consider using `BehaviorSubject.create(0)` instead and not doing that reentrant `onNext` call."
+      },
+      {
+        "user": "ykinuse",
+        "created_at": "2018-09-16T16:06:44Z",
+        "body": "Thanks for the clarification. PublishSubject was used as an example of some source. So I'm assuming doOnSubscribe() chained after startWith does not guaranteed subscription established to the source? Was expecting a guaranteed subscription to source before startWith emits. "
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-09-16T16:21:06Z",
+        "body": "No. StartWith is like concat, subscribes the next source after the previous source has completed, thus no `doOnSubscribe` is called on the next source until that."
+      },
+      {
+        "user": "ykinuse",
+        "created_at": "2018-09-16T16:30:33Z",
+        "body": "Cleared my doubts. Thanks for the swift & clear response!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how startWith operator manages upstream subscriptions",
+      "Clarification of when upstream subscription actually occurs relative to startWith emissions",
+      "Identification of safe patterns for reentrant onNext calls during stream setup",
+      "Differentiation between PublishSubject and BehaviorSubject behaviors in cold/hot observable scenarios"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:20:16"
+    }
+  },
+  {
+    "number": 6169,
+    "title": "Give Flowable.sequenceEqual()/BiPredicate the option to use Single<Boolean> instead of boolean",
+    "created_at": "2018-08-23T09:15:45Z",
+    "closed_at": "2018-08-31T19:29:46Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/6169",
+    "body": "I need to compare two `Flowable`s, that unfortunaley, due to `groupBy()` do not complete until all items it contains are subscribed to. \r\n\r\nCurrently, this is not possible since test() in the BiPredicate you can implement for `sequenceEqual()` can only return a `boolean`, it expects the `Flowable` to be comparable one by one. I suggest to overload `test()` so that it can also return `Single<Boolean>` - thus allowing the comparison to happen for all elements of the `Flowable` before expecting it to complete, which lets every item be subscribed to.",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/6169/comments",
+    "author": "Namnodorel",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-23T09:24:41Z",
+        "body": "I'm not sure what you try to achieve here. `sequenceEqual` compares item by item when both sources have at least one item ready for comparison."
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-23T09:36:01Z",
+        "body": "@akarnokd Yes. And this one-after-the-other comparison doesn't work if the items are (or come from a Flowable that was a) `GroupedFlowable`s. In that case, the first item won't complete until all the other items are subscribed to. But currently, `sequenceEqual()` waits until the first item comparison completes until it moves on to the next one. For this to work, `sequenceEqual()` would need to be able to compare the `Flowable`s asynchronously."
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-23T09:42:43Z",
+        "body": "Please show some actual code that demonstrates your issue."
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-23T09:56:50Z",
+        "body": "Given a class `ValueGroup` with an object `key` and a `Flowable`. I want to squash multiple `ValueGroup`s with the same key together, like this:\r\n```\r\nFlowable<ValueGroup> myFlowable = ...;\r\nmyFlowable\r\n.groupBy(ValueGroup::getKey)\r\n    .map(groupedValueGroups -> new ValueGroup(\r\n        groupedValueGroups.getKey(),\r\n        groupedValueGroups\r\n            .flatMap((Function<ValueGroup, Publisher<? extends Value>>) ValueGroup::getFlowable)\r\n))\r\n```\r\nAt some point later in the code, I then use\r\n```\r\nFlowable.sequenceEqual(myFlowable, anotherFlowable)\r\n```\r\n(`anotherFlowable` is basically the same as `myFlowable`)\r\n\r\nWhat then happens, is: `sequenceEqual()` takes the first item of both Flowables, tries to compare them, and... gets stuck. Because to compare the `ValueGroup`s, the `Flowable`s inside them also need to be compared. But they don't complete, because all the other elements have not yet been subscribed to."
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-23T10:03:49Z",
+        "body": "You have to consume the groups in order for them to make progress. A Single predicate won't help your case as it is too late by then. Turn the groups into Lists and compare that way."
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-23T10:15:03Z",
+        "body": "Turning `Flowable`s into a `List` is in th category of \"it technically works, but it's not really a clean solution\"...\r\n\r\nI honestly don't quite understand why it wouldn't work for `sequenceEqual()` to call `test()` asynchronously for all objects that it will compare. That way, all `Flowable`s would be subscribed to \"at once\", and could properly complete. The groups would be consumed in the sense that their comparison emits a `Single<Boolean>`."
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-23T10:33:17Z",
+        "body": "> I honestly don't quite understand why it wouldn't work \r\n\r\n`Flowable.groupBy` has backpressure and in order to have the sequence progress at all, you have to consume all groups it creates. Thus you can't just save up an inner `Flowable` to be compared later.\r\n\r\n> call test() asynchronously \r\n\r\nDoesn't work, the operator would subscribe to that `Single` and then hang as well because of the above.\r\n\r\nYou could try and adapt the following:\r\n\r\n```java\r\nFlowable<Flowable<Integer>> seq1 = ...;\r\nFlowable<Flowable<Integer>> seq2 = ...;\r\n\r\nFlowable.zip(seq1, seq2, (a, b) -> \r\n    return Flowable.sequenceEqual(a, b);\r\n)\r\n.flatMapSingle(v -> v)\r\n.all(v -> v);\r\n```"
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-28T13:21:45Z",
+        "body": ">Flowable.groupBy has backpressure and in order to have the sequence progress at all, you have to consume all groups it creates. Thus you can't just save up an inner Flowable to be compared later.\r\n\r\nI know, that's not what I'm having trouble with understanding.\r\n>Doesn't work, the operator would subscribe to that `Single` and then hang as well because of the above.\r\n\r\nThat would happen if it subscribed to only one `Single` at a time. But because it is async, it wouldn't need to wait for the first `Single` to complete, but could instead go on and subscribe to the rest of them as well. Until at some point, it has subscribed to all, and then they'll be able to complete.\r\n\r\nI'll try your example.\n\n---\n\nExample is also stuck. "
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-28T13:27:26Z",
+        "body": "Try with an `Observable`-based setup."
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-31T19:20:36Z",
+        "body": "Nevermind, the first example was actually correct, and I made a mistake in implementing it (my actual scenario is a little more complex, but that isn't relevant to the problem itself).\r\n\r\nThe issue I had is thus solved, however I'd still like to keep the suggestion: Implement this as an alternative to the existing `sequenceEqual()` so that it works with data that can't be compared one after the other for one reason or the other. "
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-08-31T19:29:46Z",
+        "body": "> Nevermind, the first example was actually correct\r\n\r\nGreat!\r\n\r\n> Implement this as an alternative\r\n\r\nI'm not convinced this is common enough to add it to RxJava. What if the structure is different? What if other properties are different? What if the operation should be different?"
+      },
+      {
+        "user": "Namnodorel",
+        "created_at": "2018-08-31T19:47:16Z",
+        "body": "Structure? Of what? The elements held in the compared Flowable/Observable? I think that is specific to my case, what's on my mind is more something that is just capable of comparing sequences not \"in order\".\r\n\r\nBasically a `sequenceEqual()` that does what your example did, but instead of returning `Flowable.sequenceEqual(a, b)` in `zip()` accessing an interface similar to `BiPredicate`, with the change of returning a `Single<Boolean>`. The elements themselves would be compared like usual; if they contain (or are) nested Flowables/Observables, you'll need a custom implementation of the comparing interface one way or the other.\r\n\r\nRegarding being common... Well, to me it sounds like it could be common enough to be included, but - well, you're the expert :D"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports asynchronous comparison of Flowable sequences where elements require concurrent subscription to complete",
+      "Allows comparing nested Flowable structures without materializing them into collections",
+      "Provides a way to compare entire sequences atomically rather than element-by-element",
+      "Maintains backpressure compatibility with RxJava operators",
+      "Offers a generalized solution for comparing complex reactive stream topologies"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:20:40"
+    }
+  },
+  {
+    "number": 5941,
+    "title": "[RxJava 2.1] Executing blocking operations on IO scheduler switches execution to a single thread",
+    "created_at": "2018-03-31T03:43:40Z",
+    "closed_at": "2018-04-15T11:28:20Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5941",
+    "body": "RxJava 2.1.3\r\n\r\nSample that demonstrates the problem:\r\n\r\n```java\r\nimport java.util.concurrent.ConcurrentHashMap;\r\nimport java.util.concurrent.atomic.AtomicInteger;\r\nimport java.util.concurrent.atomic.AtomicLong;\r\n\r\nimport io.reactivex.Observable;\r\nimport io.reactivex.ObservableTransformer;\r\nimport io.reactivex.functions.Action;\r\nimport io.reactivex.schedulers.Schedulers;\r\n\r\npublic class Main {\r\n  private static final int NUM_THREADS = 8;\r\n  private static final int NUM_EVENTS = 200;\r\n\r\n  public static void main(String[] args) throws Exception {\r\n    System.out.println(\"Executing blocking operation...\");\r\n    observe(() -> Thread.sleep((long) (Math.random() * 100)));\r\n\r\n    System.out.println(\"Executing non-blocking operation...\");\r\n    observe(() -> {});\r\n  }\r\n\r\n  private static void observe(Action op) {\r\n    AtomicInteger messageReceived = new AtomicInteger(0);\r\n    AtomicInteger observableComplete = new AtomicInteger(0);\r\n    ConcurrentHashMap<String, AtomicInteger> counters = new ConcurrentHashMap<>();\r\n\r\n    createObservable()\r\n        .compose(createThreadPoolTransformer())\r\n        .compose(performOperation(op))\r\n        .subscribe(\r\n            e -> {\r\n              counters.compute(Thread.currentThread().getName(), (key, ai) -> {\r\n                ai = ai == null ? new AtomicInteger(0) : ai;\r\n                ai.incrementAndGet();\r\n                return ai;\r\n              });\r\n              messageReceived.incrementAndGet();\r\n\r\n              if (messageReceived.get() == NUM_EVENTS) {\r\n                System.out.println(String.format(\"Counts per thread: %s \\n\", counters));\r\n              }\r\n            }, e -> {}, observableComplete::incrementAndGet);\r\n\r\n    while(observableComplete.get() == 0) {\r\n      // wait until it's complete\r\n    }\r\n  }\r\n\r\n  private static Observable<Long> createObservable() {\r\n    return Observable.just(0).repeat(NUM_EVENTS).map(al -> {\r\n      Thread.sleep(10);\r\n      return System.currentTimeMillis();\r\n    });\r\n  }\r\n\r\n  private static ObservableTransformer<Long, Long> createThreadPoolTransformer() {\r\n    AtomicLong counter = new AtomicLong(0);\r\n    return upstream ->\r\n        upstream\r\n            .groupBy(e -> counter.getAndIncrement() % NUM_THREADS)\r\n            .flatMap(g -> g.observeOn(Schedulers.io()));\r\n  }\r\n\r\n  private static ObservableTransformer<Long, Long> performOperation(Action op) {\r\n    return upstream -> upstream\r\n        .map(\r\n            e -> {\r\n              if (Math.random() < 0.5) {\r\n                op.run();\r\n              }\r\n              return e;\r\n            });\r\n  }\r\n}\r\n```\r\nRunning the program should print something like:\r\n```\r\nExecuting blocking operation...\r\nCounts per thread: {RxCachedThreadScheduler-1=200} \r\n\r\nExecuting non-blocking operation...\r\nCounts per thread: {RxCachedThreadScheduler-1=25, RxCachedThreadScheduler-2=25, RxCachedThreadScheduler-3=25, RxCachedThreadScheduler-8=25, RxCachedThreadScheduler-4=25, RxCachedThreadScheduler-5=25, RxCachedThreadScheduler-6=25, RxCachedThreadScheduler-7=25} \r\n```\r\n\r\nIt shows that after scheduling execution of blocking operations on an IO pool, the observable runs all these operations on a single thread instead.\r\n\r\nI would really appreciate any suggestions to retain equal load on all threads even in the presence of blocking operations!",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5941/comments",
+    "author": "sndre",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2018-03-31T08:51:28Z",
+        "body": "The outcome is completely within allowed behavior for two things:\r\n\r\n- `flatMap` doesn't guarantee that a source thread will be able to push through. It is completely possible that one or few threads will perform the merge for the other threads, therefore, it may appear only one or two threads are only involved pushing data further to the downstream.\r\n- You are measuring the thread use at the end consumer, which is always serialized thus there is no guarantee you'll see that many thread hopping there. To make sure `op` is executed in various background threads, you should apply it after `g.observeOn(Schedulers.io())` inside `flatMap` as well as do the current thread check there."
+      },
+      {
+        "user": "sndre",
+        "created_at": "2018-04-17T18:32:57Z",
+        "body": "@akarnokd, thank you so much for looking into it! That make sense and we followed your suggestion to to apply operations after `observeOn` \ud83d\udcaf "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why blocking operations cause thread starvation in RxJava's IO scheduler",
+      "Solution ensuring parallel execution across multiple IO threads when blocking operations exist",
+      "Clarification of RxJava operator behavior regarding thread scheduling and merging",
+      "Guidance on proper operator ordering for concurrent execution"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:21:37"
+    }
+  },
+  {
+    "number": 5869,
+    "title": "No successful subscription when running `using` and `retry` together",
+    "created_at": "2018-02-27T08:43:11Z",
+    "closed_at": "2018-02-27T09:29:07Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5869",
+    "body": "Version: 'io.reactivex.rxjava2:rxjava:2.1.10'\r\n\r\nNo successful subscription when running `using` and `retry` together, without `retry` or with other `Single` everything is fine.\r\n\r\n```        \r\nSingle.just(\"input\").flatMap(val ->\r\n                Single.using(\r\n                        () -> {\r\n                            System.out.println(\"create\");\r\n                            return \"\";\r\n                            },\r\n                        call -> singleSubscriber -> {\r\n                            System.out.println(\"sub\");\r\n                            singleSubscriber.onSuccess(val);\r\n                            System.out.println(\"sub done\");\r\n                            },\r\n                        call -> {\r\n                            System.out.println(\"close\");\r\n                        }\r\n                        )\r\n                .retry((count, error) -> {\r\n                    System.out.println(\"retry\");\r\n                    return true;\r\n                })\r\n        )\r\n                .subscribe(val -> System.out.println(\"output \" + val));\r\n```\r\nOutput:\r\n```\r\ncreate\r\nsub\r\nclose\r\nsub done\r\n```\r\n\r\nExpected:\r\n```\r\ncreate\r\nsub\r\nclose\r\noutput input\r\nsub done\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5869/comments",
+    "author": "dmitart",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2018-02-27T09:16:51Z",
+        "body": "You should not create a `SingleSource` via lambda as people often forget to follow the protocol: `onSubscribe (onSuccess | onError)?`. Use `Single.create()` instead:\r\n\r\n```java\r\nSingle.create(singleSubscriber -> {\r\n    System.out.println(\"sub\");\r\n    singleSubscriber.onSuccess(val);\r\n    System.out.println(\"sub done\");\r\n})\r\n```\r\n\r\nwith which now prints:\r\n\r\n```\r\ncreate\r\nsub\r\nclose\r\noutput input\r\nsub done\r\n```\r\n\r\nWhat happens is that `retry` converts to `Flowable` internally to reuse that operator, which requires downstream requests. However, since `onSubscribe` was never called, the request channel is never established below that operator and the single element is hold up indefinitely."
+      },
+      {
+        "user": "dmitart",
+        "created_at": "2018-02-27T09:29:07Z",
+        "body": "This solves my issue, thank you. I was not using `using` a lot before and didn't knew about this convention."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of RxJava subscription protocol requirements when combining resource management operators",
+      "Clarification of operator interaction between retry and resource-managing operators like using",
+      "Guidance on proper error recovery patterns with Single.using"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:21:48"
+    }
+  },
+  {
+    "number": 5272,
+    "title": "1.x repeatWhen does not call onCompleted on child subscription",
+    "created_at": "2017-04-07T21:37:26Z",
+    "closed_at": "2017-04-07T22:08:32Z",
+    "labels": [
+      "Question",
+      "1.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5272",
+    "body": "Tested using RxJava 1.2.9.\r\n\r\nThe description of `repeatWhen` implies if the `notificationHandler` call an `onComplete` it should pass it onto the child subscription: \"If that Observable calls onComplete or onError then repeatWhen will call onCompleted or onError on the child subscription.\"\r\n\r\nHowever, this doesn't seem to happen. The `onError` seems to work, but `onCompleted` does not. This code illustrates this:\r\n\r\n```java\r\nSubscriber<Integer> subscriber = new Subscriber<Integer>() {\r\n    @Override public void onCompleted() {\r\n        System.out.println(\"completed\");\r\n    }\r\n\r\n    @Override public void onError(Throwable e) {\r\n        System.out.println(\"error\");\r\n    }\r\n\r\n    @Override public void onNext(Integer i) {\r\n\r\n    }\r\n};\r\n\r\n// Does not output anything\r\nObservable.just(1)\r\n        .repeatWhen(observable -> observable.flatMap(ignored -> Observable.empty()))\r\n        .subscribe(subscriber);\r\n\r\n// Prints \"error\" (as expected)\r\nObservable.just(1)\r\n        .repeatWhen(observable -> observable.flatMap(ignored -> Observable.error(new Exception())))\r\n        .subscribe(subscriber);\r\n```",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5272/comments",
+    "author": "Chubacca",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2017-04-07T21:42:40Z",
+        "body": "You can't complete an entire `flatMap` with an inner `empty()` source, that just counts as 'skipping' and the merged flow is kept intact. For `repeatWhen` and `retryWhen`, you need a different mechanism and make `observable` complete, for example, with `takeWhile` or `takeUntil` or some lifted operator that can turn an `onNext` into an `onCompleted`."
+      },
+      {
+        "user": "Chubacca",
+        "created_at": "2017-04-07T22:08:32Z",
+        "body": "Ah, makes sense, the flatMap won't pass the onComplete through (because it's mapped). Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how completion propagation works in repeatWhen's notificationHandler",
+      "Identification of correct termination patterns for repeatWhen notificationHandler",
+      "Clarification of Observable operator behavior differences in completion propagation",
+      "Guidance on achieving intended child subscription termination"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:29:25"
+    }
+  },
+  {
+    "number": 5264,
+    "title": "doOnDispose / doOnLifecycle onDisposed action not being called",
+    "created_at": "2017-04-04T20:31:22Z",
+    "closed_at": "2017-04-11T11:51:36Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5264",
+    "body": "Maybe I am doing something wrong, but this just stopped working when I updated version from 2.01 to 2.07 and 2.08.\r\n\r\nThe doOnDispose and the doOnLifecycle onDisposed action are not being called.\r\n\r\nSample code:\r\n\r\n        Observable.fromCallable(() -> \"1\")\r\n                .doOnLifecycle(\r\n                        disposable -> Log.i(TAG, \"1:doOnSubscribe\"),\r\n                        () -> Log.i(TAG, \"1:doOnDispose\")\r\n                )\r\n                .subscribe()\r\n                .dispose();\r\n\r\n        Observable.fromCallable(() -> \"2\")\r\n                .doOnSubscribe(disposable -> Log.i(TAG, \"2:doOnSubscribe\"))\r\n                .doOnDispose(() -> Log.i(TAG, \"2:doOnDispose\"))\r\n                .subscribe()\r\n                .dispose();",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5264/comments",
+    "author": "fqborges",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2017-04-04T20:39:30Z",
+        "body": "`subscribe` disconnects the upstream `Disposable` when it receives a terminal event thus you can't dispose an already completed sequence. This change was introduced in 2.0.5 via #4957."
+      },
+      {
+        "user": "fqborges",
+        "created_at": "2017-04-04T20:52:36Z",
+        "body": "Is there a way to receive onDispose events after 2.0.5?\r\nI was using subscribe and dispose events for showing and hiding activity indicators/progress bar on when doing network.\r\n\r\nFor example, I used to do something like this:\r\n\r\n                doSomethingUsingNetwork()\r\n                .doOnSubscribe(d -> showProgress() )\r\n                .doOnDispose(() -> hideProgress() )\r\n                .subscribe(\r\n                        this::handleNext,\r\n                        this::handleError\r\n                )\r\n\r\nEdit: Why using onDispose? Because I missed the onFinally events when the subscription was disposed before onComplete/onError"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2017-04-04T20:54:09Z",
+        "body": "Use doFinally."
+      },
+      {
+        "user": "fqborges",
+        "created_at": "2017-04-04T20:57:55Z",
+        "body": "Thanks, it works like a charm in this version."
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2017-04-11T11:51:36Z",
+        "body": "Looks like this question has been answered. If you have further input on the issue, don't hesitate to reopen this issue or post a new one."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Provides a way to reliably detect subscription termination (both completion and disposal)",
+      "Works with RxJava 2.0.5+ lifecycle changes",
+      "Handles both successful completions and early disposals",
+      "Maintains equivalent functionality to previous doOnDispose behavior"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:29:35"
+    }
+  },
+  {
+    "number": 5073,
+    "title": "2.x - groupBy() Parallelization Not Working like in 1.0",
+    "created_at": "2017-02-05T02:24:15Z",
+    "closed_at": "2017-02-05T14:16:18Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/5073",
+    "body": "Hi David, \r\n\r\nWhile I was writing the Packt book, I think I might have found a problem with RxJava 2.0, unless this was an intended change and I'm missing something. When I do the parallelization pattern with `groupBy()` and a modulus Integer, it works fine in RxJava 1.0. Everything parallelizes across multiple threads as expected. \r\n\r\n```java \r\n\r\nimport rx.Observable;\r\nimport rx.schedulers.Schedulers;\r\nimport java.time.LocalTime;\r\nimport java.util.concurrent.ThreadLocalRandom;\r\nimport java.util.concurrent.atomic.AtomicInteger;\r\n\r\npublic class Launcher {\r\n    public static void main(String[] args) {\r\n\r\n       int coreCount = Runtime.getRuntime().availableProcessors();\r\n       AtomicInteger assigner = new AtomicInteger(0);\r\n\r\n       Observable.range(1,10)\r\n               .groupBy(i -> assigner.incrementAndGet() % coreCount)\r\n               .flatMap(grp -> grp.observeOn(Schedulers.io())\r\n                       .map(i2 -> intenseCalculation(i2))\r\n               )\r\n               .subscribe(i -> System.out.println(\"Received \" + i + \" \"\r\n                       + LocalTime.now() + \" on thread \"\r\n                       + Thread.currentThread().getName()));\r\n\r\n       sleep(20000);\r\n    }\r\n\r\n    public static <T> T intenseCalculation(T value) {\r\n        sleep(ThreadLocalRandom.current().nextInt(3000));\r\n        return value;\r\n    }\r\n    public static void sleep(long millis) {\r\n        try {\r\n            Thread.sleep(millis);\r\n        } catch (InterruptedException e) {\r\n            e.printStackTrace();\r\n        }\r\n    }\r\n}\r\n```\r\n\r\n**OUTPUT:**\r\n\r\n```\r\nReceived 1 20:17:23.422 on thread RxIoScheduler-2\r\nReceived 3 20:17:23.840 on thread RxIoScheduler-4\r\nReceived 4 20:17:24.053 on thread RxIoScheduler-5\r\nReceived 9 20:17:24.273 on thread RxIoScheduler-2\r\nReceived 5 20:17:24.695 on thread RxIoScheduler-6\r\nReceived 8 20:17:24.950 on thread RxIoScheduler-9\r\nReceived 6 20:17:25.242 on thread RxIoScheduler-7\r\nReceived 7 20:17:25.251 on thread RxIoScheduler-8\r\nReceived 2 20:17:25.324 on thread RxIoScheduler-3\r\nReceived 10 20:17:27.532 on thread RxIoScheduler-3\r\n\r\n```\r\n\r\nBut if I switch to RxJava 2.0, this no longer parallelizes. Everything stays strictly serial and only one thread is used. \r\n\r\n```java\r\n\r\nimport io.reactivex.Observable;\r\nimport io.reactivex.schedulers.Schedulers;\r\n\r\nimport java.time.LocalTime;\r\nimport java.util.concurrent.ThreadLocalRandom;\r\nimport java.util.concurrent.atomic.AtomicInteger;\r\n\r\npublic class Launcher {\r\n    public static void main(String[] args) {\r\n\r\n       int coreCount = Runtime.getRuntime().availableProcessors();\r\n       AtomicInteger assigner = new AtomicInteger(0);\r\n\r\n       Observable.range(1,10)\r\n               .groupBy(i -> assigner.incrementAndGet() % coreCount)\r\n               .flatMap(grp -> grp.observeOn(Schedulers.io())\r\n                       .map(i2 -> intenseCalculation(i2))\r\n               )\r\n               .subscribe(i -> System.out.println(\"Received \" + i + \" \"\r\n                       + LocalTime.now() + \" on thread \"\r\n                       + Thread.currentThread().getName()));\r\n\r\n       sleep(20000);\r\n    }\r\n\r\n    public static <T> T intenseCalculation(T value) {\r\n        sleep(ThreadLocalRandom.current().nextInt(3000));\r\n        return value;\r\n    }\r\n    public static void sleep(long millis) {\r\n        try {\r\n            Thread.sleep(millis);\r\n        } catch (InterruptedException e) {\r\n            e.printStackTrace();\r\n        }\r\n    }\r\n}\r\n```\r\n\r\n**OUTPUT:**\r\n\r\n```\r\nReceived 1 20:21:03.321 on thread RxCachedThreadScheduler-1\r\nReceived 9 20:21:05.273 on thread RxCachedThreadScheduler-1\r\nReceived 2 20:21:05.559 on thread RxCachedThreadScheduler-1\r\nReceived 10 20:21:07.390 on thread RxCachedThreadScheduler-1\r\nReceived 3 20:21:10.055 on thread RxCachedThreadScheduler-1\r\nReceived 4 20:21:11.962 on thread RxCachedThreadScheduler-1\r\nReceived 5 20:21:12.850 on thread RxCachedThreadScheduler-1\r\nReceived 6 20:21:15.779 on thread RxCachedThreadScheduler-1\r\nReceived 7 20:21:17.927 on thread RxCachedThreadScheduler-1\r\nReceived 8 20:21:20.540 on thread RxCachedThreadScheduler-1\r\n```\r\n\r\nIs there something new that I'm supposed to do? Or is this a possible behavior regression? ",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/5073/comments",
+    "author": "thomasnield",
+    "comments": [
+      {
+        "user": "thomasnield",
+        "created_at": "2017-02-05T02:28:51Z",
+        "body": "Hmmm... this makes things more interesting. Using a `subscribeOn()` instead of an `observeOn()` seems to make parallelization work. I don't know if this was intended or not. \r\n\r\n```java\r\n\r\nimport io.reactivex.Observable;\r\nimport io.reactivex.schedulers.Schedulers;\r\n\r\nimport java.time.LocalTime;\r\nimport java.util.concurrent.ThreadLocalRandom;\r\nimport java.util.concurrent.atomic.AtomicInteger;\r\n\r\npublic class Launcher {\r\n    public static void main(String[] args) {\r\n\r\n       int coreCount = Runtime.getRuntime().availableProcessors();\r\n       AtomicInteger assigner = new AtomicInteger(0);\r\n\r\n       Observable.range(1,10)\r\n               .groupBy(i -> assigner.incrementAndGet() % coreCount)\r\n               .flatMap(grp -> grp.subscribeOn(Schedulers.io())\r\n                       .map(i2 -> intenseCalculation(i2))\r\n               )\r\n               .subscribe(i -> System.out.println(\"Received \" + i + \" \"\r\n                       + LocalTime.now() + \" on thread \"\r\n                       + Thread.currentThread().getName()));\r\n\r\n       sleep(20000);\r\n    }\r\n\r\n    public static <T> T intenseCalculation(T value) {\r\n        sleep(ThreadLocalRandom.current().nextInt(3000));\r\n        return value;\r\n    }\r\n    public static void sleep(long millis) {\r\n        try {\r\n            Thread.sleep(millis);\r\n        } catch (InterruptedException e) {\r\n            e.printStackTrace();\r\n        }\r\n    }\r\n}\r\n```\r\n**OUTPUT:**\r\n\r\n```\r\nReceived 8 20:27:03.291 on thread RxCachedThreadScheduler-8\r\nReceived 6 20:27:03.446 on thread RxCachedThreadScheduler-6\r\nReceived 5 20:27:03.495 on thread RxCachedThreadScheduler-5\r\nReceived 4 20:27:03.681 on thread RxCachedThreadScheduler-4\r\nReceived 7 20:27:03.989 on thread RxCachedThreadScheduler-7\r\nReceived 2 20:27:04.797 on thread RxCachedThreadScheduler-2\r\nReceived 1 20:27:05.172 on thread RxCachedThreadScheduler-1\r\nReceived 9 20:27:05.327 on thread RxCachedThreadScheduler-1\r\nReceived 10 20:27:05.913 on thread RxCachedThreadScheduler-2\r\nReceived 3 20:27:05.957 on thread RxCachedThreadScheduler-3\r\n```\r\n\r\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2017-02-05T09:07:25Z",
+        "body": "Works for me on RxJava 2.0.5."
+      },
+      {
+        "user": "thomasnield",
+        "created_at": "2017-02-05T14:16:18Z",
+        "body": "Ah, okay. I was using 2.0.3 where apparently there was an issue. It looks like it was resolved by 2.0.5. Sorry I didn't check that first. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why RxJava 2.x groupBy() parallelization behavior differs from 1.x in the original code pattern",
+      "Identification of minimum required RxJava 2.x version where parallelization works as expected",
+      "Clarification on proper operator combination (subscribeOn vs observeOn) for achieving parallelization in RxJava 2.x",
+      "Documentation of threading model changes between RxJava 1.x and 2.x affecting groupBy/flatMap patterns"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:31:01"
+    }
+  },
+  {
+    "number": 4913,
+    "title": "2.x: Misbehavior of BehavoirProcessor when converted to Single",
+    "created_at": "2016-12-09T11:25:11Z",
+    "closed_at": "2016-12-09T14:04:45Z",
+    "labels": [
+      "Question",
+      "2.x"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/4913",
+    "body": "io.reactivex.rxjava2:rxandroid:2.0.1\r\n\r\nI believe `BehaviorProcessor` does not work correctly with `Single` observable. I am using `BehaviorProcessor` similarly to how I used `BehaviorSubject` with RxJava1, but this time with a `Single` observable.\r\n\r\nEvent producer\r\n```java\r\nBehaviorProcessor<Event> bp = BehaviorProcessor.create();\r\n\r\npublic Single<Event> getEvent() {\r\n    return bp.singleOrError();\r\n}\r\n\r\nvoid onEventReceived(Event event) {\r\n    bp.onEvent(event);\r\n    bp.onComplete();\r\n}\r\n```\r\n\r\nEvent observer\r\n```java\r\n\r\nproducer.getEvent().subscribeWith(\r\n    new DisposableSingleObserver<Event>() {\r\n        @Override public void onSuccess(Event value) {\r\n            Log.e(TAG, \"success\");\r\n        }\r\n\r\n        @Override public void onError(Throwable e) {\r\n            Log.e(TAG, \"error\");\r\n        }\r\n    }\r\n);\r\n```\r\n\r\nObserved behavior:\r\n1. If observers get subscribed **before** `onEventReceived()` is called, then all observers receive their `onSuccess()` callback, which is OK.\r\n2. If observers get subscribe **after** `onEventReceived()` (meaning after `onEvent()` and `onComplete()` are emitted), then `Single` receives `java.util.NoSuchElementException`. I believe this is NOT OK. Expected behavoir would be receiveing `onSuccess()` with the last value. This is what `BehaviorProcessor` should do for downstream observers, isn't it? Otherwise it appears to be useless for `Single` observers.\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/4913/comments",
+    "author": "sergejsha",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-12-09T13:05:20Z",
+        "body": "This is the correct behavior for `BehaviorProcessor`. It doesn't retain the last value if it gets terminated. This has been so since day 1 with `BehaviorSubject` as well. Use `ReplayProcessor.createWithSize(1)` instead."
+      },
+      {
+        "user": "sergejsha",
+        "created_at": "2016-12-09T13:33:45Z",
+        "body": "This is true what you say. But if I try to keep it not terminated by not calling `onComplete()`, the `Single` doesn't receive `onSuccess()`, which is also ok. Just out of curiosity, what would be the main use case for `BehavoirProcesser` with `Single` then, if later subscriptions always receive `onError()` instead of the most recent item it has observed?"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-12-09T14:00:08Z",
+        "body": "I don't understand what you try to achieve here. If you want a `Single` of the latest of the `BehaviorProcessor`, use `take(1).singleOrError()` so a `SingleObserver` will receive at most one success value and disconnect from the `BehaviorProcessor`."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why BehaviorProcessor terminates subsequent subscriptions with NoSuchElementException after completion",
+      "Clarification of valid use cases for BehaviorProcessor with Single",
+      "Alternative approach to retain last value for late subscribers after termination",
+      "Explanation of termination semantics in RxJava2 reactive streams"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:31:58"
+    }
+  },
+  {
+    "number": 4511,
+    "title": "skipUntil with \"empty\" observable causes source obs to never complete.",
+    "created_at": "2016-09-08T14:31:02Z",
+    "closed_at": "2016-09-08T15:31:59Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/4511",
+    "body": "Hello,\n\n``` java\nObservable.interval(1, TimeUnit.SECONDS)\n      .doOnNext(n -> Timber.d(\"firstObs %s\", n))\n      .doOnUnsubscribe(() -> Timber.d(\"onUnsubscribe\"))\n      .doOnCompleted(() -> Timber.d(\"onCompleted\"))\n      .skipUntil(Observable.timer(3, TimeUnit.SECONDS)\n        .flatMap(b -> Observable.empty())\n        .doOnCompleted(() -> Timber.d(\"onCompleted2\")))\n      .subscribe(\n        n -> Timber.d(\"Next? %s\",n),\n        e -> Timber.d(e, \"Err\"),\n        () -> Timber.d(\"Completed\")\n      );\n    Timber.d(\"Ciao\");\n```\n\nLooking at this snippet I would expect \"Completed\" to be triggered upon skipUntil observable completion ('after 3 seconds'). \n\nAfter some time of debugging I found out it's not the case and the Source observable does not get \"onCompleted\" or \"onUnsubscribe\" called when the latter `skipUntil` obs completes its execution.\n\nThis means that the first obs is never gonna end and the emitted items are not going to reach the end of the chain\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/4511/comments",
+    "author": "vekexasia",
+    "comments": [
+      {
+        "user": "JakeWharton",
+        "created_at": "2016-09-08T14:34:29Z",
+        "body": "flatMap does not propagate completion events\n"
+      },
+      {
+        "user": "vekexasia",
+        "created_at": "2016-09-08T14:52:48Z",
+        "body": "why do I get the following output \n\n```\n09-08 16:50:05.670 D/MainActivity: onSubscribe2\n09-08 16:50:05.672 D/MainActivity: onSubscribe\n09-08 16:50:05.674 D/MainActivity: Ciao\n09-08 16:50:06.674 D/MainActivity: firstObs 0\n09-08 16:50:07.674 D/MainActivity: firstObs 1\n09-08 16:50:08.672 D/MainActivity: onCompleted2\n09-08 16:50:08.672 D/MainActivity: onUnsubscribe2\n09-08 16:50:08.674 D/MainActivity: firstObs 2\n09-08 16:50:09.674 D/MainActivity: firstObs 3\n09-08 16:50:10.674 D/MainActivity: firstObs 4\n...\n```\n\nwhen using the following code then?\n\n``` java\nObservable.interval(1, TimeUnit.SECONDS)\n      .doOnNext(n -> Timber.d(\"firstObs %s\", n))\n      .doOnSubscribe(() -> Timber.d(\"onSubscribe\"))\n      .doOnUnsubscribe(() -> Timber.d(\"onUnsubscribe\"))\n      .doOnCompleted(() -> Timber.d(\"onCompleted\"))\n      .skipUntil(Observable.timer(3, TimeUnit.SECONDS)\n        .flatMap(b -> Observable.empty())\n        .doOnCompleted(() -> Timber.d(\"onCompleted2\"))\n        .doOnSubscribe(() -> Timber.d(\"onSubscribe2\"))\n        .doOnUnsubscribe(() -> Timber.d(\"onUnsubscribe2\"))\n      )\n      .subscribe(\n        n -> Timber.d(\"Next? %s\", n),\n        e -> Timber.d(e, \"Err\"),\n        () -> Timber.d(\"Completed\")\n      );\n    Timber.d(\"Ciao\");\n```\n"
+      },
+      {
+        "user": "JakeWharton",
+        "created_at": "2016-09-08T14:56:57Z",
+        "body": "Because timer completes. I guess you're just using that as an `ignoreElements()`?\n"
+      },
+      {
+        "user": "vekexasia",
+        "created_at": "2016-09-08T14:59:19Z",
+        "body": "Actually I was hoping that when the skipUntil observable completes, then \"parent\".\"unsubscribe\"  is triggered so that no more elements are sent through the pipeline.\n"
+      },
+      {
+        "user": "JakeWharton",
+        "created_at": "2016-09-08T15:00:28Z",
+        "body": "`skipUntil` is documented to require an emission to unlatch upstream events so all you need to do is remove your `flatMap`.\n\n> Returns an Observable that skips items emitted by the source Observable until a second Observable emits an item.\n"
+      },
+      {
+        "user": "vekexasia",
+        "created_at": "2016-09-08T15:11:48Z",
+        "body": "the code above is just as \"sample\". Consider an observable that completes after three seconds without emitting any item (used as skipUntil parameter).\n\nIn such case the first obs will just continue emit its elements without ever completing (and without any chance for the items to reach the end of the chain) \n\n\n---\n\nJust to mention that I rewrote the OperatorSkipUntil so that it unsubscribes from `child` when `other` completes without emitting any element.\n\nI figured it would be something to raise here since someone might expect the same behavior ( if `other` completes without emitting any elements then unsubscribe from `child`)\n"
+      },
+      {
+        "user": "JakeWharton",
+        "created_at": "2016-09-08T15:17:01Z",
+        "body": "Ahhh, I see. That makes sense I think. I thought you were proposing that it become unlatched when the inner observable completes.\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-09-08T15:22:45Z",
+        "body": "Yes, `skipUntil` requires the other `Observable` to signal an item in 1.x and just ignores an empty other `Observable`. In 2.x `skipUntil` enables the gate when the source either signals or just completes.\n\nThis signals-or-completes is a common practice in such operators that take auxiliary sources to trigger one-time events. I guess the 1.x `skipUntil` not opening the gate on a plain `onComplete` is a bug.\n"
+      },
+      {
+        "user": "vekexasia",
+        "created_at": "2016-09-08T15:31:59Z",
+        "body": "Thank you all :)\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why `skipUntil` does not trigger source observable completion when the controlling observable completes without emitting an item",
+      "Identification of the relationship between observable completion events and operator-specific requirements",
+      "Clarification of how to achieve desired termination behavior when using completion-only control observables",
+      "Differentiation between RxJava 1.x and 2.x behaviors for completion propagation in operators",
+      "Addressing the expectation that operator completion should trigger upstream unsubscription"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:35:14"
+    }
+  },
+  {
+    "number": 3844,
+    "title": "delaySubscription(Observable) breaks upstream unsubscription",
+    "created_at": "2016-04-08T18:26:09Z",
+    "closed_at": "2016-04-09T08:44:57Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/3844",
+    "body": "This test case is failing (tested with 1.1.2):\n\n``` java\n  @Test\n  public void testWithSubjects() {\n    PublishSubject<Integer> delayUntil = PublishSubject.create();\n    PublishSubject<Integer> interrupt = PublishSubject.create();\n    final AtomicBoolean subscribed = new AtomicBoolean(false);\n\n    Observable.just(1)\n        .doOnSubscribe(() -> subscribed.set(true))\n        .delaySubscription(delayUntil)\n        .takeUntil(interrupt)\n        .subscribe();\n\n    interrupt.onNext(9000);\n    delayUntil.onNext(1);\n\n    assertFalse(subscribed.get());\n  }\n\n```\n\nI stumbled upon this using `Completable.andThen` (which delegates to `delaySubscription`).\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/3844/comments",
+    "author": "hannesstruss",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-04-08T18:31:47Z",
+        "body": "TakeUntil subscribes to its source before the subscription to upstream could happen. This is partly due to how `lift` works and partly to allow interrupting a synchronous source as it would otherwise possibly rush through without letting the operator subscribe to the until source.\n"
+      },
+      {
+        "user": "hannesstruss",
+        "created_at": "2016-04-08T19:02:22Z",
+        "body": "In other words, `takeUntil` only guarantees to suppress emission of items given a condition, but does not guarantee what happens upstream?\n\n(I was confused, as the analogous example with time based `delaySubscription` works:)\n\n``` java\n  @Test\n  public void testWithSubjects() {\n    PublishSubject<Integer> interrupt = PublishSubject.create();\n    final AtomicBoolean subscribed = new AtomicBoolean(false);\n    TestScheduler testScheduler = new TestScheduler();\n\n    Observable.just(1)\n        .doOnSubscribe(() -> subscribed.set(true))\n        .delaySubscription(1, TimeUnit.SECONDS, testScheduler)\n        .takeUntil(interrupt)\n        .subscribe();\n\n    interrupt.onNext(9000);\n    testScheduler.advanceTimeBy(1, TimeUnit.SECONDS);\n\n    assertFalse(subscribed.get());\n  }\n```\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-04-08T19:57:05Z",
+        "body": "Interesting. The second case shouldn't pass either. I'll investigate.\n\n\n---\n\nOkay, I was wrong. Both tests should pass because they verify that the subscription doesn't happen - as expected. There is a bug in the non-timed `delaySubscription` that doesn't propagate the unsubscription properly. I'll post a PR to fix that.\n\n\n---\n\nFix posted: #3845\n"
+      },
+      {
+        "user": "hannesstruss",
+        "created_at": "2016-04-09T08:44:57Z",
+        "body": "This works in 1.1.3, thanks so much! \u2728 \n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure upstream unsubscription propagates correctly when using delaySubscription with an Observable source",
+      "Maintain consistent behavior between time-based and Observable-based delaySubscription implementations",
+      "Preserve expected operator composition semantics for takeUntil with delayed subscriptions",
+      "Handle interruption signals received before delayed subscription activation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:38:07"
+    }
+  },
+  {
+    "number": 3801,
+    "title": "PublishSubject: OnNext Not delivered or OnNext delivered on wrong Thread",
+    "created_at": "2016-03-27T20:58:37Z",
+    "closed_at": "2016-03-27T21:36:17Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/3801",
+    "body": "I was writing some automated test to verify the behaviour of PublishSubject and I noticed strange and unexpected behaviour when the subject is subscribed on a Scheduler. If I do not put a sleep after the subscriber, I will not get the onNext items but the onCompleted is called on the correct Thread. If I put a sleep after subscribing, the subscriber receives the onNext items but on the wrong thread. It receives the onNext items on the thread that called the subject.onNext.\n\nI wrote some unit test to show the behaviour. Both tests will fail with rxjava 1.1.2. Is this a bug or is this expected behavior and where can I find this in the documentation? \n\n``` java\nimport org.junit.Test;\nimport rx.observers.TestSubscriber;\nimport rx.subjects.PublishSubject;\n\nimport static org.assertj.core.api.Assertions.assertThat;\nimport static rx.schedulers.Schedulers.newThread;\n\npublic class PublishSubjectTest {\n\n    @Test\n    public void subscribeOn_WhenNoSleep_ThenNoOnNextReceived() throws InterruptedException {\n\n        // GIVEN\n        PublishSubject<String> subject = PublishSubject.create();\n        Thread currentThread = Thread.currentThread();\n        TestSubscriber<String> subscriber = new TestSubscriber<>();\n\n        // WHEN\n        subject.subscribeOn(newThread()).subscribe(subscriber);\n        subject.onNext(\"one\");\n        subject.onCompleted();\n\n        // THEN\n        subscriber.awaitTerminalEvent();\n        assertThat(subscriber.getLastSeenThread()).isNotSameAs(currentThread);\n        assertThat(subscriber.getOnNextEvents()).containsOnly(\"one\");\n\n    }\n\n    @Test\n    public void subscribeOn_WhenSleep_ThenOnNextReceivedButOnWrongThread() throws InterruptedException {\n\n        // GIVEN\n        PublishSubject<String> subject = PublishSubject.create();\n        Thread currentThread = Thread.currentThread();\n        TestSubscriber<String> subscriber = new TestSubscriber<>();\n\n        // WHEN\n        subject.subscribeOn(newThread()).subscribe(subscriber);\n        Thread.sleep(2000);\n        subject.onNext(\"one\");\n        subject.onCompleted();\n\n        // THEN\n        subscriber.awaitTerminalEvent();\n        assertThat(subscriber.getOnNextEvents()).containsOnly(\"one\");\n        assertThat(subscriber.getLastSeenThread()).isNotSameAs(currentThread);\n\n    }\n\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/3801/comments",
+    "author": "bdeneuter",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-03-27T21:14:05Z",
+        "body": "The problem is that you use `subscribeOn` instead of `observeOn` to move the delivery of events to another thread. When you `subscribeOn`, that delays the real subscription to `PublishSubject` by some amount, giving enough time to `onNext` to be observed by no one. You see only `onCompleted` because `PublishSubject` replays the terminal event to late `Subscriber`s.\n"
+      },
+      {
+        "user": "bdeneuter",
+        "created_at": "2016-03-27T21:30:20Z",
+        "body": "Thx David,\n\nIndeed, observeOn seems to solve the behaviour I was seeing. With subsribeOn and waiting long enough for the subscription to succeed, can you also explain why the terminal event is delivered on the main thread and not on the scheduler thread?\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2016-03-27T21:35:01Z",
+        "body": "You are racing with the subscription and by chance, it is possible the subscription happens in time for onComplete to pass through directly to the Subscriber.\n"
+      },
+      {
+        "user": "bdelville",
+        "created_at": "2018-07-17T00:52:10Z",
+        "body": "Hi\r\n\r\nI am not sure about the racing condition explanation, because I can reproduce it with a BehaviorSubject too (with onNext() called after subscription and timer before it)\r\n\r\n```\r\n@Test\r\n  public void testSubjectThreadFollowSubscribeOn() {\r\n    TestObserver<String> tester = new TestObserver<>();\r\n    BehaviorSubject<Integer> source = BehaviorSubject.create();\r\n    String currentThread = Thread.currentThread().getName();\r\n\r\n    source\r\n        .subscribeOn(Schedulers.io())\r\n        .take(1)\r\n        .map(o -> Thread.currentThread().getName())\r\n        .subscribe(tester);\r\n    source.onNext(1);\r\n\r\n    tester.awaitCount(1);\r\n    tester.assertValue(threadAfterSubscribeOn -> !threadAfterSubscribeOn.equals(currentThread));\r\n}\r\n```"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2018-07-17T06:37:04Z",
+        "body": "You still have a race where onNext could find an already subscribed observer and signal the first item on the test thread."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why subscribeOn causes delayed/missed onNext events but allows onCompleted delivery",
+      "Clarification of thread assignment rules for PublishSubject events",
+      "Identification of race condition between subscription and event emission",
+      "Differentiation between subscribeOn and observeOn semantics for subjects"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:38:46"
+    }
+  },
+  {
+    "number": 3748,
+    "title": "replay().connect() does not complete on current thread",
+    "created_at": "2016-03-11T13:10:57Z",
+    "closed_at": "2016-03-11T14:14:19Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/3748",
+    "body": "This test case:\n\n``` java\n  @Test\n  public void test() {\n    final AtomicBoolean onNext = new AtomicBoolean(false);\n    final AtomicBoolean onCompleted = new AtomicBoolean(false);\n\n    Observable<String> o = Observable.just(\"Hallo\")\n        .doOnNext(new Action1<String>() {\n          @Override\n          public void call(String s) {\n            onNext.set(true);\n          }\n        })\n        .doOnCompleted(new Action0() {\n          @Override\n          public void call() {\n            onCompleted.set(true);\n          }\n        });\n\n    ConnectableObservable<String> connectable = o.replay();\n    connectable.connect();\n\n    assertTrue(onNext.get());\n    assertTrue(onCompleted.get());\n  }\n```\n\nstarted failing for me on the latest snapshot. `git bisect` says c925e860c01c30edc15c59c592c1d5e9b9777a90 is the first bad commit. `.publish()` is not affected.\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/3748/comments",
+    "author": "hannesstruss",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-03-11T13:28:32Z",
+        "body": "Previously, `just()` didn't support backpressure and emitted its value immediately after subscription. Now it waits for a proper downstream request which doesn't happen because `replay()` requests upstream only when there is a downstream request. Just add `connectable.subscribe()` to trigger `just()`.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why replay().connect() doesn't trigger emission without subscribers",
+      "Clarification of interaction between replay() operator and cold observables in current RxJava version"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:39:15"
+    }
+  },
+  {
+    "number": 3611,
+    "title": "GroupedObservable -> toBlocking() - hang forever",
+    "created_at": "2016-01-11T13:31:57Z",
+    "closed_at": "2016-01-11T20:42:51Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/3611",
+    "body": "Found an issue where `groupObservable.toBlocking()` hangs.\n\n`rxjava:1.1.0`\n\n```\nObservable\n            .just(1, 1, 2, 3, 4, 4, 5)\n            .groupBy(new Func1<Integer, Boolean>() {\n                @Override\n                public Boolean call(Integer integer) {\n                    return integer % 2 == 0;\n                }\n            }).subscribe(new Action1<GroupedObservable<Boolean, Integer>>() {\n            @Override\n            public void call(GroupedObservable<Boolean, Integer> grouped) {\n                List<Integer> first = grouped.toList().toBlocking().first();\n                Timber.d(first.size() + \" (Even: \" + grouped.getKey() + \")\");\n            }\n        });\n```\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/3611/comments",
+    "author": "palaima",
+    "comments": [
+      {
+        "user": "akarnokd",
+        "created_at": "2016-01-11T15:47:43Z",
+        "body": "Hi. This is expected as the `toBlocking` gives access to blocking functions that may block the sequence. In this case, the problem is that `toList` expects a complete stream and won't emit until it receives an `onCompleted` event, Since you applied `toBlocking().first()`, that will block the current thread until it receives a single element which `toList` can't ever produce; the whole chain up to the producing `just` is blocked. The usual solution is to use `flatMap` and do some non-blocking processing with `GroupedObservable`:\n\n``` java\nObservable.just(1, 1, 2, 3, 4, 4, 5)\n.groupBy(v -> v % 2 == 0)\n.flatMap(g -> g.toList().doOnNext(first ->\n    Timber.d(first.size() + \" (Even: \" + g.getKey() + \")\")).ignoreElements())\n.subscribe(v -> { }, Throwable::printStackTrace);\n```\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the blocking call causes a deadlock in grouped observable processing",
+      "Demonstration of non-blocking stream completion handling for GroupedObservable",
+      "Use of appropriate RxJava operators for merging/flattening grouped streams"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:40:09"
+    }
+  },
+  {
+    "number": 2947,
+    "title": "TestObserver thread-safety",
+    "created_at": "2015-05-14T01:18:16Z",
+    "closed_at": "2015-05-14T14:45:16Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/2947",
+    "body": "Disclaimer: I understand, that `TestObserver` and `TestSubscriber` were made for Unit testing purposes, but they are pretty convenient because you can record received notifications and emissions, make assertions and so on, so we used them it in our Integration test and faced problem with thread-safety of `TestObserver`.\n\nThe problem is that `TestObserver` uses `ArrayList` to store notifications and received items, in case of multi-threaded `Observable` `ArrayList` may be corrupted and tests can fail randomly.\n\nWhat do you think about using thread-safe list implementation in `TestObserver`? It should not break public API. I can prepare PR for that.\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/2947/comments",
+    "author": "artem-zinnatullin",
+    "comments": [
+      {
+        "user": "benjchristensen",
+        "created_at": "2015-05-14T05:21:53Z",
+        "body": "None of these types are thread safe and are not supposed to be as Observables are single threaded. We do not serialize by default for performance reasons. \n\nIf you need to serialize a Subject, use the toSerialized() method. An Observer should never need to be thread safe unless an Observable is breaking the contract, in which case use Observable.serialize()\n"
+      },
+      {
+        "user": "artem-zinnatullin",
+        "created_at": "2015-05-14T12:41:49Z",
+        "body": "Oh.. Dived in sources for couple hours, wrote several questions and then deleted them, now I understand more. Thanks.\n\nOne question left: am I correct that there is no need to serialize `PublishSubject` because it's already serialized per each `Observer`, because each `Observer` wrapped into `SubjectSubscriptionManager.SubjectObserver` which is serialized?\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2015-05-14T13:09:34Z",
+        "body": "No. You need to front-serialize a `PublishSubject` via `toSerialized()`. Technically, a concurrent `onNext()` call doesn't break `PublishSubject` itself but observers don't and shouldn't anticipate concurrent calls to their `onXXX` methods.\n"
+      },
+      {
+        "user": "artem-zinnatullin",
+        "created_at": "2015-05-14T14:45:16Z",
+        "body": "Checked sources again, now I see. Thanks! Issue solved.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to ensure thread-safety when using TestObserver with multi-threaded Observables",
+      "Clarification of the Observable contract requirements regarding threading",
+      "Guidance on proper use of serialization mechanisms like Observable.serialize() or toSerialized()",
+      "Confirmation that modifying TestObserver's internal list implementation isn't necessary when following Observable contracts"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:42:31"
+    }
+  },
+  {
+    "number": 2805,
+    "title": "PublishSubject does not honour subscribeOn",
+    "created_at": "2015-03-05T12:23:53Z",
+    "closed_at": "2015-03-12T23:11:10Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/ReactiveX/RxJava/issues/2805",
+    "body": "In the code below, the subscriber gets called in main thread itself. If we remove the sleep, subscriber is not even called. Tried version 1.0.7, 1.0.6 and 1.0.4. My understanding is that the subscriber will be called in the passed executor.\n\n``` java\n  public static void main(String[] args) {\n        ExecutorService executor = Executors.newFixedThreadPool(2);\n        Scheduler scheduler = Schedulers.from(executor);\n\n        Subject<Integer, Integer> sub = PublishSubject.create();\n        // BufferUntilSubscriber.create();\n        sub.subscribeOn(scheduler).subscribe(new Action1<Integer>() {\n            @Override\n            public void call(Integer t1) {\n                // This prints 'main'\n                System.out.println(Thread.currentThread());\n            }\n        });\n\n        try {\n            Thread.sleep(100);\n        } catch (InterruptedException e1) {\n            e1.printStackTrace();\n        }\n\n        sub.onNext(1);\n    }\n```\n",
+    "comments_url": "https://api.github.com/repos/ReactiveX/RxJava/issues/2805/comments",
+    "author": "ashish-tyagi",
+    "comments": [
+      {
+        "user": "ashish-tyagi",
+        "created_at": "2015-03-05T12:31:50Z",
+        "body": "If we use BufferUntilSubscriber, the behavior is even more puzzling. If there is no sleep, the subscriber gets called in the executor thread. If we put some sleep, the subscriber gets called in main thread.  Should not the behavior be consistent, sleep or no sleep?\n\n``` java\n    public static void main(String[] args) {\n        ExecutorService executor = Executors.newFixedThreadPool(2);\n        Scheduler scheduler = Schedulers.from(executor);\n\n        Subject<Integer, Integer> sub = BufferUntilSubscriber.create();\n        sub.subscribeOn(scheduler).subscribe(new Action1<Integer>() {\n            @Override\n            public void call(Integer t1) {\n                System.out.println(Thread.currentThread());\n            }\n        });\n\n        try {\n            Thread.sleep(100);\n        } catch (InterruptedException e1) {\n            e1.printStackTrace();\n        }\n\n        sub.onNext(1);\n    }\n```\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2015-03-05T15:45:20Z",
+        "body": "Your first example subscribes on the given thread but receives values from the same thread your PublishSubject is emitting. You need `observeOn` to put those values to the desired thread.\n"
+      },
+      {
+        "user": "ashish-tyagi",
+        "created_at": "2015-03-05T20:48:21Z",
+        "body": "Yes, observeOn works fine.\n\nThe behavior in second example is still inconsistent.\n"
+      },
+      {
+        "user": "akarnokd",
+        "created_at": "2015-03-05T21:24:38Z",
+        "body": "In the second example, there is a race between the main thread emission and when the BufferUntilSubscriber starts to replay any buffered value. If the main thread is slow, the BufferUntilSubscriber wins but is empty at that point and just relays any value. If the main thread is fast, the BufferUntilSubscriber receives the value first, then it is subscribed to on the specified thread and immediately replays this buffered value.\n"
+      },
+      {
+        "user": "ashish-tyagi",
+        "created_at": "2015-03-12T23:11:10Z",
+        "body": "Thanks for the info. I had a misunderstanding on how onSubscribe() should work.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how RxJava schedulers interact with Subject implementations like PublishSubject and BufferUntilSubscriber",
+      "Clear distinction between subscribeOn and observeOn semantics in RxJava",
+      "Analysis of race conditions in asynchronous subscription scenarios",
+      "Behavior consistency expectations for different Subject types under varying timing conditions"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:42:44"
+    }
+  }
+]

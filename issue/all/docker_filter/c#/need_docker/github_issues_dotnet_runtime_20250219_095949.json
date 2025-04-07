@@ -1,0 +1,390 @@
+[
+  {
+    "number": 99559,
+    "title": "[System.Reflection.Emit] AssemblyBuilderAccess.RunAndCollect not collecting assemblies",
+    "created_at": "2024-03-11T19:45:12Z",
+    "closed_at": "2024-03-11T22:20:54Z",
+    "labels": [
+      "question",
+      "area-AssemblyLoader-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/99559",
+    "body": "### Description\r\n\r\nSo I've been playing around with `AssemblyBuilderAccess.RunAndCollect`, but it turns out it's not working and has the same behavior as `Run`.\r\nAccording to the docs:\r\n```\r\nThe dynamic assembly will be automatically unloaded and its memory reclaimed,\r\nwhen it's no longer accessible.\r\n```\r\n\r\nEven after fully unreferencing everything related to my dynamic assembly, it will not unload, even after a forced GC collection.\r\nI have fully tested this, using the code in the section below.\r\n\r\n### Reproduction Steps\r\n\r\nI tested this with the following script:\r\n```cs\r\nint id = 0;\r\nfor (; ; )\r\n{\r\n    GC.Collect();\r\n\r\n    var name = $\"Test{id++}\";\r\n    var asm = AssemblyBuilder.DefineDynamicAssembly(new(name), AssemblyBuilderAccess.RunAndCollect);\r\n    var mod = asm.DefineDynamicModule(name);\r\n\r\n    var type1 = mod.DefineType(\"TestClass\", TypeAttributes.Public);\r\n    var met = type1.DefineMethod(\"Foo\", MethodAttributes.Public | MethodAttributes.Static);\r\n    var il = met.GetILGenerator();\r\n    il.EmitWriteLine(\"Hello World!\");\r\n    il.Emit(OpCodes.Ret);\r\n    var t = type1.CreateType();\r\n\r\n    t.InvokeMember(\"Foo\", BindingFlags.Static | BindingFlags.Public | BindingFlags.InvokeMethod, null, null, null);\r\n\r\n    Console.WriteLine(\"----\");\r\n\r\n    foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n    {\r\n        if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n            continue;\r\n\r\n        Console.WriteLine(ass.FullName);\r\n    }\r\n\r\n    Thread.Sleep(100);\r\n    Console.Clear();\r\n}\r\n```\r\n\r\n### Expected behavior\r\n\r\nAfter a `GC.Collect`, the AppDomain should not contain the previously loaded dynamic assembly, and the console output should only contain the latest dyanmic assembly.\r\n\r\nExpected console output after 6th iteration:\r\n```\r\nHello World!\r\n----\r\nTest5, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```\r\n\r\n### Actual behavior\r\n\r\nThe AppDomain still contains the old dynamic assemblies, even after a forced collection, as seen in the console output.\r\n\r\nActual console output after 6th iteration:\r\n```\r\nHello World!\r\n----\r\nTest0, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest1, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest2, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest3, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest4, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest5, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```\r\n\r\n### Regression?\r\n\r\nI have tested the same code in net48 and net472, but the results are the same.\r\n\r\n### Known Workarounds\r\n\r\n_No response_\r\n\r\n### Configuration\r\n\r\nnet8.0\r\nWindows 11\r\nx64\r\nI don't believe the issue is related to these configs.\r\n\r\n### Other information\r\n\r\n_No response_",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/99559/comments",
+    "author": "slxdy",
+    "comments": [
+      {
+        "user": "slxdy",
+        "created_at": "2024-03-11T20:08:49Z",
+        "body": "Ok, I have done some extra research, and it turns out that `GetAssemblies` prevents collectible assemblies from being unloaded in the future.\r\nFrom what I've read, that should only happen when using `Assembly.Load`. I don't think `GetAssemblies` should replicate this behavior, considering that we should have the ability to check for loaded assemblies, collectible or not, without forcing collectible assemblies to stay alive forever.\r\nIs it worth opening another issue for this problem?"
+      },
+      {
+        "user": "reflectronic",
+        "created_at": "2024-03-11T20:22:14Z",
+        "body": "The issue does not reproduce for me after extracting the `foreach` to a separate method:\r\n```cs\r\n// ...\r\n    Console.WriteLine(\"----\");\r\n\r\n    PrintAssemblies();\r\n\r\n    Thread.Sleep(100);\r\n    Console.Clear();\r\n}\r\n\r\n\r\nstatic void PrintAssemblies()\r\n{\r\n    foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n    {\r\n        if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n            continue;\r\n\r\n        Console.WriteLine(ass.FullName);\r\n    }\r\n}\r\n``` \r\n\r\nThen I get output like this:\r\n```\r\nHello World!\r\n----\r\nTest33, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\nTest34, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n```"
+      },
+      {
+        "user": "slxdy",
+        "created_at": "2024-03-11T20:34:20Z",
+        "body": "> The issue does not reproduce for me after extracting the `foreach` to a separate method:\r\n> \r\n> ```cs\r\n> // ...\r\n>     Console.WriteLine(\"----\");\r\n> \r\n>     PrintAssemblies();\r\n> \r\n>     Thread.Sleep(100);\r\n>     Console.Clear();\r\n> }\r\n> \r\n> \r\n> static void PrintAssemblies()\r\n> {\r\n>     foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())\r\n>     {\r\n>         if (!ass.GetName().Name?.StartsWith(\"Test\") ?? true)\r\n>             continue;\r\n> \r\n>         Console.WriteLine(ass.FullName);\r\n>     }\r\n> }\r\n> ```\r\n> \r\n> Then I get output like this:\r\n> \r\n> ```\r\n> Hello World!\r\n> ----\r\n> Test33, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n> Test34, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\r\n> ```\r\n\r\nOh wow. I thought i was gonna be stuck with an annoying issue for a while, tysm.\r\nBefore I close the issue, mind explaining why this is the case tho, if you know at least? If I had to guess, it's probably because I'm getting the assemblies in the same stack?"
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2024-03-11T21:49:46Z",
+        "body": "Yes, `GetAssemblies()` returns the array of with all assemblies, the JIT may extend the lifetime of the array till end of the method (depends on many factors)."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why accessing AppDomain.CurrentDomain.GetAssemblies() in the same method prevents garbage collection",
+      "Clarification of how assembly references are maintained in stack frames",
+      "General guidance on avoiding unintended assembly retention when using collectible assemblies",
+      "Explanation of JIT optimization impacts on garbage collection"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:42:22"
+    }
+  },
+  {
+    "number": 76175,
+    "title": "Incorrect marshalling of IntPtr in union",
+    "created_at": "2022-09-26T11:05:43Z",
+    "closed_at": "2022-09-26T15:12:07Z",
+    "labels": [
+      "question",
+      "area-Interop-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/76175",
+    "body": "### Description\r\n\r\nNext example shows incorrect output in managed code of `StructA.Y`. For some reason the value is truncated.\r\n\r\nManaged part:\r\n```c#\r\nusing System;\r\nusing System.Runtime.InteropServices;\r\n\r\npublic class Program\r\n{\r\n  [StructLayout(LayoutKind.Sequential)]\r\n  internal struct StructA\r\n  {\r\n    internal IntPtr X;\r\n    internal IntPtr Y;\r\n    internal IntPtr Z;\r\n    internal uint XLength;\r\n    internal uint YLength;\r\n    internal uint ZLength;\r\n  }\r\n\r\n  [StructLayout(LayoutKind.Sequential)]\r\n  internal struct StructB\r\n  {\r\n    internal IntPtr Data;\r\n    internal uint DataLength;\r\n    internal bool Flag;\r\n  }\r\n\r\n  [StructLayout(LayoutKind.Explicit)]\r\n  internal struct UnionStruct\r\n  {\r\n    [FieldOffsetAttribute(0)]\r\n    internal StructA A;\r\n    [FieldOffsetAttribute(0)]\r\n    internal StructB B;\r\n  }\r\n\r\n  [DllImport(\"tmp.so\", EntryPoint = \"test_func\")]\r\n  internal static extern IntPtr testFunc(int value);\r\n\r\n  static void Main(string[] args)\r\n  {\r\n    Console.WriteLine(\"Hello World!\");\r\n\r\n    IntPtr ptr = testFunc(10);\r\n\r\n    var unmanagedStruct = Marshal.PtrToStructure<UnionStruct>(ptr);\r\n\r\n    Console.WriteLine(\">>> managed:\");\r\n    Console.WriteLine(unmanagedStruct.A.X);\r\n    Console.WriteLine(unmanagedStruct.A.Y);\r\n    Console.WriteLine(unmanagedStruct.A.Z);\r\n    Console.WriteLine(unmanagedStruct.A.XLength);\r\n    Console.WriteLine(unmanagedStruct.A.YLength); \r\n    Console.WriteLine(unmanagedStruct.A.ZLength);\r\n\r\n    Console.WriteLine(unmanagedStruct.B.Data);\r\n    Console.WriteLine(unmanagedStruct.B.DataLength);\r\n    Console.WriteLine(unmanagedStruct.B.Flag);\r\n  }\r\n}\r\n```\r\n\r\nNative part:\r\n```c\r\n#include <malloc.h>\r\n#include <string.h>\r\n#include <stdio.h>\r\n#include <stdbool.h>\r\n\r\ntypedef union {\r\n  struct {\r\n    unsigned char *x;\r\n    unsigned char *y;\r\n    unsigned char *z;\r\n    unsigned int x_length;\r\n    unsigned int y_length;\r\n    unsigned int z_length;\r\n  } A;\r\n\r\n  struct {\r\n    unsigned char *data;\r\n    unsigned int size;\r\n    bool flag;\r\n  } B;\r\n} union_s;\r\n\r\nvoid* test_func()\r\n{\r\n  printf(\">>> test_func:\\n\");\r\n\r\n  union_s * x = (union_s *) malloc(sizeof(union_s));\r\n\r\n  x->A.x = (unsigned char *) (0x7ea33f5000);\r\n  x->A.y = (unsigned char *) (0x7ea3440000);\r\n  x->A.z = (unsigned char *) (0x7ea3452c00);\r\n  x->A.x_length = (555);\r\n  x->A.y_length = (666);\r\n  x->A.z_length = (1010);\r\n\r\n  printf(\"x = %p, y = %p, z = %p, x_length = %u, y_length = %u, z_length = %u\\n\", \r\n    x->A.x, x->A.y, x->A.z, x->A.x_length, x->A.y_length, x->A.z_length);\r\n\r\n  return x;\r\n}\r\n```\r\n\r\n\r\n### Reproduction Steps\r\n\r\nCompile native part with `gcc -shared -fPIC 1.c -o tmp.so`. \r\n\r\n\r\n\r\n### Expected behavior\r\n\r\nExpected output:\r\n```\r\nHello World!\r\n>>> test_func:\r\nx = 0x7ea33f5000, y = 0x7ea3440000, z = 0x7ea3452c00, x_length = 555, y_length = 666, z_length = 1010\r\n>>> managed:\r\n543904714752\r\n543905021952\r\n543905098752\r\n555\r\n666\r\n1010\r\n543904714752\r\n2739142656\r\nTrue\r\n```\r\n\r\n### Actual behavior\r\n\r\nActual output:\r\n```\r\nHello World!\r\n>>> test_func:\r\nx = 0x7ea33f5000, y = 0x7ea3440000, z = 0x7ea3452c00, x_length = 555, y_length = 666, z_length = 1010\r\n>>> managed:\r\n543904714752\r\n7034109952\r\n543905098752\r\n555\r\n666\r\n1010\r\n543904714752\r\n2739142656\r\nTrue\r\n```\r\n\r\n`7034109952` value corresponds to truncated `543905021952`.\r\n\r\n### Regression?\r\n\r\n_No response_\r\n\r\n### Known Workarounds\r\n\r\n_No response_\r\n\r\n### Configuration\r\n\r\n- Reproduces on x64/arm64. Managed part of test is built with dotnet sdk 6.0.201 or dotnet sdk 5.0.408.\r\n- Reproduces on 6.0.0, 6.0.9 and main (8bf6a86f1bc309529604430c568c14490d44d069).\r\n- Reproduces with Release/Debug builds of managed part of test.\r\n- Reproduces both for Release/Debug builds of runtime.\r\n- Reproduces both with and without any R2R images.\r\n- Doesn't reproduce if type of `Struct.B.DataLength` is changed to ulong (as well as type of corresponding field in native part).\r\n\r\n### Other information\r\n\r\ncc @alpencolt @jkotas ",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/76175/comments",
+    "author": "gbalykov",
+    "comments": [
+      {
+        "user": "DaZombieKiller",
+        "created_at": "2022-09-26T12:20:57Z",
+        "body": "The issue here is that your `StructB` type contains a managed `bool` field, which causes it to be treated as a non-blittable type. Since `UnionStruct` contains a field of `StructB`, it too is considered non-blittable. This means that `Marshal.PtrToStructure` will attempt to marshal your type instead of just blitting the data across, resulting in the corruption of your pointer.\r\n\r\nFor ease of reproduction, here is a managed replacement for the native `test_func` method, which still reproduces the problem:\r\n```cs\r\nstatic unsafe IntPtr testFunc(int value)\r\n{\r\n    Console.WriteLine(\">>> test_func:\");\r\n    var a = (StructA*)NativeMemory.Alloc((uint)sizeof(StructA));\r\n    a->X = unchecked((nint)0x7ea33f5000);\r\n    a->Y = unchecked((nint)0x7ea3440000);\r\n    a->Z = unchecked((nint)0x7ea3452c00);\r\n    a->XLength = 555;\r\n    a->YLength = 666;\r\n    a->ZLength = 1010;\r\n    Console.WriteLine($\"x = 0x{a->X:X}, y = 0x{a->Y:X}, z = 0x{a->Z:X}, x_length = {a->XLength}, y_length = {a->YLength}, z_length = {a->ZLength}\");\r\n    return (IntPtr)a;\r\n}\r\n```\r\n\r\nThere are a few solutions:\r\n1. Use `*(UnionStruct*)ptr` instead of `Marshal.PtrToStructure`.\r\n2. Change the `bool` field to `byte`, which will cause the types to be considered blittable and no marshaling will occur.\r\n3. Add `[assembly: DisableRuntimeMarshaling]` and use `*(UnionStruct*)ptr` instead of `Marshal.PtrToStructure`.\r\n\r\nMy personal recommendation would be to go with option 2 and use `*(UnionStruct*)ptr` to read the value."
+      },
+      {
+        "user": "gbalykov",
+        "created_at": "2022-09-26T12:35:58Z",
+        "body": "Thanks for response.\r\n\r\nDoesn't it mean then that `Marshal.PtrToStructure` works incorrectly in such case of non-blittable types? Or marshaler is expected to work incorrectly in such case of non-blittable types?\r\n\r\nI've checked solution 2, as a workaround it works, thanks. "
+      },
+      {
+        "user": "DaZombieKiller",
+        "created_at": "2022-09-26T12:54:36Z",
+        "body": "I think this is expected behaviour, even if it may be a bit confusing.\r\n\r\nThink about how the type would be marshaled. Each field will be written in order. The marshaller normalizes booleans to `0` (`false`) or `1` (`true`).\r\n\r\nThey are also marshaled as a Win32 `BOOL` by default, which is a 32-bit integer (so it actually needs `[MarshalAs(UnmanagedType.U1)]` to have a matching layout with native).\r\n\r\nThis means that if your pointer overlaps with a `bool`, the overlapping byte will be normalized, corrupting the value once the marshaller starts marshaling `StructB`.\r\n\r\nTo help with understanding the problem, you can try performing the marshaling yourself. Define `StructB` as:\r\n```cs\r\n[StructLayout(LayoutKind.Sequential)]\r\ninternal struct StructB\r\n{\r\n    internal IntPtr Data;\r\n    internal uint DataLength;\r\n    internal int Flag; // Win32 BOOL = int\r\n}\r\n```\r\nAnd then read the value with:\r\n```cs\r\nvar unmanagedStruct = *(UnionStruct*)ptr;\r\n\r\n// normalize the bool\r\nunmanagedStruct.B.Flag = unmanagedStruct.B.Flag != 0 ? 1 : 0;\r\n```\r\nAnd you will see the same pointer corruption.\r\nAs a result, you can actually \"hide\" the problem by defining `UnionStruct` like this:\r\n```cs\r\n[StructLayout(LayoutKind.Explicit)]\r\ninternal struct UnionStruct\r\n{\r\n    [FieldOffset(0)]\r\n    internal StructB B;\r\n    [FieldOffset(0)]\r\n    internal StructA A;\r\n}\r\n```\r\nBecause `StructB` is marshaled first, you won't see the pointer corruption."
+      },
+      {
+        "user": "jkotas",
+        "created_at": "2022-09-26T15:12:07Z",
+        "body": "```\r\n  struct {\r\n    unsigned char *data;\r\n    unsigned int size;\r\n    bool flag;\r\n  } B;\r\n```\r\nNote that your managed definition of B does not match this structure. Size of `bool` is likely 1 byte in your C/C++ compiler. The default marshalling for `bool` assumes that the size is 4 bytes. This mismatch is contributing to the confusing behavior that you are seeing.\r\n\r\nManual marshalling that @DaZombieKiller suggested is the best way to avoid problems like this for more complex structs with unions, etc. You should use `byte` as managed equivalent for unmanaged `bool`.\r\n\r\nAlso, take a look at `DisableRuntimeMarshallingAttribute` that is new in .NET 7."
+      },
+      {
+        "user": "gbalykov",
+        "created_at": "2022-09-26T15:16:40Z",
+        "body": "@DaZombieKiller @jkotas thanks for detailed descriptions!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why boolean field marshaling causes pointer truncation in union structures",
+      "Guidance on maintaining blittable types for union interoperability",
+      "Clear strategy for handling overlapping fields in managed-unmanaged unions",
+      "Recommendations for direct memory access vs marshaling in union scenarios"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:42:55"
+    }
+  },
+  {
+    "number": 34097,
+    "title": "System.InvalidOperationException: StandardIn has not been redirected",
+    "created_at": "2020-03-25T22:51:00Z",
+    "closed_at": "2020-03-30T15:36:42Z",
+    "labels": [
+      "question",
+      "area-System.Diagnostics.Process"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/34097",
+    "body": "I got the following exception from time to time in my application whereas the standard input is  redirected.\r\n\r\n````\r\nException has occurred: CLR/System.InvalidOperationException\r\nAn exception of type 'System.InvalidOperationException' occurred in System.Diagnostics.Process.dll but was not handled in user code: 'StandardIn has not been redirected.'\r\n   at System.Diagnostics.Process.get_StandardInput()\r\n   at repro_process.Program.ExecuteProcessAsync(ProcessStartInfo psi) in /home/meziantou/repro-process/Program.cs:line 72\r\n   at repro_process.Program.<>c.<Main>b__0_0(Int32 i) in /home/meziantou/repro-process/Program.cs:line 27\r\n   at System.Threading.Tasks.Parallel.<>c__DisplayClass19_0`1.<ForWorker>b__1(RangeWorker& currentWorker, Int32 timeout, Boolean& replicationDelegateYieldedBeforeCompletion)\r\n````\r\n\r\nI tried to make a small repro of the code I have in production. Note that it doesn't always throw the exception. You may need to run the code 10 times to get the exception.\r\n\r\nA similar exception sometimes occurs on `process.BeginErrorReadLine()` or `process.BeginOutputReadLine()` with a similar message indicating the the standard output/error is not redirected.\r\n\r\n````c#\r\nusing System;\r\nusing System.Diagnostics;\r\nusing System.Threading.Tasks;\r\n\r\nnamespace repro_process\r\n{\r\n    class Program\r\n    {\r\n        static void Main()\r\n        {\r\n            // In the actual code, multiple unit tests (xUnit) run in parallel so I tried to reproduce this behavior by using Parallel.For\r\n            Parallel.For(0, 10000, i =>\r\n            {\r\n                var psi = new ProcessStartInfo\r\n                {\r\n                    FileName = \"git\",\r\n                    ArgumentList =\r\n                    {\r\n                        \"config\",\r\n                        \"--global\",\r\n                        \"test.a\",\r\n                        \"abc\" + i,\r\n                    },\r\n                    RedirectStandardError = true,\r\n                    RedirectStandardInput = true,\r\n                    RedirectStandardOutput = true,\r\n                };\r\n                ExecuteProcessAsync(psi).Wait(); // In the actual code, there is no wait/Result, only await\r\n                Console.WriteLine(i);\r\n            });\r\n        }\r\n\r\n        private static Task<bool> ExecuteProcessAsync(ProcessStartInfo psi)\r\n        {\r\n            var process = new System.Diagnostics.Process\r\n            {\r\n                StartInfo = psi,\r\n                EnableRaisingEvents = true,\r\n            };\r\n\r\n            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);\r\n            process.Exited += (sender, e) =>\r\n            {\r\n                try\r\n                {\r\n                    process.WaitForExit();\r\n                    process.Dispose();\r\n                    tcs.TrySetResult(true);\r\n                }\r\n                catch (Exception ex)\r\n                {\r\n                    tcs.SetException(ex);\r\n                }\r\n            };\r\n\r\n            process.Start();\r\n\r\n            if (psi.RedirectStandardOutput)\r\n            {\r\n                process.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };\r\n                process.BeginOutputReadLine();\r\n            }\r\n\r\n            if (psi.RedirectStandardError)\r\n            {\r\n                process.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };\r\n                process.BeginErrorReadLine();\r\n            }\r\n\r\n            if (psi.RedirectStandardInput)\r\n            {\r\n                process.StandardInput.Close();\r\n            }\r\n\r\n            return tcs.Task;\r\n        }\r\n    }\r\n}\r\n````\r\n\r\n**Environment:**\r\n- .NET Core 3.1.3 but I also get the exception on 3.1.0 and 3.1.2\r\n\r\n````\r\n$> lsb_release -a\r\nNo LSB modules are available.\r\nDistributor ID: Ubuntu\r\nDescription:    Ubuntu 18.04.2 LTS\r\nRelease:        18.04\r\nCodename:       bionic\r\n\r\n$> uname -a\r\nLinux DESKTOP-TV4IPEK 4.4.0-19041-Microsoft #1-Microsoft Fri Dec 06 14:06:00 PST 2019 x86_64 x86_64 x86_64 GNU/Linux\r\n\r\n$> lscpu\r\nArchitecture:        x86_64\r\nCPU op-mode(s):      32-bit, 64-bit\r\nByte Order:          Little Endian\r\nCPU(s):              4\r\nOn-line CPU(s) list: 0-3\r\nThread(s) per core:  1\r\nCore(s) per socket:  4\r\nSocket(s):           1\r\nVendor ID:           GenuineIntel\r\nCPU family:          6\r\nModel:               94\r\nModel name:          Intel(R) Core(TM) i5-6600 CPU @ 3.30GHz\r\nStepping:            3\r\nCPU MHz:             3301.000\r\nCPU max MHz:         3301.0000\r\nBogoMIPS:            6602.00\r\nHypervisor vendor:   Windows Subsystem for Linux\r\nVirtualization type: container\r\nFlags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm pni pclmulqdq dtes64 est tm2 ssse3 fma cx16 xtpr pdcm pcid sse4_1 sse4_2 movbe popcnt aes xsave osxsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap clflushopt ibrs ibpb stibp ssbd\r\n````\r\n\r\nEdit: I've just got the issue on Windows too (.NET Core 3.1.2).",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/34097/comments",
+    "author": "meziantou",
+    "comments": [
+      {
+        "user": "stephentoub",
+        "created_at": "2020-03-30T01:16:15Z",
+        "body": "This looks like a bug in your repro. Your `process.Exited` event handler is calling `process.Dispose`.  That can race with your subsequent call to `process.StandardInput.Close()`.  If the process exits and the `process.Dispose` is invoked before you access `process.StandardInput`, the call to `StandardInput` will throw, by design."
+      },
+      {
+        "user": "meziantou",
+        "created_at": "2020-03-30T15:36:42Z",
+        "body": "You are right! That's explain why it occurs very rarely. I've seen the new method `WaitForExitAsync` in the repository. I'll take inspiration from it to fix my code :)"
+      },
+      {
+        "user": "pakrym",
+        "created_at": "2020-11-12T21:25:17Z",
+        "body": "Wonder if it's worth throwing an `ObjectDisposedException` instead to make this situation more discoverable."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2020-11-24T05:34:54Z",
+        "body": "> Wonder if it's worth throwing an ObjectDisposedException instead to make this situation more discoverable.\r\n\r\nSeems reasonable to consider.\r\ncc: @adamsitnik @eiriktsarpalis"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of race condition between process disposal and stream access",
+      "Synchronization mechanism between process exit and stream operations",
+      "Proper handling of Process object lifetime in concurrent scenarios",
+      "Prevention of ObjectDisposedException scenarios in Process API usage",
+      "Best practices for async process management with stream redirection"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:43:32"
+    }
+  },
+  {
+    "number": 29465,
+    "title": "ProcessInfo Linux/Windows incompatibility",
+    "created_at": "2019-05-06T12:40:26Z",
+    "closed_at": "2020-02-01T02:07:07Z",
+    "labels": [
+      "question",
+      "area-System.Diagnostics.Process"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/29465",
+    "body": "Hi,\r\n\r\nI'm trying to run same process as a child of current process. Showed below code works just fine under windows, but fails in Linux with  error\r\n\r\nNo executable found matching command \"dotnet-MyDll.dll\"\r\n\r\n```\r\nvar processInfo = new ProcessStartInfo\r\n            {\r\n                FileName = \"dotnet\",\r\n                Arguments = \"MyDll.dll \" + id.ToString()\r\n            };\r\n\r\n            Console.WriteLine(\"Starting child process...\");\r\n            var process = Process.Start(processInfo);\r\n            return process;\r\n\r\n```\r\n\r\nIve also tried\r\n         `       FileName = \"dotnet MyDll.dll\"+ id.ToString(),`\r\nbut it ends up with different error \r\nUnhandled Exception: System.ComponentModel.Win32Exception: No such file or directory\r\n\r\nI've also tried \r\n```\r\n\r\n            var parentP = Process.GetCurrentProcess();\r\n            string fullPath = parentP.MainModule.FileName;\r\n            var command = fullPath+\" \"+Assembly.GetEntryAssembly().Location+\" \"+ id.ToString();\r\n            Console.WriteLine(\"Command = \"+command);\r\n            var processInfo = new ProcessStartInfo\r\n            {\r\n                FileName = command\r\n            };\r\n            var process = Process.Start(processInfo);\r\n```\r\nStill \r\nUnhandled Exception: System.ComponentModel.Win32Exception: No such file or directory\r\n\r\nwhat is proper way of running currently running dll again under Linux with dotnet core",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/29465/comments",
+    "author": "pragmaticadam",
+    "comments": [
+      {
+        "user": "wfurt",
+        "created_at": "2019-05-06T20:43:41Z",
+        "body": "cc: @tmds "
+      },
+      {
+        "user": "pragmaticadam",
+        "created_at": "2019-05-07T09:21:32Z",
+        "body": "I've also tried :\r\n\r\n```\r\nvar parrentP = Process.GetCurrentProcess();\r\n        string fullPath = parrentP.MainModule.FileName;\r\n        var command = \"\\\"\" + fullPath + \"\\\" \" ;\r\n        var args = Assembly.GetEntryAssembly().Location + \" \" + id;\r\n        var processInfo = new ProcessStartInfo\r\n        {\r\n            FileName = command,\r\n            Arguments = args\r\n        };\r\n            var process = Process.Start(processInfo);\r\n```\r\n\r\n\r\nWorks under windows, do not work under LINUX\r\n\r\n\r\nException No such file or directory\r\nException    at System.Diagnostics.Process.StartCore(ProcessStartInfo startInfo)\r\n   at System.Diagnostics.Process.Start()\r\n   at System.Diagnostics.Process.Start(ProcessStartInfo startInfo)\r\n\r\nLooks for me like something with path building, \r\n\r\nWHAT IS WORK AROUND FOR THIS ?\r\n\r\n\r\n"
+      },
+      {
+        "user": "tmds",
+        "created_at": "2019-05-07T10:03:19Z",
+        "body": "This works:\r\n\r\n```cs\r\nstatic void Main(string[] args)\r\n{\r\n    if (args.Length == 0)\r\n    {\r\n        var psi = new ProcessStartInfo\r\n        {\r\n            FileName = Process.GetCurrentProcess().MainModule.FileName,\r\n            Arguments = $\"\\\"{Assembly.GetEntryAssembly().Location}\\\" \\\"hello world\\\"\"\r\n        };\r\n        Process.Start(psi).WaitForExit();\r\n    }\r\n    else\r\n    {\r\n        System.Console.WriteLine(\"Called with arg: \" + args[0]);\r\n    }\r\n}\r\n```\r\n\r\nIf you want to use the `Arguments` property, you need to surround the individual arguments with double quotes. For example:\r\n```cs\r\nArguments = $\"\\\"{Assembly.GetEntryAssembly().Location}\\\" \\\"hello world\\\"\"\r\n```\r\n\r\nIf it doesn't work for you, what is the values of: `Process.GetCurrentProcess().MainModule.FileName` and `Assembly.GetEntryAssembly().Location`.\r\n\r\n> WHAT IS WORK AROUND FOR THIS ?\r\n\r\nDon't use CAPS unless you're angry and want to yell at someone."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-05-07T12:14:33Z",
+        "body": "> If you want to use the Arguments property, you need to surround the individual arguments with double quotes\r\n\r\nOnly if they may have whitespace, right?"
+      },
+      {
+        "user": "tmds",
+        "created_at": "2019-05-08T11:56:36Z",
+        "body": "> Only if they may have whitespace, right?\r\n\r\nYes, only needed then. They get stripped of the other arguments, so adding them everywhere is a simple way to avoid forgetting them somewhere.\n\n---\n\n@pragmaticadam is it working for you now? may this be closed?"
+      },
+      {
+        "user": "pragmaticadam",
+        "created_at": "2019-05-09T08:27:13Z",
+        "body": "> @pragmaticadam is it working for you now? may this be closed?\r\n\r\nYes,\r\nthank You!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Cross-platform argument formatting for ProcessStartInfo",
+      "Proper handling of spaces in file paths",
+      "Correct process invocation for self-executing assemblies",
+      "Validation of executable path resolution"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:45:55"
+    }
+  },
+  {
+    "number": 8294,
+    "title": "How can I debug Access Violation Exception on .net core 2 preview?",
+    "created_at": "2017-06-06T08:33:45Z",
+    "closed_at": "2020-01-31T01:59:29Z",
+    "labels": [
+      "question",
+      "area-Diagnostics-coreclr"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/8294",
+    "body": "Hi,\r\n\r\n I am receiving Access Violation Exception in my .net core 2 application, when this happens the debugger terminates and I have no way of knowing where the program was when this happened.\r\n\r\nIn full .net I could have set mixed mode debugging, however I cant see how to set this for .net core 2 projects.\r\n\r\nThanks in advance.\r\n\r\n@mikem8361 I'm mentioning you since I think you work on the debugger and may know. :)",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/8294/comments",
+    "author": "danwalmsley",
+    "comments": [
+      {
+        "user": "mikem8361",
+        "created_at": "2017-06-06T22:02:23Z",
+        "body": "You could try windbg/cdb and SOS. \r\n\r\nOn Windows .NET Core 2.0 does  support mixed mode debug but there seems to be problems with VS Launch (see dotnet/coreclr#8603).  "
+      },
+      {
+        "user": "danwalmsley",
+        "created_at": "2017-06-13T10:49:11Z",
+        "body": "@mikem8361 I used windbg for now thanks \ud83d\udc4d "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports debugging of mixed-mode (managed + native) code in .NET Core 2",
+      "Provides crash context preservation",
+      "Works with .NET Core 2 environment constraints",
+      "Offers alternative debugging approaches when IDE integration fails"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:49:46"
+    }
+  },
+  {
+    "number": 21269,
+    "title": "Attempt to improve no unobserved task exception being raised when trying to await null task",
+    "created_at": "2017-04-21T20:24:09Z",
+    "closed_at": "2020-01-31T15:12:42Z",
+    "labels": [
+      "question",
+      "area-System.Threading.Tasks"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/21269",
+    "body": "My application stopped working after targetting `netcoreapp2.0` while working perfectly fine in `netcoreapp1.1`. While the root cause for that is for another issue, it generated quite interesting scenario that I decided to extract.\r\n\r\nConsider following reproducable case:\r\n\r\n```c#\r\nusing System;\r\nusing System.Diagnostics.CodeAnalysis;\r\nusing System.Threading;\r\nusing System.Threading.Tasks;\r\n\r\nnamespace test {\r\n        internal static class Program {\r\n                private static readonly ManualResetEventSlim ShutdownEvent = new ManualResetEventSlim(false);\r\n\r\n                private static void Main() {\r\n                        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;\r\n                        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;\r\n                        Console.WriteLine(\"Start\");\r\n                        Reproduce().Forget();\r\n                        Console.WriteLine(\"Forget\");\r\n                        ShutdownEvent.Wait();\r\n                        Console.WriteLine(\"End\");\r\n                }\r\n\r\n                private static async Task Reproduce() {\r\n                        Console.WriteLine(\"Start inner\");\r\n                        await GetNullTask().ConfigureAwait(false);\r\n                        Console.WriteLine(\"Set event\");\r\n                        ShutdownEvent.Set();\r\n                        Console.WriteLine(\"End inner\");\r\n                }\r\n\r\n                private static Task GetNullTask() { return null; }\r\n\r\n                private static void Forget(this object obj) { }\r\n\r\n                private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e) {\r\n                        Console.WriteLine(\"OnUnhandledException!\");\r\n                }\r\n\r\n                private static void OnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e) {\r\n                        Console.WriteLine(\"OnUnobservedTaskException!\");\r\n                }\r\n        }\r\n}\r\n```\r\n\r\nAs you can see, `await GetNullTask().ConfigureAwait(false);` is trying to await a `Task` that is null. Thing is, nothing is happening, the function is entirely frozen - no unhandled exception being raised, no unobserved task exception being raised (which should happen), and no function returning - limbo.\r\n\r\n```\r\nroot@debian:~/test/test# dotnet exec bin/test.dll\r\nStart\r\nStart inner\r\nForget\r\n```\r\n\r\nI'm pretty sure this is **really** unwanted - I didn't test if the same behaviour exists in .NET core 1.1, but regardless if it does, I think this should be corrected with proper (unobserved task) exception being raised. Otherwise there is no way to even guess that some problem occured, and unobserved task exception event is the function that should catch situation like that.\r\n\r\nOf course there is no issue if we replace `Reproduce().Forget()` with `Reproduce.Wait()`:\r\n\r\n```\r\nUnhandled Exception: System.AggregateException: One or more errors occurred. (Object reference not set to an instance of an object.) ---> System.NullReferenceException: Object reference not set to an instance of an object.\r\n   at test.Program.<Reproduce>d__2.MoveNext()\r\n   --- End of inner exception stack trace ---\r\n   at System.Threading.Tasks.Task.ThrowIfExceptional(Boolean includeTaskCanceledExceptions)\r\n   at System.Threading.Tasks.Task.Wait(Int32 millisecondsTimeout, CancellationToken cancellationToken)\r\n   at System.Threading.Tasks.Task.Wait()\r\n   at test.Program.Main()\r\n```\r\n\r\nBut in `Forget()` case, there should still be `TaskScheduler.UnobservedTaskException` being raised.\r\n\r\n```\r\n.NET Command Line Tools (2.0.0-preview1-005825)\r\n\r\nProduct Information:\r\n Version:            2.0.0-preview1-005825\r\n Commit SHA-1 hash:  b4a821109d\r\n\r\nRuntime Environment:\r\n OS Name:     debian\r\n OS Version:  9\r\n OS Platform: Linux\r\n RID:         ubuntu.16.10-x64\r\n Base Path:   /opt/dotnet/sdk/2.0.0-preview1-005825/\r\n\r\nMicrosoft .NET Core Shared Framework Host\r\n\r\n  Version  : 2.0.0-preview1-002028-00\r\n  Build    : 6d0caecf154d3398b9bc0e637089b6af9e250479\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/21269/comments",
+    "author": "JustArchi",
+    "comments": [
+      {
+        "user": "svick",
+        "created_at": "2017-04-22T00:01:25Z",
+        "body": "I don't see any issue here, or any change between 1.x and 2.0.\r\n\r\n`UnobservedTaskException` is raised when a `Task` with an unobserved exception is *finalized*. Since you don't trigger GC after the `Task` is forgotten, it doesn't get finalized and so `UnobservedTaskException` is never raised. This has been the behavior since .Net 4.0.\r\n\r\nIf you manually trigger GC by adding `GC.Collect();` after `Reproduce().Forget();` and before `ShutdownEvent.Wait();`, you will see `UnobservedTaskException` being raised.\r\n\r\n<s>The only thing I can think of that could fix this would be if the CLR triggered GC periodically, even when no allocations are happening. That would be a really bad idea in production code (because it would hurt performance just to help debugging), but maybe it could make sense in debug mode? Though it would make debug mode different from release mode, which might be unwanted.</s> I realized this wouldn't be worth it.\r\n\r\nTLDR: I don't think there is any bug or compatibility issue here. <s>But maybe there is a chance to improve the debugging experience.</s>"
+      },
+      {
+        "user": "JustArchi",
+        "created_at": "2017-04-22T14:38:12Z",
+        "body": "In this case I'm wondering if there is any chance to do something in such case, as if there are no allocations, GC won't kick in and won't handle the exception. Usually this is not a problem as there are more things going on, but in this specific case there is no way to know what happened, as even during debugging it might not be obvious where is the issue, ```GetNullTask()``` could be far more complex function that does return null somewhere. Personally in real-world scenario I triggered it by `await someObject.DoAsync()`, where `someObject` was `null`. This is far more common scenario, the above one was only for reproducing the problem.\r\n\r\nAs this is not a bug, I'm fine with closing the issue, but I'd be happy if maybe we could in some way improve it, as the only thing possible to do right now is launching another task that will periodically call `GC.Collect();`, and as you noticed this is not really the best way to debug the issue, and I believe that there should be some improvement over current situation.\r\n\r\nWouldn't it be possible to add some extra code that would handle faulty tasks and propagate exception immediately instead of handling responsibility to the GC? This is only an idea, I'm sure you could think of something better that would improve programming experience in such case."
+      },
+      {
+        "user": "svick",
+        "created_at": "2017-04-22T14:54:24Z",
+        "body": "> Wouldn't it be possible to add some extra code that would handle faulty tasks and propagate exception immediately instead of handling responsibility to the GC?\r\n\r\nHow would that code know whether the exception is unobserved? Or do you want a way to get notified of *all* faulting `Task`s?\r\n\r\n---\r\n\r\nAbout debugging your specific scenario: wouldn't enabling \"break when exception is thrown\" help you? Especially since that experience got some nice improvements in VS 2017."
+      },
+      {
+        "user": "JustArchi",
+        "created_at": "2017-04-22T14:57:52Z",
+        "body": "> How would that code know whether the exception is unobserved?\r\n\r\nI thought about some middle-man that would await all tasks that are being forgotten, and immediately after they finish, propagate the exception, instead of waiting for GC to collect them.\r\n\r\n> Or do you want a way to get notified of all faulting Tasks?\r\n\r\nEither is fine, I just want to have a way of detecting such case without waiting for GC to do the job. I'm pretty sure it'd be useful for far more people, as such things might be unobserved otherwise (like in my case, I had to spend some time debugging to find out where is the issue, if I had notification I'd know right away that I have NRE somewhere there instead of believing my app is simply waiting for task to be finished)."
+      },
+      {
+        "user": "stephentoub",
+        "created_at": "2019-07-18T22:56:25Z",
+        "body": "Everything here is behaving by design.  Tasks need to be able to propagate exceptions to wherever that Task is later awaited, which means the exceptions must be caught and stored, and then it's only when we can be sure that the Task will never have its exception observed that we can raise the unobserved event... and the only way we can know that is when the object becomes collectible from the GC's perspective."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why UnobservedTaskException isn't raised without garbage collection",
+      "Solution for detecting unobserved exceptions without manual GC triggering",
+      "Guidance on debugging async null reference exceptions in forgotten tasks",
+      "Patterns for ensuring task exceptions are always observed"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:50:04"
+    }
+  },
+  {
+    "number": 17594,
+    "title": "Hello. Is it possible to install CoreFX to a custom folder?",
+    "created_at": "2016-06-13T09:54:05Z",
+    "closed_at": "2020-01-31T11:39:17Z",
+    "labels": [
+      "question",
+      "area-Infrastructure-libraries",
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/17594",
+    "body": "Is it possible to install CoreFX to a custom folder after the building from sources?\n\nCommand to build:\n`./build.sh x64 debug`\n\nBut in this case CoreFX installs to a current folder. What command I must enter to onfigure sources and instal to a custom folder?\nPS: OS Ubuntu 16.04 LTS. Problem with building are missing.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/17594/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-13T16:11:35Z",
+        "body": "Hi @zenitfan219 thanks for posting your question. There is no easy way of selecting the drop folder of the build output. However, corefx itself doesn't install in that directory, only the output is dropped there. If you want to use the corefx that you just built in a different project, you can do this by referencing the packages that get produced in `<corefxRepoPath>/bin/packages` from your project.\n\nPlease let me know if this answers your question.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-13T21:24:24Z",
+        "body": "Okay, thank You for yor answer. Then next question.\n\nCan I use built packages in <corefxRepoPath>/bin/packages without source code? I want to delete source code without <corefxRepoPath>/bin directory. Does it work?\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-13T21:47:40Z",
+        "body": "I'm not 100% sure I get your question, but if what you want to know is if the built packages are self-contained meaning that they don't depend on source code being in your machine, then that is correct. You only need the source code to build the packages, but once they are built, you can delete all of the repo code entirely from your machine, and just reference the packages that were produced.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-13T22:45:07Z",
+        "body": "Thank you, @joperezr.\n\nAnd the last question. Can I build CoreFX not in repo folder?\n"
+      },
+      {
+        "user": "mellinoe",
+        "created_at": "2016-06-13T23:16:06Z",
+        "body": "Do you mean if you do not have corefx in a git repository? Right now, it does not work, but that's something we should fix, in my opinion. We have some build steps that add assembly metadata based on  some git information. We should be able to skip that step if there is no git repository.\n\nFor now, you'll need to be in a git repo to build.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-14T08:46:37Z",
+        "body": "No.\nI mean if I clonned CoreFX repo to my PC to folder `/home/<username>/MS_GIT/corefx` and wanted to build in folder `/home/<username>/MS_BINARIES/corefx/bin`. Is it possible?\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-14T16:31:30Z",
+        "body": "No. There is no easy way to have the output of the build be a folder different than the `<repoRoot>/bin`. That said, you could easily just wait for the build to finish and then either manually or by a script copy the outputs (all of the bin directory) to a different folder in your machine, and then use that. The reason why there is no easy way to do this is because every time you run build.sh, we basically build two phases of the repo, first the native assets and then the managed ones so it's not super straight forward to change outputs from both phases into a different folder.\n"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2016-06-14T22:09:06Z",
+        "body": "Thank you for your answers!\n"
+      },
+      {
+        "user": "joperezr",
+        "created_at": "2016-06-14T23:11:22Z",
+        "body": "sure no problem! happy to help :smile: \n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ability to specify a custom output directory for CoreFX build artifacts",
+      "Clarification of package self-containment requirements",
+      "Build process flexibility regarding repository location constraints",
+      "Clear documentation of build output dependencies"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:50:51"
+    }
+  },
+  {
+    "number": 14245,
+    "title": "Improve code coverage for System.Resources.ResourceWriter",
+    "created_at": "2015-02-19T13:56:23Z",
+    "closed_at": "2020-01-31T08:56:49Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/dotnet/runtime/issues/14245",
+    "body": "According to the current code coverage report, this library is only at 56%.  Our general goal is closer to 90%, though this will depend on the library.  We should investigate to see whether the current coverage level is appropriate, and if not, improve our test suites to provide better coverage.\n",
+    "comments_url": "https://api.github.com/repos/dotnet/runtime/issues/14245/comments",
+    "author": "stephentoub",
+    "comments": [
+      {
+        "user": "ramarag",
+        "created_at": "2015-04-10T23:43:34Z",
+        "body": "With the change 67da6227c3 System.Resources.ResourceWriter has become System.Resources.ReaderWriter and has the following coverage details with aggregate to 80 %, the product coverage is 86% and 95%. To improve upon net coverage is only possible by a thorough testing of the spec line by line\n\n@stephentoub :I am closing this issue for now. Do reopen it if you think higher coverage is needed !!\n\n| Name | Covered | Uncovered | Coverable | Total | Coverage |\n| --- | --- | --- | --- | --- | --- |\n| System.Resources.ReaderWriter | 357 | 89 | 446 | 1016 | 80% |\n| **Core Product** : |  |  |  |  |  |\n| System.Resources.ResourceReader | 223 | 36 | 259 | 487 | 86.1% |\n| System.Resources.ResourceWriter | 103 | 5 | 108 | 272 | 95.3% |\n| **Helper Code** : |  |  |  |  |  |\n| System.Resources.FastResourceComparer | 10 | 6 | 16 | 49 | 62.5% |\n| System.SR | 21 | 42 | 63 | 208 | 33.3% |\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Determination of whether the current code coverage percentage (95.3% for ResourceWriter) meets the project's quality standards",
+      "Identification of remaining coverage gaps in critical path functionality",
+      "Validation that uncovered code paths are either non-critical or intentionally excluded"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 00:51:40"
+    }
+  }
+]

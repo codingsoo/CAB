@@ -1,0 +1,1011 @@
+[
+  {
+    "number": 87,
+    "title": "Is it possible to upgrade to be able to use syntax that uses transformers>=4.38.2, accelerate>=1.2.0?",
+    "created_at": "2025-02-17T13:20:05Z",
+    "closed_at": "2025-02-19T01:07:39Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/87",
+    "body": "Otherwise there is a conflict with the reasoning associated with ComfyUI's now hottest Flux model, the DeepSeek Janus Pro model",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/87/comments",
+    "author": "petercham",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-18T01:05:14Z",
+        "body": "Hi, you can directly update the versions of transformers and accelerate to the desired ones."
+      }
+    ]
+  },
+  {
+    "number": 86,
+    "title": "Some questions about HJB Optimization",
+    "created_at": "2025-02-15T14:17:54Z",
+    "closed_at": "2025-02-19T07:15:40Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/86",
+    "body": "Thank you for your open-source code. I've been trying to reproduce the HJB Optimizer optimization part according to Algorithm 2 in the paper. After the EDM denoiser predicts the clean noise, I decode it into an image using the VAE and save it. The image appears normal. Then, I use the decoded image to calculate the ArcFace ID Loss with the reference image. The loss in the first round is around 0.2. However, I find that the gradient of x_op is very small, with an average of 5.9e-5. Using the SGD optimizer fails to update x_op properly. When using Adam or AdamW, x_op becomes NaN, -inf, and inf after just one update. I've tried various learning rates from 1e-5 to 1e-2, but none of these solutions have resolved the issues. Are there any particular parts that need special attention here?\nI have noticed the same thing. In Algorithm 2, there is loss.backward(retain_graph=True). I don't understand the reason for retain_graph=True, which seems to lead to an increase in GPU memory usage during optimization.",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/86/comments",
+    "author": "DuanWei1234",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-16T01:24:35Z",
+        "body": "Hi, it seems your calculation is mostly correct. However, I haven't encountered the issue you're describing. A likely reason could be an inaccuracy in the Arcface Loss calculation. I recommend using face masks to ensure that the Arcface model focuses only on the facial region, rather than the entire image. Additionally, I use loss.backward(retain_graph=True) to maintain the gradient backpropagation chain in the VAE Decoder, as it remains non-trainable during face optimization at inference. I'll release the code for the HJB-based face optimization in February or March. Stay tuned!"
+      },
+      {
+        "user": "DuanWei1234",
+        "created_at": "2025-02-16T17:24:31Z",
+        "body": "Thank you for your reply, I'm curious whether performing the loss in the image space after VAE decoding would result in smaller gradients for the latents. During my testing, I found that directly computing the loss in the latent space (assuming I'm working on a reconstruction task) yields gradients that are two orders of magnitude higher than those obtained by computing the loss in the image space, for example, e-3 versus e-5."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-18T01:03:37Z",
+        "body": "Since the ArcFace model only supports RGB image input, it may struggle to detect face representations when working with diffusion latents. One potential solution is to fine-tune the ArcFace model in the latent space, thereby enabling it to model facial representations within that space. Additionally, the gradient value is influenced by the specific reference image you intend to animate."
+      },
+      {
+        "user": "DuanWei1234",
+        "created_at": "2025-02-19T03:55:31Z",
+        "body": "Thank you for your response. I have identified the issue. When I tried to optimize x_op using torch.float16, I encountered nan, -inf, and inf values. The problem was resolved after switching to torch.float32. During cross-identity driving, I noticed that the ID loss decreased as the optimization progressed. However, when I printed the images before and after optimization, there was hardly any noticeable change. So, I am curious about the role of HJB Optimization during inference—whether it contributes to identity preservation, pose alignment, or facial expression optimization."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-19T07:13:42Z",
+        "body": "The HJB optimization can indeed enhance both identity preservation and overall video fidelity, as evidenced by several ablation studies presented in our technical report. For further details, please refer to the full report."
+      }
+    ]
+  },
+  {
+    "number": 85,
+    "title": "Error Loading Model State Dict: Missing Keys in UNetSpatioTemporalConditionModel",
+    "created_at": "2025-02-03T02:34:48Z",
+    "closed_at": "2025-02-05T08:59:50Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/85",
+    "body": "**Description:**  \nAfter training the model using the provided training script, I encountered an error when trying to load the model for inference. The error indicates that several keys are missing from the state dict of the `UNetSpatioTemporalConditionModel`. It appears that there might be a mismatch between the trained model and the expected state dict keys during loading.\n\n**Error Message:**  \n```python\nunet_state_dict = torch.load(args.unet_model_name_or_path, map_location=\"cpu\")\nTraceback (most recent call last):\n  File \"/workspace/StableAnimator/inference_basic.py\", line 319, in <module>\n    unet.load_state_dict(unet_state_dict, strict=True)\n  File \"/workspace/StableAnimator/venv/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 2584, in load_state_dict\n    raise RuntimeError(\nRuntimeError: Error(s) in loading state_dict for UNetSpatioTemporalConditionModel:\n        Missing key(s) in state_dict: \"down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.id_to_v.weight\", \"mid_block.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\", \"mid_block.attentions.0.transformer_blocks.0.attn2.processor.id_to_v.weight\".\n```\n\n**Reproduction Steps:**  \n1. **Training:**  \n   The model was trained using the following bash command:\n   ```bash\n   CUDA_VISIBLE_DEVICES=3,7,6,5,4,2,1,0 accelerate launch train_single.py \\\n    --pretrained_model_name_or_path=\"path/checkpoints/stable-video-diffusion-img2vid-xt\" \\\n    --finetune_mode=True \\\n    --posenet_model_finetune_path=\"path/checkpoints/Animation/pose_net.pth\" \\\n    --face_encoder_finetune_path=\"path/checkpoints/Animation/face_encoder.pth\" \\\n    --unet_model_finetune_path=\"path/checkpoints/Animation/unet.pth\" \\\n    --output_dir=\"path/checkpoints/Animation2\" \\\n    --data_root_path=\"path/preprocess/\" \\\n    --data_path=\"path/preprocess/video_path.txt\" \\\n    --dataset_width=576 \\\n    --dataset_height=1024 \\\n    --validation_image_folder=\"path/validation/images\" \\\n    --validation_control_folder=\"path/validation/poses\" \\\n    --validation_image=\"path/validation/reference.png\" \\\n    --num_workers=8 \\\n    --lr_warmup_steps=500 \\\n    --sample_n_frames=8 \\\n    --learning_rate=5e-6 \\\n    --per_gpu_batch_size=1 \\\n    --num_train_epochs=600 \\\n    --mixed_precision=\"fp16\" \\\n    --gradient_accumulation_steps=1 \\\n    --checkpointing_steps=3000 \\\n    --validation_steps=9999999 \\\n    --gradient_checkpointing \\\n    --use_8bit_adam \\\n    --enable_xformers_memory_efficient_attention \\\n    --checkpoints_total_limit=90000 \\\n    --resume_from_checkpoint=\"latest\"\n   ```\n\n2. **Loading:**  \n   After training, I attempted to load the model with the following code:\n   ```python\n   unet_state_dict = torch.load(args.unet_model_name_or_path, map_location=\"cpu\")\n   unet.load_state_dict(unet_state_dict, strict=True)\n   ```\n   This resulted in the error shown above.\n\n**Environment:**  \n- **Python:** 3.12.3\n- **PyTorch:** 2.5.1+cu124 \n- **Diffusers:** 0.32.1\n\n**Additional Context:**  \n- The error lists several missing keys in the state dict (e.g., `\"down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.id_to_k.weight\"`, etc.).\n- This issue may indicate a mismatch between the model architecture used during training and the one expected during inference.  \n- Has there been any recent change in the model structure or naming conventions that could lead to this issue?\n\nAny help or guidance in resolving this issue would be greatly appreciated.",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/85/comments",
+    "author": "cvecve147",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-04T13:12:13Z",
+        "body": "Hi, please check whether AnimationIDAttnNormalizedProcessor is activated. It seems that the weights of AnimationIDAttnNormalizedProcessor were not saved during training."
+      },
+      {
+        "user": "cvecve147",
+        "created_at": "2025-02-05T08:59:51Z",
+        "body": "Thank you for your prompt response and valuable guidance. Upon further investigation, I discovered that the root cause of the issue was the use of the --enable_xformers_memory_efficient_attention parameter during training, which resulted in the AnimationIDAttnNormalizedProcessor weights not being saved correctly. After removing this parameter, the model weights are now saved and loaded properly. I greatly appreciate your support and insights in resolving this matter!"
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "how to speed up the inference?",
+    "created_at": "2025-01-31T12:45:36Z",
+    "closed_at": "2025-02-04T04:11:22Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/84",
+    "body": "how to speed up the inference?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/84/comments",
+    "author": "Arslan-Mehmood1",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-04T04:11:09Z",
+        "body": "Hi, you can reduce the resolutions of your inputs to speed up the inference."
+      },
+      {
+        "user": "Arslan-Mehmood1",
+        "created_at": "2025-02-04T09:44:35Z",
+        "body": "well, thats not a solution."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-02-04T13:09:38Z",
+        "body": "The inference speed also depends on the specific GPU used. On an A100, StableAnimator can generate a 16-frame animation at 576×1024 resolution in approximately 30 seconds, making it significantly faster than previous human image animation models. We will continue optimizing for even faster inference in the future."
+      }
+    ]
+  },
+  {
+    "number": 83,
+    "title": "training duration",
+    "created_at": "2025-01-21T10:11:06Z",
+    "closed_at": "2025-01-22T06:26:50Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/83",
+    "body": "thank you for your excellent work!\nHow long does it take to train your model once?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/83/comments",
+    "author": "yankainan",
+    "comments": [
+      {
+        "user": "ssj9596",
+        "created_at": "2025-01-21T11:18:53Z",
+        "body": "同问，顺便也想请教下是训练了多少step才能看到一个初步的正常效果？"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-22T02:34:19Z",
+        "body": "Hi,  the optimal number of epochs for StableAnimator to achieve peak performance is influenced by the quality and scale of your training videos."
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "where is the code of \" HJB equation\"",
+    "created_at": "2025-01-20T07:51:03Z",
+    "closed_at": "2025-01-20T14:17:37Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/79",
+    "body": "tks",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/79/comments",
+    "author": "henbucuoshanghai",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-20T14:17:31Z",
+        "body": "Hi, We will release the code of HJB-based face optimization. Stay tuned!"
+      }
+    ]
+  },
+  {
+    "number": 77,
+    "title": "在哪里能看到 comfyui 工作流",
+    "created_at": "2025-01-19T08:12:43Z",
+    "closed_at": "2025-01-19T14:11:45Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/77",
+    "body": "有没有 comfyui 的插件或者工作流啊，这个看不太懂",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/77/comments",
+    "author": "olafchou",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-19T14:11:43Z",
+        "body": "Hi, please refer to #14."
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "Why not use foot keypoints?",
+    "created_at": "2025-01-17T12:55:58Z",
+    "closed_at": "2025-01-18T06:33:52Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/76",
+    "body": "StableAnimator and some SOTA methods all have significant limitations when it comes to leg lifting. I'd like to ask why foot keypoints weren't used?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/76/comments",
+    "author": "hanchunrui",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-18T02:00:25Z",
+        "body": "Hi, thank you for your suggestion! We will consider it as part of our future work, as we will incorporate additional foot keypoints to explicitly enhance the model's performance in extreme scenarios."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "Issues with CLIPVisionModelWithProjection.from_pretrained(pretrained_model_name_or_path, subfolder=\"image_encoder\", revision=revision)",
+    "created_at": "2025-01-14T00:29:24Z",
+    "closed_at": "2025-01-15T08:06:33Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/73",
+    "body": "Exciting repository! I'm attempting to get the code working and I'm running into the following error? Do you have any recommendations? Thank you.\r\n\r\npython app.py\r\nTraceback (most recent call last):\r\n  File \"/home/99999/Documents/9999/StableAnimator/app.py\", line 249, in <module>\r\n    image_encoder = CLIPVisionModelWithProjection.from_pretrained(pretrained_model_name_or_path, subfolder=\"image_encoder\", revision=revision)\r\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"/home/99999/miniconda3/envs/stableanimator/lib/python3.11/site-packages/transformers/modeling_utils.py\", line 3964, in from_pretrained\r\n    with safe_open(resolved_archive_file, framework=\"pt\") as f:\r\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nsafetensors_rust.SafetensorError: Error while deserializing header: HeaderTooLarge",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/73/comments",
+    "author": "hueai",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-14T11:35:14Z",
+        "body": "Hi, please ensure that all weights from Hugging Face have been downloaded locally and organized according to the file structure described in the README file. For more details on running StableAnimator on Windows, please refer to #35."
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "DWpose procession",
+    "created_at": "2025-01-13T13:21:47Z",
+    "closed_at": "2025-01-15T08:06:40Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/72",
+    "body": "I want to know that is there any post-procession if the pose color extracted from some videos is very light？dilation？",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/72/comments",
+    "author": "Strive21",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-14T11:33:09Z",
+        "body": "Hi, I haven't applied any post-processing operations to the extracted skeleton images. If you find the color of the skeleton images too light, applying dilation could be a good option."
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "i I found that the effect is better at 512x512 resolution",
+    "created_at": "2025-01-10T02:39:18Z",
+    "closed_at": "2025-01-10T04:43:34Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/70",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/70/comments",
+    "author": "hotpot-killer",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-10T02:49:44Z",
+        "body": "Hi, StableAnimator supports human image animation at two different resolution settings: 512x512 and 576x1024.  Skeleton misalignment can significantly impact the performance of animation models. To address this, you should apply a skeleton alignment algorithm to the pose sequence before using StableAnimator. "
+      },
+      {
+        "user": "hotpot-killer",
+        "created_at": "2025-01-10T02:57:54Z",
+        "body": "> Hi, StableAnimator supports human image animation at two different resolution settings: 512x512 and 576x1024. Skeleton misalignment can significantly impact the performance of animation models. To address this, you should apply a skeleton alignment algorithm to the pose sequence before using StableAnimator.\r\n\r\nhi,I have applied the skeleton alignment algorithm"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-10T03:05:27Z",
+        "body": "It is quite weird, as I tested StableAnimator on two video datasets at different resolutions (512x512 and 576x1024), and the quality of the animated videos was similar in both cases. Thank you for pointing it out. I will conduct more experiments to investigate this issue further."
+      }
+    ]
+  },
+  {
+    "number": 66,
+    "title": "error of out of memory",
+    "created_at": "2025-01-04T08:42:01Z",
+    "closed_at": "2025-01-06T05:36:46Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/66",
+    "body": "I used 8 RTX 4090 (24G) to train my own data through the bash command_train_single.sh command, but it reported an error of out of memory. Is there any way to reduce the video memory overhead?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/66/comments",
+    "author": "wwYinYin",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-06T01:07:34Z",
+        "body": "Hi, it is worth noting that training StableAnimator requires approximately 70GB of VRAM due to the mixed-resolution (512x512 and 576x1024) training pipeline. However, if you train StableAnimator exclusively on 512x512 videos, the VRAM requirement is reduced to approximately 40GB. Regarding your computational resources, I recommend reducing the resolution of your training videos or adjusting the trainable parameters."
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "title": "可以开源一下演示视频里的apt的pose么。dwpose取得没有很好",
+    "created_at": "2025-01-02T10:34:45Z",
+    "closed_at": "2025-01-03T01:51:02Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/65",
+    "body": "年会了...部门跳这个...背景视频要用ai跳...",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/65/comments",
+    "author": "gtbloody",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-03T01:50:51Z",
+        "body": "Hi, please send me an email to request the pose sequence. I will reply to you with the details."
+      }
+    ]
+  },
+  {
+    "number": 64,
+    "title": "关于微调",
+    "created_at": "2025-01-02T02:28:01Z",
+    "closed_at": "2025-01-02T07:26:50Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/64",
+    "body": "请问大佬\r\n使用微调后的 pose_net.pth、face_encoder.pth、unet.pth 去做推理，推理时参考图片随便选择一张人物图，为啥推理出来生成的动画/视频都还是微调时候的人物，似乎参考图片的人物图并没有生效\r\n请问这是为啥呢？",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/64/comments",
+    "author": "Jeremy-J-J",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-02T03:34:38Z",
+        "body": "Hi, the plausible reason is the limited quality and diversity of your training dataset, as well as the potential for overfitting. You can use SVD to initialize StableAnimator and train it on your dataset to check whether the issue is related to dataset quality or overfitting."
+      },
+      {
+        "user": "Jeremy-J-J",
+        "created_at": "2025-01-02T06:05:33Z",
+        "body": "> Hi, the plausible reason is the limited quality and diversity of your training dataset, as well as the potential for overfitting. You can use SVD to initialize StableAnimator and train it on your dataset to check whether the issue is related to dataset quality or overfitting.\r\n\r\nHow can I implement the initialization of StableAnimator using SVD?"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-02T06:32:25Z",
+        "body": "Please refer to the training tutorial in the README file.\r\n```\r\nbash command_train.sh\r\n```"
+      },
+      {
+        "user": "Jeremy-J-J",
+        "created_at": "2025-01-02T06:41:54Z",
+        "body": "> Please refer to the training tutorial in the README file.\r\n> \r\n> ```\r\n> bash command_train.sh\r\n> ```\r\n\r\nI compared `command_finetune.sh` and `command_train.sh`, the difference in using SVD initialization is only that the parameters `--posenet_model_finetune_path`, `--face_encoder_finetune_path`, `--unet_model_finetune_path`, and `--finetune_mode` are not passed. Is that all there is to it?\r\n"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2025-01-02T06:52:40Z",
+        "body": "Yep."
+      },
+      {
+        "user": "Jeremy-J-J",
+        "created_at": "2025-01-02T07:14:15Z",
+        "body": "感谢大佬"
+      }
+    ]
+  },
+  {
+    "number": 62,
+    "title": "unexpected keyword argument 'use_cuda_graph'",
+    "created_at": "2024-12-29T22:52:14Z",
+    "closed_at": "2024-12-30T02:03:54Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/62",
+    "body": "(env1) (stableanimator) E:\\AI\\StableAnimator>python app.py\r\nTraceback (most recent call last):\r\n  File \"E:\\AI\\StableAnimator\\app.py\", line 5, in <module>\r\n    from diffusers.models.attention_processor import XFormersAttnProcessor\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\diffusers\\models\\attention_processor.py\", line 35, in <module>\r\n    import xformers.ops\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\xformers\\ops\\__init__.py\", line 8, in <module>\r\n    from .fmha import (\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\xformers\\ops\\fmha\\__init__.py\", line 10, in <module>\r\n    from . import (\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\xformers\\ops\\fmha\\triton_splitk.py\", line 110, in <module>\r\n    from ._triton.splitk_kernels import _fwd_kernel_splitK, _splitK_reduce\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\xformers\\ops\\fmha\\_triton\\splitk_kernels.py\", line 632, in <module>\r\n    _fwd_kernel_splitK_autotune[num_groups] = autotune_kernel(\r\n                                              ^^^^^^^^^^^^^^^^\r\n  File \"E:\\AI\\StableAnimator\\env1\\Lib\\site-packages\\xformers\\ops\\fmha\\_triton\\splitk_kernels.py\", line 614, in autotune_kernel\r\n    kernel = triton.autotune(\r\n             ^^^^^^^^^^^^^^^^\r\nTypeError: autotune() got an unexpected keyword argument 'use_cuda_graph'",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/62/comments",
+    "author": "kenmcguire",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-30T01:48:19Z",
+        "body": "Hi, this issue is likely due to an incorrect installation of XFormer. Please refer to #35 for a detailed Windows installation tutorial."
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "title": "训练中验证阶段崩溃的问题",
+    "created_at": "2024-12-29T07:59:28Z",
+    "closed_at": "2024-12-30T10:36:54Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/61",
+    "body": "大佬，请问一下，在训练中validation_steps验证阶段出现如下报错，可能是什么原因呢？\r\n报错日志如下：\r\n```\r\n12/28/2024 18:24:04 - INFO - __main__ - Running validation... \r\n  0%|                                                                                                                                     | 0/25 [00:11<?, ?it/s]\r\n[rank0]: Traceback (most recent call last):                                                                                               | 0/25 [00:00<?, ?it/s]\r\n[rank0]:   File \"/home/StableAnimator/train.py\", line 1695, in <module>\r\n[rank0]:     main()\r\n[rank0]:   File \"/home/StableAnimator/train.py\", line 1531, in main\r\n[rank0]:     log_validation(\r\n[rank0]:   File \"/home/StableAnimator/train.py\", line 1658, in log_validation\r\n[rank0]:     video_frames = pipeline(\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\r\n[rank0]:     return func(*args, **kwargs)\r\n[rank0]:   File \"/home/StableAnimator/animation/pipelines/validation_pipeline_animation.py\", line 671, in __call__\r\n[rank0]:     _noise_pred = self.unet(\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1736, in _wrapped_call_impl\r\n[rank0]:     return self._call_impl(*args, **kwargs)\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1747, in _call_impl\r\n[rank0]:     return forward_call(*args, **kwargs)\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/accelerate/utils/operations.py\", line 680, in forward\r\n[rank0]:     return model_forward(*args, **kwargs)\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/accelerate/utils/operations.py\", line 668, in __call__\r\n[rank0]:     return convert_to_fp32(self.model_forward(*args, **kwargs))\r\n[rank0]:   File \"/root/miniconda3/envs/stableAnimator_py310/lib/python3.10/site-packages/torch/amp/autocast_mode.py\", line 44, in decorate_autocast\r\n[rank0]:     return func(*args, **kwargs)\r\n[rank0]:   File \"/home/StableAnimator/animation/modules/unet.py\", line 446, in forward\r\n[rank0]:     sample = sample + pose_latents\r\n[rank0]: RuntimeError: The size of tensor a (64) must match the size of tensor b (88) at non-singleton dimension 3\r\nSteps:  25%|█████████████████████▎                                                               | 50/200 [1:07:19<3:21:58, 80.79s/it, lr=1e-5, step_loss=0.0991]\r\n[rank0]:[W1228 18:24:28.733727992 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())\r\n```",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/61/comments",
+    "author": "Jeremy-J-J",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-30T01:45:31Z",
+        "body": "Hi, this issue is likely caused by a dimension mismatch between the latents and pose latents. Please check the dimensions of your reference image and the corresponding human skeleton images to ensure they match."
+      },
+      {
+        "user": "Jeremy-J-J",
+        "created_at": "2024-12-30T06:23:29Z",
+        "body": "> Hi, this issue is likely caused by a dimension mismatch between the latents and pose latents. Please check the dimensions of your reference image and the corresponding human skeleton images to ensure they match.\r\n\r\nThank you, I suspect it might be because my validation set is not of size 512x512 or 576x1024. I will conduct an experiment."
+      }
+    ]
+  },
+  {
+    "number": 56,
+    "title": "error after entering Python app.py",
+    "created_at": "2024-12-26T18:52:43Z",
+    "closed_at": "2024-12-27T01:43:15Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/56",
+    "body": "(venv) D:\\ai\\StableAnimator>python app.py\r\nD:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\transformers\\utils\\generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\nD:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\transformers\\utils\\generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\nD:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\transformers\\utils\\generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\nD:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\albumentations\\__init__.py:24: UserWarning: A new version of Albumentations is available: 1.4.24 (you have 1.4.23). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.\r\n  check_for_updates()\r\nTraceback (most recent call last):\r\n  File \"D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\diffusers\\utils\\import_utils.py\", line 920, in _get_module\r\n    return importlib.import_module(\".\" + module_name, self.__name__)\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"C:\\Users\\jeffr\\miniconda3\\Lib\\importlib\\__init__.py\", line 126, in import_module\r\n    return _bootstrap._gcd_import(name[level:], package, level)\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\r\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\r\n  File \"<frozen importlib._bootstrap>\", line 1147, in _find_and_load_unlocked\r\n  File \"<frozen importlib._bootstrap>\", line 690, in _load_unlocked\r\n  File \"<frozen importlib._bootstrap_external>\", line 940, in exec_module\r\n  File \"<frozen importlib._bootstrap>\", line 241, in _call_with_frames_removed\r\n  File \"D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\diffusers\\loaders\\ip_adapter.py\", line 36, in <module>\r\n    from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection, SiglipImageProcessor, SiglipVisionModel\r\nImportError: cannot import name 'SiglipImageProcessor' from 'transformers' (D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\transformers\\__init__.py)\r\n\r\nThe above exception was the direct cause of the following exception:\r\n\r\nTraceback (most recent call last):\r\n  File \"D:\\ai\\StableAnimator\\app.py\", line 16, in <module>\r\n    from animation.pipelines.inference_pipeline_animation import InferenceAnimationPipeline\r\n  File \"D:\\ai\\StableAnimator\\animation\\pipelines\\inference_pipeline_animation.py\", line 11, in <module>\r\n    from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import retrieve_timesteps\r\n  File \"D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\diffusers\\pipelines\\stable_diffusion\\pipeline_stable_diffusion.py\", line 24, in <module>\r\n    from ...loaders import FromSingleFileMixin, IPAdapterMixin, StableDiffusionLoraLoaderMixin, TextualInversionLoaderMixin\r\n  File \"<frozen importlib._bootstrap>\", line 1229, in _handle_fromlist\r\n  File \"D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\diffusers\\utils\\import_utils.py\", line 910, in __getattr__\r\n    module = self._get_module(self._class_to_module[name])\r\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\diffusers\\utils\\import_utils.py\", line 922, in _get_module\r\n    raise RuntimeError(\r\nRuntimeError: Failed to import diffusers.loaders.ip_adapter because of the following error (look up to see its traceback):\r\ncannot import name 'SiglipImageProcessor' from 'transformers' (D:\\ai\\StableAnimator\\venv\\Lib\\site-packages\\transformers\\__init__.py)\r\n\r\n(venv) D:\\ai\\StableAnimator>",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/56/comments",
+    "author": "J-Ai-57",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-27T01:43:09Z",
+        "body": "Hi, please refer to #35. The issue seems to be that you haven't installed the correct version of the Transformers dependency."
+      }
+    ]
+  },
+  {
+    "number": 53,
+    "title": "关于训练信息可以补充吗？",
+    "created_at": "2024-12-25T08:32:23Z",
+    "closed_at": "2024-12-25T10:19:05Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/53",
+    "body": "请问不同分辨率的训练是分步骤训的吗？\r\n\r\n训练集多少个视频，用了多少step效果收敛的， 能不能提供训练集下载地址呀\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/53/comments",
+    "author": "wangshankun",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-25T08:52:57Z",
+        "body": "Hi, StableAnimator is trained using a mixed-resolution setting within an end-to-end pipeline. Videos in two resolution settings (512×512 and 576×1024) are combined and stored in two dataloaders, as detailed below.\r\n```\r\niter1 = iter(train_dataloader_1)\r\niter2 = iter(train_dataloader_2)\r\nlist_0_and_1 = [0] * len_zeros + [1] * len_ones\r\nrandom.shuffle(list_0_and_1)\r\nfor step in range(0, len(list_0_and_1)):\r\n  current_idx = list_0_and_1[step]\r\n  if current_idx == 0:\r\n  try:\r\n    batch = next(iter1)\r\n  except StopIteration:\r\n    iter1 = iter(train_dataloader_1)\r\n    batch = next(iter1)\r\n  elif current_idx == 1:\r\n    try:\r\n      batch = next(iter2)\r\n    except StopIteration:\r\n      iter2 = iter(train_dataloader_2)\r\n      batch = next(iter2)\r\n```\r\nFor more training details, please refer to the training tutorial in the README file. I recommend collecting at least 3,000 videos to fine-tune StableAnimator. If you prefer to train a LORA model, there is no need to gather thousands of videos. Regarding training convergence, it largely depends on the quality and scale of your dataset. The `train.py` includes an evaluation phase, allowing you to observe intermediate results and assess whether the model has converged. Due to company policy, I am unable to share the training dataset. However, you can collect videos from several social media platforms, such as TikTok and Bilibili."
+      },
+      {
+        "user": "justinday123",
+        "created_at": "2024-12-27T00:45:16Z",
+        "body": "How much time did it cost for your train time?"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-27T01:45:33Z",
+        "body": "> How much time did it cost for your train time?\r\n\r\nHi, I trained StableAnimator on 4 NVIDIA A100 80G GPUs for approximately 5 days."
+      }
+    ]
+  },
+  {
+    "number": 49,
+    "title": "When will ComfyUI be released?",
+    "created_at": "2024-12-18T10:47:38Z",
+    "closed_at": "2024-12-19T01:28:00Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/49",
+    "body": "When will ComfyUI be released?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/49/comments",
+    "author": "ak3389",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-19T01:27:42Z",
+        "body": "Hi, ComfyUI will be released in the future. Stay tuned!"
+      }
+    ]
+  },
+  {
+    "number": 46,
+    "title": "关于训练集的face mask提取",
+    "created_at": "2024-12-17T08:24:46Z",
+    "closed_at": "2024-12-18T01:14:08Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/46",
+    "body": "尝试了你们的推理代码，效果真的太棒了。我在尝试训练它，但是在使用你们的提供的face_mask_extraction.py批处理数据集以获取faces时，发现速度太慢了。你们是否使用了速度更快的方式创建faces？",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/46/comments",
+    "author": "potentialming",
+    "comments": [
+      {
+        "user": "potentialming",
+        "created_at": "2024-12-17T08:27:37Z",
+        "body": "或者可以分享下你们获取训练集的一些细节吗？不胜感激！"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T08:29:17Z",
+        "body": "Hi, please check whether the face detector is running on the GPU. It becomes significantly slower when the detector runs on the CPU instead of the GPU."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T08:32:14Z",
+        "body": "> 或者可以分享下你们获取训练集的一些细节吗？不胜感激！\r\n\r\nYou can collect your own training videos from the social media platforms, such as Bilibili, TikTok, and Youtube."
+      },
+      {
+        "user": "potentialming",
+        "created_at": "2024-12-17T08:37:29Z",
+        "body": "我确认我使用了GPU，我使用了公开的TiTok数据集，大概300多个视频，每个视频大概300帧左右，在一张24G 3090上预计要处理30多个小时甚至更多。请问这正常吗？我的处理代码大概是这样。\r\n\r\n```python\r\nimport numpy as np\r\nimport torch\r\nfrom facexlib.parsing import init_parsing_model\r\nfrom facexlib.utils.face_restoration_helper import FaceRestoreHelper\r\nfrom insightface.app import FaceAnalysis\r\nimport cv2\r\nimport os\r\nfrom concurrent.futures import ThreadPoolExecutor\r\n\r\ndef get_face_masks(image_path, save_path, app, face_helper, height=904, width=512):\r\n    # 如果目标文件已经存在，直接返回\r\n    if os.path.exists(save_path):\r\n        print(f\"Face mask already exists for {image_path}. Skipping...\")\r\n        return\r\n    \r\n    # 读取图像\r\n    image_1 = cv2.imread(image_path)\r\n    height, width = image_1.shape[:2]\r\n    image_bgr_1 = cv2.cvtColor(image_1, cv2.COLOR_RGB2BGR)\r\n    image_info_1 = app.get(image_bgr_1)\r\n\r\n    # 初始化掩膜\r\n    mask_1 = np.zeros((height, width), dtype=np.uint8)\r\n\r\n    # 使用 FaceAnalysis 提取面部区域\r\n    if len(image_info_1) > 0:\r\n        print(f\"FaceAnalysis detected face in {image_path}\")\r\n        for info in image_info_1:\r\n            x_1 = info['bbox'][0]\r\n            y_1 = info['bbox'][1]\r\n            x_2 = info['bbox'][2]\r\n            y_2 = info['bbox'][3]\r\n            cv2.rectangle(mask_1, (int(x_1), int(y_1)), (int(x_2), int(y_2)), (255), thickness=cv2.FILLED)\r\n        cv2.imwrite(save_path, mask_1)\r\n    else:\r\n        # 如果 FaceAnalysis 未检测到面部，使用 FaceRestoreHelper\r\n        face_helper.clean_all()\r\n        with torch.no_grad():\r\n            bboxes = face_helper.face_det.detect_faces(image_bgr_1, 0.97)\r\n        if len(bboxes) > 0:\r\n            print(f\"FaceRestoreHelper detected face in {image_path}\")\r\n            for bbox in bboxes:\r\n                cv2.rectangle(mask_1, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255), thickness=cv2.FILLED)\r\n            cv2.imwrite(save_path, mask_1)\r\n        else:\r\n            print(f\"No face detected in {image_path}\")\r\n            mask_1[:] = 255  # 如果未检测到人脸，填充白色\r\n            cv2.imwrite(save_path, mask_1)\r\n\r\ndef process_images_in_folder(folder_path, app, face_helper):\r\n    # 创建一个线程池来并行处理图像\r\n    with ThreadPoolExecutor(max_workers=13) as executor:  # 根据您的机器性能调整 max_workers\r\n        # 遍历 vec 文件夹中的每个子文件夹\r\n        for subfolder_name in os.listdir(folder_path):\r\n            subfolder_path = os.path.join(folder_path, subfolder_name)\r\n\r\n            # 判断是否为文件夹\r\n            if os.path.isdir(subfolder_path):\r\n                # 确保 images 文件夹存在\r\n                images_folder = os.path.join(subfolder_path, 'images')\r\n                if os.path.exists(images_folder):\r\n                    face_subfolder_path = os.path.join(subfolder_path, 'faces')\r\n                    if not os.path.exists(face_subfolder_path):\r\n                        os.makedirs(face_subfolder_path)\r\n                        print(f\"Folder created: {face_subfolder_path}\")\r\n                    else:\r\n                        print(f\"Folder already exists: {face_subfolder_path}\")\r\n                    \r\n                    # 遍历 images 文件夹中的所有 PNG 图像文件\r\n                    for file in os.listdir(images_folder):\r\n                        if file.endswith('.png'):\r\n                            file_path = os.path.join(images_folder, file)\r\n                            face_save_path = os.path.join(face_subfolder_path, file)  # 保持相同文件名\r\n                            executor.submit(get_face_masks, file_path, face_save_path, app, face_helper)\r\n                            print(f\"Submitted face extraction task for: {file_path}\")\r\n\r\ndef main():\r\n    # 直接在这里定义文件夹路径\r\n    folder_path = '/root/autodl-tmp/eTikTok/vec'  # 这里替换为您实际的路径\r\n\r\n    # 初始化 FaceAnalysis 和 FaceRestoreHelper\r\n    app = FaceAnalysis(\r\n        name='antelopev2', root='.', providers=['CUDAExecutionProvider', 'CPUExecutionProvider']\r\n    )\r\n    app.prepare(ctx_id=0, det_size=(640, 640))\r\n    \r\n    face_helper = FaceRestoreHelper(\r\n        upscale_factor=1,\r\n        face_size=512,\r\n        crop_ratio=(1, 1),\r\n        det_model='retinaface_resnet50',\r\n        save_ext='png',\r\n        device=\"cuda\",\r\n    )\r\n    face_helper.face_parse = init_parsing_model(model_name='bisenet', device=\"cuda\")\r\n\r\n    print(f\"Processing vec folder: {folder_path}\")\r\n    \r\n    # 处理文件夹中的所有子文件夹\r\n    process_images_in_folder(folder_path, app, face_helper)\r\n\r\nif __name__ == \"__main__\":\r\n    main()\r\n"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T08:45:42Z",
+        "body": "Since face mask extraction does not require a large amount of GPU memory, you can run multiple instances of face_mask_extraction.py in parallel (using `nohup`) to improve efficiency."
+      },
+      {
+        "user": "potentialming",
+        "created_at": "2024-12-17T08:55:18Z",
+        "body": "目前我的代码是使用的多线程，不知道改为并行运行多个 face_mask_extraction.py会不会更好，我会尝试一下，感谢解惑。"
+      }
+    ]
+  },
+  {
+    "number": 45,
+    "title": "the file \"inference\" cannot be opened",
+    "created_at": "2024-12-17T02:33:53Z",
+    "closed_at": "2024-12-17T03:17:36Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/45",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/45/comments",
+    "author": "sunjing1123",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T02:48:33Z",
+        "body": "Hi, I just downloaded the `inference.zip` file from the Hugging Face model and unzipped it locally. I was able to open the unzipped files successfully and have checked all the contents to ensure that no files are corrupted."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T02:51:36Z",
+        "body": "Please check you have successfully downloaded the entire `inference.zip` file from the Hugging Face model."
+      },
+      {
+        "user": "sunjing1123",
+        "created_at": "2024-12-17T03:32:01Z",
+        "body": "Hi, yes, I've tried it and succeeded . thanks a lot \r\n"
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "Why is face mask extraction independent of the reference image?",
+    "created_at": "2024-12-16T11:16:34Z",
+    "closed_at": "2024-12-17T03:45:39Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/43",
+    "body": "In Human Skeleton Extraction, the target image is rescaled to match the size of the human object in the reference image. However, the face mask is extracted using only the target image as input, without being based on the reference image. Is this approach valid? Could you please explain why this is the case?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/43/comments",
+    "author": "twkim-0501",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-17T01:19:59Z",
+        "body": "Hi, the human face masks are primarily used during the training phase. Since the reference image and the driven pose sequence are extracted from the same video clip during training, there is no need to perform alignment on the human face masks."
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "title": "Speed up version?",
+    "created_at": "2024-12-16T09:05:08Z",
+    "closed_at": "2024-12-16T10:29:43Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/42",
+    "body": "Do you have a plan to release a version that speed up inference_basic.py",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/42/comments",
+    "author": "NguyenQuocViet42",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T10:29:28Z",
+        "body": "Hi, please refer to #27. "
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "Would you give me some ideas about fine-tune stable animator on our  private dataset ?",
+    "created_at": "2024-12-16T05:51:56Z",
+    "closed_at": "2024-12-16T08:00:28Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/39",
+    "body": "as the title says, I want to fine-tune the models on our private datasets, for now, I have some ideas\r\n1. fine-tune the total model\r\n2. fine-tune the sub-model, such as the SVD， DWPose part\r\n\r\n\r\nDo you agree with my proposal, and how to begin? \r\n\r\nThx",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/39/comments",
+    "author": "Albertchamberlain",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T06:02:41Z",
+        "body": "Hi, the training components should involve the PoseNet, the face encoder, and the attention parts of U-Net in the SVD. If you have substantial GPU resources, you can finetune the whole U-Net in SVD instead of attention parts. Additionally, it is unnecessary to finetune the DWPose part. "
+      },
+      {
+        "user": "Albertchamberlain",
+        "created_at": "2024-12-16T06:18:27Z",
+        "body": "> Hi, the training components should involve the PoseNet, the face encoder, and the attention parts of U-Net in the SVD. If you have substantial GPU resources, you can finetune the whole U-Net in SVD instead of attention parts. Additionally, it is unnecessary to finetune the DWPose part.\r\n\r\nThx, got it, that is exactly what I want to know"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T06:26:59Z",
+        "body": "I have just updated the README file. For the details of finetuning StableAnimator, please refer to the Model Training section."
+      },
+      {
+        "user": "Albertchamberlain",
+        "created_at": "2024-12-16T07:42:32Z",
+        "body": "So, which data should I prepare? and what data or GT? I need to prepare the image and the pose series and face series ?"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T07:47:56Z",
+        "body": "You should prepare several videos and extract the corresponding skeleton poses and face masks. For details on the dataset's file structure, please refer to the Model Training section."
+      },
+      {
+        "user": "Albertchamberlain",
+        "created_at": "2024-12-16T07:57:55Z",
+        "body": "got it,thanks\r\n"
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "Please clarify the LICENSE",
+    "created_at": "2024-12-15T06:34:13Z",
+    "closed_at": "2024-12-16T04:23:28Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/36",
+    "body": "Hello @Francis-Rings \r\n\r\nThis tool is amazing, I have tried several others but this is so far the best. Not only the results are good, the best part is it work on consumer GPU's as well. Thank you for sharing with us.\r\n\r\nI can see the code is MIT, please clarify if the pre-trained model have the same License?\r\nIs it okay to post the outputs generated on YT and other social media.",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/36/comments",
+    "author": "nitinmukesh",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T01:09:38Z",
+        "body": "Hi, thank you so much for your kind words! I’m thrilled to hear you’re enjoying the tool and finding it useful. The pre-trained model has the same License as the code. You can upload your animated videos to social media platforms for academic purposes."
+      },
+      {
+        "user": "nitinmukesh",
+        "created_at": "2024-12-16T04:23:28Z",
+        "body": "Thank you"
+      }
+    ]
+  },
+  {
+    "number": 34,
+    "title": "请问这个是用大量擦边女视频训练的模型吗？",
+    "created_at": "2024-12-14T18:54:51Z",
+    "closed_at": "2024-12-16T01:05:55Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/34",
+    "body": "为什么丢进去男人的图片出来也会变成包臀裙性感擦边女？",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/34/comments",
+    "author": "unanan",
+    "comments": [
+      {
+        "user": "RichGua",
+        "created_at": "2024-12-15T12:07:23Z",
+        "body": "懂的自然懂"
+      },
+      {
+        "user": "nitinmukesh",
+        "created_at": "2024-12-15T15:02:28Z",
+        "body": "It's because the alignment of poses is not correct."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-16T01:05:29Z",
+        "body": "Hi, the training dataset contains individuals across ethnicities, genders, portrayed in fullbody, half-body, and close-up shots against varied indoor and outdoor settings. This issue may be related to the misalignment between the reference image and the driven poses. For more details, please refer to #5. "
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "title": "ffmpeg command in readme should be updated",
+    "created_at": "2024-12-13T05:05:41Z",
+    "closed_at": "2024-12-16T02:59:35Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/31",
+    "body": "currently it has ffmpeg -i target.mp4 -q:v 1 path/test/target_images/frame_%d.png, which will extract  frames from video but the file name starts with frame_1.png; it's better to use\r\nffmpeg -i target.mp4 -q:v 1 -start_number 0 path/test/target_images/frame_%d.png\r\nso the file name will start with frame_0.png",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/31/comments",
+    "author": "Yaqing2023",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-13T05:22:50Z",
+        "body": "Thank you for pointing that out! I will update the README file."
+      }
+    ]
+  },
+  {
+    "number": 30,
+    "title": "bug in DWPose/training_skeleton_extraction.py",
+    "created_at": "2024-12-13T04:22:00Z",
+    "closed_at": "2024-12-16T02:57:12Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/30",
+    "body": "the README says :--start=1 --end=500 indicates that the skeleton extraction will start at path/StableAnimator/animation_data/rec/00001 and end at path/StableAnimator/animation_data/rec/00500.\"\r\nbut in the python script it has     for idx in range(start, end):\r\nso if start=1, end=500, above logic will iterate to 499, 500 is excluded;\r\nif the intention is to include 500, then above code should be\r\n    for idx in range(start, end+1):",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/30/comments",
+    "author": "Yaqing2023",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-13T05:22:38Z",
+        "body": "Thank you for pointing that out! I will update the code."
+      }
+    ]
+  },
+  {
+    "number": 29,
+    "title": "Training failed with error _pickle.UnpicklingError: pickle data was truncated",
+    "created_at": "2024-12-13T03:47:00Z",
+    "closed_at": "2024-12-16T02:59:49Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/29",
+    "body": "I tried to run the training scripts but it failed with error\r\n    raise subprocess.CalledProcessError(returncode=process.returncode, cmd=cmd)\r\nsubprocess.CalledProcessError: Command '['/home/yaqing/miniconda3/envs/stableanimator/bin/python', 'train.py', '--pretrained_model_name_or_path=stabilityai/stable-video-diffusion-img2vid-xt', '--output_dir=/home/yaqing/ai/StableAnimator/checkpoints/Animation', '--data_root_path=/home/yaqing/ai/StableAnimator/animation_data', '--rec_data_path=/home/yaqing/ai/StableAnimator/animation_data/video_rec_path.txt', '--vec_data_path=/home/yaqing/ai/StableAnimator/animation_data/video_vec_path.txt', '--validation_image_folder=/home/yaqing/ai/StableAnimator/validation/ground_truth', '--validation_control_folder=/home/yaqing/ai/StableAnimator/validation/poses', '--validation_image=/home/yaqing/ai/StableAnimator/validation/reference.png', '--num_workers=8', '--lr_warmup_steps=500', '--sample_n_frames=16', '--learning_rate=1e-5', '--per_gpu_batch_size=1', '--num_train_epochs=6000', '--mixed_precision=fp16', '--gradient_accumulation_steps=1', '--checkpointing_steps=2000', '--validation_steps=500', '--gradient_checkpointing', '--checkpoints_total_limit=5000', '--resume_from_checkpoint=latest']' died with <Signals.SIGKILL: 9>.\r\nTraceback (most recent call last):\r\n  File \"<string>\", line 1, in <module>\r\n  File \"/home/yaqing/miniconda3/envs/stableanimator/lib/python3.9/multiprocessing/spawn.py\", line 116, in spawn_main\r\n    exitcode = _main(fd, parent_sentinel)\r\n  File \"/home/yaqing/miniconda3/envs/stableanimator/lib/python3.9/multiprocessing/spawn.py\", line 126, in _main\r\n    self = reduction.pickle.load(from_parent)\r\n_pickle.UnpicklingError: pickle data was truncated\r\nAny idea what may be wrong?\r\n",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/29/comments",
+    "author": "Yaqing2023",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-13T05:17:46Z",
+        "body": "Hi, I’ve never encountered this issue before. Based on the error message, it might be related to `spawn`. You could try modifying the multiprocessing method at Line 822 in `train.py`."
+      },
+      {
+        "user": "Yaqing2023",
+        "created_at": "2024-12-13T06:06:04Z",
+        "body": "yes I tried to change spawn to fork, the error is gone; also in the shell script  it has CUDA_VISIBLE_DEVICES=3,2,1,0, i suppose you have 4 GPU for training. this needs to be updated for actual GPU numbers user has?\r\nbut i still can not run the training on my single GPU machine with 16G memory, even though i have only 2 sub-dir to train 00001 and 00002. It still runs OOM"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-13T06:12:07Z",
+        "body": "> yes I tried to change spawn to fork, the error is gone; also in the shell script it has CUDA_VISIBLE_DEVICES=3,2,1,0, i suppose you have 4 GPU for training. this needs to be updated for actual GPU numbers user has? but i still can not run the training on my single GPU machine with 16G memory, even though i have only 2 sub-dir to train 00001 and 00002. It still runs OOM\r\n\r\nI use 4 NVIDIA A100 80GB GPUs to train StableAnimator. The CUDA_VISIBLE_DEVICES variable specifies which GPUs are available for use. For example, if your machine has a single GPU, you should set CUDA_VISIBLE_DEVICES=0. Furthermore, I recommend using GPUs with at least 40GB of VRAM for training StableAnimator."
+      }
+    ]
+  },
+  {
+    "number": 28,
+    "title": "bug in face_model.py",
+    "created_at": "2024-12-13T02:56:13Z",
+    "closed_at": "2024-12-16T02:59:27Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/28",
+    "body": "face_model.py\", line 15, in __init__\r\n    self.handler_ante = insightface.model_zoo.get_model('checkpoints/models/antelopev2/glintr100.onnx')\r\n\r\naccording to the README, models and checkpoints are same level directories, so above code should be \r\n    self.handler_ante = insightface.model_zoo.get_model('models/antelopev2/glintr100.onnx')\r\n",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/28/comments",
+    "author": "Yaqing2023",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-13T02:59:32Z",
+        "body": "Thank you for pointing that out! I will update the code."
+      }
+    ]
+  },
+  {
+    "number": 25,
+    "title": "Question about \"Human Face Mask Extraction\"",
+    "created_at": "2024-12-12T09:34:51Z",
+    "closed_at": "2024-12-16T02:58:08Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/25",
+    "body": "I have a question. \r\nThe \"Human Face Mask Extraction\" section is introduced in the ReadMe, \r\nbut I don't see where it is used in the python app.py interface. \r\nWhat is the role of this preprocessing? \r\nIs it needed in the inference process?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/25/comments",
+    "author": "xujinbao282",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T10:27:01Z",
+        "body": "Hi! The extracted human face masks are not utilized in the StableAnimator-basic during inference. They are primarily used for training purposes. The training code and tutorial will be released this Friday, so stay tuned!"
+      }
+    ]
+  },
+  {
+    "number": 24,
+    "title": "Just asking about the background",
+    "created_at": "2024-12-12T03:58:01Z",
+    "closed_at": "2024-12-16T02:57:03Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/24",
+    "body": "Just asking about the background:\r\nHow do you generate videos without flickering backgrounds? \r\nWhat technology do you use? \r\nI'm very curious",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/24/comments",
+    "author": "xujinbao282",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T04:43:39Z",
+        "body": "Hi, the quality of the background is closely tied to the effectiveness of the temporal layers in the diffusion model. From my perspective, training the temporal layers on large-scale video datasets is especially beneficial. Diverse and complicated backgrounds in video datasets are also essential."
+      },
+      {
+        "user": "xujinbao282",
+        "created_at": "2024-12-12T05:44:43Z",
+        "body": "Okay, I understand. Thanks"
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "关于参考图像pose的问题",
+    "created_at": "2024-12-11T17:31:26Z",
+    "closed_at": "2024-12-16T02:58:24Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/23",
+    "body": "感谢您出色的工作，我这里有个问题想向您请教一下，我看你们的模型架构与Controlnext的比较接近，请问是否参考了他们的代码？如果是的话，我注意到Controlnext的模型在推理时需要额外拼接引用图像的姿势，而你们的代码好像优化了这一部分。想请教下是如何做到的？",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/23/comments",
+    "author": "potentialming",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T01:46:52Z",
+        "body": "Hi, the given pose sequence is directly fed to the PoseNet of StableAnimator without any concatenation during inference. The outputs of the PoseNet are element-wise added to the main latent in the diffusion model."
+      },
+      {
+        "user": "potentialming",
+        "created_at": "2024-12-12T05:16:33Z",
+        "body": "感谢回复，还想问一下，你们训练时使用unet的参数是全部都训练吗？这得需要多少的显存啊？"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T05:23:54Z",
+        "body": "Hi, in the SVD U-Net, only the attention components are trainable. The training process requires 70GB of VRAM due to the mixed-resolution (512x512 and 576x1024) training pipeline. However, if you train StableAnimator exclusively on 512x512 videos, the VRAM requirement is reduced to approximately 40GB. I will release the training code and training tutorial this Friday. Stay Tuned!"
+      },
+      {
+        "user": "potentialming",
+        "created_at": "2024-12-12T06:14:19Z",
+        "body": "非常棒，期待您的更新。"
+      },
+      {
+        "user": "xujinbao282",
+        "created_at": "2024-12-12T09:24:58Z",
+        "body": "Looking forward to it, great work"
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "Error occurred after update",
+    "created_at": "2024-12-11T15:54:44Z",
+    "closed_at": "2024-12-16T02:58:35Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/22",
+    "body": "An error occurred after the following update  15c7c2ba2410df1ec3ce2fc327efd660a01db307\r\n\r\nWhen I reverted the update, it worked fine. \r\n\r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\toyxy\\StableAnimator\\app.py\", line 263, in <module>\r\n    face_model = FaceModel()\r\n                 ^^^^^^^^^^^\r\n  File \"C:\\Users\\toyxy\\StableAnimator\\animation\\modules\\face_model.py\", line 11, in __init__\r\n    self.app = FaceAnalysis(\r\n               ^^^^^^^^^^^^^\r\n  File \"C:\\Users\\toyxy\\StableAnimator\\venv\\Lib\\site-packages\\insightface\\app\\face_analysis.py\", line 43, in __init__\r\n    assert 'detection' in self.models\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nAssertionError\r\n```",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/22/comments",
+    "author": "toyxyz",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T01:16:40Z",
+        "body": "Hi, I find that there is a bug in the automatic download process of Antelopev2 and have updated the README file with the solution."
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T01:32:58Z",
+        "body": "This issue is related to the incorrect path of Antelopev2, which is automatically downloaded into the `models/antelopev2/antelopev2` directory. The correct path of Antelopev2 should be `models/antelopev2`. You can run the following commands to tackle this issue:\r\n```\r\ncd StableAnimator\r\nmv ./models/antelopev2/antelopev2 ./models/tmp\r\nrm -rf ./models/antelopev2\r\nmv ./models/tmp ./models/antelopev2\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 20,
+    "title": "AssertionError - Missing antelopev2",
+    "created_at": "2024-12-11T14:35:19Z",
+    "closed_at": "2024-12-16T02:58:00Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/20",
+    "body": "## Issue\r\n\r\n### Stacktrace\r\n\r\n```\r\n/home/user/mambaforge/envs/stableanimator/lib/python3.11/site-packages/torch/cuda/__init__.py:716: UserWarning: Can't initialize NVML\r\n  warnings.warn(\"Can't initialize NVML\")\r\n/home/user/mambaforge/envs/stableanimator/lib/python3.11/site-packages/transformers/utils/generic.py:441: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\n/home/user/mambaforge/envs/stableanimator/lib/python3.11/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\n/home/user/mambaforge/envs/stableanimator/lib/python3.11/site-packages/transformers/utils/generic.py:309: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.\r\n  _torch_pytree._register_pytree_node(\r\nTraceback (most recent call last):\r\n  File \"/home/user/StableAnimator/app.py\", line 263, in <module>\r\n    face_model = FaceModel()\r\n                 ^^^^^^^^^^^\r\n  File \"/home/user/StableAnimator/animation/modules/face_model.py\", line 11, in __init__\r\n    self.app = FaceAnalysis(\r\n               ^^^^^^^^^^^^^\r\n  File \"/home/user/mambaforge/envs/stableanimator/lib/python3.11/site-packages/insightface/app/face_analysis.py\", line 43, in __init__\r\n    assert 'detection' in self.models\r\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nAssertionError\r\n```\r\n\r\nDespite attempting to download antelopev2 of insight face, when you run the app you'll still get an `AssertionError`. This is because after downloading antelopev2 gets extracted into another folder:\r\n\r\n```\r\n(stableanimator) ~/StableAnimator/models/antelopev2/antelopev2$ ls -l\r\ntotal 417536\r\n-rw-rw-r-- 1 user user 143607619 Dec 11 14:06 1k3d68.onnx\r\n-rw-rw-r-- 1 user user   5030888 Dec 11 14:06 2d106det.onnx\r\n-rw-rw-r-- 1 user user   1322532 Dec 11 14:06 genderage.onnx\r\n-rw-rw-r-- 1 user user 260665334 Dec 11 14:06 glintr100.onnx\r\n-rw-rw-r-- 1 user user  16923827 Dec 11 14:06 scrfd_10g_bnkps.onnx\r\n```\r\n\r\nIt should be `~/StableAnimator/models/antelopev2/`\r\n\r\nThe manual workaround is simply to: `mv antelopev2/* .`\r\n\r\nI haven't looked at the code yet for how antelopev2 is downloaded, but wanted to give you a heads up.\r\n",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/20/comments",
+    "author": "barakyo",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-12T01:16:14Z",
+        "body": "Hi, thank you for your suggestion! I find that there is a bug in the automatic download process of Antelopev2 and have updated the README file with the solution."
+      }
+    ]
+  },
+  {
+    "number": 19,
+    "title": "关于训练tile_size的问题~",
+    "created_at": "2024-12-11T10:13:58Z",
+    "closed_at": "2024-12-14T02:18:04Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/19",
+    "body": "Excellent work！I have noticed that the tile_size used for model inference is 16 frames. The curious point is that the previous Mimic-Motion v1.1 model was able to infer at a tile_size of 72. I noticed in your paper that four 80G A100 were used for training, and it was also based on SVD. Do you have idea how to train/fine tune a model with tile_size of 72? Will your model consider supporting 72 frame inference in the future? Thank you!",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/19/comments",
+    "author": "Tiehr2000",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-11T10:29:38Z",
+        "body": "Hi, training SVD requires significant computational resources, and our current GPU devices can only support training SVD with a 16-frame setting. I’ll work on optimizing the training pipeline to enable training with 72 frames in a single run in the future. Additionally, the training code and tutorial for StableAnimator will be released this Friday. Stay tuned!"
+      },
+      {
+        "user": "Tiehr2000",
+        "created_at": "2024-12-14T02:18:04Z",
+        "body": "Thanks~"
+      }
+    ]
+  },
+  {
+    "number": 17,
+    "title": "等大佬上comfyui",
+    "created_at": "2024-12-10T20:17:44Z",
+    "closed_at": "2024-12-11T18:59:40Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/17",
+    "body": "大佬加油",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/17/comments",
+    "author": "gtbloody",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-11T01:21:07Z",
+        "body": "Hi, ComfyUI will be released in the future. Stay tuned!"
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "How much VRAM does it need",
+    "created_at": "2024-12-10T18:36:50Z",
+    "closed_at": "2024-12-11T09:10:09Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/16",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/16/comments",
+    "author": "nitinmukesh",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-11T01:20:36Z",
+        "body": "Hi, StableAnimator currently supports animating reference images in two resolutions: 512x512 and 576x1024. For a 15-second demo video (512x512 resolution at 30 fps), the 16-frame basic model requires 8GB of VRAM and takes approximately 5 minutes to complete on a 4090 GPU. When the reference image resolution is 576x1024, the same model requires around 10GB of VRAM to animate."
+      },
+      {
+        "user": "nitinmukesh",
+        "created_at": "2024-12-11T09:10:09Z",
+        "body": "You are awesome.\r\n\r\nTested 512 x 512, only need ~6 GB. 576 x 1024 need ~8+ GB.\r\nIf some sort of quantization is applied 576x1024 will work on 8 GB. "
+      }
+    ]
+  },
+  {
+    "number": 12,
+    "title": "what is this error?",
+    "created_at": "2024-12-09T12:26:45Z",
+    "closed_at": "2024-12-16T02:56:52Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/12",
+    "body": "2024-12-09 12:26:13.237640758 [E:onnxruntime:Default, provider_bridge_ort.cc:1494 TryGetProviderInfo_CUDA] /onnxruntime_src/onnxruntime/core/session/provider_bridge_ort.cc:1195 onnxruntime::Provider& onnxruntime::ProviderLibrary::Get() [ONNXRuntimeError] : 1 : FAIL : Failed to load library libonnxruntime_providers_cuda.so with error: libcublasLt.so.12: cannot open shared object file: No such file or directory",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/12/comments",
+    "author": "justinday123",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-10T01:34:58Z",
+        "body": "Hi, the issue might be related to a version conflict between CUDA and onnxruntime. Could you provide more details about your local environment? Specifically, please check and share the versions of your CUDA, PyTorch, and onnxruntime."
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "video size is wrong",
+    "created_at": "2024-12-09T10:49:29Z",
+    "closed_at": "2024-12-16T02:56:22Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/11",
+    "body": "This is a good project.  ID consistency is great. Quality wise this project is much better than EchoMimic or MimicMotion, etc. And it‘s faster also. Just noticed a small issue. The case-1 images and related  ref image all have size 512x512, but the generated gif has size 576x1024 so the figure is distorted due to wrong aspect ratio. After resizing back to 512x512, the gif looks nice.\r\nThanks for the fantastic job！",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/11/comments",
+    "author": "Yaqing2023",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-10T01:28:22Z",
+        "body": "Hi, you can modify `--width` and `--height` parameters  in `command_basic_infer.sh`. StableAnimator currently supports image animation in two resolutions: 512×512 and 576×1024. For more details, please refer to the Model Inference section."
+      }
+    ]
+  },
+  {
+    "number": 9,
+    "title": "Data Pre-Processing Code (Human Face Mask Extraction)    ",
+    "created_at": "2024-12-05T02:56:15Z",
+    "closed_at": "2024-12-16T02:56:10Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/9",
+    "body": "代码什么时候更新呀 ",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/9/comments",
+    "author": "caoshiwen1",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-05T02:58:21Z",
+        "body": "Hi! The Data Pre-Processing Code for Human Face Mask Extraction will be released this Friday."
+      },
+      {
+        "user": "lin076",
+        "created_at": "2024-12-05T03:31:46Z",
+        "body": "> Hi! The Data Pre-Processing Code for Human Face Mask Extraction will be released this Friday.\r\n\r\nwhat about training code? will you update the training code?"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-05T03:51:05Z",
+        "body": "> > Hi! The Data Pre-Processing Code for Human Face Mask Extraction will be released this Friday.\r\n> \r\n> what about training code? will you update the training code?\r\n\r\nHi! The training code is currently under review. I’ll release it as soon as possible. Stay tuned!"
+      },
+      {
+        "user": "O-O1024",
+        "created_at": "2024-12-05T19:21:34Z",
+        "body": "> 大家好！人脸口罩提取的数据预处理代码将于本周五发布。\r\n\r\nWill it be integrated into gradio demo?"
+      },
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-12-06T01:26:59Z",
+        "body": "> > 大家好！人脸口罩提取的数据预处理代码将于本周五发布。\r\n> \r\n> Will it be integrated into gradio demo?\r\n\r\nHi! We plan to integrate human face mask extraction into the Gradio demo in the future. Stay tune!"
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "About face mask model",
+    "created_at": "2024-11-30T11:51:24Z",
+    "closed_at": "2024-12-16T02:55:25Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/3",
+    "body": "Hi, when will the Data Pre-Processing Code for Human Face Mask Extraction be released?",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/3/comments",
+    "author": "Albertchamberlain",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-11-30T12:24:21Z",
+        "body": "Hi! I'll release the Data Pre-Processing Code for Human Face Mask Extraction and the detailed training code next week. Stay tuned!"
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "Please add a LICENSE file for clear usage rights",
+    "created_at": "2024-11-27T13:07:53Z",
+    "closed_at": "2024-11-29T06:56:37Z",
+    "labels": [],
+    "url": "https://github.com/Francis-Rings/StableAnimator/issues/2",
+    "body": "This repository currently lacks a LICENSE file, which means the legal terms for usage, contributions, and modifications are unclear. Adding a LICENSE file is essential to specify how others can legally use, contribute to, and build upon this project. Without it, potential users and contributors might (and should) hesitate, as the default assumption is \"All Rights Reserved.\"\n\nContributing to, modifying, or using restricted software violates copyright - and by not including a LICENSE file, this repo leaves too much to individual interpretation.\n\nPlease consider adding a LICENSE file to encourage responsible and confident collaboration.\n\nAdditionally, if the maintainers are retaining all rights to the software, they may wish to consider marking it as not forkable by managing the forking policy for the organization or repository.",
+    "comments_url": "https://api.github.com/repos/Francis-Rings/StableAnimator/issues/2/comments",
+    "author": "eoffermann",
+    "comments": [
+      {
+        "user": "Francis-Rings",
+        "created_at": "2024-11-28T01:41:06Z",
+        "body": "Thank you for your suggestions! A LICENSE file has been added to the repository."
+      }
+    ]
+  }
+]

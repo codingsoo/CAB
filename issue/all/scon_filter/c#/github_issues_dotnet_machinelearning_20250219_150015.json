@@ -1,0 +1,198 @@
+[
+  {
+    "number": 5369,
+    "title": "Enable access to preloaded data in primitive data types",
+    "created_at": "2020-08-28T17:20:19Z",
+    "closed_at": "2020-08-28T23:22:53Z",
+    "labels": [
+      "question",
+      "API",
+      "documentation"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/5369",
+    "body": "I have been using the Accord.Net framework for some time and would like to run it side-by-side with ML.NET in my application. In my application the data exists in memory as a 2D array ```double[,]```. Headings are kept as a separate 1D string array. It would be easy enough to convert to a jagged array or to a .NET DataTable (which I do in various instances for Accord). \r\n\r\nHowever, there does not appear to be any easy way to load the data to ML.NET this way. I've looked at ```mlContext.Data.LoadFromEnumerable``` but it appears that is looking for objects not raw data. It would be massively inefficient to convert the raw data to this approach.\r\n\r\nI'm a newbie to ML.NET so if I'm missing something, my apologies. \r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/5369/comments",
+    "author": "barrybriggs",
+    "comments": [
+      {
+        "user": "michaelgsharp",
+        "created_at": "2020-08-28T21:22:46Z",
+        "body": "Currently there is no built in way to do this. Have you tried creating objects for it and seeing if there really is a big performance hit (time/memory/cpu)? If your training is not being done in parallel, you should be able to use the same object memory for all the data (I'll put an example of what I mean) so it shouldn't impact memory basically at all. If you are doing training in parallel, then you will have to create 1 object for each row, but it would still be good to see what the actual performance impact would be.\r\n\r\nIf you really want to use the raw data directly, the only way would be to write a custom `IDataLoader` and `IDataView`. This would be more memory efficient, but would require a lot more developer effort than just making objects to use the built in methods. So unless the performance impact is noticeable, its probably not worth the extra effort.\r\n\r\nSample\r\n```\r\n// Class to hold the raw data.\r\npublic class Data\r\n{\r\n        public double Col1;\r\n        public double Col2;\r\n        public double Col3;\r\n        public double Col4;\r\n        public double Col5;\r\n}\r\n\r\n// Make sure your data is accessible to the method so you don't need to pass it.\r\ndouble[,] rawData;\r\n\r\n// Generator to turn raw data into object\r\nIEnumerable<Data> GetData()\r\n{\r\n    // Create new object outside the loop so its only created once.\r\n    // This works because ML.Net \"streams\" in the data 1 row at a time (unless running in parallel),\r\n    // so we are safe to reuse the object.\r\n    Data data = new Data();\r\n    for (int i = 0; i < 100000; i++)\r\n    {\r\n        data.Col1 = rawData[i, 0];\r\n        data.Col2 = rawData[i, 1];\r\n        data.Col3 = rawData[i, 2];\r\n        data.Col4 = rawData[i, 3];\r\n        data.Col5 = rawData[i, 4];\r\n        yield return data;\r\n    }\r\n}\r\n\r\n// Then in your main function do the normal stuff.\r\nvar mlContext = new MLContext(0);\r\n// An IDataView is lazy evaluated. It will only pull in the rows when it needs them, one at a time.\r\nvar dataview = mlContext.Data.LoadFromEnumerable<Data>(GetData());\r\n```\r\n\r\nDoing it like this should let you use the data as you have it already, with only a very small amount of extrahead.\r\n\r\nWill that work for you?"
+      },
+      {
+        "user": "barrybriggs",
+        "created_at": "2020-08-28T23:03:43Z",
+        "body": "Yes, this is helpful, thanks. It's a little more complicated because I have to synthesize the class definitions at runtime, but this is doable. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Supports efficient in-memory data loading without per-row object creation overhead",
+      "Works with dynamically generated schema definitions at runtime",
+      "Avoids unnecessary data duplication or transformation steps",
+      "Provides guidance on memory management for parallel processing scenarios"
+    ]
+  },
+  {
+    "number": 5270,
+    "title": "CreateEnumerable from key column",
+    "created_at": "2020-07-01T00:11:10Z",
+    "closed_at": "2020-07-01T09:09:15Z",
+    "labels": [
+      "question",
+      "P3"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/5270",
+    "body": "### System information\r\n\r\n- **OS version/distro**: Windows 10\r\n- **.NET Version (eg., dotnet --info)**: 4.7\r\n\r\n### Issue\r\n\r\n- **What did you do?**\r\nTrying to create Enumerable from IDataView which contains Column with Type Key<UInt32, 0-1059>, into a uint type.\r\n- **What happened?**\r\nEncountered error:\r\n\"Can't bind the IDataView column 'ImpressionIdKey' of type 'Key<UInt32, 0-1059>' to field or property 'ImpressionIdKey' of type 'System.UInt32'.\"\r\n- **What did you expect?**\r\nI want to be able to export key value in its uint format as enumerable\r\n\r\n### Source code / logs\r\n\r\n```\r\n        var a = mlContext.Data.CreateEnumerable<ProcessedData>(\r\n            colSelTrainingData, reuseRowObject: false);\r\n\r\n...\r\n\r\n        private class ProcessedData\r\n        {\r\n            public float[] Feature { get; set; }\r\n\r\n            public float BackProClick { get; set; }\r\n\r\n            public uint ImpressionIdKey { get; set; }\r\n        }\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/5270/comments",
+    "author": "go2ready",
+    "comments": [
+      {
+        "user": "antoniovs1029",
+        "created_at": "2020-07-01T07:04:03Z",
+        "body": "Hi, @go2ready . It should be possible for you to create an enumerable from a key column. I don't know why you're getting that exception. Can you please provide a full stacktrace, and also a .zip containing code and data to reproduce your error so I can look closer? Thanks.\r\n\r\nFor reference, I've just ran this toy example, and it worked as expected, showing you can create enumerables from key columns:\r\n<details>\r\n<summary> Click to toggle toy example </summary>\r\n<p>\r\n\r\n```C#\r\n\r\nusing System;\r\nusing Microsoft.ML;\r\nusing Microsoft.ML.Data;\r\nusing System.Linq;\r\n\r\nnamespace TextLoaderSample\r\n{\r\n    class Program\r\n    {\r\n        public class ModelInput\r\n        {\r\n            public int Id { get; set; }\r\n\r\n            public string Description { get; set; }\r\n\r\n            public float Num1 { get; set; }\r\n\r\n            public float Num2 { get; set; }\r\n\r\n        }\r\n\r\n        public class ModelOutput\r\n        {\r\n            public uint KeyDescription { get; set; }\r\n        }\r\n\r\n        static void Main(string[] args)\r\n        {\r\n            MLContext mlContext = new MLContext(seed: 1);\r\n\r\n            var inputList = new[]\r\n            {\r\n                new ModelInput(){Id = 0, Description = \"lion\", Num1 = 12.333f, Num2 = 13.44f},\r\n                new ModelInput(){Id = 1, Description = \"house\", Num1 = 12.333f, Num2 = 13.44f},\r\n            };\r\n\r\n            IDataView inputDV = mlContext.Data.LoadFromEnumerable(inputList);\r\n\r\n            var pipeline = mlContext.Transforms.Conversion.Hash(\"KeyDescription\", \"Description\");\r\n            var outputDV = pipeline.Fit(inputDV).Transform(inputDV); // \"KeyDescription\" column is type \"Key<UInt32, 0-2147483647>\"\r\n\r\n            var outputEnum = mlContext.Data.CreateEnumerable<ModelOutput>(outputDV, reuseRowObject: false);\r\n            var outputArray = outputEnum.ToArray();\r\n        }\r\n    }\r\n}\r\n\r\n```\r\n\r\n</p>\r\n\r\n</details>"
+      },
+      {
+        "user": "go2ready",
+        "created_at": "2020-07-01T09:09:15Z",
+        "body": "Thanks @antoniovs1029 for providing the code snippet, I tired this morning it worked, must be something I have been doing wrong on the pipeline :) Really appreciated"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Demonstrate correct conversion from ML.NET Key type to primitive uint in enumerables",
+      "Identify pipeline configuration requirements for successful key value extraction",
+      "Ensure compatibility between IDataView schema and target class structure"
+    ]
+  },
+  {
+    "number": 3816,
+    "title": "System.ArgumentException: 'Length of memory  must match product of dimensions.",
+    "created_at": "2019-06-04T11:37:53Z",
+    "closed_at": "2019-06-10T09:47:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/3816",
+    "body": "- windows 10\r\n- 4.7.NET Version  \r\n- ML dotnet 1.0\r\n- Visual Studio 15.9.12\r\n\r\nIssue:\r\n\r\nI'm quite new to .net, however I'm trying to replicate CRNN model developed on keras to ML dotnet. I successfully converted the model to onnx format. But when I try to make a prediction I'm getting this:\r\n _System.ArgumentException: 'Length of memory (9600) must match product of dimensions (3200).'_\r\nI didn't find any issue or something so that is way I'm writing here.\r\n\r\nI can assume that the problem might be somewhere in image transformation. My model is built for grayscale images with the shape of (1, 1, 32, 100) and there I have this conflict between:\r\n1x32x100 = 3200 (should be)  vs  3x32x100 = 9600 (actually is)\r\n\r\nI've tried to transform images to grayscale, but it doesn't work (perhaps I do it in a wrong way).\r\n\r\nThis is my snipped code for building the pipeline:\r\n\r\n`\r\n\r\n        int imageHeight = 32;\r\n        int imageWidth = 100;\r\n        bool ChannelsLast = false;\r\n        string ModelInput = \"conv2d_1_input_01\";\r\n        string ModelOutput = \"dense_1_add_0\";\r\n\r\n\r\n        var pipeline = mLContext.Transforms.LoadImages(outputColumnName: \"conv2d_1_input_01\",\r\n                                                           imageFolder: imagesLocation,\r\n                                                           inputColumnName: nameof(ImageData.ImagePath))\r\n            .Append(mLContext.Transforms.ResizeImages(outputColumnName: \"conv2d_1_input_01\",\r\n                                                            imageWidth: imageWidth,\r\n                                                            imageHeight: imageHeight))\r\n            .Append(mLContext.Transforms.ConvertToGrayscale(outputColumnName:\r\n                                                            \"conv2d_1_input_01\"))\r\n            .Append(mLContext.Transforms.ExtractPixels(outputColumnName: \"conv2d_1_input_01\", interleavePixelColors: ImageSettings.ChannelsLast))\r\n            .Append(mLContext.Transforms.ApplyOnnxModel(modelFile: modelLocation,\r\n                                                            outputColumnNames: new[] { ModelOutput },\r\n                                                            inputColumnNames: new[] { ModelInput }));\r\n`\r\n\r\nI would appreciate any help or comments.",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/3816/comments",
+    "author": "cemicel",
+    "comments": [
+      {
+        "user": "cemicel",
+        "created_at": "2019-06-06T12:36:45Z",
+        "body": "I was able to omit the problem by changing model's input shape to consume 3-channel images.\r\nIt is not the solution."
+      },
+      {
+        "user": "yaeldekel",
+        "created_at": "2019-06-07T20:08:51Z",
+        "body": "Hi @cemicel, thank you for your question. The `ConvetToGrayscale` transform converts the image to gray scale, but it keeps all the channels (alpha, R, G and B). the `ExtractPixels` transform has an option called `colorsToExtract`, where you can specify that you would only like to extract the alpha channel:\r\n```\r\nmLContext.Transforms.ExtractPixels(outputColumnName: \"conv2d_1_input_01\", colorsToExtract: ImagePixelExtractingEstimator.ColorBits.Alpha)\r\n```\r\n"
+      },
+      {
+        "user": "cemicel",
+        "created_at": "2019-06-10T09:47:38Z",
+        "body": "Hello @yaeldekel,\r\nThank you for your explanation, now it make sense for me.\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to ensure image data has exactly 1 channel (grayscale) before model input",
+      "Clarification of ML.NET's image processing pipeline behavior regarding color channels",
+      "Method to validate tensor dimensions match model expectations",
+      "Guidance on proper use of ExtractPixels parameters for channel management"
+    ]
+  },
+  {
+    "number": 3155,
+    "title": "Beginner: 'Schema mismatch for label column '': expected R4, got Key<U4>' exception thrown.",
+    "created_at": "2019-04-01T19:04:29Z",
+    "closed_at": "2019-04-01T20:15:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/3155",
+    "body": "- **Windows 10**:\r\n\r\n\r\n\r\nTrying to create my first regression in ML.NET\r\nI get an exception thrown:\r\nSchema mismatch for label column '': expected R4, got Key<U4>\r\nI was expecting to get \r\n\"Predicted 6 + 3 is: 9\"\r\nprinted to the console.\r\n\r\nI wrote a python script to create training data with 3 columns :\r\nfirst, second, result.\r\nfirst and second are random values.\r\nresult is first+second.\r\n\r\nI expect the machine to get first and second and predict the result. \r\n\r\nnumbers.cvs:\r\n```\r\n35,74,109\r\n69,36,105\r\n75,3,78\r\n19,44,63\r\n65,93,158\r\n40,15,55\r\n2,67,69\r\n27,63,90 ... X1000 times\r\n```\r\nCode that matters:\r\n```\r\n\r\n    public class NumberData\r\n    {\r\n        [LoadColumn(0)]\r\n        public float first;\r\n        [LoadColumn(1)]\r\n        public float second;\r\n        [LoadColumn(2)]\r\n        public float result;\r\n    }\r\n    public class NumberPrediction\r\n    {\r\n        [ColumnName(\"PredictedNumber\")]\r\n        public float PredictedNumber;\r\n    }\r\n.\r\n.\r\n.\r\nusing Microsoft.Data.DataView;\r\nusing Microsoft.ML;\r\nusing Microsoft.ML.Data;\r\n.\r\n.\r\n.\r\nMLContext mlContext = new MLContext();          \r\nIDataView trainingDataView = \r\nmlContext.Data.LoadFromTextFile<NumberData>(\r\n\"numbers.csv\",',',false);\r\nConsole.WriteLine(\"Loaded Data\");\r\nvar trainingPipeline =\r\nmlContext.Transforms.Conversion.MapValueToKey(nameof(NumberData.result))\r\n.Append(mlContext.Transforms.Concatenate(\r\nDefaultColumnNames.Features,\r\nnameof(NumberData.first),\r\nnameof(NumberData.second)))\r\n.Append(mlContext.Regression.Trainers.StochasticDualCoordinateAscent(\r\nlabelColumnName: \"result\",\r\nfeatureColumnName: DefaultColumnNames.Features))\r\n.Append(mlContext.Transforms.Conversion.MapKeyToValue(\"PredictedNumber\"));\r\nConsole.WriteLine(\"Created Trainer\");\r\nvar model = trainingPipeline.Fit(trainingDataView);//**RELEVANT** exception thrown here\r\nConsole.WriteLine(\"Trained The Model\");\r\nvar prediction =\r\nmodel.CreatePredictionEngine<NumberData, NumberPrediction>(mlContext).Predict(\r\nnew NumberData()\r\n{\r\nfirst = 6f,\r\nsecond = 3f,\r\nresult = 0// To be predicted\r\n});\r\nConsole.WriteLine($\"Predicted 6 + 3 is: {prediction.PredictedNumber}\");\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/3155/comments",
+    "author": "tomerze",
+    "comments": [
+      {
+        "user": "singlis",
+        "created_at": "2019-04-01T20:09:04Z",
+        "body": "Hi @TomerZeitune  - \r\n\r\nSorry that error message could be better. With 0.12 it should say \"expected float, got Key\". You are getting the exception , because there is a MapValueToKey transform for the result column which should not be needed as result is already a float. \r\n\r\nIf you remove this transformer, you will get another error Argument out of range exception and that  PredictedResult column is not found. So if you also take out the MapKeyToValue for PredictedResult, you will have a working pipeline, however the predicted result is 0. This is because the NumberPrediction class that you are using to store the prediction needs to pull from the Score column. So if you change the attribute for PredictedNumber to be:\r\n`[ColumnName(\"Score\")]\r\n`\r\nYou will get a better result:\r\n```\r\n        {\r\n            int maxIterations = 100;\r\n            MLContext mlContext = new MLContext();\r\n            IDataView trainingDataView =\r\n            mlContext.Data.LoadFromTextFile<NumberData>(\r\n            \"numbers.csv\", ',', false);\r\n            Console.WriteLine(\"Loaded Data\");\r\n            var trainingPipeline =\r\n            //mlContext.Transforms.Conversion.MapValueToKey(nameof(NumberData.result))\r\n            mlContext.Transforms.Concatenate(\r\n            DefaultColumnNames.Features,\r\n            nameof(NumberData.first),\r\n            nameof(NumberData.second))\r\n            .Append(mlContext.Regression.Trainers.StochasticDualCoordinateAscent(\r\n            labelColumnName: \"result\",\r\n            featureColumnName: DefaultColumnNames.Features,\r\n            maxIterations: maxIterations));\r\n            //.Append(mlContext.Transforms.Conversion.MapKeyToValue(\"PredictedNumber\"));\r\n            Console.WriteLine(\"Created Trainer\");\r\n            var model = trainingPipeline.Fit(trainingDataView);//**RELEVANT** exception thrown here\r\n            Console.WriteLine(\"Trained The Model\");\r\n            var prediction =\r\n            model.CreatePredictionEngine<NumberData, NumberPrediction>(mlContext).Predict(\r\n            new NumberData()\r\n            {\r\n                first = 6f,\r\n                second = 3f,\r\n                result = 0// To be predicted\r\n            });\r\n            Console.WriteLine($\"Predicted 6 + 3 is: {prediction.PredictedNumber}\");\r\n        }\r\n```\r\n\r\nHere is the class:\r\n```\r\n    public class NumberPrediction\r\n    {\r\n        [ColumnName(\"Score\")]\r\n        public float PredictedNumber;\r\n    }\r\n```\r\n"
+      },
+      {
+        "user": "tomerze",
+        "created_at": "2019-04-01T20:14:24Z",
+        "body": "Thank you a lot for your help. You solved the problem. \r\nI get \r\n\r\n```\r\nLoaded Data\r\nCreated Trainer\r\nTrained The Model\r\nPredicted 6 + 3 is: 9.004125\r\n\r\n```\r\nprinted as expected."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensure label column remains a float type for regression tasks",
+      "Correct mapping of prediction output to the expected column name",
+      "Proper configuration of regression trainer's label/feature columns"
+    ]
+  },
+  {
+    "number": 2068,
+    "title": "Word embedding output dimensions",
+    "created_at": "2019-01-08T07:33:46Z",
+    "closed_at": "2019-02-01T01:12:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/2068",
+    "body": "### System information\r\n\r\n- **OS version/distro**: windows 64bit 10.0.17134\r\n- **.NET Version (eg., dotnet --info)**: 2.1.502\r\n\r\n### Issue\r\nI am having trouble understanding the output of the WordEmbeddings function. Using a model with 50 dimensionality output, I would expect the embedding dimensions to match that output in some way. It only just multiplies the expected output dimension by 3.\r\n\r\nI have checked the model files, and they have the correct output for each word for each model.\r\n\r\n- **What did you do?** \r\nCreated wordEmbedding using several different preprocessed models. Both default and downloaded elsewhere\r\n- **What happened?**\r\nFor GloVe50D the output dimensions were 150.\r\nFor FastTextWikipedia300D the output was 900\r\n- **What did you expect?**\r\nI expected the output to match the embedding size in the models.\r\nFor GloVe50D to output dimensions 50 * input size, or [inputsize][50].\r\nFor FastTextWikipedia300D to output dimensions 300 * input size, or [inputsize][300].\r\n\r\n### Source code / logs\r\n\r\nPlease paste or attach the code or logs or traces that would be helpful to diagnose the issue you are reporting.\r\n\r\nThis code illustrates my issue. I would assume the output to be of variable size, but all outputs have dimensionality of 150, which I have trouble grasping. I have tried forcing the output to a variable vector output but it changes nothing.\r\n\r\nWhat worries me most, is what happens, when the input is a single word sentence, as I can not fathom or figure out what the extra 100 values are.\r\n\r\n```\r\n\r\nusing System;\r\nusing System.Linq;\r\nusing Microsoft.ML;\r\nusing Microsoft.ML.Runtime.Api;\r\nusing Microsoft.ML.Runtime.Data;\r\nusing Microsoft.ML.StaticPipe;\r\nusing Microsoft.ML.Transforms.Text;\r\n\r\nnamespace ConsoleApp1\r\n{\r\n    class DataEntry\r\n    {\r\n        public DataEntry(string message, int label)\r\n        {\r\n            Message = message;\r\n            Label = label;\r\n        }\r\n        public string Message { get; set; }\r\n        public int Label { get; set; }\r\n    }\r\n\r\n    class ModelOutput\r\n    {\r\n        public int Label;\r\n        public float[] Embedding;\r\n    }\r\n\r\n    class Program\r\n    {\r\n        private static MLContext mLContext = new MLContext();\r\n        private static PredictionFunction<DataEntry, ModelOutput> wordEmbedder;\r\n\r\n        static void Main()\r\n        {\r\n            var dataEntries = new[]\r\n            {\r\n                \"I am a horse\",\r\n                \"cow\",\r\n                \"The cat is norse\",\r\n                \"Don't ask me how\",\r\n                \"This is a sentence that is very long, and should have a different dimension than the other ones?\"\r\n            };\r\n            var labels = dataEntries.Select((_, i) => i).ToArray();\r\n\r\n            TokenizeData(dataEntries, labels, out  var data);\r\n            \r\n            Console.WriteLine($\"{data.Length} {data[0].Length}\");\r\n            foreach (var d in data)\r\n            {\r\n                Console.WriteLine($\"{d.Length}\");\r\n            }\r\n\r\n            Console.Read();\r\n        }\r\n        \r\n\r\n        private static void TokenizeData(string[] dataEntries, int[] labels, out double[][] dataVectors)\r\n        {\r\n            var dataEnum = dataEntries.Select((s, i) => new DataEntry(s, labels[i])).ToArray();\r\n            var reader = mLContext.CreateDataView(dataEnum).AssertStatic(\r\n                mLContext, c =>\r\n                (\r\n                    Message: c.Text.Scalar,\r\n                    Label: c.I4.Scalar));\r\n\r\n            // Inspect the message texts that are read from the file.\r\n            var pipeline = reader.MakeNewEstimator()\r\n                    .Append(r => (\r\n                        LabelMid: r.Label,\r\n                        Embedding: r.Message\r\n                            .NormalizeText()\r\n                            .TokenizeText()\r\n                            .RemoveStopwords()\r\n                            .WordEmbeddings(\r\n                                WordEmbeddingsExtractingTransformer\r\n                                    .PretrainedModelKind\r\n                                    .GloVe50D)\r\n                    ))\r\n                ;\r\n\r\n            var modelFit = pipeline.Fit(reader);\r\n\r\n            wordEmbedder = modelFit.AsDynamic.MakePredictionFunction<DataEntry, ModelOutput>(mLContext);\r\n\r\n            dataVectors = dataEntries.Select((s, i) => NameToTfVector(s, labels[i])).ToArray();\r\n        }\r\n        \r\n        private static double[] SentenceFromWordEmbedding(ModelOutput embedding)\r\n        {\r\n            return embedding.Embedding.Select(f => (double) f).ToArray();\r\n        }\r\n\r\n        private static double[] NameToTfVector(string inputText, int label)\r\n        {\r\n            return SentenceFromWordEmbedding(wordEmbedder.Predict(new DataEntry(inputText, label)));\r\n        }\r\n    }\r\n}\r\n```\r\nOutput:\r\n`5 150\r\n150\r\n150\r\n150\r\n150\r\n150`",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/2068/comments",
+    "author": "cmollgaard",
+    "comments": [
+      {
+        "user": "justinormont",
+        "created_at": "2019-01-08T13:53:58Z",
+        "body": "Greetings @stunax! \r\n\r\nThe WordEmbedding transform produces an output consisting of the average, min, and max of the words in the phrase. The min/max provide a bounding hyper-rectangle for the words in the word embedding space. This can assist for longer phrases where the average of many words drowns out the useful signal and your label is reasonable correlated with a dimension of the embedding space. \r\n\r\nFor instance, if you're trying to classify ( trucks vs. dogs ), a dimension of the pretrained embedding space may reasonably represent \"mechanical-ness\" or \"softness\"; and any word in your phrase peaking these dimensions would push the min/max outwards even when the average is overwhelmed by other words.\r\n\r\nIf you want to experiment, you can try to select the first/middle/last 3rd of the output vector as your Features column and see the impact of the average/min/max on your dataset.\r\n\r\nLet us know if you find the WordEmbedding valuable on your dataset, and if any of the pretrained custom embeddings which you're trying turn out to be useful useful. \r\n "
+      },
+      {
+        "user": "cmollgaard",
+        "created_at": "2019-01-08T15:09:31Z",
+        "body": "Thank you very much! \r\n\r\nThis was what I needed to understand the output. I was unable to find any documentation for the output, but this makes sense.\r\n\r\nI ended up just loading the model manually, but glove50 improved model performance, by reducing test error by 2/3.\r\n\r\nI am abit curious as how your FastText model works? As far as i understand, the benefit of FastText comes from the subword information, but I miss an example as how it should be combined with the ngram transformer."
+      },
+      {
+        "user": "justinormont",
+        "created_at": "2019-01-08T23:16:17Z",
+        "body": "FastText uses the sub-words (often 3 to 6 length charactergrams) plus ngrams (often length ~2 ngrams) to train the model. When they flatten the model to a lookup table, they include only the unigrams. We use the unigrams as the key to the lookup table. \r\n\r\nI believe the binary format of FastText embeddings (.bin files) retains the full neural net includes inputs for the charactergrams. We haven't investigated the gains by using the binary format vs. the flattened (.vec) format. I expect this would mainly help when there are words which are telling of the label, but not in the pre-trained word embedding file, as it can lookup the chargrams even without the full word existing. \r\n\r\nFor handling the case of out-of-vocabulary words, the trichargram portion of the TextTransform provides similar gains. Using bigrams+trichargrams as a feature gives you a pseudo-stemming ability from the trichargrams. I tend to use a word embedding in parallel with these ngrams+chargrams. "
+      },
+      {
+        "user": "Ivanidzo4ka",
+        "created_at": "2019-01-31T01:10:24Z",
+        "body": "This is clear sign what we need better documentation."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why word embedding output dimensions are 3x the model's stated dimensionality",
+      "Documentation of the output structure for WordEmbeddings function",
+      "Guidance on combining word embeddings with other text processing techniques",
+      "Conceptual explanation of embedding model implementations in the library"
+    ]
+  },
+  {
+    "number": 915,
+    "title": "Trying to left-outer join two datasets using a PK/FK",
+    "created_at": "2018-09-14T17:15:37Z",
+    "closed_at": "2018-10-03T17:58:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/machinelearning/issues/915",
+    "body": "Is there any way to manipulate the input data in order to join two distinct datasets using a primary key/foreign key?  Is the expectation that the input from the TextLoader is always partially pre-processed?",
+    "comments_url": "https://api.github.com/repos/dotnet/machinelearning/issues/915/comments",
+    "author": "ftdube",
+    "comments": [
+      {
+        "user": "Zruty0",
+        "created_at": "2018-09-17T18:08:37Z",
+        "body": "Generally, in ML.NET we tried to move away from relational operations, and assume that the input data is already a single 'view' (think SQL view).\r\n\r\nThe reasoning was that there has been a lot of research and a lot of work already done for relational operations, and we'd rather not make a mediocre effort at that.\r\n\r\nSo, yes, the expectation is that any JOINs and other relational operations are conducted prior to loading the data into ML.NET"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarify whether ML.NET requires pre-joined datasets or supports native relational operations",
+      "Explain ML.NET's design philosophy regarding data preparation",
+      "Address the relationship between ML.NET and external data processing tools"
+    ]
+  }
+]

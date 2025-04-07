@@ -1,0 +1,174 @@
+[
+  {
+    "number": 125,
+    "title": "retrieve correct cardinality for columnstore scan",
+    "created_at": "2025-02-19T11:58:45Z",
+    "closed_at": "2025-02-20T05:05:51Z",
+    "labels": [],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/pull/125",
+    "body": "Compute cardinality from file metadata when initialize the columnstore scan, to ensure duckdb generates an optimal query plan.\r\n\r\nfix #124 ",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/125/comments",
+    "author": "YuweiXiao",
+    "comments": [
+      {
+        "user": "YuweiXiao",
+        "created_at": "2025-02-20T02:20:09Z",
+        "body": "@dpxcc hey, comments are addressed. also added a regress test."
+      },
+      {
+        "user": "dpxcc",
+        "created_at": "2025-02-20T05:06:22Z",
+        "body": "Thanks for working on this!!"
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "title": "Server crashes on executing 'ALTER TABLE heaptable SET ACCESS METHOD DEFAULT'",
+    "created_at": "2025-02-04T12:50:06Z",
+    "closed_at": "2025-02-04T19:36:16Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/issues/115",
+    "body": "### What happens?\n\nServer crashes when executing the script below\nPostgreSQL build:\n```\nCFLAGS='-Og' ./configure --enable-tap-tests --with-openssl --enable-debug --enable-cassert --with-icu --with-lz4 --with-libxml\n```\n\n### To Reproduce\n\nscript.sql:\n```sql\nCREATE EXTENSION pg_mooncake;\nCREATE TABLE heaptable USING heap AS\n  SELECT a, repeat(a::text, 100) FROM generate_series(1,9) AS a;\nALTER TABLE heaptable SET ACCESS METHOD DEFAULT, SET ACCESS METHOD heap2;\n```\nbacktrace:\n```c\n#0  __strcmp_evex () at ../sysdeps/x86_64/multiarch/strcmp-evex.S:291\n#1  0x00007ff98b50b889 in DuckdbUtilityHook_Cpp (qc=0x7ffe73d95200, dest=0x55f2487d2440, query_env=<optimized out>,\n    params=<optimized out>, context=<optimized out>, read_only_tree=false,\n    query_string=0x55f2487d1430 \"ALTER TABLE heaptable SET ACCESS METHOD DEFAULT, SET ACCESS METHOD heap2;\", pstmt=0x55f2487d2080)\n    at ../../src/pgduckdb/pgduckdb_ddl.cpp:147\n#2  pgduckdb::__CPPFunctionGuard__<void (*)(PlannedStmt*, char const*, bool, ProcessUtilityContext, ParamListInfoData*, QueryEnvironment*, _DestReceiver*, QueryCompletion*), DuckdbUtilityHook_Cpp, PlannedStmt*, char const*, bool, ProcessUtilityContext, ParamListInfoData*, QueryEnvironment*, _DestReceiver*, QueryCompletion*> (func_name=0x7ff98da08d99 \"DuckdbUtilityHook\") at ../../src/pgduckdb/pgduckdb_ddl.cpp:192\n#3  0x000055f247495565 in ProcessUtility (pstmt=pstmt@entry=0x55f2487d2080, queryString=<optimized out>, readOnlyTree=<optimized out>,\n    context=context@entry=PROCESS_UTILITY_TOPLEVEL, params=<optimized out>, queryEnv=<optimized out>, dest=0x55f2487d2440,\n    qc=0x7ffe73d95200) at utility.c:519\n#4  0x000055f247492c08 in PortalRunUtility (portal=portal@entry=0x55f24884d840, pstmt=pstmt@entry=0x55f2487d2080,\n    isTopLevel=isTopLevel@entry=true, setHoldSnapshot=setHoldSnapshot@entry=false, dest=dest@entry=0x55f2487d2440,\n    qc=qc@entry=0x7ffe73d95200) at pquery.c:1156\n#5  0x000055f247492ed1 in PortalRunMulti (portal=portal@entry=0x55f24884d840, isTopLevel=isTopLevel@entry=true,\n    setHoldSnapshot=setHoldSnapshot@entry=false, dest=dest@entry=0x55f2487d2440, altdest=altdest@entry=0x55f2487d2440,\n    qc=qc@entry=0x7ffe73d95200) at pquery.c:1313\n#6  0x000055f2474931dd in PortalRun (portal=portal@entry=0x55f24884d840, count=count@entry=9223372036854775807,\n    isTopLevel=isTopLevel@entry=true, run_once=run_once@entry=true, dest=dest@entry=0x55f2487d2440, altdest=altdest@entry=0x55f2487d2440,\n    qc=0x7ffe73d95200) at pquery.c:789\n#7  0x000055f24748f5e2 in exec_simple_query (\n    query_string=query_string@entry=0x55f2487d1430 \"ALTER TABLE heaptable SET ACCESS METHOD DEFAULT, SET ACCESS METHOD heap2;\")\n    at postgres.c:1278\n#8  0x000055f247491433 in PostgresMain (dbname=<optimized out>, username=<optimized out>) at postgres.c:4767\n#9  0x000055f24748af20 in BackendMain (startup_data=<optimized out>, startup_data_len=<optimized out>) at backend_startup.c:105\n#10 0x000055f2473eca1f in postmaster_child_launch (child_type=child_type@entry=B_BACKEND,\n    startup_data=startup_data@entry=0x7ffe73d9540c \"\", startup_data_len=startup_data_len@entry=4,\n    client_sock=client_sock@entry=0x7ffe73d95440) at launch_backend.c:277\n#11 0x000055f2473f0e8a in BackendStartup (client_sock=client_sock@entry=0x7ffe73d95440) at postmaster.c:3594\n#12 0x000055f2473f10d5 in ServerLoop () at postmaster.c:1676\n#13 0x000055f2473f2732 in PostmasterMain (argc=argc@entry=3, argv=argv@entry=0x55f24878baf0) at postmaster.c:1374\n#14 0x000055f24731a7e5 in main (argc=3, argv=0x55f24878baf0) at main.c:199\n```\n\n### OS:\n\ndebian-12\n\n### pg_mooncake Version:\n\n0e0452cf985a725003a1ca8e8d96df51c1d5d01b\n\n### Postgres Version:\n\nREL_17_STABLE\n\n### Are you using pg_mooncake Docker, Neon, or the extension standalone?\n\npg_mooncake extension standalone",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/115/comments",
+    "author": "saygoodbyye",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2025-02-04T19:34:52Z",
+        "body": "Thanks for the bug report!"
+      }
+    ]
+  },
+  {
+    "number": 107,
+    "title": "NOT NULL constraints are ignored",
+    "created_at": "2025-01-27T19:10:55Z",
+    "closed_at": "2025-02-12T00:55:45Z",
+    "labels": [
+      "bug",
+      "good first issue"
+    ],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/issues/107",
+    "body": "### What happens?\n\nNOT NULL constraints are ignored, at least on some columns if not all columns.\n\n### To Reproduce\n\nReproduction script below:\n\n```\nSET mooncake.default_bucket = 's3://mooncake'; -- Set your own\n\nBEGIN;\n\n-- Example with a columnstore table\nDROP TABLE IF EXISTS columnstore_table_1;\n\n-- Create a new columnstore table where NONE of the columns allow null values\nCREATE TABLE columnstore_table_1 (\n  id TEXT NOT NULL,\n  list TEXT[] NOT NULL\n) using columnstore;\n\n-- Insert a row into the columnstore table only providing a value for id\n-- We expect this operation to FAIL, but it SUCCEEDS.\nINSERT INTO columnstore_table_1 (id)\nVALUES ('id_1');\n\n-- Insert a row into the columnstore table only providing a value for list\n-- We expect this operation to FAIL, but it SUCCEEDS.\nINSERT INTO columnstore_table_1 (list)\nVALUES (ARRAY['value1', 'value2', 'value3']);\n\n-- Display the contents of the columnstore_table_1\n-- Observe two total rows with missing values for (row1, list) or (row2, id)\nSELECT * FROM columnstore_table_1;\n```\n\n### OS:\n\nNeon\n\n### pg_mooncake Version:\n\nv0.1\n\n### Postgres Version:\n\n15\n\n### Are you using pg_mooncake Docker, Neon, or the extension standalone?\n\npg_mooncake on Neon",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/107/comments",
+    "author": "amikofalvy",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2025-01-27T21:12:53Z",
+        "body": "We don’t support constraints yet, but I agree that we should at least check for `NOT NULL` for now"
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "Add extension reload script",
+    "created_at": "2025-01-07T23:11:41Z",
+    "closed_at": "2025-01-20T12:44:26Z",
+    "labels": [],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/pull/76",
+    "body": "Automate the process of reloading the extension by:\r\n- Building the extension with `make debug`\r\n- Installing the extension\r\n- Restarting PG\r\n- Dropping the extension\r\n- Creating the extension\r\n\r\nExample usage:\r\n```sh\r\n./scripts/reload-extension.sh\r\n```\r\n\r\nFound this useful so thought I would share. Any other workflow automations can also be added here.",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/76/comments",
+    "author": "nbiscaro",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2025-01-07T23:56:18Z",
+        "body": "Why do we need to restart Postgres in order to reload extension?\r\nI usually just `make debug -j8 && make install` then `DROP EXTENSION pg_mooncake CASCADE; CREATE EXTENSION pg_mooncake`"
+      },
+      {
+        "user": "nbiscaro",
+        "created_at": "2025-01-08T04:02:50Z",
+        "body": "> Why do we need to restart Postgres in order to reload extension? I usually just `make debug -j8 && make install` then `DROP EXTENSION pg_mooncake CASCADE; CREATE EXTENSION pg_mooncake`\r\n\r\nRestarting Postgres is not strictly necessary in most cases, but it ensures there are no lingering issues or edge cases. Since restarting is quick and retains session history, it’s a cautious approach with minimal downside."
+      },
+      {
+        "user": "dpxcc",
+        "created_at": "2025-01-20T08:08:26Z",
+        "body": "Hi, I don't see an immediate need for this script. Let's defer the diff for now, and revisit it in the future when the process becomes more complex. At that point, a script like this might be useful"
+      }
+    ]
+  },
+  {
+    "number": 74,
+    "title": "Update README.md for Neon cloud storage configuration",
+    "created_at": "2025-01-07T19:44:53Z",
+    "closed_at": "2025-01-07T19:54:06Z",
+    "labels": [],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/pull/74",
+    "body": "Add a link to cloud storage configuration instructions for Neon.",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/74/comments",
+    "author": "danieltprice",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2025-01-07T19:53:36Z",
+        "body": "Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 46,
+    "title": "fix bad duckdb commit",
+    "created_at": "2024-11-27T02:15:31Z",
+    "closed_at": "2024-11-27T02:38:43Z",
+    "labels": [],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/pull/46",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/46/comments",
+    "author": "dentiny",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2024-11-27T02:38:43Z",
+        "body": "Already fixed in `main` branch"
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "[Easy] C++ change: Add override to dtor and explicit to ctor",
+    "created_at": "2024-11-24T05:53:16Z",
+    "closed_at": "2024-11-27T01:56:20Z",
+    "labels": [],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/pull/43",
+    "body": "As titled, apply C++ best practice to avoid error-prune coding.\r\nAlso apply a few minor optimizations and fixes I missed last time.",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/43/comments",
+    "author": "dentiny",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2024-11-27T01:59:10Z",
+        "body": "Urr, it appears that the diff accidentally changed `third_party/duckdb` commit\r\nre-pushed"
+      },
+      {
+        "user": "dentiny",
+        "created_at": "2024-11-27T02:22:06Z",
+        "body": "My bad... Thanks for saving!"
+      }
+    ]
+  },
+  {
+    "number": 34,
+    "title": "build failure: missing member when initializing TableAmRoutine duckdb_methods",
+    "created_at": "2024-11-18T10:24:29Z",
+    "closed_at": "2024-12-16T21:48:09Z",
+    "labels": [
+      "bug",
+      "pg_duckdb bug"
+    ],
+    "url": "https://github.com/Mooncake-Labs/pg_mooncake/issues/34",
+    "body": "### What happens?\n\ni built pg_mooncake from source with postgresql 16.4 (rhel patched version) headers, and got,\r\n\r\n```log\r\nsrc/pgduckdb/pgduckdb_table_am.cpp:464: sorry, unimplemented: non-trivial designated initializers not supported\r\n```\r\n\n\n### To Reproduce\n\nafter some investigation, i found there is a relation_toast_am member in TableAmRoutine structure for my postgresql headers. When I patched the git source with,\r\n\r\n```diff\r\ndiff --git a/src/pgduckdb/pgduckdb_table_am.cpp b/src/pgduckdb/pgduckdb_table_am.cpp\r\nindex c857f7f..6c94cac 100644\r\n--- a/src/pgduckdb/pgduckdb_table_am.cpp\r\n+++ b/src/pgduckdb/pgduckdb_table_am.cpp\r\n@@ -453,6 +453,7 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,\r\n \r\n                                               .relation_size = duckdb_relation_size,\r\n                                               .relation_needs_toast_table = duckdb_relation_needs_toast_table,\r\n+                                              .relation_toast_am = NULL,\r\n                                               /* can be null because relation_needs_toast_table returns false */\r\n                                               .relation_fetch_toast_slice = NULL,\r\n```\r\n\r\nthe source can be successfully built.\n\n### OS:\n\nRHEL 8\n\n### pg_mooncake Version:\n\nf1818d436328fef51c5fa418eb3b43d21ac128cd\n\n### Postgres Version:\n\n16.4\n\n### Are you using pg_mooncake Docker, Neon, or the extension standalone?\n\npg_mooncake extension standalone",
+    "comments_url": "https://api.github.com/repos/Mooncake-Labs/pg_mooncake/issues/34/comments",
+    "author": "bpint",
+    "comments": [
+      {
+        "user": "dpxcc",
+        "created_at": "2024-11-18T18:54:51Z",
+        "body": "Thanks for the bug report!\r\nWe've filed a bug report and PR upstream"
+      }
+    ]
+  }
+]

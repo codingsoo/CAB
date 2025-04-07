@@ -1,0 +1,81 @@
+[
+  {
+    "number": 67,
+    "title": "Crashes with CWBVH usage",
+    "created_at": "2024-12-17T20:39:12Z",
+    "closed_at": "2024-12-18T07:38:25Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/67",
+    "body": "When I build a CWBVH it crashes because allocatedBlocks is uninitialized so its value can be greater than spaceNeeded and no allocation of bvh8Data/bvh8Tris occurs. \r\n\r\nSecond problem is when I create a BVH8 and then build a CWBVH by using ConvertFrom when I go to free them, freeing both results in a crash. At first glance it looks like this is because the copy of BVH8 is not a deep copy so its two structs holding the same pointer to bvh8Node and then it gets freed twice when bvh8 is destructed.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/67/comments",
+    "author": "andr3wmac",
+    "comments": [
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T14:18:42Z",
+        "body": "This should be fixed in the latest commit on the dev branch, can you verify? The data was indeed not zeroed. Regarding the second problem: I am not sure what you encountered, perhaps it is related to the first issue; The CWBVH is not using data from bvh8, since it needs a specific format for both nodes and tris.\n\n---\n\nSecond issue was actually an issue too, sorry for dismissing that too soon. This should now be resolved: tinybvh now keeps track of ownership of bvhs and prevents duplicated deletion."
+      },
+      {
+        "user": "andr3wmac",
+        "created_at": "2024-12-18T19:17:48Z",
+        "body": "Np, just tested the latest and it looks like everything is working great \ud83d\udc4d thanks for the quick fixes."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ensures proper initialization of critical variables to prevent invalid memory access",
+      "Implements ownership tracking for shared resources to prevent double-free scenarios"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:47:13"
+    }
+  },
+  {
+    "number": 66,
+    "title": "Using custom allocation functions broke with the API rework",
+    "created_at": "2024-12-17T18:33:14Z",
+    "closed_at": "2024-12-18T08:56:50Z",
+    "labels": [],
+    "url": "https://github.com/jbikker/tinybvh/issues/66",
+    "body": "Thanks a lot for this great piece of software - After the last version I unfortunately have a crash because the library doesn't use the provided context to override the allocations functions anymore.\r\n\r\n~~~\r\ntinybvh::BVH4_CPU blas;\r\nblas.context = myContext;\r\nblas.Build( vertices, triangleCount );\r\n~~~\r\n\r\nThis internally will create more temporary Bvh structures which use the default memory context. Either the context needs to be copied, or maybe change the api to always pass the context into functions that require memory operations. \r\n\r\nI fixed it for my by setting the context member of both BVH structs on the way.",
+    "comments_url": "https://api.github.com/repos/jbikker/tinybvh/issues/66/comments",
+    "author": "jkoenen",
+    "comments": [
+      {
+        "user": "DavidPeicho",
+        "created_at": "2024-12-17T19:05:39Z",
+        "body": "Wouldn't it make sense to have a way to set a global allocator instead? Or do you build multiple BVH with different allocators?"
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-17T19:07:13Z",
+        "body": "I would prefer to pass it as a parameter because it simplifies the situation in multi-threaded situations (Where different threads potentially use different heaps) "
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T07:08:58Z",
+        "body": "This should be fixed in the dev branch now: The context that you pass to each of the specialized / derived layouts is now propagated to the intermediate formats. It's a simple fix, but it is a bit hard for me to verify; can you confirm it works properly? After that I will close this issue."
+      },
+      {
+        "user": "jkoenen",
+        "created_at": "2024-12-18T08:54:12Z",
+        "body": "Yes, that works for me - thank you for the quick fix"
+      },
+      {
+        "user": "jbikker",
+        "created_at": "2024-12-18T08:56:50Z",
+        "body": "Thanks for confirming; case closed."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Custom memory contexts must propagate to all temporary/intermediate BVH structures during build operations",
+      "Memory allocation customization must work without manual context re-assignment",
+      "Solution must support thread-specific memory contexts without global state",
+      "API must maintain explicit context passing rather than relying on implicit global allocators"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-05 01:47:25"
+    }
+  }
+]

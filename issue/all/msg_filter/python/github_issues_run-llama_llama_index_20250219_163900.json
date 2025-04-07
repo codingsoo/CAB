@@ -1,0 +1,667 @@
+[
+  {
+    "number": 15721,
+    "title": "[Question]: Can i  pass context to a FunctionTool , i dont see any examples with FunctionTool having context , can we send specific inputs to a FunctionTool? Thank you",
+    "created_at": "2024-08-29T19:28:59Z",
+    "closed_at": "2024-08-30T10:57:56Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/15721",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nCan i  pass context to a FunctionTool , i dont see any examples with FunctionTool having context , can we send specific inputs to a FunctionTool? Thank you",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/15721/comments",
+    "author": "Rohith-Scalers",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-08-29T19:30:01Z",
+        "body": "Your going to have to expand on that slightly.\r\n\r\nThe llm writes the inputs yo any tool. If there is additional info needed beyond that, that should be included within the function you write "
+      },
+      {
+        "user": "Rohith-Scalers",
+        "created_at": "2024-08-29T19:38:07Z",
+        "body": "i am trying to use this as a FunctionalTool , inside React agent work flow i have defined all these variables but when i am running the workflow the index input to the functionalTool is string rather than the index . is this approach wrong ?\r\n```\r\ndef vector_query_docker_logs(docker_logs_index,llm,query,time_data):\r\n    \"\"\"\r\n    Executes a query on the docker_logs index with time-based filters.\r\n\r\n    This function constructs metadata filters based on the provided time data \r\n    (previous and current timestamps). It applies the filters to the query engine \r\n    associated with the docker_logs index and executes the query using the specified \r\n    language model (LLM). The function returns the response from the query engine.\r\n\r\n    Args:\r\n        docker_logs_index (Index): The index to be queried you can get this from self.docker_logs_index.\r\n        llm (LLM): The language model to be used for the query engine.\r\n        query (str): The query string to be executed on the docker_logs index.\r\n        time_data (dict): A dictionary containing 'previous_time' and 'current_time' \r\n                          as Unix timestamps, used to create time-based filters.\r\n\r\n    Returns:\r\n        Response: The response object from the query engine after executing the query.\r\n    \"\"\"\r\n    ts_metadata_dicts = [{\"key\": \"time\", \"value\": ts} for ts in range(int(time_data[\"previous_time\"]), int(time_data[\"current_time\"]))]\r\n    filters = MetadataFilters.from_dicts(ts_metadata_dicts, condition=FilterCondition.OR)\r\n    query_engine = docker_logs_index.as_query_engine(llm=llm, filters=filters)\r\n    query_engine = docker_logs_index.as_query_engine(llm=llm)\r\n    response = query_engine.query(query)\r\n    return response``"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-08-29T20:30:27Z",
+        "body": "Yea, the idea with `FunctionTool` is that the LLM writes the inputs. Here, with complex objects like an index or llm, the LLM itself cannot insert these. \r\n\r\nThese variables should either be included in the function body itself, or referenced as globals.\r\n\r\nFor example, I might rewrite this as (type annotations are also extremely important!)\r\n\r\n```python\r\ndef vector_query_docker_logs(query: str, time_data: Dict[str, str]) -> str:\r\n    \"\"\"\r\n    Executes a query on the docker_logs index with time-based filters.\r\n\r\n    This function constructs metadata filters based on the provided time data \r\n    (previous and current timestamps). It applies the filters to the query engine \r\n    associated with the docker_logs index and executes the query using the specified \r\n    language model (LLM). The function returns the response from the query engine.\r\n\r\n    Args:\r\n        query (str): The query string to be executed on the docker_logs index.\r\n        time_data (dict): A dictionary containing 'previous_time' and 'current_time' \r\n                          as Unix timestamps, used to create time-based filters.\r\n\r\n    Returns:\r\n        Response: The response object from the query engine after executing the query.\r\n    \"\"\"\r\n    llm = OpenAI(...)\r\n    docker_logs_index = VectorStoreIndex.from_vector_store(vector_store)\r\n    ...\r\n```"
+      },
+      {
+        "user": "Rohith-Scalers",
+        "created_at": "2024-08-30T04:47:29Z",
+        "body": "Thank you , it worked but is there way to make llm send complex objects than just strings ? any references would be highly helpful Thank you for quick response :)"
+      }
+    ]
+  },
+  {
+    "number": 15412,
+    "title": "[Question]: ",
+    "created_at": "2024-08-15T21:35:16Z",
+    "closed_at": "2024-08-15T21:41:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/15412",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nThe documentation for persisting and storing index's isn't clear. \r\n\r\nFor example I get the error `Cannot initialize from a vector store that does not store text.` when all the documents are that is loaded is `.md` files, or in otherwords text. I can't seem to find much help on the topic, and the documentation shows the usage just how I use it save for the service context -- and isn't clear what can and cannot be stored. \r\n\r\nI store like:\r\n\r\n```python\r\n        temp = folder_paths.get_temp_directory()\r\n        vector_path = os.path.join(temp, str(uuid.uuid4()))\r\n        \r\n        llm_index.storage_context.persist(persist_dir=vector_path)\r\n```\r\n\r\nAnd load like:\r\n\r\n```python\r\n        if not os.path.exists(vector_store_path) or not os.path.isdir(vector_store_path):\r\n            raise Exception(f\"Invalid vector store path: {vector_store_path}\")\r\n        \r\n        storage_context = StorageContext.from_defaults(persist_dir=vector_store_path)\r\n        llm_index = VectorStoreIndex.from_vector_store(\r\n            vector_store=storage_context.vector_store,\r\n            storage_context=storage_context,\r\n            service_context=llm_service_context\r\n        )\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/15412/comments",
+    "author": "WAS-PlaiLabs",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-08-15T21:37:00Z",
+        "body": "You should be loading with \r\n\r\n`index = load_index_from_storage(storage_context, service_context=service_context)`"
+      },
+      {
+        "user": "WAS-PlaiLabs",
+        "created_at": "2024-08-15T21:41:19Z",
+        "body": "Ohh! Well that would do it. Thanks for the prompt reply!"
+      }
+    ]
+  },
+  {
+    "number": 15178,
+    "title": "[Question]: Getting a list of Document content from SimpleDirectoryReader",
+    "created_at": "2024-08-06T20:17:46Z",
+    "closed_at": "2024-08-06T20:27:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/15178",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nllama-index: 0.10.36\r\npython: 3.11.9\r\nUbunutu 22.04\r\n\r\nSuppose I am using a `SimpleDirectoryReader` in the following manner:\r\n\r\n```python\r\ndocs = SimpleDirectoryReader(\"/path/to/my/data\").load_data()\r\n```\r\n\r\nI can see that `docs` is a list of `Document` objects. What is the most efficient way to create a list that contains the content of each one of those `Document` objects?",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/15178/comments",
+    "author": "aclifton314",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-08-06T20:21:46Z",
+        "body": "`texts = [doc.text for doc in docs]`"
+      },
+      {
+        "user": "aclifton314",
+        "created_at": "2024-08-06T20:27:46Z",
+        "body": "@logan-markewich thanks!"
+      }
+    ]
+  },
+  {
+    "number": 14616,
+    "title": "[Question]: Set the frequency_penalty when using openailike",
+    "created_at": "2024-07-07T20:03:45Z",
+    "closed_at": "2024-07-07T20:16:05Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/14616",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHow to set the frequency_penalty and other model parameters when using openailike?\r\n\r\nI am currently setting as below:\r\n`Settings.llm = OpenAILike(model=\"meta-llama/Meta-Llama-3-8B-Instruct\", api_base=openai_api_base, api_key=\"\",\r\n max_tokens=2000, \r\n frequency_penalty=0.8,\r\n presence_penalty=0.5 ,\r\n top_p=0.9,\r\n stop=stop_phrases,\r\n model_kwargs={\r\n    \"frequency_penalty\": 1.0,\r\n  })`\r\n\r\nBut when checking on my vllm server (On a different instance hence using OpenAILike) it shows 0 as frequency_penalty.",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/14616/comments",
+    "author": "mashuk999",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-07-07T20:05:27Z",
+        "body": "Set it under additional kwargs \r\n\r\nadditional_kwargs={...}"
+      }
+    ]
+  },
+  {
+    "number": 14574,
+    "title": "[Question]: index.docstore is empty after persisting nodes in chromadb",
+    "created_at": "2024-07-04T18:43:17Z",
+    "closed_at": "2024-07-04T22:32:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/14574",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHello,\r\n\r\nI have persisted the nodes in ChromaDB along with the storage context. However, when retrieving the vector index, the index.docstore is empty, how can I get the nodes later to use for BM25Retriever? Here is the code used for persisting and retrieving:\r\n\r\n```python\r\n# node transformation\r\nnode_parser = SentenceSplitter(chunk_size=1024, chunk_overlap=20)\r\n\r\n# collect llama index documents\r\ndocuments = process_documents(df)\r\n\r\n# initialize chroma client, setting path to save data\r\ndb = chromadb.PersistentClient(path=chroma_db_path)\r\n\r\n# create collection\r\nchroma_collection = db.get_or_create_collection(collection_name)\r\n\r\n# assign chroma as the vector_store to the context\r\nvector_store = ChromaVectorStore(chroma_collection=chroma_collection)\r\nstorage_context = StorageContext.from_defaults(vector_store=vector_store)\r\n\r\n# Embedding Model\r\nembed_model = HuggingFaceEmbedding(model_name=hf_model_name, device=hf_device)\r\n\r\n# create your index\r\nindex = VectorStoreIndex.from_documents(\r\n        documents,\r\n        storage_context=storage_context,\r\n        show_progress=True,\r\n        transformations=[node_parser],\r\n        embed_model=embed_model,\r\n)\r\n\r\n# Here we save the index to the path we want\r\nindex.storage_context.persist(persist_dir=os.path.join(chroma_db_path, \"llamai\"))\r\n```\r\n\r\n```python\r\n# initialize chroma client, setting path to save data\r\ndb = chromadb.PersistentClient(path=chroma_db_path)\r\n\r\n# create collection\r\nchroma_collection = db.get_or_create_collection(collection_name)\r\n\r\n# assign chroma as the vector_store to the context\r\nvector_store = ChromaVectorStore(chroma_collection=chroma_collection)\r\nstorage_context = StorageContext.from_defaults(\r\n      vector_store=vector_store, persist_dir=os.path.join(chroma_db_path, \"llamai\")\r\n)\r\n\r\n# Embedding Model\r\nembed_model = HuggingFaceEmbedding(model_name=hf_model_name, device=hf_device)\r\n\r\n# get the index\r\nindex = VectorStoreIndex.from_vector_store(\r\n      vector_store=vector_store,\r\n      storage_context=storage_context,\r\n      embed_model=embed_model,\r\n)\r\n\r\n# return the index\r\nreturn index\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/14574/comments",
+    "author": "BalasubramanyamEvani",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-07-04T18:45:40Z",
+        "body": "This is correct. The docstore is disabled with most 3rd party vector stores to simplify storage, since the nodes are stored in chroma itself\r\n\r\nYou can override this if you want: `VectorStoreIndex.from_documents(...., store_nodes_override=True)`"
+      },
+      {
+        "user": "BalasubramanyamEvani",
+        "created_at": "2024-07-04T19:05:49Z",
+        "body": "I understand. Could you please clarify the correct way to use BM25Retriever? Instead of providing the nodes during initialization, I supplied a reference to the docstore, but it resulted in an error.\r\n\r\n```python\r\n  File \"/usr/local/anaconda3/envs/rag-search/lib/python3.9/site-packages/llama_index/retrievers/bm25/base.py\", line 73, in from_defaults\r\n    return cls(\r\n  File \"/usr/local/anaconda3/envs/rag-search/lib/python3.9/site-packages/llama_index/retrievers/bm25/base.py\", line 40, in __init__\r\n    self.bm25 = BM25Okapi(self._corpus)\r\n  File \"/usr/local/anaconda3/envs/rag-search/lib/python3.9/site-packages/rank_bm25.py\", line 83, in __init__\r\n    super().__init__(corpus, tokenizer)\r\n  File \"/usr/local/anaconda3/envs/rag-search/lib/python3.9/site-packages/rank_bm25.py\", line 27, in __init__\r\n    nd = self._initialize(corpus)\r\n  File \"/usr/local/anaconda3/envs/rag-search/lib/python3.9/site-packages/rank_bm25.py\", line 52, in _initialize\r\n    self.avgdl = num_doc / self.corpus_size\r\nZeroDivisionError: division by zero\r\n```"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-07-04T21:39:59Z",
+        "body": "You'll need to either manually populate the docstore or use the flag above. And then persist the dcostore somewhere.\r\n\r\nOr, you can directly save the nodes somewhere "
+      },
+      {
+        "user": "BalasubramanyamEvani",
+        "created_at": "2024-07-04T22:31:58Z",
+        "body": "Got it! Thanks for your help @logan-markewich "
+      }
+    ]
+  },
+  {
+    "number": 14519,
+    "title": "[Question]: Streaming response with metadata",
+    "created_at": "2024-07-02T18:27:51Z",
+    "closed_at": "2024-07-02T18:39:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/14519",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\n\r\ndef get_completion(query: str, namespace: HomeNamespace, home_id: int):\r\n    \"\"\"\r\n    Queries document from <namespace> for a specific property and returns the response and citations.\r\n    Args:\r\n        query (str): The query string.\r\n        namespace (str): The namespace for the Pinecone index.\r\n        home_id (str): The home ID to filter the documents.\r\n    Returns:\r\n        tuple: A tuple containing the response string and a list of citations.\r\n    \"\"\"\r\n    # Initialize Pinecone index\r\n    vector_store = PineconeVectorStore(pinecone_index=get_index(PineconeIndexEnum.HOME), namespace=namespace)\r\n    index = VectorStoreIndex.from_vector_store(vector_store=vector_store)\r\n\r\n    # Configure the re-ranking optimizer\r\n    rerank = SentenceEmbeddingOptimizer(embed_model=Settings.embed_model, percentile_cutoff=0.5, threshold_cutoff=0.85)\r\n\r\n    # Set metadata filters for the query\r\n    filters = MetadataFilters(\r\n        filters=[\r\n            MetadataFilter(key=\"home_id\", operator=FilterOperator.EQ, value=home_id),\r\n        ]\r\n    )\r\n\r\n    # Initialize the citation query engine\r\n    citation_query_engine = CitationQueryEngine.from_args(\r\n        index,\r\n        similarity_top_k=5,\r\n        verbose=True,\r\n        postprocessor=[rerank],\r\n        filters=filters,\r\n        citation_chunk_size=512,\r\n        citation_qa_template=citation_qa_template,\r\n        llm=OpenAI(model=\"gpt-4o-2024-05-13\", api_key=get_secret_value(\"OPENAI_API_KEY\")),\r\n        streaming=True,\r\n    )\r\n\r\n    # Perform the query\r\n    response = citation_query_engine.query(query)\r\n\r\n    # Extract citations and modify the response string\r\n    # citation_indices, response_str = extract_citations_and_modify_string(str(response))\r\n    # citations = [response.source_nodes[i - 1].text for i in citation_indices]\r\n\r\n    for text in response.response_gen:\r\n        yield text\r\n\r\n\r\nwhen I use this function I am only able to get the text of the response but I also want to  access the metadata attributes so that I can also cite my page_number and other metadata",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/14519/comments",
+    "author": "narenSb1837",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-07-02T18:31:35Z",
+        "body": "I think I shared this on discord, by either yield the metadata at the start or end, or attach it to every text that you yield. Its still on the response object\r\n\r\nSo either\r\n\r\n```\r\nyield response.source_nodes # or whatever other metadata\r\nfor text in response.response_gen:\r\n    yield text\r\n```\r\n\r\nor\r\n\r\n```\r\nfor text in response.response_gen:\r\n    yield text\r\nyield response.source_nodes # or whatever other metadata\r\n```\r\n\r\nor\r\n\r\n```\r\nfor text in response.response_gen:\r\n    yield {\"text\": text, \"metadata\": ....}\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 14171,
+    "title": "[Question]: Big problem on saving and retrieve KnowledgeGraphIndex (Neo4j)",
+    "created_at": "2024-06-15T13:49:02Z",
+    "closed_at": "2024-06-16T14:16:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/14171",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nI have a big problem, i can't save or retrieve the graph in memory do perform queries on it, so everytime the graph gets recalculated. This is the code that after 2 days Im arrived at, also asking help to chatgpt and reading  docs, but it doesn't work.\r\n\r\nIf anyone know how to do it please help me.\r\n\r\nThank you!\r\n\r\n```\r\nimport os\r\nimport openai\r\nfrom llama_index.llms.azure_openai import AzureOpenAI\r\nfrom llama_index.core import SimpleDirectoryReader, KnowledgeGraphIndex\r\nfrom dotenv import load_dotenv\r\nfrom llama_index.core import Settings\r\nfrom llama_index.graph_stores.neo4j import Neo4jGraphStore\r\nfrom llama_index.embeddings.ollama import OllamaEmbedding\r\nfrom llama_index.core import StorageContext\r\nfrom llama_index.core.indices.loading import load_graph_from_storage\r\nfrom llama_index.core.indices.composability.graph import ComposableGraph\r\n\r\nload_dotenv()\r\nprint(os.getenv('AZURE_OPENAI_LLM_DEPLOYMENT_NAME'))\r\nprint(os.getenv('AZURE_OPENAI_API_ENDPOINT'))\r\nprint(os.getenv('AZURE_OPENAI_API_KEY'))\r\nprint(os.getenv('AZURE_OPENAI_API_VERSION'))\r\n\r\nllm = AzureOpenAI(\r\n    engine=os.getenv('AZURE_OPENAI_LLM_DEPLOYMENT_NAME'),\r\n    model=\"gpt-4o\",\r\n    temperature=0.0,\r\n    azure_endpoint=os.getenv('AZURE_OPENAI_API_ENDPOINT'),\r\n    api_key=os.getenv('AZURE_OPENAI_API_KEY'),\r\n    api_version=os.getenv('AZURE_OPENAI_API_VERSION'),\r\n)\r\n\r\nembed_model = OllamaEmbedding(model_name=\"mxbai-embed-large:335m\", embed_batch_size=512)\r\n\r\nSettings.llm = llm\r\nSettings.embed_model = embed_model\r\nSettings.chunk_size = 512\r\n\r\nusername = \"neo4j\"\r\ndatabase = \"neo4j\"\r\npassword = \"xxx\"\r\nurl = \"bolt://localhost:7687\"\r\nprint(username, password, url, database)\r\n\r\ngraph_store = Neo4jGraphStore(\r\n    username=username,\r\n    password=password,\r\n    url=url,\r\n    database=database,\r\n)\r\n\r\n# Directory for the serialized graph\r\nstorage_dir = './storage'\r\nos.makedirs(storage_dir, exist_ok=True)\r\n\r\n# Define a consistent root ID\r\nroot_id = 'knowledge_graph_index'\r\n\r\n# Check if storage context files exist\r\ndocstore_path = os.path.join(storage_dir, 'docstore.json')\r\nindex_store_path = os.path.join(storage_dir, 'index_store.json')\r\ngraph_store_path = os.path.join(storage_dir, 'graph_store.json')\r\n\r\n# Attempt to load the graph\r\ntry:\r\n    if os.path.exists(docstore_path) and os.path.exists(index_store_path) and os.path.exists(graph_store_path):\r\n        storage_context = StorageContext.from_defaults(graph_store=graph_store, persist_dir=storage_dir)\r\n        knowledge_graph_index = load_graph_from_storage(storage_context, root_id=root_id)\r\n        print(\"Loaded graph from storage.\")\r\n        print(f\"Root ID: {root_id}\")\r\n    else:\r\n        raise FileNotFoundError(\"Required storage files not found, creating new graph.\")\r\nexcept Exception as e:\r\n    print(f\"Failed to load graph from storage: {e}\")\r\n    # Graph doesn't exist, so create it from documents\r\n    documents = SimpleDirectoryReader(\"./content/Documents\").load_data()\r\n    storage_context = StorageContext.from_defaults(graph_store=graph_store)\r\n\r\n    # NOTE: can take a while!\r\n    knowledge_graph_index = KnowledgeGraphIndex.from_documents(\r\n        documents,\r\n        storage_context=storage_context,\r\n        max_triplets_per_chunk=3,\r\n        show_progress=True,\r\n        include_embeddings=True,\r\n    )\r\n    # Set the root ID and save the newly created graph\r\n    knowledge_graph_index.set_index_id(root_id)\r\n    \r\n    storage_context.persist(persist_dir=storage_dir)\r\n    print(f\"Persisted graph in directory: {storage_dir}\")\r\n\r\n# Verify that the graph is correctly loaded\r\ntry:\r\n    if knowledge_graph_index is None:\r\n        raise ValueError(\"Failed to create or load KnowledgeGraphIndex.\")\r\n    print(\"Successfully created or loaded KnowledgeGraphIndex.\")\r\n    \r\n    # Check the contents of all_indices\r\n    print(f\"Contents of all_indices: {knowledge_graph_index.all_indices}\")\r\n    # Check the root_id\r\n    print(f\"Root ID set in graph: {knowledge_graph_index._root_id}\")\r\n\r\n    # Verify the root_id is in all_indices\r\n    if knowledge_graph_index.root_id not in knowledge_graph_index.all_indices:\r\n        raise KeyError(f\"The specified root_id '{knowledge_graph_index.index_id()}' was not found in the graph indices.\")\r\n    print(\"The root ID was found in the graph indices.\")\r\nexcept Exception as e:\r\n    print(f\"Error verifying the KnowledgeGraphIndex: {e}\")\r\n\r\n# Now, whether loaded or created, you can use `knowledge_graph_index` as before\r\ntry:\r\n    query_engine = knowledge_graph_index.as_query_engine(\r\n        include_text=True,\r\n        response_mode=\"tree_summarize\",\r\n        embedding_mode=\"hybrid\",\r\n        similarity_top_k=5,\r\n    )\r\n    response = query_engine.query(\"Quali sono le chiese disegnate da Raffaello?\")\r\n    print(response)\r\nexcept KeyError as e:\r\n    print(f\"KeyError: {e} - The specified root_id '{root_id}' was not found in the graph indices.\")\r\nexcept Exception as e:\r\n    print(f\"An error occurred while creating the query engine: {e}\")\r\n    \r\n    \r\n    \r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/14171/comments",
+    "author": "robertobalestri",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-06-15T13:53:34Z",
+        "body": "Is there any error? Does this line every print?\r\n\r\n`print(f\"Failed to load graph from storage: {e}\")` ?"
+      },
+      {
+        "user": "robertobalestri",
+        "created_at": "2024-06-15T14:19:11Z",
+        "body": "This is my output... but it desn't print your string. \r\n\r\nneo4j xxx bolt://localhost:7687 neo4j\r\nFailed to load graph from storage: Required storage files not found, creating new graph.\r\nParsing nodes: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 1/1 [00:00<00:00, 124.90it/s]\r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:16<00:00,  5.36s/it] \r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:06<00:00,  2.22s/it] \r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:06<00:00,  2.20s/it] \r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:06<00:00,  2.21s/it] \r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:06<00:00,  2.22s/it] \r\nGenerating embeddings: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 3/3 [00:06<00:00,  2.23s/it] \r\nProcessing nodes: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 6/6 [01:02<00:00, 10.37s/it] \r\nPersisted graph in directory: ./storage\r\nSuccessfully created or loaded KnowledgeGraphIndex.\r\nError verifying the KnowledgeGraphIndex: 'KnowledgeGraphIndex' object has no attribute 'all_indices'\r\nUna delle chiese disegnate da Raffaello \u00e8 S. Eligio degli Orefici.\r\n\r\n\r\n\r\n\n\n---\n\nOk, after days tryng i fount out that the load_graph doesn't work, but load index does.\r\n\r\n\r\n```\r\nimport os\r\nfrom llama_index.llms.azure_openai import AzureOpenAI\r\nfrom llama_index.core import SimpleDirectoryReader, KnowledgeGraphIndex, Settings, StorageContext\r\nfrom llama_index.graph_stores.neo4j import Neo4jGraphStore\r\nfrom llama_index.embeddings.ollama import OllamaEmbedding\r\nfrom llama_index.core.indices.loading import load_index_from_storage\r\nfrom dotenv import load_dotenv\r\n\r\n# Load environment variables from .env file\r\nload_dotenv()\r\n\r\n# Configure Azure OpenAI\r\nllm = AzureOpenAI(\r\n    engine=os.getenv('AZURE_OPENAI_LLM_DEPLOYMENT_NAME'),\r\n    model=\"gpt-4o\",\r\n    temperature=0.0,\r\n    azure_endpoint=os.getenv('AZURE_OPENAI_API_ENDPOINT'),\r\n    api_key=os.getenv('AZURE_OPENAI_API_KEY'),\r\n    api_version=os.getenv('AZURE_OPENAI_API_VERSION'),\r\n)\r\n\r\n# Configure the embedding model\r\nembed_model = OllamaEmbedding(model_name=\"mxbai-embed-large:335m\", embed_batch_size=512)\r\n\r\n# Set configuration parameters\r\nSettings.llm = llm\r\nSettings.embed_model = embed_model\r\nSettings.chunk_size = 512\r\n\r\n# Configure the Neo4j database connection\r\nusername = \"neo4j\"\r\ndatabase = \"neo4j\"\r\npassword = \"password\"\r\nurl = \"bolt://localhost:7687\"\r\n\r\ngraph_store = Neo4jGraphStore(\r\n    username=username,\r\n    password=password,\r\n    url=url,\r\n    database=database,\r\n)\r\n\r\n# Directory for storage\r\nstorage_dir = './storage'\r\nos.makedirs(storage_dir, exist_ok=True)\r\n\r\n# Consistent root ID\r\nroot_id = 'knowledge_graph_index'\r\n\r\n# Load or create the knowledge graph\r\ntry:\r\n    storage_context = StorageContext.from_defaults(graph_store=graph_store, persist_dir=storage_dir)\r\n    knowledge_graph_index = load_index_from_storage(storage_context, index_id=root_id)\r\n    print(\"Graph loaded from storage.\")\r\nexcept Exception as e:\r\n    print(f\"Failed to load graph from storage: {e}\")\r\n    # Create the graph from documents if it doesn't exist\r\n    documents = SimpleDirectoryReader(\"./content/Documents\").load_data()\r\n    storage_context = StorageContext.from_defaults(graph_store=graph_store)\r\n    knowledge_graph_index = KnowledgeGraphIndex.from_documents(\r\n        documents,\r\n        storage_context=storage_context,\r\n        max_triplets_per_chunk=3,\r\n        show_progress=True,\r\n        include_embeddings=True,\r\n    )\r\n    knowledge_graph_index.set_index_id(root_id)\r\n    storage_context.persist(persist_dir=storage_dir)\r\n    print(f\"Graph created and stored in: {storage_dir}\")\r\n\r\n# Verify the graph is loaded correctly\r\ntry:\r\n    if knowledge_graph_index is None:\r\n        raise ValueError(\"Failed to create or load KnowledgeGraphIndex.\")\r\n    print(\"KnowledgeGraphIndex created or loaded successfully.\")\r\n    root_id_set = knowledge_graph_index.index_id\r\n    if root_id_set != root_id:\r\n        raise KeyError(f\"The specified root ID '{root_id}' does not match the loaded root ID '{root_id_set}'.\")\r\n    print(\"The root ID matches and is correct.\")\r\nexcept Exception as e:\r\n    print(f\"Error verifying the KnowledgeGraphIndex: {e}\")\r\n\r\n# Use `knowledge_graph_index` for queries\r\ntry:\r\n    query_engine = knowledge_graph_index.as_query_engine(\r\n        include_text=True,\r\n        response_mode=\"tree_summarize\",\r\n        embedding_mode=\"hybrid\",\r\n        similarity_top_k=5,\r\n    )\r\n    response = query_engine.query(\"Quali chiese ha disegnato Raffaello?\")\r\n    print(response)\r\nexcept KeyError as e:\r\n    print(f\"KeyError: {e} - The specified root_id '{root_id}' was not found in the graph indices.\")\r\nexcept Exception as e:\r\n    print(f\"An error occurred while creating the query engine: {e}\")\r\n\r\n```"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-06-16T14:16:31Z",
+        "body": "@robertobalestri ah good catch `load_graph` is an old method for something completely unrelated actually.\r\n\r\nLoad index is the one to use, I didn't notice that in your code "
+      }
+    ]
+  },
+  {
+    "number": 14028,
+    "title": "[Question]:  Is it expected that `VectorStoreIndex.persist` and `load_index_from_storage` are not symmetric?",
+    "created_at": "2024-06-08T22:18:12Z",
+    "closed_at": "2024-06-08T22:40:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/14028",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nIs it expected that persisting (serializing) a `VectorStoreIndex` and then loading (deserializing) it is not symmetric?\r\n\r\nIn the code snippet below, `loaded_vector_store_index` is a `BaseIndex[Unknown]` while `vector_store_index` is a `VectorStoreIndex`. These classes have different behaviors.\r\n\r\nFor example, creating a query engine or retriever from each will have very different results. The ones coming from `VectorStoreIndex` having much better results.\r\n\r\n```python\r\ndocuments = [...]\r\nnodes = markdown_parser.get_nodes_from_documents(documents)\r\nvector_store_index = VectorStoreIndex(nodes=nodes)\r\nvector_store_index.storage_context.persist(persist_dir=\"/tmp/vector_store_index\")\r\n\r\nembed_model = OpenAIEmbedding(api_key=os.environ[\"OPENAI_API_KEY\"], model=\"text-embedding-3-small\")\r\nstorage_context = StorageContext.from_defaults(persist_dir=\"/tmp/vector_store_index\")\r\nloaded_vector_store_index = load_index_from_storage(\r\n    storage_context=storage_context,\r\n    embed_model=embed_model,\r\n)\r\n```\r\n\r\nI spent a lot of time today figuring this one out. I was seeing good results from the `vector_store_index` object in my ingester process, while my API process which was loading the result of ingestion into `loaded_vector_store_index` was showing really poor results.\r\n\r\nTo make it work, I'm manually creating a `VectorStoreIndex` from the `BaseIndex[Unknown]` in the API process:\r\n\r\n```python3\r\nnodes = loaded_vector_store_index.docstore.docs.values()\r\nactual_loaded_vector_store_index = VectorStoreIndex(nodes=list(nodes))\r\n```\r\n\r\nQuestions:\r\n1. Is there a better way of doing this?\r\n2. Am I missing something obvious?\r\n3. Should `persist`/`load_index_from_storage` be symmetric?\r\n",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/14028/comments",
+    "author": "mpereira",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-06-08T22:26:27Z",
+        "body": "@mpereira The one thing I noticed, is that when creating the initial index, you do not set an embedding model, but then when loading it, you do. I suspect if you updated your code like this, it would be fine\r\n\r\n```python\r\ndocuments = [...]\r\nnodes = markdown_parser.get_nodes_from_documents(documents)\r\n\r\n# use the same embed model for both\r\nembed_model =  OpenAIEmbedding(api_key=os.environ[\"OPENAI_API_KEY\"], model=\"text-embedding-3-small\")\r\n\r\nvector_store_index = VectorStoreIndex(nodes=nodes, embed_model=embed_model)\r\nvector_store_index.storage_context.persist(persist_dir=\"/tmp/vector_store_index\")\r\n\r\nstorage_context = StorageContext.from_defaults(persist_dir=\"/tmp/vector_store_index\")\r\nloaded_vector_store_index = load_index_from_storage(\r\n    storage_context=storage_context,\r\n    embed_model=embed_model,\r\n)\r\n```\r\n\r\nFor a longer explanation on typing:\r\n`load_index_from_storage` can return any index (a vector store index, property graph index, tree index, etc.) -- it works for all of them.\r\n\r\nIt knows what index to load because the index structure contains what type of index it is.\r\n\r\nBecause of how python typing works, `load_index_from_storage` has to have the return type of `BaseIndex` -- that's just how it is. And it is symmetrical, but you need to provide the proper embedding model that matches how the index was built.\r\n\r\n"
+      },
+      {
+        "user": "mpereira",
+        "created_at": "2024-06-08T22:37:36Z",
+        "body": "Hey @logan-markewich, thanks for the super quick reply.\r\n\r\nI just tested it here. Your suggestion works. Thank you!\r\n\r\nFeel free to close this."
+      }
+    ]
+  },
+  {
+    "number": 13986,
+    "title": "[Question]: Generate Only SQL Query",
+    "created_at": "2024-06-06T16:45:20Z",
+    "closed_at": "2024-06-07T11:30:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/13986",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nI am using the NLSQLTableQueryEngine to generate SQL queries from text as described in the official documentation. However I don't want NLSQLTableQueryEngine to execute the query directly on my DB. I want it to only generate the SQL statements so that I can screen it and run it my self. \r\n\r\nI tried the `sql_only` parameter provided in the docs but it didn't seem to have effect. How can i acheive this\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/13986/comments",
+    "author": "Omotade-MY",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-06-06T16:51:00Z",
+        "body": "I think it should be `sql_only=True, synthesize_response=False` in the constructor args\n\n---\n\nI didn't look closer why there's two params, but the above should do it"
+      },
+      {
+        "user": "Omotade-MY",
+        "created_at": "2024-06-07T11:30:47Z",
+        "body": "It worked. Thank you.\r\n\r\nThe issues were from the tables I passed. "
+      }
+    ]
+  },
+  {
+    "number": 13982,
+    "title": "[Question]: sent-len of sentence-spliter",
+    "created_at": "2024-06-06T14:28:40Z",
+    "closed_at": "2024-06-06T15:12:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/13982",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nthere is one arg of SentenceSplitter: chunk_size, i assume this could control the length of each split-sentence, but i found that sentence-length can be larger than the chunk_size, i want to know why this happens\r\n",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/13982/comments",
+    "author": "guangyuli-uoe",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-06-06T15:12:51Z",
+        "body": "@guangyuli-uoe the sentence splitter splits into chunks, while trying to respect sentence boundaries. It does not split and return single sentences. "
+      }
+    ]
+  },
+  {
+    "number": 13502,
+    "title": "When will gpt-4o be supported?",
+    "created_at": "2024-05-15T03:01:45Z",
+    "closed_at": "2024-05-15T03:42:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/13502",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nWhen will gpt-4o be supported?",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/13502/comments",
+    "author": "cxycxm",
+    "comments": [
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2024-05-15T03:02:04Z",
+        "body": "<!-- Greeting -->\nHey @cxycxm, nice to see you back in the matrix of issues! Diving into the GPT-4o query, hang tight.\n\n\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-05-15T03:21:24Z",
+        "body": "It already is. Since day 0\r\n\r\n`pip install -U llama-index-llms-openai`\r\n\r\n`llm = OpenAI(model=\"gpt-4o\")`\n\n---\n\nInstall the latest openai package as above. If you are running in a notebook, you'll have to restart it as well "
+      },
+      {
+        "user": "cxycxm",
+        "created_at": "2024-05-15T03:26:35Z",
+        "body": "thanks"
+      },
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2024-05-15T03:29:01Z",
+        "body": "<!-- Answer -->\nYou're welcome! If you have any more questions or need further assistance, feel free to ask.\n\n\n<!-- Dosu Comment Footer -->\n<details>\n<summary>\n\n#### Details\n</summary>\n\n\n\n**About Dosu**\nThis response is meant to be useful and save you time. It is **not meant to be a precise solution**, but rather a starting point for your own research.\n\nHelp me be more useful! Please leave a \ud83d\udc4d if this is helpful and \ud83d\udc4e if it is irrelevant.\n</details>\n\n*To continue the conversation, mention @dosu.*\n"
+      }
+    ]
+  },
+  {
+    "number": 13167,
+    "title": "[Question]: Agents-function calling with followup question",
+    "created_at": "2024-04-30T04:40:09Z",
+    "closed_at": "2024-08-11T16:07:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/13167",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nI am trying to build a framework where Agents can call specific functions whenever necessary, but how do I add a functionality for it to ask follow up questions when it doesn't have all the parameters needed to call a function.\r\n\r\nExample: Calling an email sending function using Agent Framework but the to_send address is missing in the query, in such situation, I want my agent to ask a followup question or call any additional function, instead it just ends up sending to some example email address.",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/13167/comments",
+    "author": "risos8200",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-04-30T16:49:16Z",
+        "body": "@risos8200 You could add a tool that specifically requires input from a user when it runs\r\n\r\n```\r\ndef ask_user(message: str) -> str:\r\n  \"\"\"Useful for asking a user for any required information that you are missing.\"\"\"\r\n  response = input(message).strip()\r\n  return response\r\n  \r\ntool = FunctionTool.from_defaults(ask_user)\r\n```"
+      },
+      {
+        "user": "risos8200",
+        "created_at": "2024-05-05T08:54:03Z",
+        "body": "Thanks, that worked!\n\n---\n\nHow do I do it for web based applications? Like I want to return a response to the agent to ask for further details in my flask app. But it goes into a infinite loop of asking itself the same question and calling the ask_user function.\r\n\r\n@logan-markewich can you please help out?"
+      }
+    ]
+  },
+  {
+    "number": 12689,
+    "title": "[Question]: How to save a text node and then load it up again?",
+    "created_at": "2024-04-10T05:00:14Z",
+    "closed_at": "2024-04-10T05:19:42Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/12689",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nI have text nodes in the format - \r\nTextNode(id_='node_0', embedding=None, metadata={}, excluded_embed_metadata_keys=[], excluded_llm_metadata_keys=[], relationships={<NodeRelationship.SOURCE: '1'>: RelatedNodeInfo(node_id='97a68807-c87d-4332-b23e-833aa75d204c', node_type=<ObjectType.DOCUMENT: '4'>, metadata={}, hash='f54321c2afdcd2bd45d2b9c8324fcc6d4d6d75c78b07be6c35679b66efd0aa38'), <NodeRelationship.NEXT: '3'>: RelatedNodeInfo(node_id='6d3af5ce-1039-4542-bc34-3d9f697ac160', node_type=<ObjectType.TEXT: '1'>, metadata={}, hash='47b028b14677a7f280b425bae9a305f91526c8652123e2d26ea38c48c70be0bf')}, text=\"blah blah blah.\\n\\n\", start_char_idx=0, end_char_idx=5867, text_template='{metadata_str}\\n\\n{content}', metadata_template='{key}: {value}', metadata_seperator='\\n')\r\nHow can i save this and then use this in another file?\r\n\r\nPlease help, thanks",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/12689/comments",
+    "author": "JINO-ROHIT",
+    "comments": [
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2024-04-10T05:00:42Z",
+        "body": "<!-- Greeting -->\nHey @JINO-ROHIT, great to see you back! \ud83d\ude0a It's like d\u00e9j\u00e0 vu, but in the best possible way. I'm diving into your text node conundrum as we speak. Hang tight!\n\n\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-04-10T05:01:05Z",
+        "body": "@JINO-ROHIT \r\n\r\n```\r\njson_str = node.json()\r\n\r\nnode = TextNode.parse_raw(json_str)\r\n```"
+      },
+      {
+        "user": "JINO-ROHIT",
+        "created_at": "2024-04-10T05:05:00Z",
+        "body": "@logan-markewich thanks, and for a list of text nodes? can i save it as some file name and then read it into another py script"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-04-10T05:06:38Z",
+        "body": "Just make a list of json node strings, and read/write to a file \ud83d\udc4d\ud83c\udffb \r\n\r\n```\r\nfor json_str in json_strs\r\n  f.write(json_str + \"\\n\")\r\n```"
+      },
+      {
+        "user": "JINO-ROHIT",
+        "created_at": "2024-04-10T05:07:12Z",
+        "body": "thanks so much!"
+      }
+    ]
+  },
+  {
+    "number": 11521,
+    "title": "E5-Large Llama Index embeddings don't match Langchain",
+    "created_at": "2024-02-29T23:04:08Z",
+    "closed_at": "2024-03-01T18:43:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/11521",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nCan you help me understand why this doesn't tie out? I see that the embeddings are normalized by default in LlamaIndex's implementation and have passed the argument when creating the Langchain object. \r\n\r\n```\r\nfrom llama_index.embeddings.huggingface import HuggingFaceEmbedding\r\nfrom langchain.embeddings.huggingface import HuggingFaceEmbeddings\r\n\r\nembedding_func_li = HuggingFaceEmbedding(model_name=\"intfloat/multilingual-e5-large\"#, max_length=512\r\n)\r\n\r\nembedding_func_lc = HuggingFaceEmbeddings(model_name=\"intfloat/multilingual-e5-large\", encode_kwargs={\"normalize_embeddings\": True})\r\n\r\n\r\ntext_to_embed = \"The Nasdaq notched its first record close since 2021. The tech-heavy index rose 0.9% to 16091.92, as enthusiasm about artificial intelligence has helped lift technology shares.\"\r\n\r\nprint(embedding_func_li.get_text_embedding(text_to_embed))\r\nprint(embedding_func_lc.embed_query(text_to_embed))\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/11521/comments",
+    "author": "airwindk",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-02-29T23:08:01Z",
+        "body": "I thiiiiiiink E5 requires some special pooling that got added recently\r\n\r\n`HuggingFaceEmbedding(model_name=\"intfloat/multilingual-e5-large\", pooling=\"last\")`"
+      },
+      {
+        "user": "airwindk",
+        "created_at": "2024-02-29T23:17:02Z",
+        "body": "Mean pooling seemed to do the trick. Thank you! These seem to tie out. Appreciate the quick response here!\r\n\r\nAnd not at all on your take. I needed a model that performed decently on medium / longer contexts, which the smaller sentence models seem to struggle with. If you have any other suggestions on open source embedding models let me know.\r\n\r\n```from llama_index.embeddings.huggingface import HuggingFaceEmbedding\r\nfrom langchain.embeddings.huggingface import HuggingFaceEmbeddings\r\n\r\nembedding_func_li = HuggingFaceEmbedding(model_name=\"intfloat/multilingual-e5-large\", pooling=\"mean\")\r\nembedding_func_lc = HuggingFaceEmbeddings(model_name=\"intfloat/multilingual-e5-large\", encode_kwargs={\"normalize_embeddings\": True})\r\n```"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-03-01T18:43:13Z",
+        "body": "I know nomic has some recent embedding models that work with long context.\r\n\r\nAnyways, glad it works!\r\n"
+      }
+    ]
+  },
+  {
+    "number": 11380,
+    "title": "[Question]: include_text parameter in index.as_query_engine method",
+    "created_at": "2024-02-26T03:35:04Z",
+    "closed_at": "2024-02-26T03:37:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/11380",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHi, I don't quite understand the include_text parameter in index.as_query_engine method. What's the difference between when it is set to be True or False please? Thanks a lot!",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/11380/comments",
+    "author": "DataNoob0723",
+    "comments": [
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2024-02-26T03:35:20Z",
+        "body": "_\ud83e\udd16_\n<!-- Greeting -->\nHey there, @DataNoob0723! Great to see you diving into more features of LlamaIndex. I remember our last interaction - always a pleasure to assist you. I'm taking a look at your question about the `include_text` parameter right now and will get back to you shortly with a detailed explanation. Hang tight!\n\n\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-02-26T03:37:49Z",
+        "body": "This is specific to knowledge graph indexes.\r\n\r\nIf it's true, the chunk where a matching triplet is found will also be sent to the LLM\r\n\r\nIf false, then only the matching triplets are sent to the LLM"
+      },
+      {
+        "user": "DataNoob0723",
+        "created_at": "2024-02-26T03:39:57Z",
+        "body": "> This is specific to knowledge graph indexes.\r\n> \r\n> If it's true, the chunk where a matching triplet is found will also be sent to the LLM\r\n> \r\n> If false, then only the matching triplets are sent to the LLM\r\n\r\nThanks a lot!"
+      }
+    ]
+  },
+  {
+    "number": 10919,
+    "title": "[Question]: How to get vector from Node without checking the databases?",
+    "created_at": "2024-02-17T16:32:41Z",
+    "closed_at": "2024-02-17T16:55:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/10919",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHi2,\r\n\r\nI'm writing a simple unit test to use our custom embedding capability, how to get the vector embedding of a node in the database?\r\n\r\nI try to use the ` index.docstore.get_node(node_id)`, but the node doesn't seem to have any embedding, even if I can clearly see them on the databse\r\n\r\n```python\r\ndocuments = [\r\n    Document(\r\n        id=\"1\",\r\n        text=\"Foo Bar\",\r\n    ),\r\n    Document(\r\n        id=\"2\",\r\n        text=\"AI World\",\r\n    ),\r\n]\r\n\r\nfor document in documents:\r\n    index.insert(document)\r\n\r\nall_docs = index.docstore.get_all_ref_doc_info()\r\nindex.storage_context.persist(persist_dir=\"data\")\r\n\r\nfor doc_id in all_docs:\r\n    doc = all_docs[doc_id]\r\n\r\n    node = index.docstore.get_node(doc.node_ids[0])\r\n    print(node.id_)\r\n    print(node.text)\r\n    print(node.embedding)\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/10919/comments",
+    "author": "rendyfebry",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-02-17T16:35:09Z",
+        "body": "The embedding is stored in the vector store \ud83d\udc40 \r\n\r\nIf you are using the base simple vector store, you can do\r\n\r\n`embedding = index.vector_store.get(node_id)`"
+      },
+      {
+        "user": "rendyfebry",
+        "created_at": "2024-02-17T16:45:32Z",
+        "body": "Ahh, thanks @logan-markewich \r\n\r\nThe base VectorStore class itself doesn't have `get()` function, so it didn't shown in my editor.\r\n\r\nThank you"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-02-17T16:55:08Z",
+        "body": "Yea, it's the only one with that method \ud83d\ude05 been meaning to add to the base class, but it's some work to then go and add to the children classes.\r\n\r\nGlad it worked!"
+      }
+    ]
+  },
+  {
+    "number": 9934,
+    "title": "[Question]: Sentence transfromer semeantic_search and VectorIndexRetriever retrieve",
+    "created_at": "2024-01-09T17:11:59Z",
+    "closed_at": "2024-01-15T13:56:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/9934",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nI have text data that I embed using a sentence transformer \"sentence-transformers/distiluse-base-multilingual-cased-v1\"\r\n\r\nFirst try I used the sentence_transformers semantic_search method that uses cos_sim for the score function and I got the results that I want\r\n\r\nThen I used VectorIndexRetriever with CustomEmbeddings using the same sentence_transformers model but when I used the retrieve method I got different results with a different score  \r\n\r\nI thought I would get the same results for both methods, what did I get the same results? I couldn't find anything about this ",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/9934/comments",
+    "author": "mim201820",
+    "comments": [
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2024-01-09T17:12:11Z",
+        "body": "_\ud83e\udd16_\n<!-- Greeting -->\nHello again, @mim201820! Good to see you back. I appreciate your detailed question and I'm on it! I'll dig into the specifics of your issue and will respond with a comprehensive answer shortly. Hang tight!\n\n\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-01-09T17:15:28Z",
+        "body": "These methods are only comparable if you use the same embeddings in both.\r\n\r\nCan you share some replication code?"
+      },
+      {
+        "user": "mim201820",
+        "created_at": "2024-01-09T17:24:24Z",
+        "body": "So lets say we have a text file that we want to embed its lines.\r\n\r\nFor semantic_search: \r\n```\r\n    with open(file_path, \"r\") as f:\r\n        inputs = f.readlines()\r\n    embedding_model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v1')\r\n    embeddings = embedding_model.encode(inputs)\r\n    output = model.encode(query)\r\n    query_embeddings = torch.FloatTensor(output)\r\n    hits = semantic_search(query_embeddings, dataset_embeddings, top_k=2)\r\n```\r\nFor retrieve:\r\nFirst I define the custom embedding:\r\n```\r\nclass CustomEmbeddings(BaseEmbedding):\r\n    _model: SentenceTransformer = PrivateAttr()\r\n    _instruction: str = PrivateAttr()\r\n\r\n    def __init__(\r\n        self,\r\n        instructor_model_name: str = \"sentence-transformers/distiluse-base-multilingual-cased-v1\",\r\n        **kwargs: Any,\r\n    ) -> None:\r\n        self._model = SentenceTransformer(instructor_model_name)\r\n        super().__init__(**kwargs)\r\n\r\n    @classmethod\r\n    def class_name(cls) -> str:\r\n        return \"instructor\"\r\n\r\n    async def _aget_query_embedding(self, query: str) -> List[float]:\r\n        return self._get_query_embedding(query)\r\n\r\n    async def _aget_text_embedding(self, text: str) -> List[float]:\r\n        return self._get_text_embedding(text)\r\n\r\n    def _get_query_embedding(self, query: str) -> List[float]:\r\n        embeddings = self._model.encode(query)\r\n        return embeddings.tolist()\r\n\r\n    def _get_text_embedding(self, text: str) -> List[float]:\r\n        embeddings = self._model.encode(text)\r\n        return embeddings.tolist()\r\n\r\n    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:\r\n        embeddings = self._model.encode(texts)\r\n        return embeddings.tolist()\r\n```\r\nthen I create my index retriever\r\n``` \r\n       embed_model = CustomEmbeddings()\r\n        nodes = []\r\n        with open(f_path, \"r\") as f:\r\n            entries = f.readlines()\r\n        file_name = os.path.basename(f_path)\r\n        print(f'Loading {file_name}')\r\n        for index, entry in enumerate(entries):\r\n                   node = TextNode(text=entry,)\r\n                  node_embedding = embed_model.get_text_embedding(entry)\r\n                  nodes.append(node)\r\n          db = chromadb.PersistentClient(path=\"data/chroma_db\")\r\n          chroma_collection = db.get_or_create_collection(\"chroma_db\")\r\n          vector_store = ChromaVectorStore(chroma_collection=chroma_collection)\r\n          vector_store.add(nodes)\r\n          storage_context = StorageContext.from_defaults(vector_store=vector_store)\r\n          service_context = ServiceContext.from_defaults(embed_model=embed_model)\r\n          index = VectorStoreIndex.from_vector_store(\r\n              vector_store=vector_store, service_context=service_context\r\n          )\r\n          index_retriever = index.as_retriever()\r\n          results = index_retriever.retrieve(query)\r\n          for r in results: print(f\"{r.text}\\n score {r.score}\")\r\n```"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2024-01-11T22:30:37Z",
+        "body": "@mim201820 chroma uses an approximate vector search (better for large amounts of data), while I suspect sentence transformers is exact. If you try another vector db (our default vector db, qdrant, weaviate, etc.) you will probably have the results you expect"
+      },
+      {
+        "user": "mim201820",
+        "created_at": "2024-01-15T13:56:45Z",
+        "body": "correct chroma does use cosin  similarity by default, thanks for the support "
+      }
+    ]
+  },
+  {
+    "number": 9334,
+    "title": "[Question]: Add TextNode metadata to help Retriever ",
+    "created_at": "2023-12-05T23:10:28Z",
+    "closed_at": "2023-12-06T03:27:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/9334",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHi ,\r\n\r\nI wonder if it's possible to append some metadata that would appended to TextNode's text during search.\r\n\r\nI suppose including this metadata will help retriever greatly.\r\n\r\nI can't rely on Document metadata provided by PDF parser . Actually , I want similar functionality for Nodes\r\n\r\nThanks,\r\nNissim",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/9334/comments",
+    "author": "snassimr",
+    "comments": [
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2023-12-05T23:10:40Z",
+        "body": "_\ud83e\udd16_\n<!-- Greeting -->\nHello @snassimr,\n\nGreat to see you again and thank you for your question!\n\nI'm currently looking into your issue regarding the appending of metadata to TextNode's text. Please hang tight while I gather all the necessary information to provide you with a comprehensive answer.\n\nI will get back to you shortly.\n\n\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-12-05T23:12:00Z",
+        "body": "Nodes and documents are nearly the same object -- they both support the same metadata methods and whatnot. Anything a document has, a node has too\r\n\r\nWas there something specific you wanted to do?"
+      },
+      {
+        "user": "snassimr",
+        "created_at": "2023-12-05T23:24:43Z",
+        "body": "I want to tag TextNode if it contains specific information :. Here the example . I assume node metadata is a dictionary \ud83d\udc4d \r\n\r\n{\r\n   'code' 'Doesn't contain code'\r\n   'example' : \"Contain Example 13'\r\n}\r\n\r\nI want the node to be retrieved if chunk doesn't contain code and does contain Example 13.\r\n\r\nI am not sure if LLM would be able to exploit the metadata . It just a test\r\n"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-12-05T23:50:30Z",
+        "body": "You can do this with \r\n\r\n`node.metadata = metadata`\r\n\r\nOr\r\n\r\n`node = TextNode(text=text, metadata=metadata)`\r\n\r\nIf your input documents already have this metadata, it would be inherited to the nodes automatically.\r\n\r\nThen for retrieval, you can use metadata filters \r\n\r\n```\r\nfrom llama_index.vector_stores.types import ExactMatchFilter, MetadataFilters\r\n\r\nfilters = MetadataFilters(\r\n    filters=[ExactMatchFilter(key=\"key\", value=\"val\")]\r\n)\r\n\r\nquery_engine = index.as_query_engine(similarity_top_k=3, filters=filters)\r\n```"
+      },
+      {
+        "user": "snassimr",
+        "created_at": "2023-12-06T00:01:47Z",
+        "body": "Great . Let me check . The idea of MetadataFitlers is also very powerful . Adding some types of filters extend possibilities even more . Thanks"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-12-06T03:27:53Z",
+        "body": "Yup, we are working on greatly expanding metadata filter types. \r\n\r\nRecently, chroma, qdrant, weaviate, and pinecone support some new filters we are slowly rolling out"
+      }
+    ]
+  },
+  {
+    "number": 7058,
+    "title": "[Question]: what makes it different for custom query engine vs vector index query engine",
+    "created_at": "2023-07-27T10:32:57Z",
+    "closed_at": "2023-10-24T06:30:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/7058",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nBackground:\r\n\r\n- I created a vector index and created a query engine with the default configurations, say vector_query_engine\r\n- I created a custom query engine with a custom retriever first called vector_query_engine._retriever and then call another retriever and union the result following the docs, and I then created the query engine with RetrieverQueryEngine from the custom retriver and the response_synthesizer from vector_query_engine._response_synthesizer, say custom_query_engine\r\n\r\nThe strange thing here is, in case a question is about the data got nothing related:\r\n- vector_query_engine got a wrong answer\r\n- custom_query_engine said don't know\r\n\r\nI checked both response's node are the same(from vector search), it seems something is right in the custom query engine but not in vector index query engine, I looked into the code but couldn't find any(default kwargs) that's related, could you please help point where I could be missing?\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/7058/comments",
+    "author": "wey-gu",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-07-27T14:23:15Z",
+        "body": "Are you customizing the LLM or service context at all? Once you start customizing retrievers and response synthesizers, there's a lot of places that need the service context. It's usually best to set a global service context to simplify things \ud83e\udd14\r\n\r\nAlso, if the temperature is higher than zero, then getting different answers also seems possible "
+      },
+      {
+        "user": "wey-gu",
+        "created_at": "2023-07-28T01:26:21Z",
+        "body": "Thanks @logan-markewich !\n\nDue to previously I was using azure oai thus I always explicitly specify one same service context for all classes(is this approach the global service context? I'll search it from docs tomorrow!), I'll double check tomorrow on LLM args(I recalled I have only one configuration calls my local model through).\n\n---\n\n> Are you customizing the LLM or service context at all? Once you start customizing retrievers and response synthesizers, there's a lot of places that need the service context. It's usually best to set a global service context to simplify things \ud83e\udd14\r\n> \r\n> Also, if the temperature is higher than zero, then getting different answers also seems possible\r\n\r\nThanks @logan-markewich , now with `set_global_service_context` being set, the custom query engine got the same results from the synthesizer, should be that phase the service context was not properly passed?"
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-07-28T03:41:37Z",
+        "body": "@wey-gu yea I'm guessing before there was a spot that the service context wasn't passed. Maybe into the response synthesizer?\r\n\r\nAt least with the global it's less worrisome \ud83d\udc4d"
+      }
+    ]
+  },
+  {
+    "number": 6815,
+    "title": "[Question]: Is it possible to extract similarity values before sending prompt to gpt?",
+    "created_at": "2023-07-10T03:26:24Z",
+    "closed_at": "2023-07-10T10:10:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/6815",
+    "body": "### Question Validation\r\n\r\n- [x] I have searched both the documentation and discord for an answer.\r\n\r\n### Question\r\n\r\nHi! I'm fairly new to llamaindex, this is my first time working with it. I am trying to create a chatbot which uses base gpt-3.5-turbo's knowledge if it is unable to answer the question using the context I have provided. I have managed to achieve this using a custom prompt template and few shot learning. \r\n\r\nHowever, I find that I am using extra tokens in context which ends up getting wasted when gpt is not using it to construct the answer. The idea I have in mind is to create a custom parser that takes in my query text and can extract the embeddings similarity prior to sending the context to gpt-3.5-turbo(after receiving query embeddings from ada). If the similarity is below a threshold, say 0.85, I will reset the context to be 'Context is vague' or something similar. This will help me save a lot of tokens as I do not have to send the entire custom prompt each time. \r\n\r\nI am leaning towards extracting the similarity from the node post-processors but I am unsure where should this function be called i.e. as a argument to query_engine.query() or somewhere else. Hope my question is clear, I would be happy to provide more info/code if needed. Thank you!",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/6815/comments",
+    "author": "rmj1405",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-07-10T04:37:40Z",
+        "body": "yea, node post-processors get called after retrieval, but before response synthesis\r\n\r\nYou could make a custom node postprocessor to filter out nodes, as well as add different nodes to return\r\n\r\n```\r\nquery_engine = index.as_query_engine(node_postprocessors=[MyCustomProcessor()])\r\n```\r\n\r\nIf you want to prevent calling gpt-3.5 altogether, you'll have to run the retrieval and response synthesis steps outside of the query engine\r\n\r\n```\r\nfrom llama_index import get_response_synthesizer\r\nretriever = index.as_retriever()\r\n\r\nresponse_synthesizer = get_response_synthesizer(response_mode=\"compact\", service_context=service_context)\r\n\r\nnodes = retriever.retrieve(query)\r\n\r\n<insert filter logic>\r\n\r\nresponse = response_synthesizer.synthesize(query, nodes=nodes)\r\n```\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 6746,
+    "title": "[Question]: how to set the temperature for local LLM",
+    "created_at": "2023-07-06T00:50:51Z",
+    "closed_at": "2023-10-14T20:08:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/6746",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nFor custom LLM using LLMPredictor to define index, is it possible to define the temperature in predicting? In definition of LLMPredictor, I only found following where it is possible in OpenAI interface? Thanks.\r\n\r\n```\r\n        self._llm = llm or OpenAI(\r\n            temperature=0, model_name=\"text-davinci-003\", max_tokens=-1\r\n        )\r\n```",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/6746/comments",
+    "author": "stl2015",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-07-06T17:23:13Z",
+        "body": "If you are using a custom LLM, how to set the temperature will be up to how you create the LLM right? What are you trying to use?"
+      },
+      {
+        "user": "stl2015",
+        "created_at": "2023-07-07T01:08:09Z",
+        "body": "It makes sense. I'm trying to make sure to have deterministic response for any prompt. For example, HuggingFaceLLMPredictor in llama-index has no option for temperature - it will give deterministic response, right? In my case I was trying to use a Vicuna model from HF."
+      },
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-07-07T01:10:30Z",
+        "body": "You have to set that in generate kwargs, since huggingface models have endless parameters to change they all go into generate kwargs \r\n\r\n`HuggingFaceLLMPredictor(..., generate_kwargs={\"temperature\": 0})`"
+      },
+      {
+        "user": "dosubot[bot]",
+        "created_at": "2023-10-06T16:02:27Z",
+        "body": "Hi, @stl2015! I'm Dosu, and I'm helping the LlamaIndex team manage their backlog. I wanted to let you know that we are marking this issue as stale. \n\nFrom what I understand, you had a question about how to set the temperature for a local LLM using LLMPredictor. You mentioned that you searched the documentation and Discord for an answer, but couldn't find any information on how to define the temperature in predicting. \n\nFortunately, user Logan-markewich provided a solution by suggesting to set the temperature in generate kwargs for HuggingFace models. They even gave an example: `HuggingFaceLLMPredictor(..., generate_kwargs={\"temperature\": 0})`. Both devstein and you reacted with a thumbs up to this solution, so it seems like the issue has been resolved.\n\nBefore we close this issue, we just wanted to confirm if it is still relevant to the latest version of the LlamaIndex repository. If it is, please let us know by commenting on the issue. Otherwise, feel free to close the issue yourself or it will be automatically closed in 7 days.\n\nThank you for your contribution and understanding! Let us know if you have any further questions or concerns."
+      }
+    ]
+  },
+  {
+    "number": 6445,
+    "title": "[Question]: Can you create an index with one LLM and query using another",
+    "created_at": "2023-06-13T07:32:40Z",
+    "closed_at": "2023-07-22T02:11:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/6445",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nHi \r\n\r\nGreat tool btw, I was wondering if it is possible to create an index with one LLM and query using another. I'm specifically trying to reduce the cost for index creation by using a cheaper model for index creation, but I want the power of the more capable LLMs when responding to queries. \r\n\r\nYour assistance is much appreciated. \r\n\r\nKind regards",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/6445/comments",
+    "author": "Samshive",
+    "comments": [
+      {
+        "user": "matthiaskern",
+        "created_at": "2023-06-15T08:34:02Z",
+        "body": "This is supported! You can specify different `service_context` instances for the different stages:\r\n\r\ne.g.:\r\n\r\n```\r\nindex = VectorStoreIndex.from_documents(docs, service_context=service_context_cheap)\r\nquery_engine = index.as_query_engine(service_context=service_context_expensive)\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 6278,
+    "title": "[Question]: why fetch the nodes is return None by ResponseMode.NO_TEXT",
+    "created_at": "2023-06-09T10:13:59Z",
+    "closed_at": "2023-06-12T04:21:12Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/run-llama/llama_index/issues/6278",
+    "body": "### Question Validation\n\n- [X] I have searched both the documentation and discord for an answer.\n\n### Question\n\nWhy does llama return None when response_mode is no_text?\r\n`       service_context = create_service_context()\r\n        index = self.embedding.load_index_simple(game_id, service_context)\r\n        retriever = index.as_retriever(similarity_top_k=15)\r\n        engine = RetrieverQueryEngine.from_args(retriever, service_context,\r\n                                                response_mode=ResponseMode.NO_TEXT)\r\n`\r\ni saw the nodes was print, but it not return",
+    "comments_url": "https://api.github.com/repos/run-llama/llama_index/issues/6278/comments",
+    "author": "youbai1995",
+    "comments": [
+      {
+        "user": "logan-markewich",
+        "created_at": "2023-06-09T15:04:12Z",
+        "body": "the nodes are in the response object\r\n\r\n```python\r\nresponse = index.as_query_engine(response_mode=\"no_text\").query(\"query\")\r\nprint(response.source_nodes)\r\n```"
+      },
+      {
+        "user": "youbai1995",
+        "created_at": "2023-06-12T03:14:31Z",
+        "body": "> thank you very much! the document need update ^.^\r\n\r\n"
+      }
+    ]
+  }
+]

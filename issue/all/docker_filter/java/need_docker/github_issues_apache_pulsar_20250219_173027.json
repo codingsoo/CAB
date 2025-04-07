@@ -1,0 +1,141 @@
+[
+  {
+    "number": 9340,
+    "title": "NullPointerException while stopping \"links localrun\" with Ctrl-C",
+    "created_at": "2021-01-27T10:36:09Z",
+    "closed_at": "2021-11-20T16:07:43Z",
+    "labels": [
+      "type/bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/apache/pulsar/issues/9340",
+    "body": "**Describe the bug**\r\n\r\nI ofter see this error while stopping a \"localrun\" of a sink with Ctrl-C\r\n\r\n```\r\nException in thread \"main\" java.lang.NullPointerException\r\n\tat org.apache.pulsar.functions.LocalRunner.start(LocalRunner.java:360)\r\n\tat org.apache.pulsar.functions.LocalRunner.main(LocalRunner.java:168)\r\n\r\n```\r\n\r\n\r\n**To Reproduce**\r\nSteps to reproduce the behavior:\r\n1. Run a sink with localrun and press ctrl-C\r\n\r\n**Expected behavior**\r\nNo exception to be logged, as it may look quite scary for the user\r\n",
+    "comments_url": "https://api.github.com/repos/apache/pulsar/issues/9340/comments",
+    "author": "eolivelli",
+    "comments": [
+      {
+        "user": "mattisonchao",
+        "created_at": "2021-11-11T15:06:19Z",
+        "body": "I can work on it. :)"
+      },
+      {
+        "user": "codelipenghui",
+        "created_at": "2021-11-11T15:16:57Z",
+        "body": "Thanks @mattisonchao, I have assigned the issue to you."
+      },
+      {
+        "user": "mattisonchao",
+        "created_at": "2021-11-20T12:21:36Z",
+        "body": "@eolivelli  I can not reproduce this issue. \r\n\r\nDo you have any idea to help me? thanks :)"
+      },
+      {
+        "user": "eolivelli",
+        "created_at": "2021-11-20T12:34:42Z",
+        "body": "probably it has been fixed ?\r\n\r\nwhat happens in \"LocalRunner.java:360\" ? "
+      },
+      {
+        "user": "mattisonchao",
+        "created_at": "2021-11-20T13:01:27Z",
+        "body": "@eolivelli  This bug has been fixed by #12278 \r\n\r\nI think we need to close this issue."
+      },
+      {
+        "user": "eolivelli",
+        "created_at": "2021-11-20T16:07:53Z",
+        "body": "Thank you @mattisonchao "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Prevent NullPointerException during shutdown of localrun process",
+      "Ensure clean termination of LocalRunner without unhandled exceptions",
+      "Address root cause in LocalRunner.java line 360 logic",
+      "Maintain expected Ctrl-C termination behavior without side effects"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:47:54"
+    }
+  },
+  {
+    "number": 8121,
+    "title": "Fix the flaky test testRemoveSubscribeRate",
+    "created_at": "2020-09-24T03:11:32Z",
+    "closed_at": "2020-11-17T02:45:29Z",
+    "labels": [
+      "type/bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/apache/pulsar/issues/8121",
+    "body": "**Describe the bug**\r\n`testRemoveSubscribeRate` in the TopicPolicyTest is a flaky test when run all tests under the TopicPolicyTest. But only run `testRemoveSubscribeRate`.\r\n\r\nSo in #8114 ignore the `testRemoveSubscribeRate` to make sure other PRs does not block here.",
+    "comments_url": "https://api.github.com/repos/apache/pulsar/issues/8121/comments",
+    "author": "codelipenghui",
+    "comments": [
+      {
+        "user": "hangc0276",
+        "created_at": "2020-09-30T02:32:21Z",
+        "body": "I will fix it."
+      },
+      {
+        "user": "wolfstudy",
+        "created_at": "2020-10-31T03:06:23Z",
+        "body": "> I will fix it.\r\n\r\n@hangc0276 What is the current status of this issue? Has pr fixed this problem?\n\n---\n\nMove this issue to 2.7.0."
+      },
+      {
+        "user": "codelipenghui",
+        "created_at": "2020-11-17T02:45:29Z",
+        "body": "Seems this issue is fixed by #8557, So close it first."
+      }
+    ],
+    "satisfaction_conditions": [
+      "The test testRemoveSubscribeRate must no longer exhibit flaky behavior when run with other tests in TopicPolicyTest",
+      "The solution must allow the test to be re-enabled in the test suite without special handling",
+      "The fix must prevent test failures from blocking unrelated PRs",
+      "The resolution must be validated through successful test runs in CI environment"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:48:01"
+    }
+  },
+  {
+    "number": 6414,
+    "title": "High CPU load when PulsarClient (Java) is idle",
+    "created_at": "2020-02-24T23:13:42Z",
+    "closed_at": "2020-03-03T02:31:55Z",
+    "labels": [
+      "type/bug",
+      "help wanted",
+      "area/client"
+    ],
+    "url": "https://github.com/apache/pulsar/issues/6414",
+    "body": "**Describe the bug**\r\nRunning a simple consumer on Windows using the `PulsarClient`, I notice that there is considerable CPU usage when the consumer is just idling. Profiling showed that the 'pulsar-timer-x-y' thread is heavy on the CPU. Digging into the source code, we can see that the `HashedWheelTimer `is set up with 1 ms tick time:\r\n\r\n`timer = new HashedWheelTimer(getThreadFactory(\"pulsar-timer\"), 1, TimeUnit.MILLISECONDS);`\r\n\r\nA simple test with similar values show that a running HashedWheelTimer can consume CPU equal to 100% of one hyperthread:\r\n\r\n```\r\n    @Test\r\n    public void testTimerWheel() throws Exception {\r\n        HashedWheelTimer timer = new HashedWheelTimer(1, TimeUnit.MILLISECONDS);\r\n\r\n        timer.newTimeout(new TimerTask() {\r\n\r\n            @Override\r\n            public void run(final Timeout timeout) throws Exception {\r\n                timer.newTimeout(this, 500, TimeUnit.MILLISECONDS);\r\n\r\n            }\r\n        }, 500, TimeUnit.MILLISECONDS);\r\n\r\n        Thread.sleep(30_000);\r\n        timer.stop();\r\n    }\r\n```\r\nMy understanding of the `HashedWheelTimer` is that it is indented to be used for a large number of approximated timeouts and not for millisecond precision scheduling, but I may be mistaken.\r\n\r\n**To Reproduce**\r\nRun a simple producer subscribing to a topic with no messages, or run the above simple JUnit test. Observe CPU usage.\r\n\r\n**Expected behavior**\r\nAn idle consumer should not incur high CPU load. For example, when running 8 consumers on a i7-8700 (4 cores 2 threads per core), TaskManager reported 100% CPU usage - when there was no traffic, no messages on the topics.\r\n\r\n**Discussion**\r\nHigh CPU load is a high price to pay for immediate batch dispatching (which may be the primary reason for setting the 1 ms tick time). It should be possible to lax on immediate batch dispatching in favor of more compute resources available to other tasks.\r\n\r\nAn alternative is to use a plain old `ScheduledExecutorService` for batch dispatching/reception, tests suggest it will also be lighter on the CPU when millisecond precision is required and the number of task is not too high. For example, I could schedule 2000 simple tasks every millisecond (`scheduleAtFixedRate`) with more compute available on a single thread. When scheduling 10k tasks every millisecond, the thread was working 100%, but scheduling 10k tasks every 10 millisecond was OK. So if a client is used to create a huge number of producers/consumers, it might be better to lax the batch timeout so the timeout thread has a chance to actually perform its work. Another observation is that the `HashedWheelTimer` used with 1 millisecond tick time is not able to run a single simple task every millisecond, party due to the `HashedWheelTimer` approximate nature, and maybe party because spinning the wheel competes with task expiration.\r\n\r\nNote that when using `ScheduledExecutorService` each task might not get exactly the same number of executions, for example when scheduling 1000 tasks run execute every millisecond for 30 seconds, task were executed between 29 986 and 30 012 times.\r\n\r\nSome suggestions:\r\n1) The tick time could be configurable, with default value = 1 millisecond to preserve current behavior.\r\n2) Use default tick time 100 milliseconds, then create a `ScheduledExecutorService `in `PulsarClientImpl` that is exposed the same way as the `Timer `object for other classes to use. The `ProducerImpl `and `ConsumerBase` could use the `ScheduledExecutorService `to schedule batch dispatching/reception.\r\n\r\n**Additional context**\r\nObserved under Windows 10 64-bit, running Java 11.\r\n",
+    "comments_url": "https://api.github.com/repos/apache/pulsar/issues/6414/comments",
+    "author": "racorn",
+    "comments": [
+      {
+        "user": "jiazhai",
+        "created_at": "2020-02-28T02:39:15Z",
+        "body": "Thanks a lot for @racorn 's detailed analysis.  your suggestions sounds great. Would you like to provide a fix for this?"
+      },
+      {
+        "user": "racorn",
+        "created_at": "2020-02-29T11:04:58Z",
+        "body": "Yes, I can try to implement what I suggested, by mid next week. Will that be OK with you?\n\n---\n\nI wish I had seen this before: netty/netty#9710, and the fix netty/netty#9714\r\n\r\nAs the Netty version is now bumped to 4.1.45 on master, the CPU load is no longer an issue on Windows. \r\n\r\nAnyway, @jiazhai, I made the suggested implementation in my forked repository, you can have a look to see if it is of any value. I could be an improvement in the `ProducerImpl`, where `client.scheduledExecutorService().scheduleAtFixedRate` better reflects what you want to achieve than using a `Timeout`. Also, the `keyGeneratorTask` could use the `ScheduledExecutorService` instead of using the Netty eventLoopGroup. On the other hand, if you are producing messages for a huge number of topics (10k +), the `HashedWheelTimer` may perform better. So maybe it is best to leave it as it is."
+      },
+      {
+        "user": "jiazhai",
+        "created_at": "2020-03-03T02:31:55Z",
+        "body": "Thanks @racorn for your great help. Agree with you, we could leave it as it is.  And would like to close this issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Reduces CPU usage during idle state without introducing regressions",
+      "Maintains compatibility with existing timeout/batch processing requirements",
+      "Validates solution works on Windows environments",
+      "Preserves existing functionality as default behavior"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-04 23:48:15"
+    }
+  }
+]
