@@ -1,0 +1,140 @@
+[
+  {
+    "number": 22168,
+    "title": "Formatter.FormatAsync does not seem to do anything.",
+    "created_at": "2017-09-18T17:32:40Z",
+    "closed_at": "2017-09-25T20:27:11Z",
+    "labels": [
+      "Question",
+      "Area-IDE"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/22168",
+    "body": "**Version Used**: \r\nDifferent\r\n\r\n**Steps to Reproduce**:\r\n\r\n```cs\r\n    using System;\r\n    using System.Linq;\r\n    using System.Threading;\r\n    using System.Threading.Tasks;\r\n    using Microsoft.CodeAnalysis;\r\n    using Microsoft.CodeAnalysis.CSharp;\r\n    using Microsoft.CodeAnalysis.CSharp.Syntax;\r\n    using Microsoft.CodeAnalysis.Editing;\r\n    using Microsoft.CodeAnalysis.Formatting;\r\n    using Microsoft.CodeAnalysis.Simplification;\r\n    using NUnit.Framework;\r\n\r\n    public class Repro\r\n    {\r\n        [Test]\r\n        public async Task MakeSealed()\r\n        {\r\n            var testCode = @\"\r\nnamespace RoslynSandbox\r\n{\r\n    public class Foo\r\n    {\r\n    }\r\n}\";\r\n\r\n            var projectId = ProjectId.CreateNewId(\"Test\");\r\n            var sln = new AdhocWorkspace()\r\n                .CurrentSolution\r\n                .AddProject(projectId, \"Test\", \"Test\", LanguageNames.CSharp)\r\n                .WithProjectCompilationOptions(\r\n                    projectId,\r\n                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true))\r\n                .AddDocument(DocumentId.CreateNewId(projectId), \"Foo.cs\", testCode);\r\n\r\n            var editor = await DocumentEditor.CreateAsync(sln.Projects.First().Documents.First()).ConfigureAwait(false);\r\n            var type = ((CompilationUnitSyntax)editor.OriginalRoot)\r\n                .Members.OfType<NamespaceDeclarationSyntax>()\r\n                .First()\r\n                .Members.OfType<ClassDeclarationSyntax>()\r\n                .First();\r\n            editor.SetModifiers(type, DeclarationModifiers.From(editor.SemanticModel.GetDeclaredSymbol(type)).WithIsSealed(isSealed: true));\r\n            var expected = @\"\r\nnamespace RoslynSandbox\r\n{\r\n    public sealed class Foo\r\n    {\r\n    }\r\n}\";\r\n            var actual = await GetCodeAsync(editor.GetChangedDocument(), CancellationToken.None);\r\n            Console.Write(actual);\r\n            Assert.AreEqual(expected, actual);\r\n        }\r\n\r\n        private static async Task<string> GetCodeAsync(Document document, CancellationToken cancellationToken)\r\n        {\r\n            var simplifiedDoc = await Simplifier.ReduceAsync(document, Simplifier.Annotation, cancellationToken: cancellationToken).ConfigureAwait(false);\r\n            var formatted = await Formatter.FormatAsync(simplifiedDoc, Formatter.Annotation, cancellationToken: cancellationToken).ConfigureAwait(false);\r\n            var sourceText = await formatted.GetTextAsync(cancellationToken).ConfigureAwait(false);\r\n            return sourceText.ToString();\r\n        }\r\n    }\r\n```\r\n\r\nPrints:\r\n\r\n```\r\nnamespace RoslynSandbox\r\n{\r\n    public sealedclass Foo\r\n    {\r\n    }\r\n}\r\n```\r\n\r\n**Expected Behavior**:\r\n\r\nI expected the formatter to format `public sealedclass Foo`, chances are I used it wrong. Writing this issue any way in case it is a repro for a real bug.\r\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/22168/comments",
+    "author": "JohanLarsson",
+    "comments": [
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T16:02:20Z",
+        "body": "Does it work if you do `.WithAdditionalAnnotations(Formatter.Annotation)` on the node you want formatted?"
+      },
+      {
+        "user": "JohanLarsson",
+        "created_at": "2017-09-25T16:08:01Z",
+        "body": "Does the repro code not compile? Sorry about that if so.\r\nFor the question: I had `.WithAdditionalAnnotations(Formatter.Annotation)` but could not get the formatted output."
+      },
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T16:17:21Z",
+        "body": "Ahh, okay. You're formatting an entire document which isn't decorated with the `Formatter.Annotation`, so just get rid of the `Formatter.Annotation` argument to `Formatter.FormatAsync` to get it to format the whole thing -- that is, `var formatted = await Formatter.FormatAsync(simplifiedDoc, cancellationToken: cancellationToken).ConfigureAwait(false);` -- Does that work for you?\r\n\r\n[Note: updated explanation for clarity]"
+      },
+      {
+        "user": "JohanLarsson",
+        "created_at": "2017-09-25T19:40:30Z",
+        "body": "Yes, removing the `Formatter.Annotation` made it format the document. Do you have a link to relevant docs for this?"
+      },
+      {
+        "user": "DustinCampbell",
+        "created_at": "2017-09-25T20:24:22Z",
+        "body": "I realize that you're looking for something a bit more, and that we could do much, much better with documentation. However, the XML doc comment does have some of this information:\r\n\r\n```C#\r\n/// <summary>\r\n/// Formats the whitespace in areas of a document corresponding to annotated nodes.\r\n/// </summary>\r\n/// <param name=\"document\">The document to format.</param>\r\n/// <param name=\"annotation\">The annotation used to find on nodes to identify spans to format.</param>\r\n/// <param name=\"options\">An optional set of formatting options. If these options are not supplied the current set of options from the document's workspace will be used.</param>\r\n/// <param name=\"cancellationToken\">An optional cancellation token.</param>\r\n/// <returns>The formatted document.</returns>\r\npublic static Task<Document> FormatAsync(Document document, SyntaxAnnotation annotation, OptionSet options = null, CancellationToken cancellationToken = default)\r\n    => FormatAsync(document, annotation, options, rules: null, cancellationToken: cancellationToken);\r\n```\r\n\r\nNote the documentation for the `annotation` parameter above."
+      },
+      {
+        "user": "dpoeschl",
+        "created_at": "2017-09-25T20:27:11Z",
+        "body": "The code is working now, so I'm going to close this. If there's a specific problem with the documentation, let's file and track that separately. Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how to properly use Formatter.FormatAsync to format an entire document",
+      "Clarification on when to use or not use the Formatter.Annotation parameter",
+      "Reference to documentation about Formatter usage"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:19:55"
+    }
+  },
+  {
+    "number": 4377,
+    "title": "Strange compilation error, cannot find attribute reference after applying code fix",
+    "created_at": "2015-08-06T15:58:04Z",
+    "closed_at": "2015-08-06T17:22:09Z",
+    "labels": [
+      "Question",
+      "Concept-API",
+      "Resolution-Answered"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/4377",
+    "body": "See the code below. What I'm trying to do is fairly simple. Have a code fix which adds an attribute if it's not there. This works fine when I use the non fully qualified name of the attribute, however if I do use the fully qualified name, I'm getting compilation errors. But strangely enough only a single one even when the fully qualified name is used twice. \n\nFor some reason the new attribute is not equivalent to the existing one even though they are equal as a string.\n\nAm I missing something?\n\nHere's the code, needs Roslyn references as well as to the old Composition dll in the GAC (but I'm getting the same results for Obsolete). I've duplicated some code from the template just to make it self-contained.\n\n``` CSharp\nusing System;\nusing System.Linq;\nusing System.Threading.Tasks;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.CSharp.Syntax;\nusing Microsoft.CodeAnalysis.Text;\nusing Microsoft.VisualStudio.TestTools.UnitTesting;\nusing static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;\n\nnamespace Test.CodeFixes\n{\n    [TestClass]\n    public class UnitTest1\n    {\n        internal static readonly MetadataReference CorlibReference = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);\n        internal static readonly MetadataReference SystemCoreReference = MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location);\n        internal static readonly MetadataReference CSharpSymbolsReference = MetadataReference.CreateFromFile(typeof(CSharpCompilation).Assembly.Location);\n        internal static readonly MetadataReference CodeAnalysisReference = MetadataReference.CreateFromFile(typeof(Compilation).Assembly.Location);\n\n        [TestMethod]\n        public void TestCompilationError()\n        {\n            var testCode = @\"\n\nusing System.ComponentModel.Composition;\n\n[System.ComponentModel.Composition.Export(typeof(System.String))]\n[Export(typeof(System.Single))]\npublic class TempClass\n{\n}\";\n\n            var project = CreateProject(testCode);\n\n            var document = project.Documents.Single();\n            CheckForCompilationErrors(project.GetCompilationAsync().Result);\n\n            var newDocument = AddAttributeAsyncFix(document, document.GetSyntaxRootAsync().Result.DescendantNodes().OfType<ClassDeclarationSyntax>().Single()).Result;\n            Console.WriteLine(@\"new code:\n\" + newDocument.GetTextAsync().Result);\n\n            CheckForCompilationErrors(newDocument.Project.GetCompilationAsync().Result);\n        }\n\n        private Project CreateProject(string testCode)\n        {\n            var TestProjectName = \"TestProject\";\n            var projectId = ProjectId.CreateNewId(TestProjectName);\n\n            var solution = new AdhocWorkspace()\n                .CurrentSolution\n                .AddProject(projectId, TestProjectName, TestProjectName, LanguageNames.CSharp)\n                .WithProjectCompilationOptions(projectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))\n                .AddMetadataReference(projectId, CorlibReference)\n                .AddMetadataReference(projectId, SystemCoreReference)\n                .AddMetadataReference(projectId, CSharpSymbolsReference)\n                .AddMetadataReference(projectId, CodeAnalysisReference)\n                .AddMetadataReferences(projectId, GetAdditionalReferences());\n\n\n            var documentId = DocumentId.CreateNewId(projectId);\n            solution = solution.AddDocument(documentId, \"test.cs\", SourceText.From(testCode));\n\n            var project = solution.GetProject(projectId);\n            return project;\n        }\n\n        private async Task<Document> AddAttributeAsyncFix(\n            Document document,\n            ClassDeclarationSyntax classDeclaration)\n        {\n            //Add [Export(typeof(TypeName))]\n            var root = await document.GetSyntaxRootAsync();\n\n            var typeofArgument = AttributeArgument(TypeOfExpression(ParseTypeName(\"System.Double\")));\n            var attributeSyntax = Attribute(IdentifierName(\"System.ComponentModel.Composition.Export\"), AttributeArgumentList().AddArguments(typeofArgument));\n            var attributeListSyntax = AttributeList(SeparatedList(new[] { attributeSyntax }));\n            var newClass = classDeclaration.AddAttributeLists(attributeListSyntax);\n            root = root.ReplaceNode(classDeclaration, newClass);\n\n            return document.WithSyntaxRoot(root);\n        }\n\n        private static void CheckForCompilationErrors(Compilation compilation)\n        {\n            var compilationDiagnositics = compilation.GetDiagnostics();\n            var errorDiagnostics = compilationDiagnositics.Where(x => x.Severity == DiagnosticSeverity.Error);\n            if (errorDiagnostics.Any())\n            {\n                Assert.Fail($@\"There are errors in the code to be analyzed. See below:\n{string.Join(\"\\r\\n\", errorDiagnostics.Select(x => x.GetMessage()))}\");\n            }\n        }\n\n        protected MetadataReference[] GetAdditionalReferences()\n        {\n            return new MetadataReference[]\n            {\n                MetadataReference.CreateFromFile(typeof(System.ComponentModel.Composition.ExportAttribute).Assembly.Location)\n            };\n        }\n    }\n}\n\n\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/4377/comments",
+    "author": "hvanbakel",
+    "comments": [
+      {
+        "user": "Pilchie",
+        "created_at": "2015-08-06T17:22:09Z",
+        "body": "You can't create an `IdentifierName` for `System.ComponentModel.Composition.Export`.  An identifier name can only represent a single identifier, not a dotted name.\n\nTry using `ParseName` instead of of `IdentifierName`\n"
+      },
+      {
+        "user": "hvanbakel",
+        "created_at": "2015-08-06T17:39:46Z",
+        "body": "Works like a charm, thanks!\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the fully qualified name in the attribute syntax is causing compilation errors",
+      "A correct approach to create attribute syntax with fully qualified names",
+      "Understanding of Roslyn's syntax factory methods and their appropriate usage"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:21:22"
+    }
+  },
+  {
+    "number": 3213,
+    "title": "Remove node fails in Visual Basic.",
+    "created_at": "2015-06-01T12:36:24Z",
+    "closed_at": "2015-06-02T06:26:25Z",
+    "labels": [
+      "Question",
+      "Area-IDE",
+      "Resolution-Answered",
+      "Verification Not Required"
+    ],
+    "url": "https://github.com/dotnet/roslyn/issues/3213",
+    "body": "Fails while generating preview. \n\n```\n<ExportCodeRefactoringProvider(LanguageNames.VisualBasic, Name:=NameOf(MoveClassToFileCodeRefactoringProvider)), [Shared]>\nFriend Class MoveClassToFileCodeRefactoringProvider\nInherits CodeRefactoringProvider\n\nPublic NotOverridable Overrides Async Function ComputeRefactoringsAsync(context As CodeRefactoringContext) As Task\n    ' TODO: Replace the following code with your own analysis, generating a CodeAction for each refactoring to offer\n\n    Dim root = Await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(False)\n\n    ' Find the node at the selection.\n    Dim node = root.FindNode(context.Span)\n\n    ' Only offer a refactoring if the selected node is a type statement node.\n    Dim typeDecl = TryCast(node, ClassStatementSyntax)\n    If typeDecl Is Nothing Then\n        Return\n    End If\n\n\n    Dim a2 = CodeAction.Create(\"Delete class\", Function(c) MoveClassToFile(context.Document, typeDecl, c))\n\n    ' Register this code action.\n    context.RegisterRefactoring(a2)\n\nEnd Function\n\nPrivate Async Function MoveClassToFile(document As Document, typeDecl As ClassStatementSyntax, cancellationToken As CancellationToken) As Task(Of Document)\n\n    Dim currentSyntaxTree = document.GetSyntaxTreeAsync().Result\n    Dim currentRoot = currentSyntaxTree.GetRootAsync().Result\n    Dim replacedRoot = currentRoot.RemoveNode(typeDecl, SyntaxRemoveOptions.KeepNoTrivia)\n\n    Dim ret = document.WithSyntaxRoot(replacedRoot)\n\n    Return ret\nEnd Function\n\n\nEnd Class\n```\n\nTested in c# by altering the Language to CSharp and the ClassStatementSyntax to ClassDeclarationSyntax, it's working fine :(\n",
+    "comments_url": "https://api.github.com/repos/dotnet/roslyn/issues/3213/comments",
+    "author": "petterek",
+    "comments": [
+      {
+        "user": "mattwar",
+        "created_at": "2015-06-02T00:55:18Z",
+        "body": "VB is trickier to get right since there are both xxxStatementSyntax nodes and xxxBlockSyntax nodes. You cannot remove a xxxStatementSyntax node if it's part of a xxxBlockSyntax, you have to remove the xxxBlockSyntax node instead.\n"
+      },
+      {
+        "user": "mattwar",
+        "created_at": "2015-06-02T01:12:33Z",
+        "body": "You will need to remove the ClassBlockSyntax node that is the ClassStatementSyntax's parent.\n"
+      },
+      {
+        "user": "petterek",
+        "created_at": "2015-06-02T06:16:28Z",
+        "body": "OK.. I will try it out\n"
+      },
+      {
+        "user": "petterek",
+        "created_at": "2015-06-02T06:26:23Z",
+        "body": "That worked  :+1: Thank you very much\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Guidance on the correct node type to remove in Visual Basic syntax tree",
+      "Explanation of the structural differences between C# and VB syntax trees",
+      "A working approach to remove class nodes in Visual Basic code refactoring"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:22:22"
+    }
+  }
+]

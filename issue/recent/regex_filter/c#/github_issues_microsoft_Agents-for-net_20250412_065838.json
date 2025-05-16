@@ -1,0 +1,413 @@
+[
+  {
+    "number": 188,
+    "title": "OnUserSignInSuccess is not called for AutoSignin. - Behavior bug?",
+    "created_at": "2025-04-08T00:29:13Z",
+    "closed_at": "2025-04-08T20:47:06Z",
+    "labels": [
+      "triage"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/188",
+    "body": "When **auto sign** is Configured, OnUserSignInSuccess is not called when a login occurs.  \n\nWhen auto sign in is NOT configured, and UserSignOn is requested directly, OnUserSignInSuccess is properly called. \n",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/188/comments",
+    "author": "MattB-msft",
+    "comments": [
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T15:04:47Z",
+        "body": "I confirm this behavior"
+      },
+      {
+        "user": "sarahcritchley",
+        "created_at": "2025-04-08T20:47:07Z",
+        "body": "to doc - in Auth docs - will close and add to backlog"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T12:45:34Z",
+        "body": "This is intentional.  I have been pointing this out for some time and is the behavior from Teams AI SDK.  Auto was designed to continue with the original Activity after sign in is complete.  \n\nWhat is different from Teams AI SDK is the manual sign in.  There the (equivelent) call to SignInUser would return a token if the user was already signed in.  Otherwise it would later call OnUserSignInSuccess when the multi-turn sign in was complete."
+      }
+    ]
+  },
+  {
+    "number": 187,
+    "title": "`turnState` not persisted across turns",
+    "created_at": "2025-04-07T19:16:45Z",
+    "closed_at": "2025-04-11T18:42:56Z",
+    "labels": [
+      "triage"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/187",
+    "body": "When using `OnActivity` the `turnState` is available in the configured handler.\n\nI was expecting the values added in one turn to be available in future turns, however seems those are not persisted when Storage has not been configured\n\n```cs\nvar agent = new AgentApplication(new AgentApplicationOptions() { StartTypingTimer = true })\n    .OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        int counter = turnState.GetValue(\"counter\", () => 0);\n        turnState.SetValue(\"counter\", counter++);\n        await turnContext.SendActivityAsync(MessageFactory.Text($\"Echo [{counter}]: {turnContext.Activity.Text}\"), cancellationToken);\n    });\n```\n\nTo avoid this issue we should consider some of these suggestions:\n\n1. If Storage is required (memory storage as a minimum), make this requirement explicit in the AgentApplicationOption ctor (without having to use DI)\n2. If storage is not provided, add memory automatically and produce a Warning",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/187/comments",
+    "author": "rido-min",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-07T22:30:13Z",
+        "body": "This is because the AgentApplicationOptions.TurnStateFactory wasn't provided.  There is no persisted state in this case.  We talked and loosely agreed about trapping this is an error.\n\nThe proper config would be:\n\n```csharp\nvar agent = new AgentApplication(new AgentApplicationOptions() \n{ \n    StartTypingTimer = true,\n    TurnStateFactory = () => new TurnState(sp.GetService<IStorage>()\n})\n```\n"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-07T22:33:37Z",
+        "body": "This is harder to spot because Teams AI SDK would default to \"Temp\" state if the ITurnState.SetValue did not include the state name.\n\ni.e., `turnState.SetValue(\"counter\")` is the same as `turnState.Temp.SetValue(\"counter\")`.\n\nWhere `turnState.SetValue(\"conversation.counter\")` is the same as `turnState.Conversation.SetValue(\"counter\")`."
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-07T23:01:53Z",
+        "body": "> This is because the AgentApplicationOptions.TurnStateFactory wasn't provided. There is no persisted state in this case. We talked and loosely agreed about trapping this is an error.\n> \n> The proper config would be:\n> \n> var agent = new AgentApplication(new AgentApplicationOptions() \n> { \n>     StartTypingTimer = true,\n>     TurnStateFactory = () => new TurnState(sp.GetService<IStorage>()\n> })\n\nI was trying to use the Application object minimizing the use the DI, I cannot get your example to compile because `sp` is not provided. When I create the IStorage in the factory I still get the same behavior.\n\n```cs\nvar agent = new AgentApplication(new AgentApplicationOptions() { \n    StartTypingTimer = true,\n    TurnStateFactory = () => new TurnState(new MemoryStorage())\n})\n        .OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        int counter = turnState.GetValue(\"counter\", () => 0);\n        turnState.SetValue(\"counter\", counter++);\n        await turnContext.SendActivityAsync(MessageFactory.Text($\"Echo [{counter}]: {turnContext.Activity.Text}\"), cancellationToken);\n    });\n```"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-07T23:39:01Z",
+        "body": "See my comment about your use of ITurnState.SetValue.  It doesn't matter what your storage is, it's going to Temp state."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-07T23:40:08Z",
+        "body": "```\n        /// <summary>\n        /// Set a property value.\n        /// </summary>\n        /// <param name=\"path\">The full path to the property: {scope}.{name}</param>\n        /// <param name=\"value\">The property value.</param>\n        void SetValue(string path, object value);\n```\n\nThe comment could be more explicit about what happens with missing \"{scope}\""
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T00:32:18Z",
+        "body": "sure.. although we cannot assume users will read the comments. We need docs explaining the design.\n\nAre you saying that using a scope the value will be persisted?\n\nIf I use `turnState.SetValue(\"my.counter\", counter++);` I got an exception `Error: Scope 'my' not found`, probably because I didnt initialize it properly.\n\nI also tried \n\n```cs\nint counter = turnState.GetValue(\"conversation.counter\", () => 0);\nturnState.SetValue(\"conversation.counter\", counter++);\n```\n\nwith no luck\n"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T00:43:19Z",
+        "body": "TurnStateFactory is called at the beginning of the turn.  Which means that if your AgentApplication is (effectively) transient, then you are getting a new MemoryStorage each turn. \n\n`my` would only be a valid scope if you added an appropriate IAgentState implementation with that name.  See TurnState for an example.  It adds ConversatationState, UserState, etc... or whatever TurnState was constructed with.  In theory, you could add an new `AgentState` implementation named `my`.\n\n"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T00:45:41Z",
+        "body": "I'm not entirely sold on defaulting to `Temp` for a missing scope.  But then... I suppose technically an agent doesn't need state at all.  Though I would bet most do."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T00:47:54Z",
+        "body": "It's an interesting experiment to find gaps, but 100% if state wasn't working, neither would other things.  Like User Authorization, or the DotNet EchoBot sample."
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T00:55:10Z",
+        "body": "In my example there is only one instance of Application configured with MemoryStorage, and it still does not restore the conversation state, even though I'm calling Load/Save.\n\nWhat I dont understand is why my code does not load the state\n\n```cs\nvar agent = new AgentApplication(new AgentApplicationOptions() { \n    StartTypingTimer = true,\n    TurnStateFactory = () => new TurnState(new MemoryStorage())\n})\n    .OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        await turnState.LoadStateAsync(turnContext, true, cancellationToken);\n        int counter = turnState.GetValue(\"conversation.counter\", () => 0);\n        turnState.SetValue(\"conversation.counter\", counter++);\n        await turnContext.SendActivityAsync(MessageFactory.Text($\"Echo [{counter}]: {turnContext.Activity.Text}\"), cancellationToken);\n        await turnState.SaveStateAsync(turnContext, true, cancellationToken);\n    });\n\nvar builder = WebApplication.CreateBuilder(args);\nbuilder.Services.AddHttpClient();\nbuilder.AddAgent(sp => agent);\n\nvar app = builder.Build();\n```\n\nbut this unit test with TurnState instances passes\n\n```cs\n        [Fact]\n        public async Task SaveAsync_WithoutInitializingUserAndConversation()\n        {\n            var storage = new MemoryStorage();\n            var turnState = new TurnState(storage);\n            var context = TestUtilities.CreateEmptyContext();\n            await turnState.LoadStateAsync(context, cancellationToken: CancellationToken.None);\n            \n            var convCount = turnState.GetValue(\"conversation.Count\", () => 0);\n            Assert.Equal(0, convCount);\n\n            turnState.SetValue(\"conversation.Count\", 20);\n            await turnState.SaveStateAsync(context, cancellationToken: CancellationToken.None);\n\n            var turnState2 = new TurnState(storage);\n            await turnState2.LoadStateAsync(context, cancellationToken: CancellationToken.None);\n            convCount = turnState2.GetValue(\"conversation.Count\", () => 0);\n            Assert.Equal(20, convCount);\n        }\n```\nI guess it has something to do with how the app is registered. Should it be registered as a singleton instead of transient?\n"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T00:59:07Z",
+        "body": "I assume you are using either a Controller or the minimal AspNet routes (MapPost)?  In that case, it uses DI to get the IAgent.  Are you adding that to DI as transient?  In which case, create a MemoryStorage outside that.\n\nYou shouldn't have to call Load/Save, as the AgentApplication does.  Though it's conceivable there could be a need to call Save manually.  Perhaps."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T01:00:56Z",
+        "body": "It's clear there needs to more comments, docstr, etc... around TurnStateFactory in cases where people want to construct via code (as opposed to configuration)."
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T01:09:32Z",
+        "body": "I'm using `.AddAgent` and internally it's setup as Transient, hence why I'm asking if the App should be registered as singleton. I'm calling Load/Save explicitely with the force flag..\n\nI dont think using Controllers or MapPost has any effect on this discussion.\n\nFor completeness, here is the full Program.cs\n\n```cs\nAgentApplication agent = new AgentApplication(new AgentApplicationOptions() { \n    StartTypingTimer = true,\n    TurnStateFactory = () => new TurnState(new MemoryStorage())\n})\n    .OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        await turnState.LoadStateAsync(turnContext, true, cancellationToken);\n        int counter = turnState.GetValue(\"conversation.counter\", () => 0);\n        turnState.SetValue(\"conversation.counter\", counter++);\n        await turnContext.SendActivityAsync(MessageFactory.Text($\"Echo [{counter}]: {turnContext.Activity.Text}\"), cancellationToken);\n        await turnState.SaveStateAsync(turnContext, true, cancellationToken);\n    });\n\n\nvar builder = WebApplication.CreateBuilder(args);\nbuilder.Services.AddHttpClient();\nbuilder.AddAgent(sp => agent);\n\nvar app = builder.Build();\n\napp.MapGet(\"/\", () => \"Microsoft Agents SDK Sample\");\napp.MapPost(\"/api/messages\", async (httpContext) =>\n{\n    var adapter = app.Services.GetService<IAgentHttpAdapter>();\n    await adapter!.ProcessAsync(httpContext.Request, httpContext.Response, agent);\n});\n\napp.Run();\n```"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T01:10:34Z",
+        "body": "In theory AgentApplication would work as a singleton.  But we haven't really vetted that.  Though AddRoute/Enumerte has locking.  \n\nThis is complicated by a recent ask of supporting multiple IAgents in a single host.  But different topic.\n\nBut for what you are doing, create MemoryStorage outside the `AddAgent` and make it:\n\n`TurnStateFactory = () => new TurnState(storage)`"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T01:13:33Z",
+        "body": "Which is to say... Before `OnActivity` is even evaluated, `AgentApplication` calls:  `Options.TurnStateFactory()`.  So in your case... new MemoryStorage each time.  "
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T01:17:50Z",
+        "body": "I think most of the behavior discussed in this issue can be simplified by requesting an instance of the IStorage, without any factory, in AgentApplicationOptions.\n\n.. and we can discuss later if makes sense to have AgentApplication as transient."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T01:25:41Z",
+        "body": "> I think most of the behavior discussed in this issue can be simplified by requesting an instance of the IStorage, without any factory, in AgentApplicationOptions.\n\nAgentApplication.OnTurnAsync expects a new instance of ITurnState.  Even if AgentApplication was singleton, this would be true."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T01:26:35Z",
+        "body": "Its just that with MemoryStorage, IStorage needs to be singleton."
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T14:57:42Z",
+        "body": "I configured a poor man singleton:\n\n```cs\nclass MemorySingleton\n{\n    static MemoryStorage instance = null!;\n    internal static MemoryStorage GetInstance()\n    {\n        if (instance == null)\n        {\n            instance = new MemoryStorage();\n        }\n        return instance;\n    }\n}\n\nAgentApplication agent = new AgentApplication(new AgentApplicationOptions() { \n    StartTypingTimer = true,\n    TurnStateFactory = () => new TurnState(MemorySingleton.GetInstance())\n})\n\n```\n\nAnd still cannot get the state from `OnActivity`\n\n```cs\n    .OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        await turnState.LoadStateAsync(turnContext, true, cancellationToken);\n        int counter = turnState.GetValue(\"conversation.counter\", () => 0);\n        turnState.SetValue(\"conversation.counter\", counter++);\n        await turnContext.SendActivityAsync(MessageFactory.Text($\"Echo [{counter}]: {turnContext.Activity.Text}\"), cancellationToken);\n        await turnState.SaveStateAsync(turnContext, true, cancellationToken);\n    });\n```\n\nI might be doing something wrong... "
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T16:58:24Z",
+        "body": "What are you trying to solve?  Because there are two ways you can do this now:\n\n```csharp\nvar storage = new MemoryStorage();\nbuilder.AddAgent(sp =>\n{\n    var options = new AgentAppliationOptions()\n    {\n       TurnStateFactory = () => new TurnState(storage);\n    };\n\n    var app = new AgentApplication(options);\n    ...\n    return app;\n});\n```\n\n```csharp\nbuilder.Services.AddSingleton<IStorage, MemoryStorage>();\nbuilder.AddAgent(sp =>\n{\n    var options = new AgentAppliationOptions()\n    {\n       TurnStateFactory = () => new TurnState(sp.GetService<IStorage>());\n    };\n\n    var app = new AgentApplication(options);\n    ...\n    return app;\n});\n```\n\nThe benefit of the second is that IStorage is used in several places.  Typically folks use the same instance, and in a production env the DI would just be replaced with Blobs or CosmosDb."
+      },
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-08T17:13:26Z",
+        "body": "> What are you trying to solve?\n\nI'm trying to understand the detailed design of Application and TurnState to replicate in JS. As we dont have DI I'm trying to minimize  the use of DI as much as possible for easier apple-to-apple comparison.\n\nI'm going with the first option you suggested, even by using a Singleton for MemoryStorage, and TurnState is not persisted across turns, so wondering if I'm doing something wrong or if this is a bug.\n\nRelated to this there is another important decision to make IStorage required when using the AgentApplication object, with or without DI."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T12:33:50Z",
+        "body": "Probably would need to see a complete repro for this.  This just hasn't been an issue for me in any sample/test-bot, and I guess I'm not seeing what you are doing differently and what changes we could make to minimize this."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T13:05:31Z",
+        "body": "This works for me:\n\n```csharp\nvar storage = new MemoryStorage();\n\nbuilder.AddAgent(sp =>\n{\n    var options = new AgentApplicationOptions()\n    {\n        TurnStateFactory = () => new TurnState(storage)\n    };\n\n    var agent = new AgentApplication(options);\n\n    agent.OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        int count = turnState.Conversation.GetValue<int>(\"countKey\");\n        turnState.Conversation.SetValue(\"countKey\", ++count);\n\n        await turnContext.SendActivityAsync($\"[{count}] you said: {turnContext.Activity.Text}\", cancellationToken: cancellationToken);\n    });\n    return agent;\n});\n```"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T13:16:18Z",
+        "body": "This is the JS equivalent from Teams AI SDK.  It's a bit harder to compare because they allowed (required) the dev to define a \"CovnersationState\" class (of dev defined content).  But it is using IStorage in the same way.\n\n```js\ninterface ConversationState {\n    count: number;\n}\ntype ApplicationTurnState = TurnState<ConversationState>;\n\n// Define storage and application\nconst storage = new MemoryStorage();\nconst app = new Application<ApplicationTurnState>({\n    storage\n});\n\n// Listen for ANY message to be received. MUST BE AFTER ANY OTHER MESSAGE HANDLERS\napp.activity(ActivityTypes.Message, async (context: TurnContext, state: ApplicationTurnState) => {\n    // Increment count state\n    let count = state.conversation.count ?? 0;\n    state.conversation.count = ++count;\n\n    // Echo back users request\n    await context.sendActivity(`[${count}] you said: ${context.activity.text}`);\n});\n```"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T13:25:41Z",
+        "body": "As you suggested, and since TurnStateFactory is so critical:\n\n```csharp\n    public class AgentApplicationOptions\n    {\n        /// <summary>\n        /// Constructs AgentApplicationOptions programmatically.\n        /// <code>\n        ///   var options = new AgentApplicationOptions(storageInstance)\n        ///   {\n        ///     StartTypingTimer = true,\n        ///     ...\n        ///     \n        ///     UserAuthorization = new UserAuthorizationOptions()   // if required\n        ///     {\n        ///       ...\n        ///     }\n        ///     \n        ///     AdaptiveCards = new AdaptiveCardsOptions()  // if required\n        ///     {\n        ///     }\n        ///   };\n        /// </code>\n        /// <remarks>\n        /// This will set the `TurnStateFactory` property with the default TurnStateFactory.\n        /// </remarks>\n        /// </summary>\n        public AgentApplicationOptions(IStorage storage) : this(() => new TurnState(storage))\n        {\n        }\n\n        public AgentApplicationOptions(TurnStateFactory turnStateFactory)\n        {\n            TurnStateFactory = turnStateFactory;\n        }\n\n       ...\n  }\n```"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-10T14:25:49Z",
+        "body": "A more abbreviated version with your suggested AgentApplicationOptions change:\n\n```csharp\nvar storage = new MemoryStorage();\n\nbuilder.AddAgent(sp =>\n{\n    var agent = new AgentApplication(new AgentApplicationOptions(storage));\n\n    agent.OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) =>\n    {\n        int count = turnState.Conversation.GetValue<int>(\"countKey\");\n        turnState.Conversation.SetValue(\"countKey\", ++count);\n\n        await turnContext.SendActivityAsync($\"[{count}] you said: {turnContext.Activity.Text}\", cancellationToken: cancellationToken);\n    });\n\n    return agent;\n});\n```"
+      }
+    ]
+  },
+  {
+    "number": 185,
+    "title": "ConcurrentOperationsNotSupported",
+    "created_at": "2025-04-07T15:58:35Z",
+    "closed_at": "2025-04-08T21:31:43Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/185",
+    "body": "I was running the AuthorizationAgent sample, configured with Blob Storage, and got this exception.. not always repro, but if it happens to me once, it might happen again\n\n```text\nOperations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.\n=====================================\nErrorCode: -2146233079\nSource: System.Private.CoreLib\nMethod: ThrowInvalidOperationException_ConcurrentOperationsNotSupported\nTimeStamp: 2025-04-07T15:55:24.0190648Z\nError: Operations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.\nHelpLink Url: Not Provided\nStack Trace: at System.Collections.Generic.Dictionary`2.TryInsert(TKey key, TValue value, InsertionBehavior behavior)\n   at System.Collections.Generic.Dictionary`2.set_Item(TKey key, TValue value)\n   at Microsoft.Agents.Builder.TurnContextStateCollection.Set[T](String key, T value) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\TurnContextStateCollection.cs:line 87\n   at Microsoft.Agents.Builder.State.AgentState.LoadAsync(ITurnContext turnContext, Boolean force, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\State\\AgentState.cs:line 187\n   at Microsoft.Agents.Builder.State.TurnState.LoadStateAsync(ITurnContext turnContext, Boolean force, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\State\\TurnState.cs:line 134\n   at Microsoft.Agents.Builder.App.AgentApplication.OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\App\\AgentApplication.cs:line 667\n   at Microsoft.Agents.Builder.App.AgentApplication.OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\App\\AgentApplication.cs:line 747\n   at Microsoft.Agents.Builder.MiddlewareSet.ReceiveActivityWithStatusAsync(ITurnContext turnContext, AgentCallbackHandler callback, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\MiddlewareSet.cs:line 38\n   at Microsoft.Agents.Builder.ChannelAdapter.RunPipelineAsync(ITurnContext turnContext, AgentCallbackHandler callback, CancellationToken cancellationToken) in D:\\Agents-for-net\\src\\libraries\\Builder\\Microsoft.Agents.Builder\\ChannelAdapter.cs:line 164\n=====================================\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/185/comments",
+    "author": "rido-min",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-04-08T14:38:33Z",
+        "body": "Confirmed"
+      }
+    ]
+  },
+  {
+    "number": 170,
+    "title": "Added AgentApplicationBuilder",
+    "created_at": "2025-04-01T18:28:03Z",
+    "closed_at": "2025-04-07T14:38:48Z",
+    "labels": [
+      "ML: Core"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/pull/170",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/170/comments",
+    "author": "tracyboehrer",
+    "comments": [
+      {
+        "user": "rido-min",
+        "created_at": "2025-04-07T20:07:21Z",
+        "body": "[apologies for replying in a closed PR, could not find a better place]\r\n\r\nHow is the `AgentApplicationBuilder` intended to be used with DI flows?\r\n\r\nRelated to this question, seems like the inheritance in the user code eg `public class AuthAgent : AgentApplication` is used to take advantage of DI and primary constructors, but it could easily use composition instead.. no?\r\n\r\n/c @tracyboehrer \r\n"
+      }
+    ]
+  },
+  {
+    "number": 110,
+    "title": "Corrections in BotToBot READMEs and appsettings.",
+    "created_at": "2025-02-24T21:03:42Z",
+    "closed_at": "2025-03-06T20:56:29Z",
+    "labels": [
+      "ML: Samples"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/pull/110",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/110/comments",
+    "author": "tracyboehrer",
+    "comments": [
+      {
+        "user": "rido-min",
+        "created_at": "2025-02-24T22:34:50Z",
+        "body": "> appSettings files are JSON, and by default comments are not allowed, producing errors on VSCode.\r\n\r\nthere is workaroudn by adding `.vscode/settings.json` with \r\n\r\n```json\r\n{\r\n    \"files.associations\": {\r\n        \"appsettings*.json\": \"jsonc\"\r\n    }\r\n}\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 78,
+    "title": "Added AdapterOptions to control CloudAdapter",
+    "created_at": "2025-01-30T17:47:39Z",
+    "closed_at": "2025-02-01T14:39:30Z",
+    "labels": [
+      "ML: Samples",
+      "ML: Core",
+      "ML: Tests"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/pull/78",
+    "body": "- Async true/false\r\n- ShutdownTimeoutSeconds for shared hosting idle shutdown delay",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/78/comments",
+    "author": "tracyboehrer",
+    "comments": [
+      {
+        "user": "MattB-msft",
+        "created_at": "2025-02-01T00:29:45Z",
+        "body": "@tracyboehrer \r\nare you planning on making this available in the configuration options ( appsettings ) ?"
+      }
+    ]
+  },
+  {
+    "number": 58,
+    "title": "Updated config to include TenantID in TokenValidation section required by AspNetExtensions.cs",
+    "created_at": "2025-01-17T22:55:26Z",
+    "closed_at": "2025-01-27T15:08:04Z",
+    "labels": [
+      "From Fork",
+      "ML: Samples"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/pull/58",
+    "body": "Updated config to include TenantID in TokenValidation section required by AspNetExtensions.cs without this being provided the token validation will fail and the skill can not be added in Microsoft Copilot Studio",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/58/comments",
+    "author": "davidyack",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-01-17T22:58:33Z",
+        "body": "@davidyack Thanks!  Since this is still preview, we get some churn here and there.  I noticed that some of the samples are missing this when it would be beneficial to add it due to Single Tenant issuers."
+      }
+    ]
+  },
+  {
+    "number": 25,
+    "title": "Bug Fix and use Credential Free for the Semantic Kernel Weather bot sample",
+    "created_at": "2025-01-13T03:33:43Z",
+    "closed_at": "2025-01-16T16:40:59Z",
+    "labels": [
+      "From Fork",
+      "ML: Samples"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/pull/25",
+    "body": "Appsettings and other sample projects (EchoBot) use \"Audiences\" as the setting, fix bug which still use \"Audience\" in AspNetExtensions.cs for the Semantic Kernel sample\r\n\r\nUse Credential Free method to access Azure OpenAI for the same Semantic Kernel sample",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/25/comments",
+    "author": "freistli",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-01-14T21:44:46Z",
+        "body": "@freistli Thanks!  Can you resolve the conflicts?  This seems like a good idea."
+      },
+      {
+        "user": "freistli",
+        "created_at": "2025-01-15T05:13:24Z",
+        "body": "Thanks @tracyboehrer , I solved the conflicts."
+      },
+      {
+        "user": "MattB-msft",
+        "created_at": "2025-01-15T22:10:31Z",
+        "body": "@freistli sorry for the bother, but you can you rebase your fork and update your branch\r\n"
+      },
+      {
+        "user": "freistli",
+        "created_at": "2025-01-16T06:11:13Z",
+        "body": "@MattB-msft , No problem at all. I merged Microsoft main branch and now this PR branch contains all latest updates."
+      }
+    ]
+  },
+  {
+    "number": 19,
+    "title": "WeatherBot contains bug for Audience variable in AspNetExtensions.cs",
+    "created_at": "2025-01-02T14:04:11Z",
+    "closed_at": "2025-01-07T14:53:48Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/19",
+    "body": "## Version\nWhat package version of the SDK are you using.\nI am using the latest version of the downloaded code as of 1/2/2025\n\n**Describe the bug**\nA clear and concise description of what the bug is.\nIn the WeatherBot example there is a bug in the AspNetExtensions.cs file on line 88 where it says  \n\n`string audience = tokenValidationSection[\"Audience\"];`\n\nWith the given appsettings.json and the given README.md this leads the user to believe that there should be a variable in the TokenValidation section called \"Audience\", when in fact there is a list variable called \"Audiences\" and therefore this produces an error.\n\n**To Reproduce**\nHow can we reproduce this error?\n\nSimply try and run the code.\n\n",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/19/comments",
+    "author": "MCKRUZ",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-01-07T14:53:48Z",
+        "body": "@MCKRUZ This has already been corrected and will be included in the next update."
+      }
+    ]
+  },
+  {
+    "number": 15,
+    "title": "Feature Request: Create more robustness in configuration",
+    "created_at": "2024-12-19T13:40:27Z",
+    "closed_at": "2025-04-09T14:28:38Z",
+    "labels": [
+      "enhancement",
+      "feature-request"
+    ],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/15",
+    "body": "Currently when trying to use libraries like MSAL and other parts of the Agents framework it requires us to setup our appsettings.json a certain way with certain settings.  \n\nOne example of where this is done is when calling the \"AddDefaultMsalAuth\" method where you have to send in a configuration section for \"MSALConfiguration\".\n\nMost of my enterprise level applications have custom configuration code where we inject various configurations from different locations and variations.  Rather then have the libraries pull directly from configuration could we possibly have an option to send in the variables directly?  I find myself having to write code to dynamically create configuration sections on the fly to do translations to just use the libraries.",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/15/comments",
+    "author": "MCKRUZ",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2024-12-19T13:45:57Z",
+        "body": "@MCKRUZ  MSALConfiguration in optional.  But what you want is a way to set those programmatically instead of via config?"
+      },
+      {
+        "user": "MCKRUZ",
+        "created_at": "2024-12-20T14:02:55Z",
+        "body": "Correct.  It's not only in the MSALConfiguration though it's all over the Agent framework.  For example I had to create my own version of the ConfigurationConnections class in order to make it so I didn't have to setup my appsettings.json in a certain manner.  That class takes in a IConfiguration object which directly pulls from the appsettings.  I try whenever possible to not recreate code that Microsoft has already built since then I have to watch for any changes you guys make and then make the appropriate changes on my side.  It would just make life easier if it were more robust to handle configuration outside of appsettings.json. "
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2024-12-20T15:37:32Z",
+        "body": "@MCKRUZ How did you handle IConnections?  Though that is why that is an interface, and different implementations could be created."
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2024-12-20T16:33:25Z",
+        "body": "@MCKRUZ It would be interesting to see some examples.  It would be more accurate to say it is currently IConfiguration based, which may be things other than appsettings.  A programmatic way seems reasonable for many cases, and as we move on from \"preview\" status we'd like to support more flexible means."
+      },
+      {
+        "user": "MCKRUZ",
+        "created_at": "2025-01-01T15:44:18Z",
+        "body": "So I ended up creating my own version of the IConnections class.  In my project I have a POCO object called AppConfig that handles our rather large config.  So to circumvent all of the places where you guys utilized IConfiguration, I simply created a helper class that loads the configs into memory and spits out a IConfigurationSection object whenever I need it.  "
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2025-03-10T17:30:06Z",
+        "body": "@MCKRUZ This is still on my radar.  Not ignoring this.  Most of the newer stuff allows for code-first config instead of just IConfiguration.  Just haven't fit it into the schedule yet to make that work for the initial implementation of some things.  Namely MsalAuth and Connections."
+      },
+      {
+        "user": "MCKRUZ",
+        "created_at": "2025-03-27T20:20:17Z",
+        "body": "No worries tracy, I know you guys are slammed.  I have a work around for now.  I did see you added AgentApplicationOptions, I'm digging into that functionality now.  Cheers mate.  Don't stress, you guys are killing it."
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "title": "AuthenticationConstants is missing variables in release",
+    "created_at": "2024-12-19T13:35:44Z",
+    "closed_at": "2025-01-13T15:10:06Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/Agents-for-net/issues/14",
+    "body": "I am currently on version 0.1.26 of the Microsoft.Agents.Authenitcation library and when referencing the AuthenticationConstants file it seems like it does not contain all of the constants referenced in the sample code in the repository.  Some examples are:\n\n - GovAzureBotServiceOpenIdMetadataUrl\n - GovOpenIdMetadataUrl\n - PublicOpenIdMetadataUrl\n\nIs there something I'm doing incorrectly?",
+    "comments_url": "https://api.github.com/repos/microsoft/Agents-for-net/issues/14/comments",
+    "author": "MCKRUZ",
+    "comments": [
+      {
+        "user": "tracyboehrer",
+        "created_at": "2024-12-19T13:44:28Z",
+        "body": "@MCKRUZ Are you using the packages?  i.e., Not the sample in the solution that uses project links?"
+      },
+      {
+        "user": "MCKRUZ",
+        "created_at": "2024-12-20T14:03:51Z",
+        "body": "Yes sir, this is with version 0.1.26"
+      },
+      {
+        "user": "tracyboehrer",
+        "created_at": "2024-12-20T15:58:30Z",
+        "body": "@MCKRUZ Likely our bad.  My guess is new packages weren't released that match the latest SDK code."
+      }
+    ]
+  }
+]

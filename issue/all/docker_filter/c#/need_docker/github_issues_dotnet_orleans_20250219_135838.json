@@ -1,0 +1,268 @@
+[
+  {
+    "number": 7451,
+    "title": "Silos cannot find each other after a re-run when using RedisClustring",
+    "created_at": "2021-12-27T08:24:05Z",
+    "closed_at": "2021-12-27T10:34:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/orleans/issues/7451",
+    "body": "Hi \r\nI'm trying to run orleans locally for development  but i'm using redis clustring.\r\nI have 2 silo each host different kind of grains. On first run everything work fine but when i try to re-run my silos they cannot find each other and they try to connect to dead silos for about 10 minutes.\r\n\r\n`Failed to get ping responses from 1 of 1 active silos. Newly joining silos validate connectivity with all active silos that have recently updated their 'I Am Alive' value before joining the cluster. Successfully contacted: []. Silos which did not respond successfully are: [S10.163.245.127:11111:378287550]. Will continue attempting to validate connectivity until 12/27/2021 08:08:04. Attempt #3`\r\n\r\nHere my configurations for silos:\r\n```\r\n    siloBuilder.UseRedisClustering(options => \r\n                    { \r\n                         options.ConnectionString = redisConnectionString; options.Database = 0; \r\n                    })\r\n                    .ConfigureEndpoints(siloPort: 11111, gatewayPort: 30000)\r\n                    .Configure<ClusterOptions>(options =>\r\n                    {\r\n                        options.ClusterId = \"dev\";\r\n                        options.ServiceId = \"OrleansBasics\";\r\n                    })\r\n                    .ConfigureLogging(logging => logging.AddConsole())\r\n```\r\n\r\n```\r\nsiloBuilder\r\n                    .UseRedisClustering(options => \r\n                    { \r\n                        options.ConnectionString = redisConnectionString; options.Database = 0; \r\n                    })\r\n                    .ConfigureEndpoints(siloPort: 11112, gatewayPort: 30002)\r\n                    .Configure<ClusterOptions>(options =>\r\n                    {\r\n                        options.ClusterId = \"dev\";\r\n                        options.ServiceId = \"OrleansBasics\";\r\n                    })\r\n                    .ConfigureLogging(logging => logging.AddConsole())\r\n```",
+    "comments_url": "https://api.github.com/repos/dotnet/orleans/issues/7451/comments",
+    "author": "zeinali0",
+    "comments": [
+      {
+        "user": "benjaminpetit",
+        "created_at": "2021-12-27T09:09:29Z",
+        "body": "It's expected, previous silo instances did not shutdown properly. \r\n\r\nTwo solutions:\r\n\r\n- make sure that your silo can shutdown properly (might not be practical in dev environment, but you need to make sure it actually works for production)\r\n- use another `ClusterId`  every time you deploy a new cluster"
+      },
+      {
+        "user": "zeinali0",
+        "created_at": "2021-12-27T10:06:02Z",
+        "body": "Even in production there is possibility to silo not shutdown properly \r\nwhat should we do if we want to immediately replace dead silo with new one?\r\nIs there any reason it configured such a long time to detect a silo is dead?\r\nUsing new `ClusterId` mean if one silo died we should re-run all other silos and clients again with new clusterId. this may cause no problem in development but it can be problematic in production."
+      },
+      {
+        "user": "benjaminpetit",
+        "created_at": "2021-12-27T10:21:31Z",
+        "body": "What you are experiencing here is only happening because all silos from the cluster are dead. When a silo tries to join an existing cluster, it will tries to ping all silos marked alive (ignoring values not updated for more than `NumMissedTableIAmAliveLimit * IAmAliveTablePublishTimeout`, by default 10min).\r\n\r\nIf you have a 3-silo cluster, and one of them crashes, the two remaining would vote the 3rd dead quite quickly, updating the membership table. A new silo would be able to start without any troubles.\r\n\r\nIn your case the silo trying to join the cluster is a bit stuck: why it is not able to ping the silo marked `Alive` in the membership table? Is it because they are dead? Is it because of a network/config issue? It is safer in this case to just give up with a clear error message."
+      },
+      {
+        "user": "zeinali0",
+        "created_at": "2021-12-27T10:33:59Z",
+        "body": "That make sense. I didn't know this happen only when all silos is dead. I thought it always happen for new silos when they gonna join cluster.\r\nThanks for Details."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why silos cannot find each other after a restart",
+      "Clarification on how Orleans membership detection works",
+      "Information about the difference between development and production scenarios",
+      "Explanation of the timeout behavior when joining a cluster"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:31:38"
+    }
+  },
+  {
+    "number": 2101,
+    "title": "Stream throwing an exception",
+    "created_at": "2016-08-28T02:04:08Z",
+    "closed_at": "2016-09-05T21:42:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/dotnet/orleans/issues/2101",
+    "body": "I'm writing a tracking service where the devices connect to the server via TCP and I need to report to a company the status of the devices, I have a DeviceGrain where I deserialize the message, make some calculations and then, via a stream, report the data to a CompanyGrain, on my OnActivateAsync I have the following piece of code:\n\n```\n_stream = GetStream();\n\n            //when a new message arrive\n            _stream.SubscribeAsync((data, token) =>\n            {\n                if (data.GetType().ToString().Contains(\"Alert\"))\n                {\n                    _notificationHub.Invoke(\"SendAlert\", new object());\n                }\n                else if(data.GetType().ToString().Contains(\"Notification\"))\n                {\n                    var status = (StatusNotification)data;\n                    DeviceStatus deviceStatus;\n                    var exists = devicesStatus.TryGetValue(status.Id, out deviceStatus);\n                    if (exists)\n                    {\n                        devicesStatus[status.Id] = status.Status;\n                    }\n                    else\n                    {\n                        devicesStatus.Add(status.Id, status.Status);\n                    }\n                }\n```\n\nThe method GetStream is written as follows:\n\n```\nprivate IAsyncStream<object> GetStream()\n\n        {\n            var streamProvider = base.GetStreamProvider(\"SMSProvider\");\n            var companyStream = streamProvider.GetStream<object>(this.GetPrimaryKey(), \"Devices\");\n            return companyStream;\n        }\n```\n\nEverything works fine, the code inside the SuscribeAsync gets executed as it should (when a message arrives) bue it always throws the exception written below.\n\nExtension not installed on grain GrainCollection.DeviceGrain attempting to invoke type Orleans.Streams.OrleansCodeGenStreamConsumerExtensionMethodInvoker from invokable Orleans.Runtime.ActivationData\nException = Orleans.Runtime.GrainExtensionNotInstalledException: Extension not installed on grain GrainCollection.DeviceGrain attempting to invoke type Orleans.Streams.OrleansCodeGenStreamConsumerExtensionMethodInvoker from invokable Orleans.Runtime.ActivationData\n",
+    "comments_url": "https://api.github.com/repos/dotnet/orleans/issues/2101/comments",
+    "author": "miker1423",
+    "comments": [
+      {
+        "user": "gabikliot",
+        "created_at": "2016-08-29T02:23:34Z",
+        "body": "Is it possible you are missing await before subscribe?\n"
+      },
+      {
+        "user": "miker1423",
+        "created_at": "2016-08-29T02:28:34Z",
+        "body": "I thought so, I added async and await and the error persisted.\n"
+      },
+      {
+        "user": "sergeybykov",
+        "created_at": "2016-08-29T22:25:07Z",
+        "body": "Just to clarify, you changed the code to `await _stream.SubscribeAsync((data, token) =>`?\n"
+      },
+      {
+        "user": "miker1423",
+        "created_at": "2016-08-29T22:28:27Z",
+        "body": "Exactly.\n"
+      },
+      {
+        "user": "sergeybykov",
+        "created_at": "2016-08-29T22:38:19Z",
+        "body": "This is very strange. Even though the lambda should be totally fine. Can you try defining the callback as a method on the grain class? Just to compare.\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2016-08-30T00:59:22Z",
+        "body": "As Sergey stated, you must await the subscribe call or this can occure.  Assuming you are:\n\nIs your grain marked reentrant?  That could cause this behavior.\n\nAre there any conditions under which your grain could activate without subscribing?\n\nWhat stream provider are you using?\n\nAre you using implicit subscriptions or explicit subscriptions?  Looks like implicit..\n"
+      },
+      {
+        "user": "ReubenBond",
+        "created_at": "2016-08-30T01:17:56Z",
+        "body": "@jason-bragg even if the grain is marked as reentrant, we should not be allowing reentrancy before activation has completed - should we? It's like allowing calls to a half-constructed object.\n\n@miker1423 I think a larger code snippet would be useful here.\n"
+      },
+      {
+        "user": "miker1423",
+        "created_at": "2016-08-30T04:49:02Z",
+        "body": "@jason-bragg answering your questions:\n1.- The grain isn't reentrant.\n2.- No, the stream is created inside the OnActivateAsync method as well as the suscribe method.\n3.- I'm using the simple message stream as my provider\n4.- I'm using Implicit subscriptions\n\n@ReubenBond, the thing is that the only thing I'm doing in the OnActivateAsync method...\nI'll omit all the trivial code only leaving the stream part.\n\n```\nusing Orleans;\nusing Orleans.Streams;\nusing Orleans.Runtime;\nnamespace GrainCollection\n{\n         [ImplicitStreamSubscription(\"Devices\")]\n         public class CompanyGrain : Grain, ICompanyGrain\n         {\n                 private IAsyncStream<DeviceNotification> _stream;\n\n                public override async Task OnActivateAsync()\n                {\n                        _stream = GetStream();\n                        await _stream.SuscribeAsync((data, token) => \n                          {\n                            if(data.IsAlert){ TriggerAlerts(data); }\n                            else { UpdateStatus(data); }\n                          }\n                }\n\n                private IAsyncStream<DeviceNotification> GetStream()\n                {\n                      var streamProvider = base.GetStreamProvider(\"SMSProvider\");\n                      var companyStream = streamProvider.GetStream<DeviceNotification>(this.GetPrimaryKey(), \"Devices\");\n                      return companyStream;\n                }\n\n         }\n}\n```\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2016-08-30T17:29:40Z",
+        "body": "@miker1423 \nThe referenced exception reports that the grain having issue is \"GrainCollection.DeviceGrain\", but the code you've referenced is from GrainCollection.CompanyGrain.  Does GrainCollection.DeviceGrain have a [ImplicitStreamSubscription(\"Devices\")] attribute on it?\n"
+      },
+      {
+        "user": "miker1423",
+        "created_at": "2016-08-30T18:08:40Z",
+        "body": "@jason-bragg sorry, my fault, wrong class, I'll edit it. \nEDIT: I remembered why I showed that code, the exception is raised when the Company grain is executed.\n\nBut here is the device grain Code also:\n\n```\nusing Orleans;\nusing Orleans.Streams;\nusing Orleans.Runtime;\nusing Orleans.Runtime.Configuration;\n\nnamespace GrainCollection\n{\n         [ImplicitStreamSubscription(\"Devices\")]\n         public class DeviceGrain : Grain, IDeviceGrain, IRemindable\n         {\n                private IAsyncStream<DeviceNotification> _stream;\n\n                public override Task OnActivateAsync()\n                {\n                       _stream = GetStream();\n                       return TaskDone.Done;\n                }\n\n                private Task UpdateLocation(Point newLocation)\n                {\n                       _stream.OnNextAsync(new DeviceNotification {\n                            Id = this.GetPrimaryKeyLong(),\n                            Status = _status, //Private variable\n                            Location = newLocation,\n                            IsAlert = false\n                        });\n                }\n         }\n}\n```\n"
+      },
+      {
+        "user": "ReubenBond",
+        "created_at": "2016-08-30T19:08:16Z",
+        "body": "@miker1423 your `DeviceGrain` class has an `[ImplicitSubscription(...)]`, but you are not subscribing to that stream in `OnActivateAsync`\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2016-08-30T19:31:43Z",
+        "body": "TL;DR - Remove the ImplicitSubscription attribute from the DeviceGrain.\n\nThe ImplicitSubscription attribute is used on grains that one wants to implicitly subscribe to a stream.  The DeviceGrain produces on the stream but does not subscribe to it.  By having an ImplicitSubscription attribute on the grain, the streaming infrastructure is trying to deliver events to DeviceGrains, and getting the referenced exception because those activations are not subscribing to the stream during grain activation.\n"
+      },
+      {
+        "user": "miker1423",
+        "created_at": "2016-09-05T21:42:24Z",
+        "body": "Thanks! that made it. :smile: \n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the exception 'Extension not installed on grain' when using stream subscriptions",
+      "Guidance on proper usage of the ImplicitStreamSubscription attribute",
+      "Clear explanation of the relationship between stream producers and subscribers in Orleans"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:36:12"
+    }
+  },
+  {
+    "number": 890,
+    "title": "Receiving events from Azure Queue Stream Provider multiple times",
+    "created_at": "2015-10-08T22:57:40Z",
+    "closed_at": "2015-11-16T17:26:03Z",
+    "labels": [
+      "bug",
+      "question"
+    ],
+    "url": "https://github.com/dotnet/orleans/issues/890",
+    "body": "I appear to have an issue which I have been chasing for a few weeks now, where when I push messages down a stream the consumer/handler is not receiving them.\n\nI have this issue in my main solution which has 23 projects, but managed to replicate it in a simple solution as well.\n\nI'll take some time to explain the set up I have: \n\nI have three grain types: Red, Blue and Green.\n\nThe Red grain has one function which takes a string and posts it as a byte array down into two separate streams, both with an id of `guid.empty`\n\nThe Blue and Green grains have an `ImplicitStreamSubscription` to `TestStream` and `TestStream2` respectively.\n\nTo start with, everything works as expected, the Red grain sends the events down `TestStream` and `TestStream2` and the handlers in both the Blue and Green grains receive the events, but within a few minutes (I appear unable to work out 'why') the handlers stop receiving the events, even though they appear to be submitted.\n\nWhen trying to replicate the issue, just having one stream, it didn't appear to cause any issues and firing at streams with different id's for each request didn't have an issue either. It only appeared to be an issue if firing off to a stream which had already had data sent to it. \n\nHowever, after reading #884 it could be the cause of the issue, as I am getting a log full of `QueueCacheMissExceptions` - if it is will reverting back to an older version of Orleans be a workaround until the next release?\n\n```\n[2015-10-08 22:44:48.073 GMT    17  ERROR   103315  PullingAgentSystemTarget/FF/821b63b5-QueueStore 127.0.0.1:11111]    !!!!!!!!!! Ignored RunConsumerCursor Error  \nExc level 0: Orleans.Streams.QueueCacheMissException: Item not found in cache.  Requested: [EventSequenceToken: SeqNum=31, EventIndex=0], Low: [EventSequenceToken: SeqNum=190, EventIndex=0], High: [EventSequenceToken: SeqNum=191, EventIndex=0]\n   at Orleans.Providers.Streams.Common.SimpleQueueCache.InitializeCursor(SimpleQueueCacheCursor cursor, StreamSequenceToken sequenceToken)\n   at Orleans.Providers.Streams.Common.SimpleQueueCache.TryGetNextMessage(SimpleQueueCacheCursor cursor, IBatchContainer& batch)\n   at Orleans.Providers.Streams.Common.SimpleQueueCacheCursor.MoveNext()\n   at Orleans.Streams.PersistentStreamPullingAgent.<RunConsumerCursor>d__46.MoveNext()\n```\n",
+    "comments_url": "https://api.github.com/repos/dotnet/orleans/issues/890/comments",
+    "author": "BenjaminGibbs",
+    "comments": [
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-08T23:02:59Z",
+        "body": "@BenjaminGibbs , you are using Azure queue stream provider, right?\n\nIf you try the latest version from master, including #884, does it work? There indeed have been a number of fixes around those issues lately (multiple streams, some cache miss exceptions), and unfortunately you need all of them for things to work properly.\n"
+      },
+      {
+        "user": "BenjaminGibbs",
+        "created_at": "2015-10-08T23:04:14Z",
+        "body": "Sorry yes I am using the Azure Queue Provider, sorry I should have mentioned that.\n\nI have not tried the master, I will download it and try it next.\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-08T23:08:24Z",
+        "body": "Yes, try the master. There is a good chance it will fix the issue.\n"
+      },
+      {
+        "user": "BenjaminGibbs",
+        "created_at": "2015-10-12T17:51:13Z",
+        "body": "On the surface the issues appear to be fixed when using the master. I am going to do a bit more testing this evening and see if anything else pops up.\n"
+      },
+      {
+        "user": "sergeybykov",
+        "created_at": "2015-10-12T20:37:13Z",
+        "body": "Sounds encouraging. Please keep us posted.\n"
+      },
+      {
+        "user": "BenjaminGibbs",
+        "created_at": "2015-10-13T01:18:35Z",
+        "body": "So it works fine on the surface, when I push a similar workload to before it works like a dream, however when I push the workload so the streams get a backlog I start losing items and they don't get delivered. This is looking like a different error to before.\n\nFrom the log: I am using the AzureQueueStreamProvider with the default settings, queue count and cache size.\n\n```\n[2015-10-13 00:20:52.053 GMT    19  ERROR   103211  AzureQueueDataManager   127.0.0.1:11111]    !!!!!!!!!! Error doing DeleteMessage for Azure storage queue beta-queuestore-3 \nException = Microsoft.WindowsAzure.Storage.StorageException: The remote server returned an error: (404) Not Found. ---> System.Net.WebException: The remote server returned an error: (404) Not Found.\n   at Microsoft.WindowsAzure.Storage.Shared.Protocol.HttpResponseParsers.ProcessExpectedStatusCodeNoException[T](HttpStatusCode expectedStatusCode, HttpStatusCode actualStatusCode, T retVal, StorageCommandBase`1 cmd, Exception ex) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\Common\\Shared\\Protocol\\HttpResponseParsers.Common.cs:line 50\n   at Microsoft.WindowsAzure.Storage.Queue.CloudQueue.<DeleteMessageImpl>b__3a(RESTCommand`1 cmd, HttpWebResponse resp, Exception ex, OperationContext ctx) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Queue\\CloudQueue.cs:line 2676\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndGetResponse[T](IAsyncResult getResponseResult) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 299\n   --- End of inner exception stack trace ---\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndExecuteAsync[T](IAsyncResult result) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 50\n   at System.Threading.Tasks.TaskFactory`1.FromAsyncCoreLogic(IAsyncResult iar, Func`2 endFunction, Action`1 endAction, Task`1 promise, Boolean requiresSynchronization)\n--- End of stack trace from previous location where exception was thrown ---\n   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\n   at Orleans.AzureUtils.AzureQueueDataManager.<DeleteQueueMessage>d__20.MoveNext()\nRequest Information\nRequestID:a09f9118-0003-0044-0f4c-052ccc000000\nRequestDate:Tue, 13 Oct 2015 00:20:34 GMT\nStatusMessage:The specified message does not exist.\nErrorCode:MessageNotFound\n\nExc level 0: Microsoft.WindowsAzure.Storage.StorageException: Message = The remote server returned an error: (404) Not Found., HttpStatusCode = 404, HttpStatusMessage = The specified message does not exist., ExtendedErrorInformation.ErrorCode = MessageNotFound, ExtendedErrorInformation.ErrorMessage = The specified message does not exist.\nRequestId:a09f9118-0003-0044-0f4c-052ccc000000\nTime:2015-10-13T00:20:35.0431917Z.\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndExecuteAsync[T](IAsyncResult result) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 50\n   at System.Threading.Tasks.TaskFactory`1.FromAsyncCoreLogic(IAsyncResult iar, Func`2 endFunction, Action`1 endAction, Task`1 promise, Boolean requiresSynchronization)\n--- End of stack trace from previous location where exception was thrown ---\n   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\n   at Orleans.AzureUtils.AzureQueueDataManager.<DeleteQueueMessage>d__20.MoveNext()\nExc level 1: System.Net.WebException: The remote server returned an error: (404) Not Found.\n   at Microsoft.WindowsAzure.Storage.Shared.Protocol.HttpResponseParsers.ProcessExpectedStatusCodeNoException[T](HttpStatusCode expectedStatusCode, HttpStatusCode actualStatusCode, T retVal, StorageCommandBase`1 cmd, Exception ex) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\Common\\Shared\\Protocol\\HttpResponseParsers.Common.cs:line 50\n   at Microsoft.WindowsAzure.Storage.Queue.CloudQueue.<DeleteMessageImpl>b__3a(RESTCommand`1 cmd, HttpWebResponse resp, Exception ex, OperationContext ctx) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Queue\\CloudQueue.cs:line 2676\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndGetResponse[T](IAsyncResult getResponseResult) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 299\n[2015-10-13 00:20:52.061 GMT    19  ERROR   103211  AzureQueueDataManager   127.0.0.1:11111]    !!!!!!!!!! Error doing DeleteMessage for Azure storage queue beta-queuestore-3 \nException = Microsoft.WindowsAzure.Storage.StorageException: The remote server returned an error: (404) Not Found. ---> System.Net.WebException: The remote server returned an error: (404) Not Found.\n   at Microsoft.WindowsAzure.Storage.Shared.Protocol.HttpResponseParsers.ProcessExpectedStatusCodeNoException[T](HttpStatusCode expectedStatusCode, HttpStatusCode actualStatusCode, T retVal, StorageCommandBase`1 cmd, Exception ex) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\Common\\Shared\\Protocol\\HttpResponseParsers.Common.cs:line 50\n   at Microsoft.WindowsAzure.Storage.Queue.CloudQueue.<DeleteMessageImpl>b__3a(RESTCommand`1 cmd, HttpWebResponse resp, Exception ex, OperationContext ctx) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Queue\\CloudQueue.cs:line 2676\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndGetResponse[T](IAsyncResult getResponseResult) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 299\n   --- End of inner exception stack trace ---\n   at Microsoft.WindowsAzure.Storage.Core.Executor.Executor.EndExecuteAsync[T](IAsyncResult result) in c:\\Program Files (x86)\\Jenkins\\workspace\\release_dotnet_master\\Lib\\ClassLibraryCommon\\Core\\Executor\\Executor.cs:line 50\n   at System.Threading.Tasks.TaskFactory`1.FromAsyncCoreLogic(IAsyncResult iar, Func`2 endFunction, Action`1 endAction, Task`1 promise, Boolean requiresSynchronization)\n--- End of stack trace from previous location where exception was thrown ---\n   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\n   at Orleans.AzureUtils.AzureQueueDataManager.<DeleteQueueMessage>d__20.MoveNext()\nRequest Information\nRequestID:c7b6bad1-0003-002f-364c-05719a000000\nRequestDate:Tue, 13 Oct 2015 00:20:34 GMT\nStatusMessage:The specified message does not exist.\nErrorCode:MessageNotFound\n```\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-13T01:33:09Z",
+        "body": "This indeed looks a different issue.\nMy guess is that we try to delete twice from the queue and second time it fails, naturally.\nJason, I would check how we handle failed deletes. What happened for example if first delete succeeded but response timed out, would we retry and how. It can explain this log error.\n\nIt does looks though as a benign issue, if we failed to delete (maybe second time) its not a problem.\nBenjamin, is there any application visible problem? If not, it may be the 2nd delete case, and there is no problem \n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T01:37:37Z",
+        "body": "I'll review the error handling logic.  We set a retry policy on the storage account, which would make this a natural error to receive any time the azure client library retries due to timeouts.  Our error handling should catch, log, and ignore this error when deleting messages.  If it does not, this is a bug.\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-13T01:43:58Z",
+        "body": "Thanks Jason. Agree with what you wrote. Of course, it could also be, in theory,  a different bug where we somehow try to delete a wrong msg that was never in the queue,,but I doubt.\n\nThe most important thing I think is to make sure that if the above error happens, we do ignore it and keep processing as nothing happened. If the msg was not deleted, it will re appear and we will re deliver, later on, in accordance with azure queue at least once semantics.\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T01:53:55Z",
+        "body": "I've confirmed that we don't ignore this error.  It is logged and re-thrown, which will cause the main reader loop in the agent to exit until the next timer.  In general, this is not good, but should not cause data loss.\n\nTo mitigate this some, until we get a fix, you can set \"GetQueueMessagesTimerPeriod\" to TimeSpan.FromMilliseconds(10) in the provider configuration.  This will reduce the effect of this exception.\n\n\"When I push the workload so the streams get a backlog I start losing items and they don't get delivered\"\nThe posted exceptions 'should' not be causing data loss.  Can you log any OnErrorAsync calls to your grains?  If the stream infrastructure is having difficulties delivering events, it will attempt to notify the grain of these errors via the OnErrorAsync handler.\n"
+      },
+      {
+        "user": "BenjaminGibbs",
+        "created_at": "2015-10-13T17:27:52Z",
+        "body": "So after somewhat alot more testing in the last 12 hours, I am not losing message they are being delivery multiple times - my mistake.\n\nI am now sending Random GUID's down 4 different streams with the aim that at the end of each run they state should be the same - And it is; \n\nHowever I am also counting how many times we try to add an item which is already in the state and it fails, ie it is a re submission. - This is not triggering onErrorAsync.\n\nIf I push 10,000 items at once it gets backloged but in the end it all the states match, however the reprocess count is up to 10 times that of the times in the list, each stream has a different reprocess count. \n\nBut if I drop the cache size to a low value like 10 this doesn't happen. It should be noted I an intentionally creating a backlog on the grain at the moment, to see how it would handle a spike in traffic.\n\nA possible explanation could be that the the stream cache could be holding the items longer than the time out which means the AzureQueue is making the items reappear which then get re-added to the Stream Cache so in effect an never ending loop as in items are getting processed multiple times.\n\nI was able to replicate this theory by adding a delay to the processing of the grain that consumes the message, I could push in 100 items in to the streams and when I had the delay it re-processed in excess of 1700 extra messages, on top of the items. - If I repeated I get the same number of excess if I increase the delay it goes up, reduce the delay it goes down.\n\nOn error is not being fired.\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T18:21:56Z",
+        "body": "\"This is not triggering onErrorAsync\"\nThat is correct.  It should not.  Azure queues allow multiple delivery, so this is not an error.  If you see data loss, you should see OnErrorAsync calls.\n\n\"the AzureQueue is making the items reappear\"\nThis can happen.  When using azure queue's it's important to keep event processing time lower than azure queues re-add time.\n\nSetting the GetQueueMessagesTimerPeriod as mentioned before should help some with this, but in general, you'll need to perform some load tests and capacity planning to ensure that you've enough processing power for your load.\nTuning queue count and cache size can also help.\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T18:38:24Z",
+        "body": "Depending on how much effort you want to put into this, a custom queue cache could be developed, based off of SimpleQueueCache, which tracks how long messages have been in the cache and adjusts back pressure with this info.  Basically, if the time in the cache starts to approach the (configured) redelivery time, the cache could trigger the reader to back off, thereby reducing load.\n\nThis is more work of course, but it would be a more robust solution for azure queues with unbounded load.\n"
+      },
+      {
+        "user": "BenjaminGibbs",
+        "created_at": "2015-10-13T19:06:21Z",
+        "body": "Thanks Jason for clarification.\n\nI am pleased the original Issue I posted is fixed, I think extending the SimpleQueueCache would be a useful thing to do to in long run so I will look at doing that, currently I can control this with cache size and timer period.\n"
+      },
+      {
+        "user": "veikkoeeva",
+        "created_at": "2015-10-13T19:16:32Z",
+        "body": "@BenjaminGibbs, @jason-bragg A very enlightening exchange of thoughts and conclusion. :+1: \n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T19:43:25Z",
+        "body": "@BenjaminGibbs The SimpleQueueCache, as its name probably indicates, is a general all-purpose queue cache.  It is not queue specific.  If you do decide to make a custom adapter cache that is more tuned to azure queues, I could see that being useful to others in the community.  I fully expect that you're primary focus will be to build out the tech you need, but If you find the time, I'd be interested in seeing a issue opened regarding contributing your azure queue adapter cache to Orleans to be maintained as an alternative implementation of IQueueCache.\n"
+      },
+      {
+        "user": "jason-bragg",
+        "created_at": "2015-10-13T21:57:50Z",
+        "body": "@BenjaminGibbs A question in issue \"Talk about the stream (Feedback on the stream and QueueCacheMissException) #850\" reminded me of a cache behavior that may explain why you see more redeliveries with larger cache sizes. \n\nEvents are removed from the queue (via the MessagesDeliveredAsync call) once they are purged from the cache.  In general they are purged from the cache when all consumers have delivered the event, however the SimpleQueueCache purges events in bulk, not on an individual event by event basis.  It has buckets of events and does not purge a bucket until all of the events in the bucket have been delivered.  If the cache size is increased the bucket size will be increased, increasing the number of events that must be delivered before all events in the bucket can be released.\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-15T09:44:42Z",
+        "body": "We can also allow to configure the number of buckets.\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-19T11:22:18Z",
+        "body": "Can we please rename this issue to better represent what it is about: Something along the lines of: receiving events from azure queue stream provider multiple times.\n"
+      },
+      {
+        "user": "gabikliot",
+        "created_at": "2015-10-23T10:42:58Z",
+        "body": "@benjamingibbs, did you manage to solve it, by playing with cache size and number of buckets?\n"
+      },
+      {
+        "user": "sergeybykov",
+        "created_at": "2015-11-16T17:26:03Z",
+        "body": "@BenjaminGibbs Feel free to reopen if you are still experiencing this issue.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A fix for the QueueCacheMissException issue that prevents stream handlers from receiving events",
+      "Understanding of the message redelivery behavior in Azure Queue Stream Provider",
+      "Configuration guidance to minimize message redelivery",
+      "Explanation of how cache size affects message processing",
+      "Clarification that multiple message delivery is expected behavior with Azure queues"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:36:51"
+    }
+  }
+]

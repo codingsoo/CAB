@@ -1,0 +1,1104 @@
+[
+  {
+    "number": 405,
+    "title": "fix(env): Unify CodeIO datasets",
+    "created_at": "2025-04-01T22:09:37Z",
+    "closed_at": "2025-04-02T20:40:03Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/405",
+    "body": "Unified the two datasets into a single file.\r\n\r\nMain issue was regarding code execution: the OG version has imports at top of script, whereas @olliestanley 's version has it embedded inside each method. \r\n\r\nShould be resolved now that we pass `local_dict` as both locals and globals to `exec`, which will store the imports at the top of the main code snippet for each sample. \r\n\r\nTested it out by generating 500 samples, and it worked. Sometimes it would throw an exception that some package (e.g. `numba`, `xarray`, ...) are not present in the current venv, but that is expected, since the code sample is executed within the same shell. Can be resolved by installing it locally in your venv that you run the dataset with.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/405/comments",
+    "author": "zafstojano",
+    "comments": [
+      {
+        "user": "olliestanley",
+        "created_at": "2025-04-01T22:17:19Z",
+        "body": "I'm not sure if we should include samples which require packages other than those RG already depends on. I filtered those out from the samples in my original dataset.\n\nIf we do want to include them, we should at least compile a list of which additional packages need to be installed to run codeio, otherwise it will be pretty difficult to use this."
+      },
+      {
+        "user": "zafstojano",
+        "created_at": "2025-04-02T08:07:07Z",
+        "body": "@olliestanley filtered those out, now we are at 3002 rows "
+      }
+    ]
+  },
+  {
+    "number": 396,
+    "title": "fix(training): Prepend `<think>` token in format reward",
+    "created_at": "2025-03-27T22:05:25Z",
+    "closed_at": "2025-03-28T08:45:17Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/396",
+    "body": "(Distilled) r1 models prepend the <think> token during tokenizing the prompt, hence why this is not visible in the final output that we evaluate. \r\n\r\nFor this reason, I introduce a new parameter in the config called `prepend_think_token`, whose function is self-explanatory.\r\n\r\nIt should work, see below (first sample doesn't format correctly, second one does and gets format reward)\r\n\r\n```\r\nreward=0.0 (score=0.0, format=0.0, length=0.0), seq=<｜begin▁of▁sentence｜>A conversation between User and Assistant. The user asks a question, and the Assistant solves it.\r\nThe assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think>\r\n<answer>answer here</answer>\r\nDo not explain your reasoning inside the answer tags, provide only the final answer. When an example is provided, you should strictly follow the format of the output/answer in that example.\r\n<｜User｜>Two strings are isomorphic if the characters in one string can be replaced to get the second string.\r\n\r\nAll occurrences of a character must be replaced with another character while preserving the order of characters.\r\n\r\nNo two characters may map to the same character, but a character may map to itself.\r\n\r\nReturn True if the following two strings are isomorphic, or False otherwise:\r\nskjfrfcqp jfhwdmvie\r\n<｜Assistant｜><think>\r\nOkay, let me analyze this problem step by step. We have two strings, and we need to determine if they are isomorphic. An isomorphic pair means that each character in one string can be replaced by a unique character from the other string, and the order of characters remains the same.\r\n\r\nFirst, I should make sure I understand the problem correctly. If the two strings are isomorphic, every occurrence of a character in the first string must map to exactly one character in the second string, and vice versa. Importantly, two different characters in the first string shouldn't map to the same character in the second string, and each character in the second string must be mapped from exactly one character in the first string.\r\n\r\nNow, looking at the specific example given: the strings are \"skjfrfcqp\" and \"jfhwdmvie\". I notice that the lengths of both strings are the same, which is a good start because isomorphic strings must be of equal length.\r\n\r\nNext, I need to check each character in the first string against the corresponding character in the second string to see if there is a consistent mapping without any conflicts.\r\n\r\nLet me go through each character one by one:\r\n\r\n1. The first character of the first string is 's', and the corresponding character in the second string is 'j'. This suggests that 's' maps to 'j'.\r\n2. The second character in the first string is 'k', and in the second string, it's 'f'. So, 'k' maps to 'f'.\r\n3. Continue this process to map all characters in the first string to the second string.\r\n\r\nI'll create a dictionary in my mind to keep track of these mappings. Each time I find a new character in the first string that hasn't been mapped yet, I assign it the next available character from the second string.\r\n\r\nHowever, I realized that I should also check for any mismatches in the mappings. For example, if at any point a character from the first string maps to a different character than the one I previously assigned, the strings are not isomorphic.\r\n\r\nLooking at the example again, I'll write out the mappings:\r\n\r\n- s → j\r\n- k → f\r\n- j → h\r\n- f → w\r\n- r → d\r\n- f → m (Wait, wait, no, in the second string it's 'jfhwdmvie', so let's see each position.\r\n4. The third character in the first string is 'j' with 'h' in the second string. So, j → h.\r\n5. Next, first string 'f' → second string 'w'.\r\n6. Third string's 'r' → second string 'd'.\r\n7. Fourth string's 'f' → second string 'm'.\r\n8. Fifth string's 'c' → second string 'v'.\r\n9. Sixth string's 'q' → second string 'i'.\r\n10. Seventh string's 'p' → second string 'e'.\r\n\r\nSo, the mappings are:\r\n\r\ns → j\r\n\r\nk → f\r\n\r\nj → h\r\n\r\nf → w\r\n\r\nr → d\r\n\r\nm → ? Hmm, wait a second. Because m is another character. Let me check if 'm' in the first string maps to 'm' in the second string, but 'm' is a unique character in the first string, so if the mapping goes 'm' → 'm', that would be acceptable. But in this particular case, I need to ensure that all the mappings are consistent.\r\n\r\nWait, I'm getting confused. Let me clarify: each character in the first string must map to a unique character in the second string, and each character in the second string must have a unique map from the first string.\r\n\r\nNow, looking at the second string, is there any duplicate mappings?\r\n\r\nFor example, does the first string have two different characters that map to the same character in the second string? If the second string has 'jfhwdmvie', each character is unique. So, the mappings are also unique between<｜end▁of▁sentence｜>\r\n/home/zafstojano/miniconda3/envs/torch/lib/python3.11/site-packages/torch/utils/checkpoint.py:1399: FutureWarning: `torch.cpu.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cpu', args...)` instead.\r\n  with device_autocast_ctx, torch.cpu.amp.autocast(**cpu_autocast_kwargs), recompute_context:  # type: ignore[attr-defined]\r\nstep:1 - global_seqlen/min:56536.000 - global_seqlen/max:58216.000 - global_seqlen/minmax_diff:1680.000 - global_seqlen/balanced_min:57376.000 - global_seqlen/balanced_max:57376.000 - global_seqlen/mean:57376.000 - actor/kl_loss:0.001 - actor/kl_coef:0.001 - actor/entropy_loss:0.784 - actor/pg_loss:0.060 - actor/pg_clipfrac:0.000 - actor/ppo_kl:0.000 - actor/grad_norm:0.334 - perf/mfu/actor:0.000 - perf/max_memory_allocated_gb:33.460 - perf/max_memory_reserved_gb:34.564 - perf/cpu_memory_used_gb:61.268 - actor/lr:0.000 - critic/score/mean:0.422 - critic/score/max:2.000 - critic/score/min:0.000 - critic/rewards/mean:0.422 - critic/rewards/max:2.000 - critic/rewards/min:0.000 - critic/advantages/mean:-0.106 - critic/advantages/max:2.475 - critic/advantages/min:-1.323 - critic/returns/mean:-0.106 - critic/returns/max:2.475 - critic/returns/min:-1.323 - response_length/mean:695.312 - response_length/max:829.000 - response_length/min:177.000 - response_length/clip_ratio:0.000 - prompt_length/mean:201.188 - prompt_length/max:205.000 - prompt_length/min:197.000 - prompt_length/clip_ratio:0.000 - timing_s/gen:20.656 - timing_s/old_log_prob:3.888 - timing_s/ref:5.268 - timing_s/adv:0.075 - timing_s/update_actor:13.457 - timing_s/step:43.348 - timing_per_token_ms/gen:0.232 - timing_per_token_ms/adv:0.001 - timing_per_token_ms/ref:0.046 - timing_per_token_ms/update_actor:0.117 - perf/total_num_tokens:114752.000 - perf/time_per_step:43.348 - perf/throughput:1323.601\r\n\r\nTraining Progress:   0%|          | 1/625 [00:43<7:31:16, 43.39s/it]\r\n/home/zafstojano/miniconda3/envs/torch/lib/python3.11/site-packages/torch/utils/checkpoint.py:1399: FutureWarning: `torch.cpu.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cpu', args...)` instead.\r\n  with device_autocast_ctx, torch.cpu.amp.autocast(**cpu_autocast_kwargs), recompute_context:  # type: ignore[attr-defined]\r\nreward=1.0 (score=0.0, format=1.0, length=0.0), seq=<｜begin▁of▁sentence｜>A conversation between User and Assistant. The user asks a question, and the Assistant solves it.\r\nThe assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think>\r\n<answer>answer here</answer>\r\nDo not explain your reasoning inside the answer tags, provide only the final answer. When an example is provided, you should strictly follow the format of the output/answer in that example.\r\n<｜User｜>Two strings are isomorphic if the characters in one string can be replaced to get the second string.\r\n\r\nAll occurrences of a character must be replaced with another character while preserving the order of characters.\r\n\r\nNo two characters may map to the same character, but a character may map to itself.\r\n\r\nReturn True if the following two strings are isomorphic, or False otherwise:\r\naitdkrkzbk rixvyzyonz\r\n<｜Assistant｜><think>\r\nAlright, I need to determine if the two given strings are isomorphic. The strings are:\r\naitdkrkzbk rixvyzyonz\r\n\r\nFirst, I notice that each string seems to have a specific order of characters, and we're trying to see if they follow a similar pattern. Isomorphic strings, according to the description, mean that each character in one string can be replaced with another to get the other string, preserving the order, and no two characters map to the same one.\r\n\r\nSo, I should check each character in both strings to see if they follow this structure. If every corresponding character is consistently mapped to another unique character in the other string, with no duplicates, then they are isomorphic.\r\n\r\nComparing the two strings:\r\n1. First few characters must be checked thoroughly to ensure the mapping holds consistently across the entire length.\r\n</think>\r\n\r\n<answer>True</answer><｜end▁of▁sentence｜>\r\nstep:2 - global_seqlen/min:53954.000 - global_seqlen/max:57020.000 - global_seqlen/minmax_diff:3066.000 - global_seqlen/balanced_min:55487.000 - global_seqlen/balanced_max:55487.000 - global_seqlen/mean:55487.000 - actor/kl_loss:0.001 - actor/kl_coef:0.001 - actor/entropy_loss:0.839 - actor/pg_loss:0.245 - actor/pg_clipfrac:0.000 - actor/ppo_kl:-0.000 - actor/grad_norm:0.365 - perf/mfu/actor:0.000 - perf/max_memory_allocated_gb:36.245 - perf/max_memory_reserved_gb:45.887 - perf/cpu_memory_used_gb:61.689 - actor/lr:0.000 - critic/score/mean:0.430 - critic/score/max:2.000 - critic/score/min:0.000 - critic/rewards/mean:0.430 - critic/rewards/max:2.000 - critic/rewards/min:0.000 - critic/advantages/mean:-0.134 - critic/advantages/max:2.475 - critic/advantages/min:-1.135 - critic/returns/mean:-0.134 - critic/returns/max:2.475 - critic/returns/min:-1.135 - response_length/mean:666.234 - response_length/max:829.000 - response_length/min:180.000 - response_length/clip_ratio:0.000 - prompt_length/mean:200.750 - prompt_length/max:205.000 - prompt_length/min:197.000 - prompt_length/clip_ratio:0.000 - timing_s/gen:23.489 - timing_s/old_log_prob:2.277 - timing_s/ref:2.392 - timing_s/adv:0.067 - timing_s/update_actor:12.429 - timing_s/step:40.660 - timing_per_token_ms/gen:0.275 - timing_per_token_ms/adv:0.001 - timing_per_token_ms/ref:0.022 - timing_per_token_ms/update_actor:0.112 - perf/total_num_tokens:110974.000 - perf/time_per_step:40.660 - perf/throughput:1364.673\r\n\r\nTraining Progress:   0%|          | 2/625 [01:24<7:14:00, 41.80s/it]\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/396/comments",
+    "author": "zafstojano",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-27T22:06:09Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 394,
+    "title": "Feat/curr adj",
+    "created_at": "2025-03-23T20:34:16Z",
+    "closed_at": "2025-04-02T05:39:14Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/394",
+    "body": "This pull request fixes/adjusts the implementation of the curriculum. \r\n**Changes made**\r\n- Adapt `ComposeDataset`, `ReasoningGymDataset` `BaseCurriculum` implementations to take a curriculum\r\n- Adapts fit function to adjust curriculum after each step (where conditions are met)\r\n- Adapts curriculum for `SpellBackward` `NumberSorting` and `WordCounting` datasets to make better match smaller lm capabilities\r\n- Adapt verl shell scripts\r\n- Unit testing \r\n- Updated read me",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/394/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-25T08:29:54Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "olliestanley",
+        "created_at": "2025-03-25T09:04:42Z",
+        "body": "Once pre-commit/test stuff is resolved this looks good from my side! Great stuff, looking forward to doing some curriculum runs"
+      },
+      {
+        "user": "joesharratt1229",
+        "created_at": "2025-03-25T16:08:37Z",
+        "body": "@andreaskoepf the reason for the precommit hook fail is that i have added a better base file `words3to10.txt` for extracting words to spell backwards. This is better for model training/curriculum on this dataset as the original dataset does not contain many 3 or 4 letter words and so the same words get repeatedly sampled during training. If not happy with merging this in lmk and Ill go back to original implementation otherwise I think it would be better to use this file. "
+      },
+      {
+        "user": "olliestanley",
+        "created_at": "2025-03-25T16:51:19Z",
+        "body": "> @andreaskoepf the reason for the precommit hook fail is that i have added a better base file `words3to10.txt` for extracting words to spell backwards. This is better for model training/curriculum on this dataset as the original dataset does not contain many 3 or 4 letter words and so the same words get repeatedly sampled during training. If not happy with merging this in lmk and Ill go back to original implementation otherwise I think it would be better to use this file.\r\n\r\nSeems like the tests are failing because this new file isn't committed to the branch so that needs to be added, right?"
+      },
+      {
+        "user": "joesharratt1229",
+        "created_at": "2025-03-26T08:05:38Z",
+        "body": "> > @andreaskoepf the reason for the precommit hook fail is that i have added a better base file `words3to10.txt` for extracting words to spell backwards. This is better for model training/curriculum on this dataset as the original dataset does not contain many 3 or 4 letter words and so the same words get repeatedly sampled during training. If not happy with merging this in lmk and Ill go back to original implementation otherwise I think it would be better to use this file.\r\n> \r\n> Seems like the tests are failing because this new file isn't committed to the branch so that needs to be added, right?\r\n\r\nYes "
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-26T08:06:58Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 392,
+    "title": "Verl/curr experiments",
+    "created_at": "2025-03-21T11:57:47Z",
+    "closed_at": "2025-03-23T20:27:04Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/392",
+    "body": "A Pull request which adds curriculum learning into the training script and also creates a reward function registry that can be used to define custom reward functions in model training",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/392/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-21T11:58:29Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-21T12:23:00Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-22T15:37:40Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-22T15:55:56Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-22T21:11:06Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-23T07:02:42Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-23T07:52:18Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-23T10:03:52Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-23T20:11:59Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 382,
+    "title": "CodeIO HQ Dataset",
+    "created_at": "2025-03-17T21:09:19Z",
+    "closed_at": "2025-04-01T20:34:33Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/382",
+    "body": "High quality filtered dataset based on the original codeio dataset. Filtered using Qwen-Coder32B using various metrics resulting in approx 50% of the original dataset, which can be filtered further.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/382/comments",
+    "author": "User3574",
+    "comments": [
+      {
+        "user": "User3574",
+        "created_at": "2025-03-17T21:09:51Z",
+        "body": "Q: @zafstojano @andreaskoepf should I also provide original dataset with annotations or only HQ filtered version? Otherwise I can also provide script to filter basically best data based on the specification, let's say top 20% (parameter would be top-%)."
+      },
+      {
+        "user": "zafstojano",
+        "created_at": "2025-04-01T20:34:17Z",
+        "body": "@User3574 Thank you for the valuable submission Roman!"
+      }
+    ]
+  },
+  {
+    "number": 374,
+    "title": "Eval N completions per prompt",
+    "created_at": "2025-03-15T10:58:32Z",
+    "closed_at": "2025-03-15T15:39:36Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/374",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/374/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-15T10:59:10Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-15T12:23:38Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 370,
+    "title": "Arc 1d curriculum",
+    "created_at": "2025-03-14T17:05:39Z",
+    "closed_at": "2025-04-01T11:02:02Z",
+    "labels": [
+      "curriculum"
+    ],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/370",
+    "body": "Added curriculum for Arc-1D dataset with unit tests passing.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/370/comments",
+    "author": "Adefioye",
+    "comments": [
+      {
+        "user": "zafstojano",
+        "created_at": "2025-04-01T11:01:58Z",
+        "body": "Incorporated in #402 "
+      }
+    ]
+  },
+  {
+    "number": 367,
+    "title": "Add curricula status to gallery",
+    "created_at": "2025-03-14T11:44:28Z",
+    "closed_at": "2025-03-14T15:16:26Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/367",
+    "body": "Fairly trivial addition to the Gallery so we can visually keep track of which still needs a curricula",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/367/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-14T11:45:06Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 330,
+    "title": "Fix Dice",
+    "created_at": "2025-03-10T23:47:00Z",
+    "closed_at": "2025-03-11T07:24:32Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/330",
+    "body": "Removing an 'unused' variable actually cast the return tuple into the wrong object and broke the answer checking. Revert and use the variable for metadata",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/330/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-10T23:47:38Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-10T23:49:41Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 301,
+    "title": "add zss to dev-requirements",
+    "created_at": "2025-03-08T22:53:17Z",
+    "closed_at": "2025-03-09T06:40:21Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/301",
+    "body": "```python\r\nimport zss\r\n```\r\n\r\nis in codeio.py",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/301/comments",
+    "author": "vncntt",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-03-09T06:40:21Z",
+        "body": "Had been added to main deps in pyproject.toml already - please run `pip install -e .` again."
+      }
+    ]
+  },
+  {
+    "number": 295,
+    "title": "Show curricula",
+    "created_at": "2025-03-08T01:33:41Z",
+    "closed_at": "2025-03-08T13:21:50Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/295",
+    "body": "usage: debug_curricula.py [-h] [--examples EXAMPLES] [--show-config] [--output OUTPUT] [--dataset DATASET]\r\n\r\nGenerate curriculum documentation\r\n\r\noptions:\r\n  -h, --help           show this help message and exit\r\n  --examples EXAMPLES  Number of examples to generate per difficulty level\r\n  --show-config        Show the effective dataset configuration\r\n  --output OUTPUT      Output file path (relative to project root)\r\n  --dataset DATASET    Generate documentation for specific datasets (comma-separated list)",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/295/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-08T01:34:22Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-08T13:07:33Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-08T13:08:14Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 281,
+    "title": "Curriculum for basic_arithmetic",
+    "created_at": "2025-03-07T00:11:54Z",
+    "closed_at": "2025-03-08T00:28:05Z",
+    "labels": [
+      "curriculum"
+    ],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/281",
+    "body": "Curriculum for basic_arithmetic. \r\n\r\nThe levels are expressed like this [min_terms, max_terms, min_digits, max_digits].\r\n\r\nLevel 0: [2,2,1,2]\r\nLevel 1: [3,4,1,3]\r\nLevel 2: [4,5,1,4]\r\nLevel 3: [5,6,1,4]\r\n\r\nThe annoying thing is that you have to increment both the num_terms and num_digits pairs when moving between levels. \r\n\r\n```python\r\ncurriculum = BasicArithmeticCurriculum()\r\n\r\ncurriculum.set_attr_level(\"num_terms\",0)\r\ncurriculum.set_attr_level(\"num_digits\",0)\r\nconfig = curriculum.generate_configuration()\r\n\r\ndataset = BasicArithmeticDataset(config)\r\n\r\nprint(\"FIRST LEVEL(2 terms, 1-2 digits):\")\r\nprint(dataset[0]['question'])\r\n\r\n\r\ncurriculum.increment_attr_level(\"num_terms\")\r\ncurriculum.increment_attr_level(\"num_digits\")\r\n\r\nconfig = curriculum.generate_configuration()\r\n\r\ndataset = BasicArithmeticDataset(config)\r\n\r\nprint(\"SECOND LEVEL(3-4 terms, 1-3 digits):\")\r\nprint(dataset[0]['question'])\r\n```\r\n```bash\r\nFIRST LEVEL(2 terms, 1-2 digits):\r\nCalculate -78 * 3 * 96 * ( -44 - -46 ).\r\n{'min_terms': 5, 'max_terms': 6, 'min_digits': 1, 'max_digits': 3}\r\nSECOND LEVEL(3-4 terms, 1-3 digits):\r\nCalculate ( 7 * 9 + 1 - -6 ) + -2 - -5.\r\n```\r\n\r\n\r\nIt might be easier to override the generate_configurations by using the method below. We wouldn't do this if we want more flexibility with incrementing each of (num_terms, num_digits) individually. \r\n```python\r\nclass BasicArithmeticCurriculum(BaseCurriculum):\r\n    def __init__(self):\r\n        super().__init__(BasicArithmeticCurriculum.__name__, BasicArithmeticDatasetConfig)\r\n\r\n        # Define a single attribute that controls both terms and digits\r\n        self._define_attributes(\r\n            AttributeDefinition(\r\n                name=\"difficulty\",\r\n                levels=[\r\n                    {\"min_terms\": 2, \"max_terms\": 2, \"min_digits\": 1, \"max_digits\": 2},  # Level 0\r\n                    {\"min_terms\": 3, \"max_terms\": 4, \"min_digits\": 1, \"max_digits\": 3},  # Level 1\r\n                    {\"min_terms\": 4, \"max_terms\": 5, \"min_digits\": 1, \"max_digits\": 4},  # Level 2\r\n                    {\"min_terms\": 5, \"max_terms\": 6, \"min_digits\": 1, \"max_digits\": 4},  # Level 3\r\n                ],\r\n                default_level=0,\r\n                description=\"Combined difficulty level controlling terms and digits\",\r\n                attr_type=AttributeType.STATIC,\r\n            ),\r\n        )\r\n        \r\n    def generate_configuration(self, defaults: Optional[dict[str, Any]] = None) -> BasicArithmeticDatasetConfig:\r\n        \"\"\"Override to handle the custom difficulty attribute\"\"\"\r\n        config_args = defaults.copy() if defaults is not None else {}\r\n        \r\n        # Get the current difficulty level settings\r\n        difficulty_settings = self.get_attr_value(\"difficulty\")\r\n        \r\n        # Update config args with all settings from the difficulty level\r\n        config_args.update(difficulty_settings)\r\n        \r\n        return self._config_cls(**config_args)\r\n```\r\n```python\r\ncurriculum = BasicArithmeticCurriculum()\r\n\r\ncurriculum.set_attr_level(\"difficulty\",0)\r\n\r\nconfig = curriculum.generate_configuration()\r\ndataset = BasicArithmeticDataset(config)\r\nprint(dataset[0]['question'])\r\n\r\ncurriculum.increment_attr_level(\"difficulty\")\r\nconfig = curriculum.generate_configuration()\r\ndataset = BasicArithmeticDataset(config)\r\nprint(dataset[0]['question'])\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/281/comments",
+    "author": "vncntt",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-03-08T00:28:05Z",
+        "body": "This was unfortunately a curriculum for which @zafstojano already submitted a PR earlier."
+      }
+    ]
+  },
+  {
+    "number": 261,
+    "title": "Minor question template & score_answer improvements",
+    "created_at": "2025-03-04T09:23:45Z",
+    "closed_at": "2025-03-04T20:55:10Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/261",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/261/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-04T20:37:23Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 250,
+    "title": "Remove strip from ProceduralDataset::core score_answer()",
+    "created_at": "2025-03-02T06:14:38Z",
+    "closed_at": "2025-03-02T07:46:36Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/250",
+    "body": "- `strip=True` as optional bool parameter of extract answer\r\n",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/250/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-02T06:47:06Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-03-02T06:52:27Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 238,
+    "title": "Eval script consolidation",
+    "created_at": "2025-02-27T13:34:38Z",
+    "closed_at": "2025-02-27T16:39:14Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/238",
+    "body": "The eval configuration files can now contain multiple categories, e.g. we can create a single configuration file per model (no longer different files per category). Config can either be json or yaml.\r\n\r\nExample yaml:\r\n```\r\n# Example configuration for the evaluation script\r\nmodel: \"meta-llama/llama-3.3-70b-instruct\"\r\nprovider: \"Hyperbolic\"\r\noutput_dir: \"results\"\r\nmax_concurrent: 10\r\ndefault_size: 20  # Default size for all datasets\r\ndefault_seed: 42  # Default seed for all datasets\r\n\r\ncategories:\r\n  - category: \"algebra\"\r\n    datasets:\r\n      - dataset: \"complex_arithmetic\"\r\n        params:\r\n          min_real: -10\r\n\r\n  - category: \"arithmetic\"\r\n    datasets:\r\n      - dataset: \"products\"\r\n        size: 10\r\n        seed: 43\r\n        params:\r\n          min_digits: 2\r\n          allow_negation: true\r\n\r\n      - dataset: \"chain_sum\"\r\n        size: 12\r\n        seed: 43\r\n        params:\r\n          min_digits: 2\r\n          allow_negation: true\r\n```\r\n\r\nA  `summary.json` file is now created which contains the most relevant facts:\r\n```\r\n{\r\n  \"total_datasets\": 3,\r\n  \"total_examples\": 42,\r\n  \"dataset_scores\": {\r\n    \"complex_arithmetic\": 0.95,\r\n    \"products\": 0.30699999999999994,\r\n    \"chain_sum\": 0.9175\r\n  },\r\n  \"timestamp\": \"2025-02-27T17:02:08.997816\",\r\n  \"git_hash\": \"4dc879b3848e62705c8b59a1fe6160dd33036ee6\",\r\n  \"model\": \"meta-llama/llama-3.3-70b-instruct\",\r\n  \"provider\": \"Hyperbolic\",\r\n  \"duration_seconds\": 26.781318\r\n}\r\n```\r\n\r\nThe order of the dataset_scores should match the order of the datasets in the configuration.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/238/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-27T13:35:16Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 220,
+    "title": "Make Rubiks Cube Output Format More Explicit",
+    "created_at": "2025-02-26T12:17:41Z",
+    "closed_at": "2025-02-27T11:16:09Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/220",
+    "body": "Also adds support for more advanced notation anyway",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/220/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-27T06:46:58Z",
+        "body": "For clarification: The code currently always appends 2x base independent of the number actually parsed .. I assume that 2x would be correct if the number is 2. If there are other values but 2 either a for loop could be used or if other values but 2 are not allowed then parsing should fail."
+      }
+    ]
+  },
+  {
+    "number": 212,
+    "title": "Add llama-3.3-70b-instruct algebra, algorithmic eval configs",
+    "created_at": "2025-02-25T22:18:22Z",
+    "closed_at": "2025-02-25T22:46:08Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/212",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/212/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-25T22:19:03Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-25T22:27:45Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-25T22:33:25Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-25T22:36:53Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 198,
+    "title": "Basic curriculum",
+    "created_at": "2025-02-24T17:05:04Z",
+    "closed_at": "2025-03-07T10:22:12Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/198",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/198/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-24T17:05:43Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 190,
+    "title": "arc_1d dataset generation error",
+    "created_at": "2025-02-23T07:05:45Z",
+    "closed_at": "2025-02-23T12:20:09Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/open-thought/reasoning-gym/issues/190",
+    "body": "Hi, the following error is encountered when trying to generate more than approximately 10 examples (1000 samples in my case) with task arc_1d.\n\n```\nTraceback (most recent call last):\n  File \"/usr/project/xtmp/hc387/reasoning-gym/arc_1d.py\", line 108, in <module>\n    mapped_test = [make_map_fn('test')(example, idx) for idx, example in enumerate(test_dataset)]\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/project/xtmp/hc387/reasoning-gym/arc_1d.py\", line 108, in <listcomp>\n    mapped_test = [make_map_fn('test')(example, idx) for idx, example in enumerate(test_dataset)]\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/project/xtmp/hc387/reasoning-gym/reasoning_gym/dataset.py\", line 35, in __next__\n    item = self[self._current_idx]\n           ~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/usr/project/xtmp/hc387/reasoning-gym/reasoning_gym/arc/arc_1d.py\", line 74, in __getitem__\n    example = task_func(rng, size, **task_kwargs)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/project/xtmp/hc387/reasoning-gym/reasoning_gym/arc/arc_1d_tasks.py\", line 206, in task_block_scale_to_dot\n    question[dot_pos] = dot_color\n    ~~~~~~~~^^^^^^^^^\nIndexError: list assignment index out of range\n```",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/190/comments",
+    "author": "jchy20",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-23T10:29:17Z",
+        "body": "Thanks for reporting, can reproduce, fix coming."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-23T12:23:11Z",
+        "body": "@jchy20 With fix I could now generate 1M examples without exceptions. Please let us know if you find other issues with arc_1d or other datasets."
+      }
+    ]
+  },
+  {
+    "number": 181,
+    "title": "Add Bitwise Arithmetic",
+    "created_at": "2025-02-21T11:07:27Z",
+    "closed_at": "2025-02-21T16:27:45Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/181",
+    "body": "More arithmetic, this time with hex values and shift registers.\r\n\r\n```\r\nPlease solve this problem. Reply only with the final hexidecimal value.\r\n(((((0xeb51 - 0xa153) - (0x8afe * 0x2532)) << 0x1) - (((0x40f9 + 0xc5ef) - (0x8da0 + 0xe129)) - ((0x6afc - 0xa441) - (0xb4b6 >> 0x0)))) >> 0x3)\r\n```\r\n\r\n```\r\n-0x50c752b\r\n```\r\n\r\nChatGPT gets confused with the really really big ones. It gets the correct when it's allowed to write and execute Python, but gets them wrong after a certain point if it doesn't try to use Python.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/181/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-21T15:53:00Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 174,
+    "title": "Add decimal number comparison",
+    "created_at": "2025-02-20T16:50:56Z",
+    "closed_at": "2025-02-23T12:43:15Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/174",
+    "body": "Python generator to compare decimals",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/174/comments",
+    "author": "Adefioye",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-23T12:43:15Z",
+        "body": "Closing this due to high similarity with other existing datasets (as discussed)."
+      }
+    ]
+  },
+  {
+    "number": 172,
+    "title": "Add Water Jug Puzzles",
+    "created_at": "2025-02-20T15:19:48Z",
+    "closed_at": "2025-02-20T21:48:12Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/172",
+    "body": "Die Hard 3 puzzles.\r\n\r\n```\r\nYou are a police officer. A maniac has planted a bomb next to a public fountain.\r\n\r\nTo defuse the bomb, you must solve a puzzle. The puzzle is solved when you fill any of the available jugs with the target amount of water.\r\n\r\nYou have three move types: 'fill', 'empty' and 'pour'.\r\n\r\nTo fill Jug A, you 'fill A'.\r\nTo empty Jug B, you 'empty B'.\r\nTo pour the contents of Jug A into Jug B, you 'pour A->B'.\r\nAll jugs are empty to begin with.\r\n\r\nThe empty jugs hold this many litres of water: A:101, B:19, C:19\r\nAnd your target is: 85 litres.\r\n\r\nHow do you defuse the bomb?\r\n\r\nReply as a JSON-parsable list of moves which result in any of the jugs being filled with the target amount.\r\n```\r\n\r\n```\r\n['fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'empty A', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A', 'fill B', 'pour B->A']\r\n```\r\n\r\nActually a fairly simple 'mental algorithm' if you know how to solve it, but requires a lot of thought tokens.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/172/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-20T21:35:13Z",
+        "body": "I'll quickly make the changes."
+      }
+    ]
+  },
+  {
+    "number": 159,
+    "title": "Resolve mini sudoku generator outputting non-unique puzzles",
+    "created_at": "2025-02-18T18:48:27Z",
+    "closed_at": "2025-02-18T20:48:55Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/159",
+    "body": "Closes #153 \r\n\r\nI think this solution, of ensuring puzzles are unique rather than including in the prompt that they may not be and accepting any of the possible solutions in the scoring, is preferable.\r\n\r\nSudoku puzzles are meant to be unique as this ensures they can be solved with logic rather than by guessing. It seems to fit better with the goals of a reasoning dataset to produce puzzles which are logically solvable.\r\n\r\nI wrote in a code comment that this can theoretically cause the configured minimum empty cells to be violated. In practice I have only observed this when using min_empty=12. For min_empty=12, approx. 10% of puzzles actually have 11 rather than 12.\r\n\r\nIf we are happy with this as a solution I'll look into the Sudoku dataset too, to see whether it has the same non-uniqueness issue and try a similar fix if so.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/159/comments",
+    "author": "olliestanley",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-18T19:37:55Z",
+        "body": "Would be great if you checked the Sudoku dataset as well! BTW this PR is still draft, please set to ready for review when it can be merged."
+      },
+      {
+        "user": "olliestanley",
+        "created_at": "2025-02-18T20:17:17Z",
+        "body": "> Would be great if you checked the Sudoku dataset as well! BTW this PR is still draft, please set to ready for review when it can be merged.\r\n\r\nWas just verifying that the uniqueness check works, ready to go now! Will take a look at the full sudoku next"
+      }
+    ]
+  },
+  {
+    "number": 158,
+    "title": "Decimal Arithmetic",
+    "created_at": "2025-02-18T18:21:23Z",
+    "closed_at": "2025-02-20T11:35:41Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/158",
+    "body": "Simple 1234.123 + 234.567 type of math problems.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/158/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-18T18:22:04Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "Miserlou",
+        "created_at": "2025-02-19T11:32:02Z",
+        "body": "Okay, I've improved this a bit. Now we have more control over number of digits, number of terms, and desired precision. The scoring function also adds a little bit of tolerance at the least significant digit to account for rounding.\r\n\r\n"
+      },
+      {
+        "user": "Miserlou",
+        "created_at": "2025-02-20T09:46:51Z",
+        "body": "Added paren grouping, this should be ready to rock"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-20T11:11:03Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 154,
+    "title": "reasoning-gym-server & cli tool",
+    "created_at": "2025-02-18T11:43:53Z",
+    "closed_at": "2025-02-19T21:41:33Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/154",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/154/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-18T14:41:08Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-18T15:28:27Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 153,
+    "title": "Mini Sudoku Uniqueness",
+    "created_at": "2025-02-18T09:29:52Z",
+    "closed_at": "2025-02-18T20:48:56Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/issues/153",
+    "body": "While looking into some changes to scoring yesterday evening, I noticed that it's possible for the mini sudoku generator to generate puzzles with multiple solutions.\n\nThis is a problem for two reasons:\n\n- sudoku puzzles are meant to have a single solution\n- one of the two+ solutions is still recorded as the correct answer, so if an LLM generates a \"correct\" but different solution, or refuses to answer due to the non-uniqueness, it will receive a bad reward\n\nHere's an example of a non-unique puzzle it generated for me:\n\n```\n_ _ _ _\n_ 1 _ _\n1 _ 4 3\n_ 3 1 _\n```\n\nThe given solution is:\n\n```\n2 4 3 1\n3 1 2 4\n1 2 4 3\n4 3 1 2\n```\n\nBut another valid solution would be:\n\n```\n3 4 2 1\n2 1 3 4\n1 2 4 3\n4 3 1 2\n```",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/153/comments",
+    "author": "olliestanley",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-18T11:47:50Z",
+        "body": "As long as it is guaranteed that a valid solution can be found I think this could be a feature of mini_sodoku but we need to adapt score_answer() of course so that it accepts all valid mini_sudoku solutions (independent of the oracle_answer)."
+      },
+      {
+        "user": "olliestanley",
+        "created_at": "2025-02-18T12:34:54Z",
+        "body": "> As long as it is guaranteed that a valid solution can be found I think this could be a feature of mini_sodoku but we need to adapt score_answer() of course so that it accepts all valid mini_sudoku solutions (independent of the oracle_answer).\n\nAgree this would be one possible fix. Would require:\n\n- updating the puzzle generation code to find all possible solutions\n- updating the prompt to specify there is no guarantee of uniqueness\n- updating scoring to accept any of the possible solutions\n\nThe second is necessary as most models already assume uniqueness when seeing \"sudoku\". In my tests R1 found a correct solution to the above puzzle, then reasoned for several minutes longer as it noticed the non-uniqueness and believed this meant it had made a mistake in its first solution.\n\nI can look at making these changes this evening."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-18T14:58:26Z",
+        "body": "OK, we could also make the uniqueness optional (e.g. check if an llm knowns a quick change to ensure uniqueness)."
+      }
+    ]
+  },
+  {
+    "number": 137,
+    "title": "Reformatted `basic_arithmetic` and `word_ladder` template",
+    "created_at": "2025-02-16T09:29:02Z",
+    "closed_at": "2025-02-16T13:20:14Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/137",
+    "body": "Only very small changes but adjusted the question templates for both to make the answer format more explicit. ",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/137/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-16T10:37:02Z",
+        "body": "Could you quickly run `pre-commit run -a` & check the failing unit test?"
+      }
+    ]
+  },
+  {
+    "number": 128,
+    "title": "[Ongoing] Eval Template and Score Fixes",
+    "created_at": "2025-02-14T11:16:39Z",
+    "closed_at": "2025-02-14T15:15:37Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/128",
+    "body": "Ongoing work to fix up evaluators and ambiguous questions.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/128/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-14T11:17:15Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 110,
+    "title": "Adds Dice Probability Dataset",
+    "created_at": "2025-02-11T11:55:46Z",
+    "closed_at": "2025-02-11T21:54:02Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/110",
+    "body": "```\r\nI have these dice: 1d24, 1d23, 1d20, 1d16, 1d11, 1d9, 1d7, 1d4. What are the odds of rolling 65 or higher? Please respond with a reduced fraction representing the probability [ex., 1/60].\r\n```\r\n\r\n```\r\n64800983/163215360\r\n```\r\n\r\nPretty simple task, trivial for Python to solve but takes reasoning models 2-5 minutes to solve these by thinking.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/110/comments",
+    "author": "Miserlou",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-11T11:59:45Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-11T15:15:46Z",
+        "body": "Interesting idea. Do you think the question is already clear enough? Should we maybe add that all dice are rolled together and that 1d23 stands for one dice with 23 sides?"
+      },
+      {
+        "user": "Miserlou",
+        "created_at": "2025-02-11T15:20:38Z",
+        "body": "All models I tested seemed to not need that, but sure, I'll add that."
+      }
+    ]
+  },
+  {
+    "number": 100,
+    "title": "Matrix Manipulation Dataset",
+    "created_at": "2025-02-10T19:43:51Z",
+    "closed_at": "2025-02-10T21:37:37Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/100",
+    "body": "### What does this PR do?\r\n\r\nThis PR introduces an environment that performs the following operations on a matrix:\r\n- `rotate`: 90, 180 and 270 degrees clockwise\r\n- `hmirror`: mirror across rows\r\n- `vmirror`: mirror across cols\r\n- `dmirror`: mirror across main diagonal\r\n- `cmirror`: mirror across counterdiagonal\r\n- `map`: map one number into another\r\n- `zero_divisble`: set all numbers divisible by `k` to `0`\r\n- `crop`: crop the matrix within a bounding box\r\n- `remove_every_nth_row` \r\n- `remove every_nth_col`\r\n\r\nAdresses #95 \r\n",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/100/comments",
+    "author": "zafstojano",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-10T21:27:51Z",
+        "body": "This is really a fantastic dataset!"
+      }
+    ]
+  },
+  {
+    "number": 98,
+    "title": "Add r1 benchmark evals for cognition, algorithimic and logic datasets",
+    "created_at": "2025-02-10T09:39:31Z",
+    "closed_at": "2025-02-23T19:35:03Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/issues/98",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/98/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "theblackcat102",
+        "created_at": "2025-02-18T13:50:26Z",
+        "body": "My issue with benchmarking on R1 is timeout issues, some of the tasks might require reasoning so long that all my requests just timeout...."
+      },
+      {
+        "user": "joesharratt1229",
+        "created_at": "2025-02-23T19:35:03Z",
+        "body": "Completed"
+      }
+    ]
+  },
+  {
+    "number": 86,
+    "title": "Ransom Note",
+    "created_at": "2025-02-08T12:23:17Z",
+    "closed_at": "2025-02-08T16:39:57Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/86",
+    "body": "### What does this PR do?\r\n\r\nCheck if you can construct a ransom note from letters in a magazine. \r\n\r\nThe input is constructed as follows:\r\n1. Randomly sample letters for the ransom note\r\n2. Initialize the magazine letters with the ransom note\r\n    - If the answer should be solvable, then randomly pick the remaining letters from the vocabulary\r\n    - If the answer should be unsolvable, then remove one of the letters in the magazine letter list, and fill the remaining letters randomly without picking the randomly removed letter, thereby making sure you can't solve the puzzle. \r\n3. Shuffle the two inputs\r\n\r\n### Example\r\n\r\n```python\r\nimport reasoning_gym\r\n\r\n# Defaults\r\n# max_note_length: int = 10  # Maximum length of the ransom note\r\n# max_magazine_length = 30 # Maximum length of the magazine\r\n# p_solvable: float = 0.5  # Probability that the ransom note can be constructed\r\n\r\ndata = reasoning_gym.create_dataset('ransom_note', size=5, seed=42)\r\n\r\nfor i, item in enumerate(data):\r\n    print(f\"Sample {i+1}:\")\r\n    print(f\"Question: {item['question']}\")\r\n    print(f\"Answer: {item['answer']}\\n\")\r\n    print(f\"Metadata: {item['metadata']}\\n\")\r\n    assert item['metadata']['solution'] == item['metadata']['solvable']\r\n    print(\"--------------------------------------------------\\n\")\r\n```\r\n\r\n````\r\nSample 1:\r\nQuestion: Given two strings representing a ransom note and a magazine, return True if you can construct the ransom note using the letters in the magazine, and False otherwise.\r\n\r\nEach letter in the magazine string can only be used once in your ransom note.\r\n\r\nRansom note: i\r\nMagazine: nxxydukos\r\n\r\nAnswer: False\r\n\r\nMetadata: {'ransom_note': 'i', 'magazine': 'nxxydukos', 'solution': False, 'solvable': False}\r\n\r\n--------------------------------------------------\r\n\r\nSample 2:\r\nQuestion: Given two strings representing a ransom note and a magazine, return True if you can construct the ransom note using the letters in the magazine, and False otherwise.\r\n\r\nEach letter in the magazine string can only be used once in your ransom note.\r\n\r\nRansom note: bpr\r\nMagazine: bmbadghcodkcaerporajvqofx\r\n\r\nAnswer: True\r\n\r\nMetadata: {'ransom_note': 'bpr', 'magazine': 'bmbadghcodkcaerporajvqofx', 'solution': True, 'solvable': True}\r\n\r\n--------------------------------------------------\r\n\r\nSample 3:\r\nQuestion: Given two strings representing a ransom note and a magazine, return True if you can construct the ransom note using the letters in the magazine, and False otherwise.\r\n\r\nEach letter in the magazine string can only be used once in your ransom note.\r\n\r\nRansom note: ocvetolls\r\nMagazine: lbxqhnsttttplvceusyxvoeccoo\r\n\r\nAnswer: True\r\n\r\nMetadata: {'ransom_note': 'ocvetolls', 'magazine': 'lbxqhnsttttplvceusyxvoeccoo', 'solution': True, 'solvable': True}\r\n\r\n--------------------------------------------------\r\n\r\nSample 4:\r\nQuestion: Given two strings representing a ransom note and a magazine, return True if you can construct the ransom note using the letters in the magazine, and False otherwise.\r\n\r\nEach letter in the magazine string can only be used once in your ransom note.\r\n\r\nRansom note: snyewnge\r\nMagazine: sonwemengys\r\n\r\nAnswer: True\r\n\r\nMetadata: {'ransom_note': 'snyewnge', 'magazine': 'sonwemengys', 'solution': True, 'solvable': True}\r\n\r\n--------------------------------------------------\r\n\r\nSample 5:\r\nQuestion: Given two strings representing a ransom note and a magazine, return True if you can construct the ransom note using the letters in the magazine, and False otherwise.\r\n\r\nEach letter in the magazine string can only be used once in your ransom note.\r\n\r\nRansom note: qujkhlq\r\nMagazine: qhbckqkvbfjeljhqelhkswtcd\r\n\r\nAnswer: False\r\n\r\nMetadata: {'ransom_note': 'qujkhlq', 'magazine': 'qhbckqkvbfjeljhqelhkswtcd', 'solution': False, 'solvable': False}\r\n\r\n--------------------------------------------------\r\n````",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/86/comments",
+    "author": "zafstojano",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-08T13:27:04Z",
+        "body": "Nice one! :-) . \r\nbtw for future datasets: if possible look for riddles where guessing the answer has very little chance of success (as for example for multiplying numbers). The problem of tasks with small sets of possible answers (like true/false) is that RL has to deal with very noisy rewards, which makes it for learning faithful CoTs. Such tasks can be used for evaluation but (probably) will be less used for RL training (we'll see).\r\nWe should probably explain it in a contributing.md file - ;-) ..."
+      },
+      {
+        "user": "zafstojano",
+        "created_at": "2025-02-08T13:33:33Z",
+        "body": "Makes sense, I see your point on how having binary answers can cause training not to converge due to potential arbitrary guessing. I have some other puzzles in the pipeline that are not as restricted in the outputs :) "
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "title": "Refactor: Add more Docstrings and Examples to Tsumego",
+    "created_at": "2025-02-07T23:05:44Z",
+    "closed_at": "2025-02-08T09:52:18Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/84",
+    "body": "This commit refines the configuration of white stone formations in Tsumego puzzles to ensure that they present a clear capture scenario for Black. In addition, inline documentation has been added to explain that these puzzles simulate localized capture problems in Go.\r\n\r\nI've added some decoy stones around the forced capture formation. The new logic calculates the current stone count, and if it's below the limit (max_stones + 7), it chooses one decoy candidate (at a Manhattan distance of 2 from the center) and places a random stone there (either \"X\" or \"O\"). This should make the puzzle less trivial by introducing a deceptive distraction while leaving the forced capture intact.\r\n\r\nIn the future, we want to extend it to multi-move puzzles that are harder to solve.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/84/comments",
+    "author": "JeanKaddour",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-08T07:35:56Z",
+        "body": "Please make pre-commit happy by running  `pre-commit run -a` :-)."
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "Fix syllogisms",
+    "created_at": "2025-02-07T19:36:52Z",
+    "closed_at": "2025-02-07T20:47:59Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/82",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/82/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-07T20:29:29Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 80,
+    "title": "Add GO hints, legend, disallow numeric answer, store expected string …",
+    "created_at": "2025-02-07T14:18:25Z",
+    "closed_at": "2025-02-07T14:56:07Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/80",
+    "body": "…answer",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/80/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-07T14:18:57Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "Add Coaching & ScoreBoard class (result tracking)",
+    "created_at": "2025-02-06T18:26:37Z",
+    "closed_at": "2025-02-06T22:15:28Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/72",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/72/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-06T19:25:39Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "title": "Test training with trl",
+    "created_at": "2025-02-06T13:45:59Z",
+    "closed_at": "2025-02-07T06:42:33Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/70",
+    "body": "The following PR provides an example of how to train a LLM with GRPO with the HuggingFace trl framework on a procedural gym dataset. \r\n\r\n# Files added\r\n- `examples/trl/main_grpo_reward.py` - where the training script sits\r\n-  `examples/trl/config/grpo.yaml` - which contains training configuration arguments\r\n- `examples/trl/grpo_config.py` - additional script configuration\r\n- `examples/trl/requirements.txt` - contains dependencies needed to run the training script\r\n- `examples/trl/README.md` - read me with installation and model run instructions\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/70/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-07T06:41:03Z",
+        "body": "@joesharratt1229 I will merge the PR now and quickly do the changes."
+      },
+      {
+        "user": "joesharratt1229",
+        "created_at": "2025-02-07T07:08:33Z",
+        "body": "> @joesharratt1229 I will merge the PR now and quickly do the changes.\r\n\r\nNo problem Andreas, thanks!"
+      }
+    ]
+  },
+  {
+    "number": 67,
+    "title": "feat: Add Complex Arithmetic Dataset and Tests",
+    "created_at": "2025-02-06T04:30:56Z",
+    "closed_at": "2025-02-06T06:59:11Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/67",
+    "body": "This commit introduces a new dataset for complex number arithmetic operations:\r\n\r\n- Implements ComplexArithmeticDataset for generating complex number problems\r\n- Supports addition, subtraction, multiplication, and division operations\r\n\r\nPart of the algebra tasks collection in reasoning-gym.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/67/comments",
+    "author": "idigitopia",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-06T06:38:26Z",
+        "body": "Nice clean impl! Could you please run `pre-commit run -a` to fix formatting (otherwise I also can run it, but would cause unnecessary line-changes by me)."
+      }
+    ]
+  },
+  {
+    "number": 64,
+    "title": "Add PolynomialMultiplicationDataset",
+    "created_at": "2025-02-05T21:25:27Z",
+    "closed_at": "2025-02-07T13:06:41Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/64",
+    "body": "A simple polynomial multiplication dataset, effectively a convolution. A simple script to try it out:\r\n\r\n```python\r\nimport sympy as sp\r\nimport reasoning_gym\r\n\r\ndata = reasoning_gym.create_dataset('polynomial_multiplication', size=3, seed=42)\r\n\r\nfor n, i in enumerate(data):\r\n  print(f\"Example {n}:\")\r\n  print(f\"Question: {i['question']}\")\r\n  print(f\"Answer: {i['answer']}\")\r\n  print(\"Metadata:\", i['metadata'])\r\n```",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/64/comments",
+    "author": "tohskai",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-06T06:34:27Z",
+        "body": "Please run `pre-commit run -a` for formatting, thanks! You can update the GALLERY.md file with scripts/generate_gallery.py (this file is btw excluded from formatting and should not be manually edited - I think your editor removed training whitespaces)."
+      },
+      {
+        "user": "tohskai",
+        "created_at": "2025-02-07T02:39:47Z",
+        "body": "I accidentally synced my fork, so had to force push instead of squashing to keep commit history clean, sorry. I based the score function on the integral implementation. I added tests for the score function, works surprisingly well, although I should consider keeping better track of variables in metadata in the future."
+      }
+    ]
+  },
+  {
+    "number": 63,
+    "title": "Gsm symbolic fixes",
+    "created_at": "2025-02-04T23:26:33Z",
+    "closed_at": "2025-02-05T20:15:35Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/63",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/63/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "Adefioye",
+        "created_at": "2025-02-05T07:21:41Z",
+        "body": "@andreaskoepf Welldone. At first I was overthinking this in terms of validating the answers manually. However, I figured the calculations have been well-cpatured by the `generate_from_variables()` function. So nice to see this out of the door.\r\n\r\nObviously you were thinking about this more clearly than I was."
+      }
+    ]
+  },
+  {
+    "number": 49,
+    "title": "Curriculum",
+    "created_at": "2025-02-02T21:55:35Z",
+    "closed_at": "2025-02-06T20:17:20Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/49",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/49/comments",
+    "author": "EduardDurech",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-02T22:17:45Z",
+        "body": "Due to conflicts its creates I recommend to keep datasets in place until we finished the curriculum impl. Placing the curricula from the beginning in a separate folder is of course ok."
+      },
+      {
+        "user": "EduardDurech",
+        "created_at": "2025-02-03T10:52:06Z",
+        "body": "Agree, I'll make a separate branch for restructuring as I think for maintenance and automation should subset"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-06T13:49:41Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-06T14:02:12Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "added calendar-arithmetic tasks",
+    "created_at": "2025-02-02T13:55:21Z",
+    "closed_at": "2025-02-02T14:22:50Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/43",
+    "body": "Added 7 tasks for calendar arithmetic. \r\n\r\nFor prompt diversity, each has 3 question templates and they share different format requests selected at random (eg: specify if the expected answer is a day in letters or a numerical value). \r\n\r\nThe calendar arithmetic problems (generally) span a year, specified in the config. The tasks have different inherent complexities, with three parameters that can be tuned to adjust the difficulty:\r\n\r\n**Tunable**:  \r\n\"is_leap_year\" - tuned with `leap_year_range`\r\n\r\nThe next four tasks difficulty depend on `offset_upper_bound`. They can be easy to hard, by setting the offset bound from a few days to an arbitrary large number.\r\n\"weekday_offset\"\r\n\"count_business_days\"\r\n\"count_days\" \r\n\"weekday_of_date_from_first_day\" (offset is capped to fit in a year)\r\n\r\n**Not tunable** (and hard, especially if given year is not in the training distribution of the llm):\r\n\"weekday_of_date\" \r\n\"recurring_event_day\" (harder)\r\n\r\nI also created a denser reward for numerical answers and for strings (eg: wrong capitalization shouldn't have 0 reward).",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/43/comments",
+    "author": "bjiro",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-02T13:55:49Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "title": "Create python generator files for gsm symbolic data templates",
+    "created_at": "2025-02-02T02:25:13Z",
+    "closed_at": "2025-02-03T21:54:29Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/42",
+    "body": "Here, python generators for gsm symbolic data has been created. \r\n\r\nPre-commit currently failing.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/42/comments",
+    "author": "Adefioye",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-02T08:36:27Z",
+        "body": "Nice! :1st_place_medal: .. could you run `pre-commit run -a` to standardize formatting?"
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "test",
+    "created_at": "2025-02-01T01:44:13Z",
+    "closed_at": "2025-02-01T01:48:29Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/40",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/40/comments",
+    "author": "andreaskoepf",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2025-02-01T01:46:30Z",
+        "body": "❌ Pre-commit checks failed. Please run `pre-commit run --all-files` locally and fix the issues."
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "feat: add palindrome_generation",
+    "created_at": "2025-02-01T01:12:29Z",
+    "closed_at": "2025-02-03T09:10:29Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/39",
+    "body": "Adds **Palindrome Generation**, to the **Algorithmic** section.\r\nI made the decision to base this on **made-up words**. I think this will isolate the algorithmic challenge of creating a palindrome without interference from linguistic factors.\r\n\r\nPrompt example:\r\n```\r\nq=\"Rearrange these letters to form a palindrome (a word, phrase, or sequence that remains the same in reverse): c, c, f\r\n\r\nExample format:\r\nracecar\r\n\r\nWhat is your palindrome?\", a=\"cfc\"\r\n```\r\n\r\nObject example:\r\n`metadata: {'letters': ['c', 'c', 'f'], 'generated_palindrome': 'cfc'}`\r\n\r\nCan change min & max length as part of config.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/39/comments",
+    "author": "joenorton",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-01T01:21:26Z",
+        "body": "Can you please try to rebase to current main head? I first forgot to add the pytz dependency in pyproject.yaml."
+      },
+      {
+        "user": "joenorton",
+        "created_at": "2025-02-01T02:50:21Z",
+        "body": "Hopefully did that correctly. If not I'll circle back on Sunday."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-01T13:16:52Z",
+        "body": "OK, now formatting & unit tests pass. Since the result in not unique we need a score_answer() function which check whether the right letter-set was used and that the submitted answer is a palindrome."
+      },
+      {
+        "user": "Miserlou",
+        "created_at": "2025-02-01T14:48:17Z",
+        "body": "max_length: int = 10 seems like a low limit? Would love to see this done with 32K tokens, for instance.."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-01T15:46:12Z",
+        "body": "@Miserlou I suggest we keep the default config very simple .. in ~1 week we'll have some experience of \"curriculum engineering\" and can then give some guidelines for \"calibrating\" the default/baseline complexity which can then be adjusted in a similar way for all tasks scalar value."
+      },
+      {
+        "user": "joenorton",
+        "created_at": "2025-02-02T16:56:40Z",
+        "body": "I'm fine with changing the default config to whatever is reasonable."
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "Add Simple and Advanced Geometry Dataset Generators",
+    "created_at": "2025-01-31T13:43:44Z",
+    "closed_at": "2025-02-01T16:00:24Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/38",
+    "body": "Implementation of issue #29 ",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/38/comments",
+    "author": "Schmeitzke",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-01-31T16:10:47Z",
+        "body": "@Schmeitzke thanks for the pr! Could you please run `pre-commit run -a` in the root repo dir to correct the formatting?"
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "title": "Feat/countdown scoring ",
+    "created_at": "2025-01-31T07:08:20Z",
+    "closed_at": "2025-01-31T08:22:51Z",
+    "labels": [],
+    "url": "https://github.com/open-thought/reasoning-gym/pull/32",
+    "body": "The following pr adds an implementation of the `score_answer` method for the countdown game. \r\n\r\n**Files amended**\r\n\r\n- `games/countdown.py` - adds `score_answer` method, which checks if user provided answer matches the target. Handles cases of incorrectly formatted strings, null answers and partial rewards for partial solutions\r\n- `tests/test_countdown.py` - checks within `test_coundown_games_items` the reward matches expected outputs. ",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/32/comments",
+    "author": "joesharratt1229",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-01-31T07:15:10Z",
+        "body": "Nice, please run `pre-commit run -a` for standard black formatting. For future you can run `pre-commit install` in the repo dir to install a local hook which runs the pre-commit checks while committing locally."
+      }
+    ]
+  },
+  {
+    "number": 29,
+    "title": "Add Simple and Advanced Geometry Dataset Generators",
+    "created_at": "2025-01-30T16:55:04Z",
+    "closed_at": "2025-03-13T20:37:42Z",
+    "labels": [
+      "dataset"
+    ],
+    "url": "https://github.com/open-thought/reasoning-gym/issues/29",
+    "body": "**Description**  \nWe would like to introduce two new dataset generators for geometry:\n1. **Simple Geometry Dataset** for basic angle-finding tasks (e.g., interior angles of polygons).\n2. **Advanced Geometry Dataset** for more complex problems (e.g., orthocenter, incircle radius, angle chasing using coordinate geometry).\n\n**Proposed Solution**  \n1. **Simple Geometry**  \n   - **Task Scope**: Generate regular polygon or polygon-like problems (e.g., “Find the missing interior angle in a convex polygon”).  \n   - **Implementation**:  \n     - Configuration class (`SimpleGeometryConfig`) with parameters for number of sides, angle ranges, and dataset size.  \n     - Dataset class (`SimpleGeometryDataset`) that uses a known formula (sum of interior angles = 180°(n−2)) to verify correctness.  \n   - **Output**: A text prompt (the polygon angles) and a numeric answer (the missing angle).\n\n2. **Advanced Geometry**  \n   - **Task Scope**: Coordinate-based geometry with Sympy for verification (e.g., orthocenter, incircle radius, angle measures).  \n   - **Implementation**:  \n     - Configuration class (`AdvancedGeometryConfig`) specifying coordinate ranges, possible tasks, and dataset size.  \n     - Dataset class (`AdvancedGeometryDataset`) that:\n       - Randomly generates non-degenerate triangles.\n       - Selects a task type (orthocenter, incircle, angle measure, etc.).\n       - Uses Sympy geometry methods to compute exact/approximate solutions.\n   - **Output**: A text prompt (e.g., triangle coordinates and requested property) and a numeric or symbolic solution.\n\n**Tasks**  \n- [ ] Create configuration and dataset classes for both simple and advanced geometry.  \n- [ ] Implement unit tests for deterministic generation, correct structure, and verification logic.  \n- [ ] Ensure code aligns with existing repository conventions (e.g., `ProceduralDataset` base class, `register_dataset`).  \n- [ ] Document configuration parameters, usage examples, and test coverage.\n\n**Additional Context**  \n- The simple dataset builds on existing arithmetic or logic dataset patterns by focusing on basic geometry.  \n- The advanced dataset extends geometric reasoning significantly, providing diverse and verifiable tasks for more robust model training.  \n- Both datasets will aid in testing a model’s ability to handle numeric computations, symbolic reasoning, and multi-step geometry tasks.",
+    "comments_url": "https://api.github.com/repos/open-thought/reasoning-gym/issues/29/comments",
+    "author": "Schmeitzke",
+    "comments": [
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-01-30T20:32:55Z",
+        "body": "Great proposal, please go ahead, assigned the task to you."
+      },
+      {
+        "user": "andreaskoepf",
+        "created_at": "2025-02-01T16:31:55Z",
+        "body": "@Schmeitzke Thanks for the PR! We are now missing a good `score_answer()` implementation for these datasets, e.g. to generate a score between 0-1 depending on how far the answer-value is from the right value. Also the question should include a short hint about the desired precision for the answer, e.g. rounded to how many decimal digts. Please let me know if you are in adding the score_answer methods."
+      }
+    ]
+  }
+]

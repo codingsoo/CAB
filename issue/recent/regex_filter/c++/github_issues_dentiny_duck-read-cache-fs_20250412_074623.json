@@ -1,0 +1,94 @@
+[
+  {
+    "number": 150,
+    "title": "Thread Pool Limit: Implement Maximum Thread Allocation to Prevent Resource Issues",
+    "created_at": "2025-03-22T18:26:26Z",
+    "closed_at": "2025-03-23T03:58:37Z",
+    "labels": [],
+    "url": "https://github.com/dentiny/duck-read-cache-fs/issues/150",
+    "body": "**Is your feature request related to a problem? Please describe.**\nWe currently don't have a limit on the number of threads that can be allocated in the thread pool, which can lead to resource issues.\n\n**Describe the solution you'd like**\nI verified that the issue is related to thread allocation by testing a workaround that restricts the max thread count to 10 in `GetThreadCountForSubrequests`:\n```\nif (io_request_count > 10) {\n    return 10;\n}\n```\nThis test confirmed the thread allocation is the root cause. We should implement a more robust solution similar to `DBConfig::GetSystemMaxThreads` in DuckDB to handle thread limits properly.\n",
+    "comments_url": "https://api.github.com/repos/dentiny/duck-read-cache-fs/issues/150/comments",
+    "author": "douenergy",
+    "comments": [
+      {
+        "user": "dentiny",
+        "created_at": "2025-03-22T20:35:15Z",
+        "body": "Could you please provide error message and reproduction script? "
+      }
+    ]
+  },
+  {
+    "number": 139,
+    "title": "Fix MacOS compile error by updating Immutable buffer type",
+    "created_at": "2025-03-21T23:30:50Z",
+    "closed_at": "2025-03-22T04:05:04Z",
+    "labels": [],
+    "url": "https://github.com/dentiny/duck-read-cache-fs/pull/139",
+    "body": "Fixed this MacOS compilation error by changing the `ImmutableBuffer` type from `std::shared_ptr<char[]>` to `std::shared_ptr<char>` with an appropriate array deleter. \r\n\r\nThis resolves the type compatibility issue between `char (*)[]` and the required const char* return type for the data() method.",
+    "comments_url": "https://api.github.com/repos/dentiny/duck-read-cache-fs/issues/139/comments",
+    "author": "douenergy",
+    "comments": [
+      {
+        "user": "douenergy",
+        "created_at": "2025-03-22T00:12:38Z",
+        "body": "After running `make test_debug_unit `\r\n\r\ntwo unit test will failed. \r\n\r\n1. test_set_extension_config.cpp's test case `Test on changing extension config change default cache dir path setting`\r\n\r\n```\r\nSUMMARY: AddressSanitizer: heap-use-after-free file_open_flags.hpp:111 in duckdb::FileOpenFlags::GetFlagsInternal() const\r\n```\r\n\r\n2. test_exclusive_multi_lru_cache.cpp's test case  `Put items with the same key`\r\n\r\n```\r\nSUMMARY: AddressSanitizer: heap-use-after-free string:1682 in std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>::__is_long[abi:v160006]() const\r\n```"
+      },
+      {
+        "user": "dentiny",
+        "created_at": "2025-03-22T00:14:19Z",
+        "body": "@douenergy could you please paste the **error message for compilation failure** in PR description?"
+      },
+      {
+        "user": "douenergy",
+        "created_at": "2025-03-22T00:46:17Z",
+        "body": "@dentiny  The original compile error messenge \r\n\r\n```\r\n/duck-read-cache-fs/src/utils/include/immutable_buffer.hpp:23:38: error: no matching constructor for initialization of 'std::shared_ptr<char[]>'\r\n        ImmutableBuffer(std::size_t size) : buffer(new char[size]), buf_size(size) {\r\n                                            ^      ~~~~~~~~~~~~~~\r\n```\r\n\r\n```\r\n/duck-read-cache-fs/src/utils/include/immutable_buffer.hpp:33:10: error: cannot initialize return object of type 'const char *' with an rvalue of type 'element_type *' (aka 'char (*)[]')\r\n                return buffer.get();\r\n                       ^~~~~~~~~~~~\r\n```"
+      },
+      {
+        "user": "dentiny",
+        "created_at": "2025-03-22T03:04:07Z",
+        "body": "OK I could reproduce on my local macos; I think the issue is, shared pointer of array is a C++17 feature, which is not supported by all stdlib implementation.\r\n\r\nI'll revert related PRs; meanwhile could you please close the PR? Thanks."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "Add benchmark README",
+    "created_at": "2025-02-20T21:32:41Z",
+    "closed_at": "2025-02-22T11:37:58Z",
+    "labels": [],
+    "url": "https://github.com/dentiny/duck-read-cache-fs/pull/73",
+    "body": "Add performance benchmark documentation comparing DuckDB native httpfs vs Cache FS Extension for sequential S3 reads.",
+    "comments_url": "https://api.github.com/repos/dentiny/duck-read-cache-fs/issues/73/comments",
+    "author": "douenergy",
+    "comments": [
+      {
+        "user": "dentiny",
+        "created_at": "2025-02-21T11:03:01Z",
+        "body": "> The numbers don't make sense to me, first latency from Taiwan to Japan should be much less than US to Japan, so I expect much better benchmark performance; second parallel read should have much better performance than sequential access;\r\n\r\nSync-ed offline, poor performance for parallel read is caused by limited bandwidth for network environment --- single threaded read already saturated b/w, so parallelism doesn't help that much.\r\n\r\n@douenergy You need to mention the machine configuration and bucket/test location in the doc as well."
+      }
+    ]
+  },
+  {
+    "number": 64,
+    "title": "Sequential read benchmark",
+    "created_at": "2025-02-19T09:33:11Z",
+    "closed_at": "2025-02-20T10:00:57Z",
+    "labels": [],
+    "url": "https://github.com/dentiny/duck-read-cache-fs/pull/64",
+    "body": "Hardward config:\r\n```\r\nubuntu@hjiang-devbox-pg$ lscpu\r\nArchitecture:            x86_64\r\n  CPU op-mode(s):        32-bit, 64-bit\r\n  Address sizes:         46 bits physical, 48 bits virtual\r\n  Byte Order:            Little Endian\r\nCPU(s):                  32\r\n  On-line CPU(s) list:   0-31\r\nCaches (sum of all):     \r\n  L1d:                   512 KiB (16 instances)\r\n  L1i:                   512 KiB (16 instances)\r\n  L2:                    16 MiB (16 instances)\r\n  L3:                    35.8 MiB (1 instance)\r\n\r\nubuntu@hjiang-devbox-pg$ lsmem \r\nRANGE                                   SIZE  STATE REMOVABLE   BLOCK\r\n0x0000000000000000-0x00000000bfffffff     3G online       yes    0-23\r\n0x0000000100000000-0x0000001fe7ffffff 123.6G online       yes 32-1020\r\n\r\nMemory block size:       128M\r\nTotal online memory:    126.6G\r\nTotal offline memory:      0B\r\n```\r\n\r\nBenchmark and bucket region:\r\n- Benchmark is performed at us-west1 region\r\n- Bucket is at Tokyo\r\n\r\nBenchmark results:\r\n```\r\nStarts to warmup read\r\nSequential read of 255970454 bytes in 33554432-byte chunks takes 10833 milliseconds\r\nStarts with httpfs read with no cache\r\nSequential read of 255970454 bytes in 33554432-byte chunks takes 10681 milliseconds\r\nStarts on-disk cache read with no existing cache\r\nSequential read of 255970454 bytes in 33554432-byte chunks takes 3934 milliseconds\r\nStarts on-disk cache read with local cache\r\nSequential read of 255970454 bytes in 33554432-byte chunks takes 31 milliseconds\r\n```",
+    "comments_url": "https://api.github.com/repos/dentiny/duck-read-cache-fs/issues/64/comments",
+    "author": "douenergy",
+    "comments": [
+      {
+        "user": "dentiny",
+        "created_at": "2025-02-20T07:09:20Z",
+        "body": "I updated your branch, since it's stale and contains bug."
+      },
+      {
+        "user": "dentiny",
+        "created_at": "2025-02-20T09:57:54Z",
+        "body": "After fixing the configuration and tune the block and request size a bit, results looks reasonable to me."
+      }
+    ]
+  }
+]

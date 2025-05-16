@@ -1,0 +1,375 @@
+[
+  {
+    "number": 51474,
+    "title": "Cannot allocate RAFT instance due to \"Address family not supported by protocol\" (IPv6 disabled)",
+    "created_at": "2023-06-27T11:09:14Z",
+    "closed_at": "2023-07-10T09:44:41Z",
+    "labels": [
+      "question",
+      "st-need-info",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/51474",
+    "body": "\r\nIt's look like that resolving of issue #33381 hasn't fixed the problem with ClickHouse-Keeper on machines with disabled IPv6:\r\n\r\nIn /var/log/clickhouse-server/clickhouse-server.log we have:\r\n\r\n2023.06.27 13:47:36.661896 [ 113898 ] {} <Error> RaftInstance: got exception: open: Address family not supported by protocol [system:97] on port 9234\r\n2023.06.27 13:47:36.661947 [ 113898 ] {} <Debug> KeeperDispatcher: Server initialized, waiting for quorum\r\n2023.06.27 13:50:36.662692 [ 113898 ] {} <Error> void DB::KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration &, bool, bool): Code: 568. DB::Exception: Failed to wait RAFT initialization. (RAFT_ERROR), Stack trace (when copying this message, always include the lines below):\r\n\r\n0. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int, bool) @ 0xa3ec73a in /usr/bin/clickhouse\r\n1. DB::KeeperServer::waitInit() @ 0x16062e35 in /usr/bin/clickhouse\r\n2. DB::KeeperDispatcher::initialize(Poco::Util::AbstractConfiguration const&, bool, bool) @ 0x1604df4a in /usr/bin/clickhouse\r\n3. DB::Context::initializeKeeperDispatcher(bool) const @ 0x14875d4d in /usr/bin/clickhouse\r\n4. DB::Server::main(std::__1::vector<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >, std::__1::allocator<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > > > const&) @ 0xa48d880 in /usr/bin/clickhouse\r\n5. Poco::Util::Application::run() @ 0x189a11a6 in /usr/bin/clickhouse\r\n6. DB::Server::run() @ 0xa47e8fe in /usr/bin/clickhouse\r\n7. mainEntryClickHouseServer(int, char**) @ 0xa47be97 in /usr/bin/clickhouse\r\n8. main @ 0xa3da86b in /usr/bin/clickhouse\r\n9. __libc_start_main @ 0x3ad85 in /usr/lib64/libc-2.28.so\r\n10. _start @ 0xa19a46e in /usr/bin/clickhouse\r\n (version 22.8.6.71 (official build))\r\n\r\n...and no listening ports from ClickHouse...\r\nss -tunlp\r\nNetid                 State                  Recv-Q                 Send-Q                                 Local Address:Port                                  Peer Address:Port                Process                \r\nudp                   UNCONN                 0                      0                                            0.0.0.0:111                                        0.0.0.0:*                                          \r\nudp                   UNCONN                 0                      0                                          127.0.0.1:323                                        0.0.0.0:*                                          \r\nudp                   UNCONN                 0                      0                                            0.0.0.0:45755                                      0.0.0.0:*                                          \r\ntcp                   LISTEN                 0                      128                                          0.0.0.0:10050                                      0.0.0.0:*                                          \r\ntcp                   LISTEN                 0                      128                                          0.0.0.0:111                                        0.0.0.0:*                                          \r\ntcp                   LISTEN                 0                      128                                          0.0.0.0:22                                         0.0.0.0:*  \r\n\r\nThere are no uncommented IPv6 wildcards in config.xml, config.d configs and only one default user. To config.xml we added only:\r\n<listen_host>0.0.0.0</listen_host>\r\n<interserver_listen_host>0.0.0.0</interserver_listen_host>\r\nEverything else is default after ClickHouse installed from rpm.\r\n\r\nClickHouse release: 22.8.6.71-lts\r\nOS: RHEL 8\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/51474/comments",
+    "author": "SavelyevPavel",
+    "comments": [
+      {
+        "user": "antonio2368",
+        "created_at": "2023-06-28T12:27:06Z",
+        "body": "Can you try setting `keeper_server.enable_ipv6` to `false` in your XML?\r\n`interserver_listen_host` support in Keeper is in 22.9+."
+      },
+      {
+        "user": "SavelyevPavel",
+        "created_at": "2023-07-10T09:02:47Z",
+        "body": "Yes, `keeper_server.enable_ipv6` works! Thank you, @antonio2368! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "A configuration option that allows ClickHouse-Keeper to work on systems with IPv6 disabled",
+      "A solution that prevents the 'Failed to wait RAFT initialization' error",
+      "A way to make ClickHouse-Keeper properly bind to network interfaces when IPv6 is disabled"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:14:51"
+    }
+  },
+  {
+    "number": 28903,
+    "title": "clickhouse server crashes after starts ",
+    "created_at": "2021-09-11T18:16:54Z",
+    "closed_at": "2021-09-11T21:51:45Z",
+    "labels": [
+      "invalid",
+      "question",
+      "alternative build"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/28903",
+    "body": "error message below\r\n```\r\n2021.09.12 01:23:44.437039 [ 18936 ] {} <Fatal> BaseDaemon: ########################################\r\n2021.09.12 01:23:44.437087 [ 18936 ] {} <Fatal> BaseDaemon: (version 20.8.3.18, no build id) (from thread 18818) (no query) Received signal Segmentation fault (11)\r\n2021.09.12 01:23:44.437113 [ 18936 ] {} <Fatal> BaseDaemon: Address: 0x7f78fb378000 Access: write. Attempted access has violated the permissions assigned to the memory area.\r\n2021.09.12 01:23:44.437126 [ 18936 ] {} <Fatal> BaseDaemon: Stack trace: 0x14b99c2f 0x14b9e7ad 0x14b9fd36 0x14b98e78 0x14ba17ef 0x14ba1b33 0x9e7e7ea 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d 0x114dc197 0x10a7675d\r\n2021.09.12 01:23:44.437163 [ 18936 ] {} <Fatal> BaseDaemon: 3. ? @ 0x14b99c2f in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437171 [ 18936 ] {} <Fatal> BaseDaemon: 4. ? @ 0x14b9e7ad in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437177 [ 18936 ] {} <Fatal> BaseDaemon: 5. ? @ 0x14b9fd36 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437186 [ 18936 ] {} <Fatal> BaseDaemon: 6. unw_step @ 0x14b98e78 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437193 [ 18936 ] {} <Fatal> BaseDaemon: 7. ? @ 0x14ba17ef in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437203 [ 18936 ] {} <Fatal> BaseDaemon: 8. _Unwind_Resume @ 0x14ba1b33 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437212 [ 18936 ] {} <Fatal> BaseDaemon: 9. ? @ 0x9e7e7ea in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437224 [ 18936 ] {} <Fatal> BaseDaemon: 10. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437236 [ 18936 ] {} <Fatal> BaseDaemon: 11. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437259 [ 18936 ] {} <Fatal> BaseDaemon: 12. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437267 [ 18936 ] {} <Fatal> BaseDaemon: 13. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437274 [ 18936 ] {} <Fatal> BaseDaemon: 14. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437281 [ 18936 ] {} <Fatal> BaseDaemon: 15. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437288 [ 18936 ] {} <Fatal> BaseDaemon: 16. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437295 [ 18936 ] {} <Fatal> BaseDaemon: 17. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437302 [ 18936 ] {} <Fatal> BaseDaemon: 18. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437309 [ 18936 ] {} <Fatal> BaseDaemon: 19. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437315 [ 18936 ] {} <Fatal> BaseDaemon: 20. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437322 [ 18936 ] {} <Fatal> BaseDaemon: 21. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437329 [ 18936 ] {} <Fatal> BaseDaemon: 22. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437341 [ 18936 ] {} <Fatal> BaseDaemon: 23. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437348 [ 18936 ] {} <Fatal> BaseDaemon: 24. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437355 [ 18936 ] {} <Fatal> BaseDaemon: 25. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437362 [ 18936 ] {} <Fatal> BaseDaemon: 26. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437369 [ 18936 ] {} <Fatal> BaseDaemon: 27. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437376 [ 18936 ] {} <Fatal> BaseDaemon: 28. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437382 [ 18936 ] {} <Fatal> BaseDaemon: 29. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437389 [ 18936 ] {} <Fatal> BaseDaemon: 30. DB::ExpressionBlockInputStream::readImpl() @ 0x114dc197 in /usr/bin/clickhouse\r\n2021.09.12 01:23:44.437396 [ 18936 ] {} <Fatal> BaseDaemon: 31. DB::IBlockInputStream::read() @ 0x10a7675d in /usr/bin/clickhouse\r\n\r\n```\r\nScenario\uff1aour clickhouse cluster runs stably for a time, yesterday a beginner developer runs a lot of \"alter table\" query try to \"update\" a field in a big table, the server crashed. then we add \r\n```\r\n<cleanup_delay_period>60</cleanup_delay_period>\r\n<task_max_lifetime>60</task_max_lifetime>\r\n<max_tasks_in_queue>200</max_tasks_in_queue>\r\n```\r\nthis to the clickhouse config to clean up the DDL queue. after that, some of clickhouse servers could not start up.\r\nAny ideas",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/28903/comments",
+    "author": "liu316484231",
+    "comments": [
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-09-11T20:53:33Z",
+        "body": "It's not official build."
+      },
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-09-11T21:47:14Z",
+        "body": "About how to fix your issue: it has caused by large number of ALTER mutations. You should find and delete the offending mutation record. Its location depends on whether you are using MergeTree or ReplicatedMergeTree."
+      },
+      {
+        "user": "liu316484231",
+        "created_at": "2021-09-11T23:01:21Z",
+        "body": "> About how to fix your issue: it has caused by large number of ALTER mutations. You should find and delete the offending mutation record. Its location depends on whether you are using MergeTree or ReplicatedMergeTree.\r\n\r\nhow to find and delete these mutations?we use MergeTree. I didnt see any log related to the alter mutation after modify the config before crashes"
+      },
+      {
+        "user": "liu316484231",
+        "created_at": "2021-09-11T23:03:54Z",
+        "body": "> It's not official build.\r\n\r\nyou mean the version we use (version 20.8.3.18, no build id) is not official recommanded?"
+      },
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-09-11T23:05:19Z",
+        "body": "Mutations are located in `mutation_*.txt` files. You can delete them.\r\n\r\n> you mean the version we use (version 20.8.3.18, no build id) is not official recommanded?\r\n\r\nYes. And it is not our build. It is somehow modified or you have built it manually."
+      },
+      {
+        "user": "liu316484231",
+        "created_at": "2021-09-13T02:29:35Z",
+        "body": "> Mutations are located in `mutation_*.txt` files. You can delete them.\r\n> \r\n> > you mean the version we use (version 20.8.3.18, no build id) is not official recommanded?\r\n> \r\n> Yes. And it is not our build. It is somehow modified or you have built it manually.\r\n\r\nThank you for your reply, we fixed the problem"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Instructions for identifying and removing problematic mutation records",
+      "Explanation of the root cause of the server crash",
+      "Clarification about their ClickHouse build status"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:25:30"
+    }
+  },
+  {
+    "number": 21894,
+    "title": "Distributed Tables missing records. \"Exception: Too large string size.\" in logs.",
+    "created_at": "2021-03-18T21:48:33Z",
+    "closed_at": "2021-03-19T02:38:48Z",
+    "labels": [
+      "question",
+      "obsolete-version",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/21894",
+    "body": "Setup:\r\n```\r\n         <shard>\r\n              <weight>1</weight>\r\n              <internal_replication>false</internal_replication>\r\n              <replica>\r\n                  <host><server1domainname></host>\r\n                  <port>9000</port>\r\n              </replica>\r\n              <replica>\r\n                  <host><server2domainname></host>\r\n                  <port>9000</port>\r\n              </replica>\r\n          </shard>\r\n\r\n```\r\nOur code writes to a Distributed table on either server, and then clickhouse writes the record to the underlying real tables on both servers. \r\n\r\nNo zookeeper.\r\n\r\nThis has been working for a few years.\r\n\r\nIncident.\r\nTo get multivolume support, I upgraded from 18.14.19 to 20.8.12.2. I had a number of problems, and ran out of time to debug/fix, so I rolled back to 18.14.19. My problem probably started then.\r\n\r\nNow we have discovered that some records are not getting replicated to one of the servers. Or maybe replication is working from server1 -> server2, but not the other way. I'm not 100% sure. When reads randomly choose a server, they get different results.\r\n\r\nI have these error messages constantly on one server:\r\n\r\n`2021.03.19 02:35:13.294443 [ 39 ] {} <Error> <table>.Distributed.DirectoryMonitor: Poco::Exception. Code: 1000, e.code() = 0, e.displayText() = Exception: Too large string size., e.what() = Exception\r\n`\r\n\r\nI also noticed a small number of these errors on the other server, but they are not constant. Only a handful from a few hours ago.\r\n\r\n`2021.03.18 19:22:36.647630 [ 38 ] {} <Error> <table>.Distributed.DirectoryMonitor: Code: 252, e.displayText() = DB::Exception: Received from <serverdomainname>:9000, <ipaddress> DB::Exception: Too many parts (304). Merges are processing significantly slower than inserts..\r\n`\r\n\r\nI did some research into the first error, but I don't really understand which directory, or which string it is referring to.\r\n\r\nThanks.",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/21894/comments",
+    "author": "entropical",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2021-03-18T22:47:41Z",
+        "body": "You don't have actual Replication. \r\nDistributed table propagates inserts into 2 CH nodes. Sometimes inserts can fail into one replica and succeed into another.\r\nThere is no surprise that Replicas has different data. It's documented behavior for this setup.\r\n\r\n >Poco::Exception. Code: 1000, e.code() = 0, e.displayText() = Exception: Too large string size\r\n\r\nYou should stop insertion and check what is going in Distributed table catalog. \r\nProbably drop Distributed table. Remove all remains of Distributed folder (/var/lib/clickhouse/data/db/distributedtablename/) and create Distributed table back.\r\n\r\n> Too many parts (304). Merges are\r\n\r\nNeed to check what is going on with `<serverdomainname>:9000` in this server logs. And in `select * from system.merges`\r\n\r\n"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2021-03-18T22:48:48Z",
+        "body": ">I did some research into the first error, but I don't really understand which directory, or which string it is referring to.\r\n\r\nIt's about `/var/lib/clickhouse/data/db/distributedtablename/.....`"
+      },
+      {
+        "user": "entropical",
+        "created_at": "2021-03-18T23:10:29Z",
+        "body": "> You don't have actual Replication.\r\n> It's documented behavior for this setup.\r\n\r\nYeah, I did know this, but up until very recently it has been sufficient for our purpose.\r\n\r\n> It's about /var/lib/clickhouse/data/db/distributedtablename/.....\r\n\r\nRight! I noticed this directory when I had the failed upgrade.\r\n\r\nI have two directories here, but I think I should only have one. One has IP, one has domainname. I'm pretty sure this is related to the version change.\r\n\r\n/var/lib/clickhouse/data/noc/distributedtablename/\r\ndefault@111%2E222%2E333%2E444:9000/\r\ndefault@domainname%2Etld%2Etld%2Etld%2Ecom:9000/\r\n\r\n> Probably drop Distributed table. Remove all remains of Distributed folder (/var/lib/clickhouse/data/db/distributedtablename/) and create Distributed table back.\r\n\r\nYeah, this sounds like it might help. This is safe, right, because the Distributed table doesn't actually contain data? Trying not to lose any (more...) data."
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2021-03-18T23:44:29Z",
+        "body": ">This is safe, right, because the Distributed table doesn't actually contain data? \r\n\r\nYes. It is safe. It contains only not propagated inserts. That's why I suggest to stop insertion.\r\nCheck that it stops to propagate. \r\nCheck the size of these subdirectories: `du -sh /var/lib/clickhouse/data/noc/distributedtablename/*`\r\nIf it's huge, check how many .bin files inside. Check the server logs."
+      },
+      {
+        "user": "entropical",
+        "created_at": "2021-03-19T00:20:21Z",
+        "body": "On one server, both of these directories are very small.\r\nOn the other server, the one with the IP address in as the name is small. The one with the domain name appears to be so huge I can't even ls or du it.\r\n\r\n> Remove all remains of Distributed folder\r\n\r\nHypothetically, if there are orphaned bin files here, can I reintroduce them after I recreate the Distributed table, and it is working? I'm not _too_ concerned if not, just working out my options.\r\n\r\nThanks for your excellent help by the way."
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2021-03-19T00:53:01Z",
+        "body": ">Hypothetically, if there are orphaned bin files here, \r\n>can I reintroduce them after I recreate the Distributed table, and it is working?\r\n> I'm not too concerned if not, just working out my options.\r\n\r\nIf you sure that both directories are the same destination you can move files from the one to anther.\r\nAnd yes, you can move files / rename (move) the whole  directory to somewhere to /var/lib/clickhouse\r\nrecreate the distr. table and move .bin files one by one or  1000 by 1000 ( batches ).\r\n\r\n"
+      },
+      {
+        "user": "entropical",
+        "created_at": "2021-03-19T01:33:53Z",
+        "body": "I stopped my writers, and am now dropping the replicatedtable. It has taken about 10 minutes so far... "
+      },
+      {
+        "user": "entropical",
+        "created_at": "2021-03-19T02:38:48Z",
+        "body": "The drop was taking forever. I think it was attempting to catch up on the pending propogations first.\r\n\r\nI moved the directory to a safe location, and the drop completed a few seconds later. I then recreated the distributed table, and started my writers. For the last hour it looks like the propagations are working fine.\r\n\r\nI'll now try to reparent my orphan bin files.\r\n\r\nThanks again for your help @den-crane."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of what's causing the replication issues between servers",
+      "Identification of the specific error message source",
+      "A safe procedure to fix the distributed table issues without data loss",
+      "Options for handling orphaned files from the distributed table",
+      "Guidance on troubleshooting steps to diagnose distributed table problems"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:29:27"
+    }
+  },
+  {
+    "number": 17353,
+    "title": "replicated part FAILED fetches between two replicas",
+    "created_at": "2020-11-24T07:49:49Z",
+    "closed_at": "2021-08-17T07:49:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/17353",
+    "body": "This happens between two replicas of the CH cluster.\r\n\r\nOne of the replicas runs well but the other one seems fail to fetch data part from the first one.\r\n\r\nThe log I pasted below.\r\n\r\nThis problem's solved after restarting clickhouse server on the pair node.\r\n\r\nI am confused that why this would happen and what infos we can gain from the log below.\r\n\r\nand how to point and solve this problem without restarting.\r\n\r\nThanks a lot.\r\n\r\n\r\n\r\n2020.11.24 15:33:44.251143 [ 42024 ] {} <Error> {database}.{table_name}: DB::StorageReplicatedMergeTree::queueTask()::<lambda(DB::StorageReplicatedMergeTree::LogEntryPtr&)>: Code: 86, e.displayText() = DB::Exception: Received error from remote server ?endpoint=DataPartsExchange%3A%2Fclickhouse%2Fck_cluster%2F{database}%2Ftables%2F01-05%2F{table_name}%2Freplicas%2F{replica_name}&part=20201127_694_723_6&client_protocol_version=2&compress=false. HTTP status code: 500 Internal Server Error, body: Code: 221, e.displayText() = DB::Exception: No interserver IO endpoint named DataPartsExchange:/clickhouse/ck_cluster/{database}/tables/01-05/{table_name}/replicas/{replica_name}, Stack trace (when copying this message, always include the lines below):\r\n\r\n0. Poco::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int) @ 0xbb8c1cc in /usr/bin/clickhouse\r\n1. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int) @ 0x4ff4bb9 in /usr/bin/clickhouse\r\n2. ? @ 0x49e1048 in /usr/bin/clickhouse\r\n3. DB::InterserverIOHTTPHandler::handleRequest(Poco::Net::HTTPServerRequest&, Poco::Net::HTTPServerResponse&) @ 0x5065294 in /usr/bin/clickhouse\r\n4. Poco::Net::HTTPServerConnection::run() @ 0x9c6b43b in /usr/bin/clickhouse\r\n5. Poco::Net::TCPServerConnection::start() @ 0x9c68017 in /usr/bin/clickhouse\r\n6. Poco::Net::TCPServerDispatcher::run() @ 0x9c6840d in /usr/bin/clickhouse\r\n7. Poco::PooledThread::run() @ 0xbbfaf4f in /usr/bin/clickhouse\r\n8. Poco::ThreadImpl::runnableEntry(void*) @ 0xbbf81b8 in /usr/bin/clickhouse\r\n9. ? @ 0xbbf98e9 in /usr/bin/clickhouse\r\n10. start_thread @ 0x7eb5 in /usr/lib64/libpthread-2.17.so\r\n11. clone @ 0xfe8fd in /usr/lib64/libc-2.17.so\r\n (version 20.3.8.53), Stack trace (when copying this message, always include the lines below):\r\n\r\n0. Poco::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int) @ 0xbb8c1cc in /usr/bin/clickhouse\r\n1. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int) @ 0x4ff4bb9 in /usr/bin/clickhouse\r\n2. ? @ 0x4d5f6ba in /usr/bin/clickhouse\r\n3. DB::receiveResponse(Poco::Net::HTTPClientSession&, Poco::Net::HTTPRequest const&, Poco::Net::HTTPResponse&, bool) @ 0x9a4f96f in /usr/bin/clickhouse\r\n4. DB::detail::ReadWriteBufferFromHTTPBase<std::__1::shared_ptr<DB::UpdatablePooledSession> >::call(Poco::URI, Poco::Net::HTTPResponse&) @ 0x8ece233 in /usr/bin/clickhouse\r\n5. DB::detail::ReadWriteBufferFromHTTPBase<std::__1::shared_ptr<DB::UpdatablePooledSession> >::ReadWriteBufferFromHTTPBase(std::__1::shared_ptr<DB::UpdatablePooledSession>, Poco::URI, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::function<void (std::__1::basic_ostream<char, std::__1::char_traits<char> >&)>, Poco::Net::HTTPBasicCredentials const&, unsigned long, std::__1::vector<std::__1::tuple<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > >, std::__1::allocator<std::__1::tuple<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > > > >, DB::RemoteHostFilter const&) @ 0x8ece7cb in /usr/bin/clickhouse\r\n6. DB::DataPartsExchange::Fetcher::fetchPart(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int, DB::ConnectionTimeouts const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, bool, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&) @ 0x8ecb819 in /usr/bin/clickhouse\r\n7. ? @ 0x8e0c3c3 in /usr/bin/clickhouse\r\n8. DB::StorageReplicatedMergeTree::fetchPart(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, bool, unsigned long) @ 0x8e51966 in /usr/bin/clickhouse\r\n9. DB::StorageReplicatedMergeTree::executeFetch(DB::ReplicatedMergeTreeLogEntry&) @ 0x8e54fb6 in /usr/bin/clickhouse\r\n10. DB::StorageReplicatedMergeTree::executeLogEntry(DB::ReplicatedMergeTreeLogEntry&) @ 0x8e5678d in /usr/bin/clickhouse\r\n11. ? @ 0x8e56bbc in /usr/bin/clickhouse\r\n12. DB::ReplicatedMergeTreeQueue::processEntry(std::__1::function<std::__1::shared_ptr<zkutil::ZooKeeper> ()>, std::__1::shared_ptr<DB::ReplicatedMergeTreeLogEntry>&, std::__1::function<bool (std::__1::shared_ptr<DB::ReplicatedMergeTreeLogEntry>&)>) @ 0x901eb0e in /usr/bin/clickhouse\r\n13. DB::StorageReplicatedMergeTree::queueTask() @ 0x8e0ddd7 in /usr/bin/clickhouse\r\n14. DB::BackgroundProcessingPool::threadFunction() @ 0x8ec6221 in /usr/bin/clickhouse\r\n15. ? @ 0x8ec6bcd in /usr/bin/clickhouse\r\n16. ThreadPoolImpl<std::__1::thread>::worker(std::__1::__list_iterator<std::__1::thread, void*>) @ 0x4ffe407 in /usr/bin/clickhouse\r\n17. ? @ 0x4ffca5f in /usr/bin/clickhouse\r\n18. start_thread @ 0x7eb5 in /usr/lib64/libpthread-2.17.so\r\n19. clone @ 0xfe8fd in /usr/lib64/libc-2.17.so\r\n (version 20.3.8.53)\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/17353/comments",
+    "author": "BernieJiangDL",
+    "comments": [
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-08-17T07:49:16Z",
+        "body": "It indicates misconfiguration.\r\n\r\nMaybe the network configuration (IP addresses or hostnames) has changed in background.\r\nIf it is not fixed automatically, you have to restart the server."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why data fetching fails between ClickHouse replicas",
+      "Information about what can be learned from the provided error logs",
+      "A solution to fix the replication issue without restarting the server",
+      "Guidance on diagnosing similar replication problems in the future"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:33:20"
+    }
+  },
+  {
+    "number": 15802,
+    "title": "Connecttion refused after kill the clickhouse server process",
+    "created_at": "2020-10-10T02:18:38Z",
+    "closed_at": "2020-10-12T03:04:30Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/15802",
+    "body": "I have a clickhouse table containing more than 40 billion records.  One day I want to modify a parameter in my config.xml. So I attempted to stop the server but it was stuck. I guess there were many background processes working. Then I kill the clickhouse server with \"kill -9\".\r\nHowever when I tried to restart the server and run clickhouse-client again, I got \"connection refused\". \r\nIf I remove all data partitions and the corresponding table metadata (sql), it works fine again. Once I move the table data back to its position, I got the same error \"connection refused\" again.\r\n\r\n**How to reproduce**\r\nif I tried to stop the clickhosue server process with \"kill -9\", but not \"clickhouse-server stop\". the error occurs. Especially when its a massive table.\r\n\r\n* Which ClickHouse server version to use\r\nversion 20.0.10\r\n\r\nIf any ideas? Thanks.",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/15802/comments",
+    "author": "y45398jp123",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2020-10-10T02:22:20Z",
+        "body": "40 billion records -- it's not big table. There are installation with 40 trillions.\r\nCH start time depends on number of parts (table partitioning).\r\n\r\nCan you show \r\n`select count() from system.parts`?\r\n`select count() from system.columns where tables = ....` ?"
+      },
+      {
+        "user": "y45398jp123",
+        "created_at": "2020-10-10T02:38:42Z",
+        "body": "Thanks for your reply @den-crane \r\nthe table contains 14521 partitions and 119 columns.\r\ndo i have to wait for longer time after restart the server before trying to connect? have no idea...\r\nThanks."
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-10-10T12:30:11Z",
+        "body": ">The table contains 14521 partitions and 119 columns.\r\n\r\nThen slow start is expected. Especially on slow HDD or IOPS limited cloud disks (like AWS EBS GP1)\r\nYou should wait longer  for a start minutes. I've heard that in case of 100000 CH can start up to 40 minutes.\r\nThis is expected by design. Because CH reads reads every part (metadata) on start. \r\n\r\nYou can use disks with low latency (SSD/NVME) or reduce number of partitions (by re-desingning your table -- partition by section)."
+      },
+      {
+        "user": "y45398jp123",
+        "created_at": "2020-10-12T03:04:26Z",
+        "body": "thanks so much for reply, quick and professional !"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation for why the server connection is refused after a forced kill",
+      "Information about expected server behavior with large datasets",
+      "Guidance on appropriate wait times for server restart",
+      "Technical explanation of why the server takes time to start",
+      "Practical recommendations to improve the situation"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:35:42"
+    }
+  },
+  {
+    "number": 14419,
+    "title": "No data in replicated table",
+    "created_at": "2020-09-02T17:41:29Z",
+    "closed_at": "2020-09-03T14:21:46Z",
+    "labels": [
+      "invalid",
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/14419",
+    "body": "I have two replicas. Data are inserted into table in replica A. Table counterpart in replica B is empty though. Data are not replicated between replicas. I tried recreating table in replica B but it did not trigger the sync.\r\n\r\nReplication for other tables is working just fine.\r\n\r\nWhat can I do to debug the issue? `show create table` gives same result for both replicas.\r\n\r\nClickHouse version 20.6",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/14419/comments",
+    "author": "simPod",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2020-09-02T17:47:09Z",
+        "body": "check (at both nodes) : select * from system.replication_queue \r\n\r\nwrong ZK path? different shards?"
+      },
+      {
+        "user": "simPod",
+        "created_at": "2020-09-02T17:50:07Z",
+        "body": "I don't have multiple shards.\r\n\r\nreplication queue does not contain any records for the target table\r\n\r\npath is the same (reported by show create table)\r\n\r\n\ud83e\udd14 "
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-09-02T17:52:25Z",
+        "body": "Show `grep tablename clickhouseserver.log`"
+      },
+      {
+        "user": "simPod",
+        "created_at": "2020-09-02T17:56:41Z",
+        "body": "I tried grepping `cat /var/log/clickhouse-server/clickhouse-server.log` in both replicas but for this particular table contains no logs (it does have some warnings for larger tables though)."
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-09-02T18:05:33Z",
+        "body": "It could be anything. How did you copy/pasted / attached zk path when you created a table?\r\n\r\nFor example these two strings are different. \r\nLatin:    /ccccc/ \r\n\u0421yrrylic: /\u0441\u0441\u0441\u0441\u0441/ \r\n\r\nCheck zookeeper select * from system.zookeeper where path = '/..zk_path/replicas\r\nCheck select * from system.replicas where table = ...\r\n"
+      },
+      {
+        "user": "simPod",
+        "created_at": "2020-09-03T13:29:12Z",
+        "body": "> select * from system.zookeeper where path = '/..zk_path/replicas\r\nGives result on both replicas. \r\n\r\nBut on the B, there's `replicas\tlast added replica: A` (version: 1)\r\nFor fully replicated tables it's `replicas\tlast added replica: B` (version: 4)\r\n\r\n`system.replicas` says the `total_replicas` is 1. Seems like those tables are disconnected on both replicas. Is there a way to get in in sync somehow?\r\n\r\n> How did you copy/pasted / attached zk path when you created a table?\r\n\r\nI did it a long time ago but It was simple CREATE TABLE ON CLUSTER I believe"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-09-03T14:18:37Z",
+        "body": "Check at both servers that zhash is identical \r\n```\r\n\r\nselect replica_name, total_replicas, active_replicas, zookeeper_path, \r\n           cityHash64(zookeeper_path) zhash, hex(zookeeper_path) \r\nfrom system.replicas\r\nwhere table = '....'\r\n```"
+      },
+      {
+        "user": "simPod",
+        "created_at": "2020-09-03T14:21:46Z",
+        "body": "Zookeeper paths differ in a small typo :/ Thank you very much for helping me debug this. I have setup a new monitoring query to catch this in the future."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Effective debugging steps to identify replication issues between ClickHouse replicas",
+      "Commands to inspect the replication configuration and status",
+      "Methods to verify ZooKeeper path consistency between replicas",
+      "Guidance that considers subtle configuration differences that might not be immediately obvious"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:37:17"
+    }
+  },
+  {
+    "number": 7151,
+    "title": "Log file not recreated if deleted",
+    "created_at": "2019-09-30T09:42:09Z",
+    "closed_at": "2019-09-30T12:02:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/7151",
+    "body": "Hi,\r\n\r\nMy ClickHouse is integrated with a system that regularly take the log files, backup them, and delete them locally. It is a common system to lots of services.\r\n\r\nNevertheless, I got an issue with clickhouse. If you delete one ClickHouse log file when ClickHouse is up and running, the log file will not be recreated, and all new clickhouse logs will be lost.\r\n\r\nForcing the reload of the config file or flushing the log  (SYSTEM RELOAD CONFIG or SYSTEM FLUSH LOGS) does not seems to fix the issue.\r\n\r\nSo is there a way to force clickhouse to recreate the log file ?",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/7151/comments",
+    "author": "edonin",
+    "comments": [
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2019-09-30T09:46:07Z",
+        "body": "You can send SIGHUP to clickhouse-server to create next log file."
+      },
+      {
+        "user": "edonin",
+        "created_at": "2019-09-30T12:02:44Z",
+        "body": "Super, it is working.\r\n\r\nThanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to force ClickHouse to recreate log files after they've been deleted",
+      "A solution that works with ClickHouse's running state without requiring restart",
+      "A solution compatible with external log management systems"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-14 00:27:44"
+    }
+  },
+  {
+    "number": 3434,
+    "title": "Kafka EOF reached for partition ...",
+    "created_at": "2018-10-21T09:09:39Z",
+    "closed_at": "2018-10-22T20:14:22Z",
+    "labels": [
+      "question",
+      "comp-kafka"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/3434",
+    "body": "```\r\nClickHouse client version 18.14.9.\r\nConnecting to database monitoring at localhost:9000 as user broker.\r\nConnected to ClickHouse server version 18.14.9 revision 54409.\r\n\r\n\u250c\u2500name\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500value\u2500\u2500\u2500\u252c\u2500changed\u2500\u252c\u2500description\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\r\n\u2502 max_insert_block_size    \u2502 1048576 \u2502       0 \u2502 The maximum block size for insertion, if we control the creation of blocks for insertion. \u2502\r\n\u2502 stream_flush_interval_ms \u2502 7500    \u2502       0 \u2502 Timeout for flushing data from streaming storages.                                        \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```\r\n\r\n\r\nI just upgrade from 1.1.54385 to 18.14.9 and I'm receiving \"EOF reached for partition...\" when any of my materialized views are running. Queues with little traffic don't show this message so much but a queue that gets 100+ messages per second is constantly getting this message and some queue messages aren't written to the MergeTree table. Any advice would be greatly appreciated.\r\n\r\n```\r\n2018.10.21 08:57:38.093341 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146709\r\n2018.10.21 08:57:38.620841 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146723\r\n2018.10.21 08:57:38.767349 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146724\r\n2018.10.21 08:57:38.973400 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146727\r\n2018.10.21 08:57:39.254782 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146730\r\n2018.10.21 08:57:39.706890 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146739\r\n2018.10.21 08:57:40.088991 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146745\r\n2018.10.21 08:57:40.242327 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146746\r\n2018.10.21 08:57:40.766095 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146749\r\n2018.10.21 08:57:41.090802 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146751\r\n2018.10.21 08:57:41.216236 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146752\r\n2018.10.21 08:57:41.587863 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146756\r\n2018.10.21 08:57:41.705616 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146759\r\n2018.10.21 08:57:41.933883 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146763\r\n2018.10.21 08:57:42.111605 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146765\r\n2018.10.21 08:57:42.585086 [ 33 ] {} <Trace> StorageKafka (monitoring_middle_registration_kafka_queue): EOF reached for partition 0 offset 260146773\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/3434/comments",
+    "author": "daledude",
+    "comments": [
+      {
+        "user": "vavrusa",
+        "created_at": "2018-10-22T19:26:39Z",
+        "body": "This just means that Kafka consumer reached EOF for given partition. Background consumer uses this as a signal for closing current batch, instead of waiting for timeout. It's useful for tracing/debugging (which is why it's emitted at trace level)."
+      },
+      {
+        "user": "daledude",
+        "created_at": "2018-10-22T20:14:22Z",
+        "body": "Thank you @vavrusa! My msg loss is unrelated then."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of what the 'EOF reached for partition' messages mean in the context of Kafka integration",
+      "Clarification on whether these messages indicate an error condition",
+      "Information about the relationship between these messages and potential message loss"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-14 00:32:24"
+    }
+  }
+]

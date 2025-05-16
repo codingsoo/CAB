@@ -1,0 +1,294 @@
+[
+  {
+    "number": 44,
+    "title": "fp8 support for inference",
+    "created_at": "2025-02-25T13:58:54Z",
+    "closed_at": "2025-03-14T03:26:24Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/issues/44",
+    "body": "Hi all,\n\nThanks for your work! I wanna achieve the fp8 inference on v3 model, is there any hints on how to do that or any plans to support it?",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/44/comments",
+    "author": "JoeyYoung",
+    "comments": [
+      {
+        "user": "beginlner",
+        "created_at": "2025-02-25T15:21:57Z",
+        "body": "We are working on fp8 kv-cache."
+      },
+      {
+        "user": "kris-lambda",
+        "created_at": "2025-02-26T00:46:32Z",
+        "body": "are you also using flashmla?"
+      },
+      {
+        "user": "beginlner",
+        "created_at": "2025-02-26T02:00:05Z",
+        "body": "yes"
+      },
+      {
+        "user": "JoeyYoung",
+        "created_at": "2025-03-14T03:26:24Z",
+        "body": "wait for the update:)"
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "title": "Support FP16 dtype in FlashMLA kenrel",
+    "created_at": "2025-02-24T10:04:14Z",
+    "closed_at": "2025-02-25T01:19:43Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/pull/32",
+    "body": "As the title\r\n\r\nTest Plan\r\n\r\n```\r\npython tests/test_flash_mla.py --dtype=fp16\r\n\r\npython tests/test_flash_mla.py --dtype=bf16\r\n\r\n\r\nFLASH_MLA_DISABLE_FP16=TRUE python setup.py install\r\n```",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/32/comments",
+    "author": "sijiac",
+    "comments": [
+      {
+        "user": "beginlner",
+        "created_at": "2025-02-24T16:25:10Z",
+        "body": "Thanks for your contribution!\r\nCould you please add an environment variable `FLASH_MLA_DISABLE_FP16` to optionally save compiling time?"
+      },
+      {
+        "user": "sijiac",
+        "created_at": "2025-02-24T18:04:40Z",
+        "body": "Thanks for the comment, @beginlner. The env variable is added"
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "title": "啥时候支持昇腾910B",
+    "created_at": "2025-02-24T09:56:37Z",
+    "closed_at": "2025-03-11T14:02:50Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/issues/31",
+    "body": "啥时候支持昇腾910B，迫切需要呀",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/31/comments",
+    "author": "JerryZ01",
+    "comments": [
+      {
+        "user": "super-chao1997",
+        "created_at": "2025-02-24T10:08:05Z",
+        "body": "+1"
+      },
+      {
+        "user": "TejParker",
+        "created_at": "2025-02-24T10:14:40Z",
+        "body": "+1"
+      },
+      {
+        "user": "datalee",
+        "created_at": "2025-02-24T10:30:56Z",
+        "body": "+10086"
+      },
+      {
+        "user": "kittem",
+        "created_at": "2025-02-24T11:38:52Z",
+        "body": "+1"
+      },
+      {
+        "user": "OedoSoldier",
+        "created_at": "2025-02-24T13:17:56Z",
+        "body": "这你该去昇腾论坛问"
+      },
+      {
+        "user": "xiaodingdang365",
+        "created_at": "2025-02-24T21:21:42Z",
+        "body": "让deepseek根据flashMLA的代码逻辑思路，生产一套或修改为适用于其它GPU的一套代码，可以吗？"
+      },
+      {
+        "user": "JerryZ01",
+        "created_at": "2025-02-25T02:52:02Z",
+        "body": "> 让deepseek根据flashMLA的代码逻辑思路，生产一套或修改为适用于其它GPU的一套代码，可以吗？\n\n`\n\n我将基于FlashMLA的设计思想和昇腾硬件特性，给出适配华为昇腾平台的FlashAttention优化方案。以下实现参考了分页KV缓存、内存访问优化、计算精度控制等核心技术，并结合昇腾芯片架构进行针对性设计：\n\n```python\nimport torch\nimport acl\nfrom npu_framework import combine_op\n\nclass AscendFlashAttention(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, q, k, v, block_size=64, precision=\"fp16\"):\n        \"\"\"\n        昇腾优化版FlashAttention前向计算\n        :param q: 查询矩阵 [batch, heads, seq_len, dim]\n        :param k: 键矩阵\n        :param v: 值矩阵\n        :param block_size: 内存分块大小(根据昇腾910B内存带宽调整)\n        :param precision: 支持fp16/bf16混合精度\n        \"\"\"\n        # 初始化昇腾硬件资源\n        acl.init()\n        device_id = 0\n        aclrt.set_device(device_id)\n        \n        # 内存分页管理(借鉴FlashMLA\n                k_block = k_cache.get_block(b)\n                v_block = v_cache.get_block(b)\n                \n                # 矩阵分块计算(利用昇腾矩阵计算单元)\n                attn_scores = ascend_mm(q_block, k_block.transpose(-2,-1))\n                attn_weights = ascend_softmax(attn_scores / dim0.5)\n                \n                # 结果累加(内存复用优化)\n                output[:, :, b*block_size:(b+1)*block_size] = ascend_mm(attn_weights, v_block)\n                \n                # 显存碎片管理(参考FlashMLA分页设计\n        self.block_size = block_size\n        self.precision = precision\n        \n    def load_from_tensor(self, tensor):\n        # 分块存储并转换为昇腾张量格式\n        seq_len = tensor.size(2)\n        num_blocks = (seq_len + self.block_size -1) // self.block_size\n        for b in range(num_blocks):\n            block = tensor[:, :, b*self.block_size:(b+1)*self.block_size, :]\n            block = self._convert_precision(block)\n            self.blocks.append(block.npu_format_cast(29))  # 昇腾NC1HWC0格式\n            \n    def get_block(self, index):\n        # 使用昇腾DMA引擎加速数据传输\n        return acl.util.media_transfer(self.blocks[index])\n\ndef ascend_mm(a, b):\n    \"\"\"昇腾矩阵乘法加速核(使用TBE算子)\"\"\"\n    return torch_npu.npu_bmmV2(a, b, [])\n\ndef ascend_softmax(x):\n    \"\"\"混合精度softmax计算(基于昇腾v200架构优化)\"\"\"\n    return torch_npu.npu_softmax(x, -1, torch.float32)\n```\n\n核心优化技术说明：\n\n1. 昇腾硬件适配层\n- 使用NPU内存格式转换(npu_format_cast)提升访存效率\n- 调用昇腾AI Core的矩阵计算单元(TBE算子)\n- 采用分块DMA传输减少数据搬运开销\n\n2. 内存优化策略\n- 分页KV缓存管理(NPUPagedMemory类)，减少显存碎片\n- 动态内存整理(aclrt.memory_trim)防止内存泄漏\n- 按昇腾NC1HWC0格式存储数据，提升3D Cube利用率\n\n3. 计算过程优化\n- 混合精度计算链：FP16矩阵乘法 + FP32 Softmax\n- 分块流水线设计，隐藏数据加载延迟\n- 基于昇腾并行架构的多核任务调度\n\n4. 软件栈整合\n- 与PyTorch前端无缝对接(AscendFlashAttention Function)\n- 使用昇腾ACL接口管理硬件资源\n- 集成NPU媒体数据传输加速模块\n\n性能对比测试（模拟数据）：\n| 优化方法       | 序列长度 | 内存带宽 | 计算效率 |\n|----------------|----------|----------|----------|\n| 原始Attention  | 4096     | 512GB/s  | 42%      |\n| 本方案         | 4096     | 1.2TB/s  | 78%      |\n| FlashMLA(H800) | 4096     | 3TB/s    | 87%      |\n\n该方案在昇腾910B上的实测性能可达理论峰值的78%，较原始实现提升1.8-2.3倍。主要技术优势来源于：\n\n- 异构计算加速：通过昇腾AI Core的3D Cube单元，矩阵乘计算效率提升3倍\n- 内存访问优化：分页缓存策略使有效内存带宽利用率达65%\n- 动态负载均衡：根据昇腾多核架构自动分配计算任务\n\n进阶优化方向建议：\n1. 引入昇腾图编译器优化计算图融合\n2. 支持稀疏注意力机制(利用昇腾稀疏计算单元)\n3. 实现动态块大小调整策略(根据序列长度自适应) `"
+      },
+      {
+        "user": "mowentian",
+        "created_at": "2025-02-26T03:27:26Z",
+        "body": "期待社区支援"
+      },
+      {
+        "user": "cenlm",
+        "created_at": "2025-02-27T07:31:31Z",
+        "body": "deepseek真硬核啊！ 这回把英伟达和OpenAI干的嗷嗷叫了~ 牛逼！！！"
+      },
+      {
+        "user": "Ryutaku",
+        "created_at": "2025-02-27T09:00:20Z",
+        "body": "现在都开源了，昇腾应该去适配"
+      }
+    ]
+  },
+  {
+    "number": 20,
+    "title": "东西是个好东西，但我在昇腾上用不了",
+    "created_at": "2025-02-24T06:15:30Z",
+    "closed_at": "2025-02-24T10:30:10Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/issues/20",
+    "body": "cry 哈哈",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/20/comments",
+    "author": "datalee",
+    "comments": [
+      {
+        "user": "libinhang",
+        "created_at": "2025-02-24T06:20:42Z",
+        "body": "word"
+      },
+      {
+        "user": "jacksparowtxz",
+        "created_at": "2025-02-24T06:25:44Z",
+        "body": "上次要饭这么理直气壮的，还是两年前的泽连斯基"
+      },
+      {
+        "user": "OedoSoldier",
+        "created_at": "2025-02-24T06:29:24Z",
+        "body": "等昇腾团队适配，其实也不难，他们有自己的 FlashAttention 实现"
+      },
+      {
+        "user": "zhanglzu",
+        "created_at": "2025-02-24T06:33:13Z",
+        "body": "东西是个好东西，但是昇腾用不了呀。别说这个用不了了，我的910A连现在的deepseek-r1蒸馏版都用不了呀。推理速度太慢了，据说是因为910A的算子现在更的慢了，有没有写910A算子的大佬呀，赶紧更一下吧。"
+      },
+      {
+        "user": "tangzhiyi11",
+        "created_at": "2025-02-24T07:19:34Z",
+        "body": "> 东西是个好东西，但是昇腾用不了呀。别说这个用不了了，我的910A连现在的deepseek-r1蒸馏版都用不了呀。推理速度太慢了，据说是因为910A的算子现在更的慢了，有没有写910A算子的大佬呀，赶紧更一下吧。\n\n貌似新的算子都是910b及以上才能跑了，910a估计他们不太管了。。"
+      },
+      {
+        "user": "zhanglzu",
+        "created_at": "2025-02-24T07:23:12Z",
+        "body": "> > 东西是个好东西，但是昇腾用不了呀。别说这个用不了了，我的910A连现在的deepseek-r1蒸馏版都用不了呀。推理速度太慢了，据说是因为910A的算子现在更的慢了，有没有写910A算子的大佬呀，赶紧更一下吧。\n> \n> 貌似新的算子都是910b及以上才能跑了，910a估计他们不太管了。。\n\n就是的，真想给昇腾发邮件，让他们赶紧管起来。"
+      },
+      {
+        "user": "baotong",
+        "created_at": "2025-02-24T07:38:38Z",
+        "body": "> > > 东西是个好东西，但是昇腾用不了呀。别说这个用不了了，我的910A连现在的deepseek-r1蒸馏版都用不了呀。推理速度太慢了，据说是因为910A的算子现在更的慢了，有没有写910A算子的大佬呀，赶紧更一下吧。\n> > \n> > \n> > 貌似新的算子都是910b及以上才能跑了，910a估计他们不太管了。。\n> \n> 就是的，真想给昇腾发邮件，让他们赶紧管起来。\n\n昇腾自己 910b 都不向后兼容 910A 啊？"
+      },
+      {
+        "user": "zhanglzu",
+        "created_at": "2025-02-24T08:00:40Z",
+        "body": "> > > > 东西是个好东西，但是昇腾用不了呀。别说这个用不了了，我的910A连现在的deepseek-r1蒸馏版都用不了呀。推理速度太慢了，据说是因为910A的算子现在更的慢了，有没有写910A算子的大佬呀，赶紧更一下吧。\n> > > \n> > > \n> > > 貌似新的算子都是910b及以上才能跑了，910a估计他们不太管了。。\n> > \n> > \n> > 就是的，真想给昇腾发邮件，让他们赶紧管起来。\n> \n> 昇腾自己 910b 都不向后兼容 910A 啊？\n\n据说是架构差别非常大，不知道呀，也不知道这个工作量是不是太大了，支持不过来。"
+      },
+      {
+        "user": "datalee",
+        "created_at": "2025-02-24T10:30:11Z",
+        "body": "> 上次要饭这么理直气壮的，还是两年前的泽连斯基\n\n为何如此不友好？我只是说了个事实"
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "title": "minor fix test",
+    "created_at": "2025-02-24T04:14:08Z",
+    "closed_at": "2025-02-24T05:13:58Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/pull/14",
+    "body": "1. Include h_q, h_kv in the function arg.\r\n",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/14/comments",
+    "author": "lancerts",
+    "comments": [
+      {
+        "user": "beginlner",
+        "created_at": "2025-02-24T05:13:54Z",
+        "body": "Thanks for the fix!"
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "compiling error",
+    "created_at": "2025-02-24T04:01:40Z",
+    "closed_at": "2025-03-09T12:46:30Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/issues/13",
+    "body": "RuntimeError: Error compiling objects for extension",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/13/comments",
+    "author": "z18256199275",
+    "comments": [
+      {
+        "user": "MaxLLF",
+        "created_at": "2025-02-27T08:51:11Z",
+        "body": "The same problem, any solution?"
+      },
+      {
+        "user": "z18256199275",
+        "created_at": "2025-02-27T14:36:59Z",
+        "body": "> The same problem, any solution?\n\nI see that the cutlass file in the csrc in the FlashMLP folder has not been cloned, resulting in a compilation error"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "DeepSeek",
+    "created_at": "2025-02-24T03:34:23Z",
+    "closed_at": "2025-02-24T03:58:53Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/issues/10",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/10/comments",
+    "author": "chaytonmin",
+    "comments": [
+      {
+        "user": "xingenju",
+        "created_at": "2025-02-24T03:56:56Z",
+        "body": "这玩意儿想来骗钱还是骗人气"
+      },
+      {
+        "user": "chaytonmin",
+        "created_at": "2025-02-25T03:00:04Z",
+        "body": "纯技术交流"
+      },
+      {
+        "user": "hanshou101",
+        "created_at": "2025-02-25T09:07:22Z",
+        "body": "Diu Ren Diu Dao Zhe Er Lai Le . What a shame"
+      }
+    ]
+  },
+  {
+    "number": 9,
+    "title": "support Windows build",
+    "created_at": "2025-02-24T03:32:21Z",
+    "closed_at": "2025-02-24T05:21:59Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/pull/9",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/9/comments",
+    "author": "homorunner",
+    "comments": [
+      {
+        "user": "chenyuan99",
+        "created_at": "2025-02-24T04:08:21Z",
+        "body": "is there any good to run h800 or h100 on windows?"
+      },
+      {
+        "user": "homorunner",
+        "created_at": "2025-02-27T07:21:00Z",
+        "body": "> is there any good to run h800 or h100 on windows?\r\n\r\nNvidia driver on Windows provide some more features over linux, for example, shared memory support."
+      },
+      {
+        "user": "chenyuan99",
+        "created_at": "2025-02-27T11:59:46Z",
+        "body": "i see"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "perf(store): Cache output stride parameters in registers to reduce global loads",
+    "created_at": "2025-02-24T02:47:22Z",
+    "closed_at": "2025-03-11T07:30:47Z",
+    "labels": [],
+    "url": "https://github.com/deepseek-ai/FlashMLA/pull/6",
+    "body": "## Summary\r\n\r\nThis PR optimizes the `store()` function in the FlashMLA kernel by caching frequently used output stride parameters (i.e., `o_batch_stride`, `o_row_stride`, and `o_head_stride`) into local registers. By using the `__ldg` intrinsic to read these values once per thread, we reduce repetitive global memory accesses and potentially lower memory latency. This improvement should help improve kernel performance without affecting functionality.\r\n\r\n## Key Changes\r\n\r\n- **Added local caching** for `params.o_batch_stride`, `params.o_row_stride`, and `params.o_head_stride` in the `store()` function.\r\n- **Utilizes the `__ldg` intrinsic** to hint to the compiler that these values are read-only.\r\n- **Maintains functional consistency**, ensuring that the remainder of the function remains unchanged.\r\n\r\n## Impact\r\n\r\nThis change is a targeted **performance optimization** that minimizes redundant memory loads from global memory, improving efficiency without altering correctness.",
+    "comments_url": "https://api.github.com/repos/deepseek-ai/FlashMLA/issues/6/comments",
+    "author": "garethpaul",
+    "comments": [
+      {
+        "user": "beginlner",
+        "created_at": "2025-03-01T10:05:58Z",
+        "body": "I don't think the changes make any difference on performance. If so, we should deal with other attributes of `params` in the same way. Could you please update a benchmark comparison?"
+      }
+    ]
+  }
+]

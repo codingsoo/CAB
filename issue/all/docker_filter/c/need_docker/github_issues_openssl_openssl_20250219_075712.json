@@ -1,0 +1,83 @@
+[
+  {
+    "number": 25569,
+    "title": "OpenSSL Initialization Failure Due to Manually Mapped DLLs Not Recognized by GetModuleHandleExA",
+    "created_at": "2024-09-29T21:58:05Z",
+    "closed_at": "2024-09-30T13:06:42Z",
+    "labels": [
+      "help wanted",
+      "triaged: feature"
+    ],
+    "url": "https://github.com/openssl/openssl/issues/25569",
+    "body": "Say we stop using `LoadLibraryA` instead we create its equivalent for security purposes, the module we map windows wont be aware of it, for OpenSSL modules, when we map it, and attempt to initialize OpenSSL, its failing to robustly initialize on that Context, the reason exaclty becouse of `ossl_init_load_crypto_nodelete`, who returns false inside Crypto Initialize routine, becouse of the fact that WinApi `GetModuleHandleExA` is not aware of the manually mapped modules, how to approach this problem? notice that appart from that, when redirecting to another legit module, and forcing the function to return true, everything initialize as expected and OpenSSL works as normal (Sanity Tested Extensively).\r\nVersion 1.1.1w\r\nto reproduce the issue simply use any dll manual mapper and simply call `OPENSSL_init_crypto`",
+    "comments_url": "https://api.github.com/repos/openssl/openssl/issues/25569/comments",
+    "author": "pinwhell",
+    "comments": [
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T08:50:17Z",
+        "body": "Some Front matter: Openssl 1.1.1w is no longer supported.\n\nThat said, I don't think what you're trying to do is possible at the moment.  Doing the wrapping that you describe seems like it would prevent the use of GetModuleHandleEx.\n\nThat said, how are you creating the equivalent of LoadLibraryA?  Are you creating and linking to a separate DLL?"
+      },
+      {
+        "user": "tom-cosgrove-arm",
+        "created_at": "2024-09-30T09:09:45Z",
+        "body": "Is this an issue in OpenSSL, or should it be a discussion?"
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T09:11:47Z",
+        "body": "I think thats to be determined.  Currently whats being attempted I don't think can be done.  The question to answer is, should it be possible?  i.e. is this a feature request?"
+      },
+      {
+        "user": "tom-cosgrove-arm",
+        "created_at": "2024-09-30T09:35:45Z",
+        "body": "> The question to answer is, should it be possible?\r\n\r\n`LoadLibraryA` is a fundamental operating system API. Replacing these is almost certainly going to cause problems in some use-cases.\r\n\r\n> Say we stop using `LoadLibraryA` instead we create its equivalent for security purposes\r\n\r\nWithout knowing how the \"equivalent\" is created, and what \"security purposes\" means, this is a very vague requirement.\r\n\r\n> `GetModuleHandleExA` is not aware of the manually mapped modules\r\n\r\nSince `GetModuleHandleExA` is a fundamental operating system API that works with `LoadLibraryA`, it's clear that the \"equivalent to LoadLibraryA\" API isn't really equivalent.\r\n\r\nIt may be that what the OP wants (\"securing\" `LoadLibraryA` for an unspecified meaning of \"securing\") could be achieved by hooking `LoadLibraryA` and only allowing whitelisted requests through."
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T10:03:06Z",
+        "body": "@tom-cosgrove-arm are you suggesting that LoadLibraryA is a weak symbol that the author can override and call the underlying function after passing a whitelist test?  That would make sense"
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T11:32:08Z",
+        "body": "not exaclty guys, let me explain why it precisely fails!, that call to GetModuleHandleEx was to pin the current OpenSSL module so it cant be unloaded, as you can see this action fails becouse the Module is not mapped by the OS, instead by us!, so the os is not aware of such module thus the reason why GetModuleHandleEx fails!, i was experimenting did a patch to that single thing, and OpenSSL succesfully initialized, worked, and was extensively tested, and passed all tests"
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T11:33:00Z",
+        "body": "when i said, \"Replaced\" LoadLibraryA, i was refering mimicing its action, meaning manually loading the DLL instead of calling LoadLibraryA directly, and yes its a OpenSSL issue"
+      },
+      {
+        "user": "nhorman",
+        "created_at": "2024-09-30T12:02:50Z",
+        "body": "You're still not being particularly clear in what you are trying to do.  Its clear that the call to GetModuleHandleEx pins libcrypto.so so that it can't be unloaded.\r\n\r\nFrom that we can conclude that the ability to pin a library is a requirement for openssl on windows.\r\n\r\nWhats unclear is exactly how you are mimicing the loading of libcrypto.  If you are not calling LoadLibraryA, what are you doing?  Are you just opening the file, memory mapping it, and resolving symbols on your own?\r\n\r\nIf so, OpenSSL was never meant to be loaded in that fashion.  Its always been assumed that the library is loaded by the operating systems, using API's that inform the OS of that operation. Thats not a bug, its a design choice.\r\n\r\nYou can continue to explore this approach, and if you have a proposed change, please feel free to post it, and we will gladly review it, but I expect your use case is not one openssl will likely choose to support natively"
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T12:48:37Z",
+        "body": "> You're still not being particularly clear in what you are trying to do.  Its clear that the call to GetModuleHandleEx pins libcrypto.so so that it can't be unloaded.\n> \n> \n> \n> From that we can conclude that the ability to pin a library is a requirement for openssl on windows.\n> \n> \n> \n> Whats unclear is exactly how you are mimicing the loading of libcrypto.  If you are not calling LoadLibraryA, what are you doing?  Are you just opening the file, memory mapping it, and resolving symbols on your own?\n> \n> \n> \n> If so, OpenSSL was never meant to be loaded in that fashion.  Its always been assumed that the library is loaded by the operating systems, using API's that inform the OS of that operation. Thats not a bug, its a design choice.\n> \n> \n> \n> You can continue to explore this approach, and if you have a proposed change, please feel free to post it, and we will gladly review it, but I expect your use case is not one openssl will likely choose to support natively\n\nI am mapping the library, solving its imports, handling relocations, handling TLS, which is enough to make everything works, as you see for security reasons I am not mapping it in the OS records of loaded libs, otherwise simply call LoadLib in the first place and problem solved, maybe there could be a option to control pinning mechanism manually so users can selectively decide if pinning or not, to avoid this type of problems, I guess it definitely an edge case probably beyond scope of OpenSSL, but could be cool to support that bare metal like environment"
+      },
+      {
+        "user": "mattcaswell",
+        "created_at": "2024-09-30T12:58:16Z",
+        "body": "You can compile OpenSSL with \"no-pinshared\" to turn off pinning."
+      },
+      {
+        "user": "pinwhell",
+        "created_at": "2024-09-30T13:06:34Z",
+        "body": "> You can compile OpenSSL with \"no-pinshared\" to turn off pinning.\n\nIf this is such an option I do believe it would be the ideal solution, I wasn't aware of it, Just to be clear for anyone who might get the same problem, on the 1.1.1w just handling this issue, OpenSSL seems to behave properly when manually mapped, Thanks guys ..."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A way to use OpenSSL with manually mapped DLLs that aren't registered with the operating system",
+      "A method to disable or bypass the OpenSSL library pinning mechanism",
+      "A solution that maintains the security benefits of manual DLL mapping",
+      "A solution that works with their existing manual DLL mapping approach"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:06:58"
+    }
+  }
+]

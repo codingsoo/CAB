@@ -1,0 +1,109 @@
+[
+  {
+    "number": 11,
+    "title": "Fix typos",
+    "created_at": "2025-02-25T16:48:08Z",
+    "closed_at": "2025-02-26T15:22:23Z",
+    "labels": [],
+    "url": "https://github.com/livebook-dev/pythonx/pull/11",
+    "body": "Found via `typos --hidden --format brief`",
+    "comments_url": "https://api.github.com/repos/livebook-dev/pythonx/issues/11/comments",
+    "author": "kianmeng",
+    "comments": [
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-26T15:22:20Z",
+        "body": "Thank you!"
+      },
+      {
+        "user": "kianmeng",
+        "created_at": "2025-02-26T22:57:27Z",
+        "body": ":partying_face: :partying_face: :partying_face: :partying_face: :partying_face: "
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "title": "local libraries",
+    "created_at": "2025-02-24T05:18:47Z",
+    "closed_at": "2025-02-24T08:21:02Z",
+    "labels": [],
+    "url": "https://github.com/livebook-dev/pythonx/issues/8",
+    "body": "I'm having troubles using my own libraries.\nConsider this setup: in the root folder of the app, I have a folder called `plibs` which at the moment, for test purposes, it contains one very simple library generated with `uv`. Running `uv build` does what it needs to do, building the `.tar.gz` and the `.whl` . For testing purposes, I have a `ptest` folder where I import the above library as a dependency like this:\n```\ndependencies = [\n    \"firstlib\"\n  ]\n[tool.uv.sources]\n  firstlib = { path = \"../plibs/firstlib/dist/firstlib-0.1.0-py3-none-any.whl\" }\n```\nRunning it via `uv run` works as expected.\nNow, I want to use the same library in Pythonx. So, I'm configuring it like this:\n```\nconfig :pythonx, :uv_init,\n  pyproject_toml: \"\"\"\n  [project]\n  name = \"nwsite\"\n  version = \"0.0.0\"\n  requires-python = \"==3.12.*\"\n  dependencies = [\n    \"firstlib\"\n  ]\n  [tool.uv.sources]\n  firstlib = { path = \"plibs/firstlib/dist/firstlib-0.1.0-py3-none-any.whl\" }\n  \"\"\"\n```\n\nThe result is this:\n\n```\n==> pythonx\nCompiling 10 files (.ex)\nUsing CPython 3.12.8\nCreating virtual environment at: .venv\nerror: Distribution not found at: file:///...../_build/dev/lib/pythonx/priv/uv/project/plibs/firstlib/dist/firstlib-0.1.0-py3-none-any.whl\n\n== Compilation error in file lib/pythonx/application.ex ==\n** (RuntimeError) fetching Python and dependencies failed, see standard output for details\n    lib/pythonx/uv.ex:36: Pythonx.Uv.fetch/3\n    lib/pythonx/application.ex:24: (module)\ncould not compile dependency :pythonx, \"mix compile\" failed. Errors may have been logged above. You can recompile this dependency with \"mix deps.compile pythonx --force\", update it with \"mix deps.update pythonx\" or clean it with \"mix deps.clean pythonx\"\n```\nIt tries to load relatively to the _build directory, not the root directory of the project.\n\nSo, my question is: how can I configure a local uv-built library? Hardcoding the absolute path to the library (it works, tested it, but it doesn't feels very flexible to me) ? \nAny other options/ideas I could explore?\n\nThank you!\n ",
+    "comments_url": "https://api.github.com/repos/livebook-dev/pythonx/issues/8/comments",
+    "author": "dantodor",
+    "comments": [
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-24T06:01:02Z",
+        "body": "Hey @dantodor! Since the config is an Elixir string, you can actually \"generate\" it to a reasonable extent, so what about this?\n\n```elixir\nconfig :pythonx, :uv_init,\n  pyproject_toml: \"\"\"\n  [project]\n  name = \"nwsite\"\n  version = \"0.0.0\"\n  requires-python = \"==3.12.*\"\n  dependencies = [\n    \"firstlib\"\n  ]\n  [tool.uv.sources]\n  firstlib = { path = \"#{File.cwd!()}/plibs/firstlib/dist/firstlib-0.1.0-py3-none-any.whl\" }\n  \"\"\"\n```"
+      },
+      {
+        "user": "dantodor",
+        "created_at": "2025-02-24T08:21:01Z",
+        "body": "That did it, thanks for the great suggestion!\n"
+      }
+    ]
+  },
+  {
+    "number": 7,
+    "title": "multiple independent python environments using pythonx",
+    "created_at": "2025-02-23T11:45:22Z",
+    "closed_at": "2025-02-23T12:34:57Z",
+    "labels": [],
+    "url": "https://github.com/livebook-dev/pythonx/issues/7",
+    "body": "hello, I am using `pythonx` to integrate python code in my elixir codebase. I wanted to ask if there is a way to initialise two separate pythonx environments? the reason is that I have different modules with different python dependencies, and I’d like to keep their environments separate.\n\nhere is how my project structure look's like\n```\n.\n├── config\n│   └── config.exs\n├── lib\n│   ├── feluda_dimension_reduction\n│   │   ├── config.yml\n│   │   └── reduce.ex\n│   ├── feluda_vid_vec_clip\n│   │   └── vidvec.ex\n│   └── python_elixir.ex\n├── mix.exs\n```\nI’d like to define separate environments for `feluda_dimension_reduction` and `feluda_vid_vec_clip`. Is there a way to configure this in `config.exs` or another approach you’d recommend?\n \nThis is how my `config/config.exs` look's right now\n```elixir\nimport Config\n\nconfig :pythonx, :uv_init,\n  pyproject_toml: \"\"\"\n  [project]\n  name = \"project\"\n  requires-python = \"==3.10.*\"\n  dependencies = [\n    \"feluda==0.9.2\",\n    \"feluda-dimension-reduction==0.1.2\",\n  ]\n  \"\"\"\n```\nthank you so much, `pythonx` has been really helpful in integrating python into my elixir project.\n",
+    "comments_url": "https://api.github.com/repos/livebook-dev/pythonx/issues/7/comments",
+    "author": "aatmanvaidya",
+    "comments": [
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-23T12:21:08Z",
+        "body": "Hey @aatmanvaidya! If I understand correctly, you want to provide two configs for Pythonx and then do something like `Pythonx.eval(:env1, \"...\", %{...})`. This inherently is not going to work, because the point is that the Python interpreter runs in the same OS process as the Elixir application, so it needs to be a single environment. For your use case, you need to list all of dependencies in the config."
+      },
+      {
+        "user": "aatmanvaidya",
+        "created_at": "2025-02-23T12:28:28Z",
+        "body": "hey @jonatanklosko, right understood, its a limitation of python interpreter, thank you for the help!\n\nJust to check, would there be any possible workaround? For example, could I manually create virtual environment in each module folder and somehow use them separately? Or would I run into the same limitation? "
+      },
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-23T12:34:57Z",
+        "body": "Even if we had separate virtual environments, we would need to add both to module paths and there would be no isolation at runtime. In particular, if there was a package used in both environments with different version, only one of them would actually be picked up at runtime.\n\nIn a way, it is similar to trying to have parts of your Elixir application use different set of dependencies :)\n\nSidenote: is there any reason for not using a single environment?"
+      },
+      {
+        "user": "dantodor",
+        "created_at": "2025-02-23T12:36:18Z",
+        "body": "I think you might try, since it's usign `uv`, the single file approach, where you put all the dependencies at the top of the file. See uv doc for details."
+      },
+      {
+        "user": "aatmanvaidya",
+        "created_at": "2025-02-23T12:44:46Z",
+        "body": "> Even if we had separate virtual environments, we would need to add both to module paths and there would be no isolation at runtime. In particular, if there was a package used in both environments with different version, only one of them would actually be picked up at runtime.\n> \n> In a way, it is similar to trying to have parts of your Elixir application use different set of dependencies :)\n> \n> Sidenote: is there any reason for not using a single environment?\n\nunderstood, thank you so much for the clarification and help :)!\n\nThe reason we were hoping to use separate environments is that we're building a web dashboard in Elixir where users can experiment and play with different machine learning models. Since these models rely on many different packages, we're running into dependency conflicts.\n\nFor example, ML Model A requires `scikit-learn<=1.3`, but a sub-dependency of ML Model B needs `scikit-learn>=1.5`, leading to version clashes. Resolving these conflicts has been quite challenging, so having separate environments for each model would have been great."
+      },
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-23T12:53:03Z",
+        "body": "I see! Yeah, so in this case you indeed want separate runtime environments, so basically multiple instances of Python. In order to do this with Pythonx, you would need to run separate Elixir nodes, each with different Pythonx setup, and then communicate over distribution (for example using an umbrella project)."
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Fix typos in README",
+    "created_at": "2025-02-19T23:00:20Z",
+    "closed_at": "2025-02-20T04:07:47Z",
+    "labels": [],
+    "url": "https://github.com/livebook-dev/pythonx/pull/3",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/livebook-dev/pythonx/issues/3/comments",
+    "author": "princemaple",
+    "comments": [
+      {
+        "user": "jonatanklosko",
+        "created_at": "2025-02-20T04:07:42Z",
+        "body": "Thank you :)"
+      }
+    ]
+  }
+]

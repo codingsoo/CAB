@@ -1,0 +1,250 @@
+[
+  {
+    "number": 239,
+    "title": "Detecting first-time OAuth/OIDC Signups and route to onboarding",
+    "created_at": "2025-04-01T23:42:34Z",
+    "closed_at": "2025-04-02T14:18:53Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/239",
+    "body": "I'm using openauthjs with OAuth/OIDC providers (e.g., GoogleProvider, GoogleOidcProvider) for user authentication in my application.\n\nMy goal is to differentiate between a user logging in for the very first time (effectively signing up via the OAuth provider) and a user who has logged in before. This would allow me to trigger specific onboarding flows or record signup events.\n\nI understand that the standard OAuth 2.0 and OIDC protocols don't typically include a flag indicating if it's the user's first authentication with a specific client application. The check usually involves looking up the user's unique identifier (like the sub claim or email provided by the identity provider) in the application's own database.\n\nMy question is: What is the recommended approach or best practice for implementing this \"first-time user detection\" logic within the openauthjs flow?\nIs the intended pattern simply to perform this database lookup inside the success handler provided to the issuer?\n\nOne option is to simply check if there already exists a record manually later, eg\n\n<details>\n<summary>this code</summary>\n\n```js\nimport { issuer } from \"@openauthjs/openauth\";\n\nexport default issuer({\n  providers: {\n    google: GoogleOidcProvider({})\n  },\n  subjects: {},\n\n  success: async (ctx, value) => {\n    let appUserId: string;\n    let isNewUser = false;\n\n    if (value.provider === 'google' && value.id?.sub) {\n       const providerUserId = value.id.sub;\n       const email = value.id.email;\n\n       const existingUser = await findUserByProviderId('google', providerUserId); // call method in my database\n\n       return ctx.subject(\"user\", { userId: appUserId, existingUser });\n    }\n\n    return ctx.subject(\"user\", { userId: appUserId, existingUser: false });\n  },\n});\n```\n</details>\n\nAre there any more elegant ways? (I am currently checking this in the callback function in my Next.JS application, which is effectively the same as what I have shown, I simply move the function)",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/239/comments",
+    "author": "vlashada",
+    "comments": [
+      {
+        "user": "thdxr",
+        "created_at": "2025-04-02T14:18:50Z",
+        "body": "what we do is lookup an existing user or create if not exists. there's no state in openauth that would be able to help with this"
+      }
+    ]
+  },
+  {
+    "number": 209,
+    "title": "\"ReferenceError: crypto is not defined\" when using AWS Lamba for issuer function.",
+    "created_at": "2025-02-21T08:04:27Z",
+    "closed_at": "2025-02-23T01:59:36Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/209",
+    "body": "I've just followed the instructions to setup our OpenAuth issuer on AWS and when I try to login, I receive the following error output from SST:\n\n```\n ReferenceError: crypto is not defined\n|  +51ms           at hmac (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:219:21)\n|  +51ms           at AwsV4Signer.signature (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:181\n:27)\n|  +51ms           at AwsV4Signer.authHeader (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:17\n3:34)\n|  +51ms           at AwsV4Signer.sign (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:160:52)\n|  +51ms           at AwsClient.sign (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:52:57)\n|  +51ms           at AwsClient.fetch (/home/user/code/myapp/node_modules/.pnpm/aws4fetch@1.0.20/node_modules/aws4fetch/dist/aws4fetch.esm.mjs:65:40)\n|  +51ms           at dynamo (/home/user/code/myapp/node_modules/.pnpm/@openauthjs+openauth@0.3.9_arctic@2.3.4_hono@4.7.2/node_modules/@openauthjs/opena\nuth/dist/esm/storage/dynamo.js:26:32)\n|  +51ms           at Object.scan (/home/user/code/myapp/node_modules/.pnpm/@openauthjs+openauth@0.3.9_arctic@2.3.4_hono@4.7.2/node_modules/@openauthjs/\nopenauth/dist/esm/storage/dynamo.js:116:24)\n|  +51ms           at encryptionKeys (/home/user/code/myapp/node_modules/.pnpm/@openauthjs+openauth@0.3.9_arctic@2.3.4_hono@4.7.2/node_modules/@openauth\njs/openauth/dist/esm/keys.js:76:32)\n|  +58ms       --> GET /authorize?client_id=nextjs&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fcallback&response_type=code&state=b9b72a75-664b-4c4f-9746-de98\nd2949d51 302 17ms\n|  +68ms       (node:50265) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 13)\n|  +70ms       (Use `node --trace-warnings ...` to show where the warning was created)\n|  Done        took +134ms\n|  Invoke      ./backend/auth/index.handler\n|  +6ms        <-- GET /authorize?client_id=nextjs&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fcallback&response_type=code&state=b9b72a75-664b-4c4f-9746-de98\nd2949d51\n```\nHere is my authorizer setup:\n\n```\nexport const authDomainName = () => {\n  switch ($app.stage) {\n    case \"dev\":\n    case \"qa\":\n      return `auth.${$app.stage}.my-app.net`;\n    case \"prod\":\n      return \"auth.my-app.net\";\n    default:\n      throw new Error(`Unknown stage: ${$app.stage}`);\n  }\n};\n\nexport const auth = new sst.aws.Auth(\"Auth\", {\n  issuer: {\n    handler: \"./backend/auth/index.handler\",\n    runtime: \"nodejs20.x\", // have tried nodejs22.x as well\n  },\n  domain: {\n    name: authDomainName(),\n  },\n});\n```\n\nHere is my ./backend/auth/index.ts handler code:\n```\nimport { issuer } from \"@openauthjs/openauth\";\nimport { handle } from \"hono/aws-lambda\";\nimport { subjects } from \"./subjects\";\nimport { PasswordUI } from \"@openauthjs/openauth/ui/password\";\nimport { PasswordProvider } from \"@openauthjs/openauth/provider/password\";\n\n// Get user from database\n// Return user ID\nasync function getUser(email: string) {\n  return \"00000000-0000-0000-0000-000000000000\";\n}\n\nconst app = issuer({\n  subjects,\n  providers: {\n    password: PasswordProvider(\n      PasswordUI({\n        sendCode: async (email, code) => {\n          console.log(email, code);\n        },\n      }),\n    ),\n  },\n  success: async (ctx, value) => {\n    if (value.provider === \"password\") {\n      return ctx.subject(\"user\", {\n        id: await getUser(value.email),\n      });\n    }\n    throw new Error(\"Invalid provider\");\n  },\n});\n\nexport const handler = handle(app);\n```\n\nI'm assuming this is a dependency issue with Hono / aws4fetch, so I've tried importing crypto into my handler to force it to be available:\n\n```\nimport { issuer } from \"@openauthjs/openauth\";\nimport { handle } from \"hono/aws-lambda\";\nimport { subjects } from \"./subjects\";\nimport { PasswordUI } from \"@openauthjs/openauth/ui/password\";\nimport { PasswordProvider } from \"@openauthjs/openauth/provider/password\";\nimport * as crypto from \"node:crypto\";\nglobal.crypto = crypto;\n\n...\n...\n...\n```\n\nThis made no difference, however if I remove the issuer from the handler and just use a default handler function, the handler works fine, so I know my infra is setup correctly.\n\nWe're looking to implement OpenAuth to replace Auth0 in one of our stacks, so would be grateful for any advice or things I can try to get this working.\n\nThanks!",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/209/comments",
+    "author": "gainggs",
+    "comments": [
+      {
+        "user": "NeatFastro",
+        "created_at": "2025-02-22T03:15:27Z",
+        "body": "getting the same error"
+      },
+      {
+        "user": "NeatFastro",
+        "created_at": "2025-02-22T03:33:28Z",
+        "body": "it might be due to hono, downgrade your hono to 4.7.0"
+      },
+      {
+        "user": "gainggs",
+        "created_at": "2025-02-23T01:59:36Z",
+        "body": "Managed to resolve this - turns out we were running an older version of Node locally (~18.x.x) - after I updated to 22.x.x the crypto error went away and everything worked fine. So, if anyone else comes across this, check your local Node.js version and make sure it's >= 20."
+      }
+    ]
+  },
+  {
+    "number": 208,
+    "title": "import { createClient } from \"@openauthjs/openauth/client\"; Cannot find module",
+    "created_at": "2025-02-19T20:29:41Z",
+    "closed_at": "2025-02-21T08:44:09Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/208",
+    "body": "`\nCannot find module '@openauthjs/openauth/client' or its corresponding type declarations.\n  There are types at '/repo/packages/web/node_modules/@openauthjs/openauth/dist/types/client.d.ts', but this result could not be resolved under your current 'moduleResolution' setting. Consider updating to 'node16', 'nodenext', or 'bundler'.ts(2307)\n`\n",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/208/comments",
+    "author": "kayden1940",
+    "comments": [
+      {
+        "user": "imajared",
+        "created_at": "2025-02-20T23:45:17Z",
+        "body": "In your tsconfig.json add the following under your compilerOptions.\n\n`\"moduleResolution\": \"bundler\"`"
+      }
+    ]
+  },
+  {
+    "number": 204,
+    "title": "Storage - Cloudflare KV sometimes throws error",
+    "created_at": "2025-02-16T16:39:14Z",
+    "closed_at": "2025-03-21T23:51:18Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/204",
+    "body": "While using Cloudflare KV as storage medium, sometimes the set operation would fail because the expiry TTL ends up being < 60 which is is as under:\n\n```typescript\nexport function CloudflareStorage(\n  options: CloudflareStorageOptions,\n): StorageAdapter {\n  return {\n    async set(key: string[], value: any, expiry?: Date) {\n      await options.namespace.put(joinKey(key), JSON.stringify(value), {\n        expirationTtl: expiry\n          ? Math.floor((expiry.getTime() - Date.now()) / 1000)\n          : undefined,\n      })\n    }\n```\n\nThe line regarding the computation of TTL needs to include Math.max as under:\n\n```typescript\nconst expirationTtl: expiry ? Math.max(Math.floor((expiry.getTime() - Date.now()) / 1000), 60) : undefined;\n```\nand with this one small fix, the error wouldn't happen. I have this modified copy of the whole provider in production and works flawlessly.\n\nCan contribute the PR.",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/204/comments",
+    "author": "mohsinhijazee",
+    "comments": [
+      {
+        "user": "sdairs",
+        "created_at": "2025-03-09T16:51:57Z",
+        "body": "+1 - @mohsinhijazee are you able to PR your fix? I can submit one if not"
+      }
+    ]
+  },
+  {
+    "number": 166,
+    "title": "Is there a way to set password complexity for the Password Provider?",
+    "created_at": "2025-01-24T20:57:26Z",
+    "closed_at": "2025-02-03T21:39:47Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/166",
+    "body": "Can't seem to find any way to restrict the passwords when a user tries to register a new password using the Password Provider. It accepts anything even 1 character passwords.",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/166/comments",
+    "author": "GerardKetuma",
+    "comments": [
+      {
+        "user": "lukeshay",
+        "created_at": "2025-01-28T04:11:41Z",
+        "body": "It would be cool if it could take in a @standard-schema/spec"
+      }
+    ]
+  },
+  {
+    "number": 154,
+    "title": "sst: 'environment' does not exist in type 'AuthArgs'",
+    "created_at": "2025-01-15T21:20:09Z",
+    "closed_at": "2025-02-03T23:00:03Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/154",
+    "body": "I want to write something like this, otherwise I can't have direct access to the auth secrets. \r\n\r\n```\r\n const auth = new sst.aws.Auth('Auth', {\r\n      issuer: './src/auth/issuer.handler',\r\n      environment: {\r\n        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,\r\n        GOOGLE_SECRET: process.env.GOOGLE_SECRET!,\r\n      },\r\n    });\r\n```\r\n\r\nI understand secrets and other ways exists but this feels like a good improvement",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/154/comments",
+    "author": "yiminghan",
+    "comments": [
+      {
+        "user": "thdxr",
+        "created_at": "2025-02-03T23:00:03Z",
+        "body": "```\nissuer: {\n  handler: \"./path\",\n  environment: { ... }\n}\n```"
+      }
+    ]
+  },
+  {
+    "number": 57,
+    "title": "Support First and Last name fields",
+    "created_at": "2024-12-12T22:13:16Z",
+    "closed_at": "2024-12-14T23:29:32Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/57",
+    "body": "I'd like to have the ability to add First and Last name fields in the password ui register flow.",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/57/comments",
+    "author": "usama-m98",
+    "comments": [
+      {
+        "user": "beeirl",
+        "created_at": "2024-12-12T22:55:51Z",
+        "body": "You need to build a custom ui for this or extend the existing ui components"
+      },
+      {
+        "user": "usama-m98",
+        "created_at": "2024-12-13T00:29:39Z",
+        "body": "It looks like I'll have to also extend the password adapter as well, since it doesn't accept a first and last name field."
+      },
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-13T04:29:29Z",
+        "body": "i'd recommend collecting these things after auth is done in your application layer\r\n\r\nbut it is technically possible since the callbacks have all the form data"
+      },
+      {
+        "user": "usama-m98",
+        "created_at": "2024-12-14T23:29:32Z",
+        "body": "I've chosen to do this afterwards like you recommended, I'll close this now."
+      }
+    ]
+  },
+  {
+    "number": 22,
+    "title": "createClient tree-shaking",
+    "created_at": "2024-12-10T22:01:50Z",
+    "closed_at": "2024-12-11T03:17:36Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/22",
+    "body": "`import { createClient } from \"@openauthjs/openauth\";` \r\n\r\nfails on the client (nextjs) because it has a transitive dependency `node:crypto` via `hono` via the root import. Next does not polyfill `node:crypto` on purpose (?).\r\n\r\n```\r\nModule build failed: UnhandledSchemeError: Reading from \"node:crypto\" is not handled by plugins (Unhandled scheme).\r\nWebpack supports \"data:\" and \"file:\" URIs by default.\r\nYou may need an additional plugin to handle \"node:\" URIs.\r\nImport trace for requested module:\r\nnode:crypto\r\n./node_modules/.pnpm/hono@4.6.13/node_modules/hono/dist/adapter/aws-lambda/handler.js\r\n./node_modules/.pnpm/hono@4.6.13/node_modules/hono/dist/adapter/aws-lambda/index.js\r\n./node_modules/.pnpm/@openauthjs+openauth@0.0.20_arctic@2.3.0_hono@4.6.13/node_modules/@openauthjs/openauth/dist/esm/authorizer.js\r\n./node_modules/.pnpm/@openauthjs+openauth@0.0.20_arctic@2.3.0_hono@4.6.13/node_modules/@openauthjs/openauth/dist/esm/index.js\r\n```\r\nInstead, this works -- \r\n\r\n`import { createClient } from \"@openauthjs/openauth/client\";`.\r\n\r\nNot a critical issue, but maybe a UX one getting started.\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/22/comments",
+    "author": "r2d4",
+    "comments": [
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-10T23:57:58Z",
+        "body": "yeah i probably am going to get rid of that root export since some bundlers have a hard time with it\r\n\r\nclient might move to its own package at some point"
+      },
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-11T02:22:11Z",
+        "body": "removed from all our examples, left it in there for now but will remove for 1.0"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "License?",
+    "created_at": "2024-12-10T01:13:26Z",
+    "closed_at": "2024-12-10T03:52:16Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/issues/10",
+    "body": "This project looks awesome, thanks for building and sharing! I'd love to know what license you're publishing it under!",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/10/comments",
+    "author": "beeman",
+    "comments": [
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-10T03:51:10Z",
+        "body": "oh it's MIT let me fix that"
+      },
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-10T03:52:16Z",
+        "body": "fixed"
+      },
+      {
+        "user": "beeman",
+        "created_at": "2024-12-10T04:47:10Z",
+        "body": "> oh it's MIT let me fix that\r\n\r\nAmazing, thanks! "
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "Add login OTP logic for password",
+    "created_at": "2024-12-04T18:33:33Z",
+    "closed_at": "2024-12-06T21:40:14Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/pull/3",
+    "body": "This adds the ability for the password provider to generate an OTP (optional) when the client logs in, that the client has to then provide accurately.\r\n\r\nThe `generateOtp` function gets req and email and can return an OTP. Up to the implementor to decide whether an OTP is required based on req+email.\r\n\r\nThis does add a slight breaking change to the API, could create a separate provider `password-otp` instead.\r\nOr, we could rename the new callback that takes state to `authorize` instead of `login`, and leave the old callback so that old implementations still work.",
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/3/comments",
+    "author": "ajoslin",
+    "comments": [
+      {
+        "user": "ajoslin",
+        "created_at": "2024-12-05T17:55:31Z",
+        "body": "Please let me know if you prefer the breaking change or to make the new callback that takes `state` have a new name like `authorize`. "
+      },
+      {
+        "user": "thdxr",
+        "created_at": "2024-12-06T06:53:56Z",
+        "body": "so the way i had imagined this was by composing different providers together.\r\n\r\nin the `success` callback for password, you could save a cookie with their info and then redirect them to code auth.\r\nand then in success for the code provider, you retreive their info and log them in"
+      },
+      {
+        "user": "ajoslin",
+        "created_at": "2024-12-06T21:39:39Z",
+        "body": "Hmmm, yeah, clearly superior way to do it because it would allow OTP for all provider types.\r\n\r\nok cool\r\n"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "Implement DynamoDB Storage Adapter",
+    "created_at": "2024-11-15T18:16:14Z",
+    "closed_at": "2024-11-22T02:14:58Z",
+    "labels": [],
+    "url": "https://github.com/toolbeam/openauth/pull/1",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/toolbeam/openauth/issues/1/comments",
+    "author": "natac13",
+    "comments": [
+      {
+        "user": "thdxr",
+        "created_at": "2024-11-22T02:14:59Z",
+        "body": "wow thanks for this but i just implemented it - didn't see this PR\r\navoiding aws-sdk as well since this needs to work everywhere"
+      }
+    ]
+  }
+]

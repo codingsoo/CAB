@@ -1,0 +1,197 @@
+[
+  {
+    "number": 14141,
+    "title": "Handle container started as non-root better",
+    "created_at": "2020-11-23T05:49:43Z",
+    "closed_at": "2021-03-02T17:07:20Z",
+    "labels": [
+      "area/docs",
+      "help wanted"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/14141",
+    "body": "### description\r\n\r\nIt seems like a common issue that people try to start the container as non-root, which doesnt work with the `ENTRYPOINT` currently.\r\n\r\nUsers then seem to set `ENVOY_UID` and that only confuses the issue further.\r\n\r\nI think we can do a couple of things. \r\n\r\n- print a very big warning in the entrypoint if it  detects that it has been started by a user other than root - perhaps with link to docs\r\n- allow the container to be started (with an explicit flag) as non-root in which case it wont try to drop perms or chown stuff etc\r\n\r\nstarting as non-root will probably work in most situations, esp if you ensure the env yourself - not sure off hand about stdout/err\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/14141/comments",
+    "author": "phlax",
+    "comments": [
+      {
+        "user": "phlax",
+        "created_at": "2020-11-23T19:18:50Z",
+        "body": "this may be an issue for some specific frameworks or at least common setups - eg openshift\n\n---\n\none idea i was thinking of for starting as non-root is that if the ENVOY_UID is set *and* the container is started with the same uid, perhaps it could skip the permissions dropping etc \n\n---\n\n@lizan any thoughts on this ?\n\n---\n\n/assign phlax"
+      },
+      {
+        "user": "lizan",
+        "created_at": "2020-12-12T06:53:35Z",
+        "body": "I forgot why we had chown in the first place, in most environment it isn't needed anyway... /dev/stdout is a symlink to /proc/self/fd/1"
+      },
+      {
+        "user": "phlax",
+        "created_at": "2020-12-12T07:06:15Z",
+        "body": "im trying to rem too - my vague recollection was that it was needed\r\n\r\ni guess there are two options that might improve this - remove it (if unneeded), or add some logic to conditionally do whatever perms/user checking/dropping\r\n\r\ni think the  main issue is that users are trying to start the container (from outside) as non-root, which can work i think, but wont with the current permission dropping\r\n"
+      },
+      {
+        "user": "lizan",
+        "created_at": "2020-12-12T10:24:29Z",
+        "body": "agreed, I'm ok with either way."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-01-11T12:13:24Z",
+        "body": "This issue has been automatically marked as stale because it has not had activity in the last 30 days. It will be closed in the next 7 days unless it is tagged \"help wanted\" or \"no stalebot\" or other activity occurs. Thank you for your contributions."
+      },
+      {
+        "user": "mtttcgcg",
+        "created_at": "2021-02-19T01:31:48Z",
+        "body": "This is more important for us now that Envoy 1.14's xDS v2 API is deprecated. 1.14 was the last version we were able to run without encountering this issue."
+      },
+      {
+        "user": "phlax",
+        "created_at": "2021-02-26T08:46:27Z",
+        "body": "@mtttcgcg there is a fix i think in #15115 \r\n\r\nill follow up with an update to docs once that has landed\n\n---\n\n@ToniCipriani @mtttcgcg if you can confirm that this issue was resolved in #15115 ill add a note in docs and we can close this ticket i think"
+      },
+      {
+        "user": "ToniCipriani",
+        "created_at": "2021-02-26T19:27:04Z",
+        "body": "> @ToniCipriani @mtttcgcg if you can confirm that this issue was resolved in #15115 ill add a note in docs and we can close this ticket i think\r\n\r\nLooks good. Deployed envoyproxy/envoy-alpine-dev, container did not complain and I can see logs. Did a few basic tests and seems to work fine.\r\n\r\nThanks.\n\n---\n\nAlso, will this be part of the next 1.17 release?"
+      },
+      {
+        "user": "phlax",
+        "created_at": "2021-03-01T12:39:21Z",
+        "body": "@Shikugawa would we be able to backport #15115 and/or include in current release ?"
+      },
+      {
+        "user": "Shikugawa",
+        "created_at": "2021-03-01T13:04:59Z",
+        "body": "@phlax It makes sense. Affected versions are 1.15, 1.16 and 1.17, right?"
+      },
+      {
+        "user": "phlax",
+        "created_at": "2021-03-01T13:10:41Z",
+        "body": "great, thanks\r\n\r\n>  Affected versions are 1.15, 1.16 and 1.17, right?\r\n\r\nyep - just checked the `v1.15-latest` image and that has the problem entrypoint"
+      },
+      {
+        "user": "ToniCipriani",
+        "created_at": "2021-08-25T10:58:33Z",
+        "body": "@phlax We noticed the same problem again on one of our clusters. However it doesn't mention the additional message, and it tried to drop the permissions, resulting in the chown error again. I will have to check the service account configuration on what it's trying to run as."
+      },
+      {
+        "user": "phlax",
+        "created_at": "2021-08-25T11:19:20Z",
+        "body": "im a little confused - im trying to figure out how either, it could be running as non-root but get a uid of 0, *or*, its running as root but cant chown"
+      }
+    ]
+  },
+  {
+    "number": 12861,
+    "title": "Test100AndDisconnectLegacy flake (ARM release)",
+    "created_at": "2020-08-27T22:37:00Z",
+    "closed_at": "2020-09-03T22:20:20Z",
+    "labels": [
+      "help wanted",
+      "area/test flakes"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/12861",
+    "body": "```\r\n[ RUN      ] Protocols/DownstreamProtocolIntegrationTest.Test100AndDisconnectLegacy/IPv4_HttpDownstream_HttpUpstream\r\n[2020-08-27 21:11:58.717][30877][critical][assert] [test/integration/http_integration.cc:317] assert failure: result. Details: The connection disconnected unexpectedly, and allow_unexpected_disconnects_ is false.\r\n```",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/12861/comments",
+    "author": "mattklein123",
+    "comments": [
+      {
+        "user": "mattklein123",
+        "created_at": "2020-08-27T22:37:20Z",
+        "body": "cc @alyssawilk "
+      },
+      {
+        "user": "alyssawilk",
+        "created_at": "2020-08-31T19:50:54Z",
+        "body": "I don't recall this assert having caught anything useful  How would you feel if we just allowed unexpected disconnects?"
+      },
+      {
+        "user": "mattklein123",
+        "created_at": "2020-08-31T20:18:38Z",
+        "body": "> I don't recall this assert having caught anything useful How would you feel if we just allowed unexpected disconnects?\r\n\r\nBig +1"
+      },
+      {
+        "user": "alyssawilk",
+        "created_at": "2020-09-01T12:06:31Z",
+        "body": "Excellent.  I'll pick that up Wednesday"
+      }
+    ]
+  },
+  {
+    "number": 10701,
+    "title": "thrift proxy test driver dependencies",
+    "created_at": "2020-04-08T17:25:22Z",
+    "closed_at": "2022-04-26T00:54:08Z",
+    "labels": [
+      "tech debt",
+      "help wanted"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/10701",
+    "body": "Envoy's thrift proxy network filter uses some python code to generate a variety of requests and responses in the various combinations of thrift transport and protocol that are support. One of the supported protocols, colloquially known as \"ttwitter\", is no longer supported in python and is not compatible with python3, blocking #4552.\r\n\r\nThe actual python3 incompatibility is in the twitter.common.rpc package and involves a type check against `long`, which no longer exists in python3. The fix is simple, but as the package is no longer support I don't expect we'll see an update. \r\n\r\nThis issue enumerates so possible paths forward:\r\n\r\n1. It's fairly simple to patch the library to remove the check for `long`. I think this is reasonable in the short-term.\r\n\r\n2. Bring the unsupported twitter.common.rpc code into the envoyproxy org (not necessarily envoyproxy/envoy), and fix it. I dislike this path because the entire point of using external libraries was to test against a different implementation of the protocol. If the protocol were ever updated (and it does have a versioning provision) we'd be implementing both sides of the integration test.\r\n\r\n3. Thrift supports other languages besides python and it should be possible to rewrite the code in `test/extensions/filters/network/thrift_proxy/driver` in another language. Java seems the mostly likely candidate since it's supported by bazel and has support for all the variations of thrift. I think we'd want to put that code in a new repository (under the envoyproxy org) and treat the entire payload generating structure as an external dependency.\r\n\r\n4. Deprecate ttwitter support and delete usage of the abandoned libraries. I don't have a sense of how much the ttwitter thrift protocol is used in conjunction with Envoy so I don't know how to gauge how painful this would be to end users.\r\n",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/10701/comments",
+    "author": "zuercher",
+    "comments": [
+      {
+        "user": "zuercher",
+        "created_at": "2020-04-08T17:29:17Z",
+        "body": "#10702 implements the first option above."
+      },
+      {
+        "user": "rgs1",
+        "created_at": "2022-04-25T23:00:58Z",
+        "body": "I think we should get started with option 4 (deprecate ttwitter and remove the abandoned tests), I am happy to drive. I pinged @mattklein123 offline to get a sense of whether other deployments are relying on ttwitter.\r\n\r\ncc: @fishcakez @davinci26 @tkovacs-2 @caitong93  \n\n---\n\n@zuercher I think we can close this now that #20466 is done. \r\n\r\ncc: @phlax "
+      },
+      {
+        "user": "zuercher",
+        "created_at": "2022-04-26T00:54:08Z",
+        "body": "For anyone going across this bug in the future -- we chose option 4 and have deprecated the ttwitter protocol."
+      }
+    ]
+  },
+  {
+    "number": 4616,
+    "title": "[v1.8.0 (Oct 4, 2018) deprecation] Remove features marked deprecated in #3838",
+    "created_at": "2018-10-05T17:33:34Z",
+    "closed_at": "2019-04-01T16:21:27Z",
+    "labels": [
+      "tech debt",
+      "help wanted",
+      "deprecation"
+    ],
+    "url": "https://github.com/envoyproxy/envoy/issues/4616",
+    "body": "#3838 (add response/request header options at route level) introduced a deprecation notice for v1.8.0 (Oct 4, 2018). This issue tracks source code cleanup.",
+    "comments_url": "https://api.github.com/repos/envoyproxy/envoy/issues/4616/comments",
+    "author": "mattklein123",
+    "comments": [
+      {
+        "user": "stale[bot]",
+        "created_at": "2018-11-04T20:13:16Z",
+        "body": "This issue has been automatically marked as stale because it has not had activity in the last 30 days. It will be closed in the next 7 days unless it is tagged \"help wanted\" or other activity occurs. Thank you for your contributions.\n"
+      },
+      {
+        "user": "derekargueta",
+        "created_at": "2018-11-06T22:16:37Z",
+        "body": "looking at this today"
+      },
+      {
+        "user": "mattklein123",
+        "created_at": "2019-03-20T16:19:03Z",
+        "body": "@derekargueta any chance of getting this deprecation complete before we cut 1.10.0? Thank you!"
+      },
+      {
+        "user": "derekargueta",
+        "created_at": "2019-03-25T22:49:21Z",
+        "body": "Just started picking this back up yesterday :)\r\n\r\n2 PRs on the way:\r\n1.  Convert all the router config_impl tests to the v2 API (makes testing this easier since the v1->v2 translation code doesn't really differentiate between route action and route, which is where I got lost last time, and v1 is entirely deprecated now anyways) - almost done, just a few more tests left.\r\n2. Actually remove this feature, with the first PR being very helpful in fixing the tests.\n\n---\n\n@mattklein123 re the new deprecation notice policy @alyssawilk sent out a few days ago, should these go to `fatal-by-default` first? Considering that this feature has been deprecated for a while (~6 months) and was removed from documentation at the same time, I'd favor just deleting but don't want to stray from the new policy.\r\n\r\nOtherwise, just waiting on #6332 to land before putting up the PR to remove this feature."
+      },
+      {
+        "user": "mattklein123",
+        "created_at": "2019-03-25T23:06:41Z",
+        "body": "@derekargueta I will defer to \"commander of deprecation policy\" @alyssawilk, but deleting sounds reasonable to me. :)"
+      },
+      {
+        "user": "alyssawilk",
+        "created_at": "2019-03-26T12:57:17Z",
+        "body": "+1 - good to remove.\r\nAnything with an open issue predates the changes to deprecation, so we're fine to straight up remove.\r\nThe script can't tell the difference, so both things which were ok to remove, and things subject to the new process all got listed."
+      }
+    ]
+  }
+]

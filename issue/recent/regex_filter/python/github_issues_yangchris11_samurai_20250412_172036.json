@@ -1,0 +1,500 @@
+[
+  {
+    "number": 109,
+    "title": "The kf_socre is always None",
+    "created_at": "2025-03-18T05:36:13Z",
+    "closed_at": "2025-03-19T01:53:42Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/109",
+    "body": "i found the kf_socre in always  none in sam2_base.py/_prepare_memory_conditioned_features, maybe the kf_socre mean kf_ious (but not compact to \"current_out\" in sam2_vidio_predictor.py/_run_single_frame_inference)?\n\n",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/109/comments",
+    "author": "txzhou-hust",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2025-03-18T20:47:42Z",
+        "body": "@InfluenceFunction  Thank you for pointing this out!\n\nWe double check out implementation/commit history and found out this two lines should be added to `_run_single_frame_inference` in the `sam2_video_predictor.py` file (which is somehow mistaken during refactoring of the code):\n```\n        # object pointer is a small tensor, so we always keep it on GPU memory for fast access\n        obj_ptr = current_out[\"obj_ptr\"]\n        object_score_logits = current_out[\"object_score_logits\"]\n        best_iou_score = current_out[\"best_iou_score\"]\n        best_kf_score = current_out[\"kf_ious\"]                                             # this line\n        # make a compact version of this frame's output to reduce the state size\n        compact_current_out = {\n            \"maskmem_features\": maskmem_features, # (B, C, H, W)\n            \"maskmem_pos_enc\": maskmem_pos_enc, \n            \"pred_masks\": pred_masks,\n            \"obj_ptr\": obj_ptr,\n            \"object_score_logits\": object_score_logits,\n            \"best_iou_score\": best_iou_score,\n            \"kf_score\": best_kf_score,                                                   # and this line\n        }\n```\n\nPlease try to see in the updated version works, thank you!"
+      },
+      {
+        "user": "txzhou-hust",
+        "created_at": "2025-03-19T01:52:40Z",
+        "body": "ok，thank you, i have no other question"
+      }
+    ]
+  },
+  {
+    "number": 105,
+    "title": "demo.py Out of Memory",
+    "created_at": "2025-02-17T14:40:29Z",
+    "closed_at": "2025-02-20T14:38:27Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/105",
+    "body": "I tried to run samurai inference on my PC with 96GB of RAM and RTX 3090 24GB. However, demo.py ran out of memory for whatever video I throw at it. I even tried a 256P 8fps with only 1s duration, its memory usage still spiked and consumed all of my system memory. I think this is definitely unusual, there must be some kind of bug in the code.",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/105/comments",
+    "author": "GaiZhenbiao",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-18T07:13:22Z",
+        "body": "Can you try adding `offload_state_to_cpu=True` to initialize the predictor?"
+      },
+      {
+        "user": "GaiZhenbiao",
+        "created_at": "2025-02-18T07:25:08Z",
+        "body": "I am. Here's code I'm using. It doesn't help if setting this to False, too. Is `demo.py` working fine on your end, that it doesn't consume so much RAM?\n\n```\nimport argparse\nimport os\nimport os.path as osp\nimport numpy as np\nimport cv2\nimport torch\nimport gc\nimport sys\nfrom tqdm import tqdm\nsys.path.append(\"./sam2\")\nfrom sam2.build_sam import build_sam2_video_predictor\n\ncolor = [(255, 0, 0)]\n\ndef load_txt(gt_path):\n    with open(gt_path, 'r') as f:\n        gt = f.readlines()\n    prompts = {}\n    for fid, line in enumerate(gt):\n        x, y, w, h = map(float, line.split(','))\n        x, y, w, h = int(x), int(y), int(w), int(h)\n        prompts[fid] = ((x, y, x + w, y + h), 0)\n    return prompts\n\ndef determine_model_cfg(model_path):\n    if \"large\" in model_path:\n        return \"configs/samurai/sam2.1_hiera_l.yaml\"\n    elif \"base_plus\" in model_path:\n        return \"configs/samurai/sam2.1_hiera_b+.yaml\"\n    elif \"small\" in model_path:\n        return \"configs/samurai/sam2.1_hiera_s.yaml\"\n    elif \"tiny\" in model_path:\n        return \"configs/samurai/sam2.1_hiera_t.yaml\"\n    else:\n        raise ValueError(\"Unknown model size in path!\")\n\ndef prepare_frames_or_path(video_path):\n    if video_path.endswith(\".mp4\") or osp.isdir(video_path):\n        return video_path\n    else:\n        raise ValueError(\"Invalid video_path format. Should be .mp4 or a directory of jpg frames.\")\n\ndef resize_frame(frame, resolution):\n    if resolution is None:\n        return frame\n    height, width = frame.shape[:2]\n    aspect_ratio = width / height\n    new_height = resolution\n    new_width = int(aspect_ratio * new_height)\n    return cv2.resize(frame, (new_width, new_height))\n\ndef main(args):\n    print(\"Loading model\")\n    model_cfg = determine_model_cfg(args.model_path)\n    predictor = build_sam2_video_predictor(model_cfg, args.model_path, device=\"cuda:0\")\n    frames_or_path = prepare_frames_or_path(args.video_path)\n    prompts = load_txt(args.txt_path)\n\n    print(\"Loading frames\")\n    frame_rate = 8\n    if args.save_to_video:\n        if osp.isdir(args.video_path):\n            frames = sorted([osp.join(args.video_path, f) for f in os.listdir(args.video_path) if f.endswith((\".jpg\", \".jpeg\", \".JPG\", \".JPEG\"))])\n            loaded_frames = [resize_frame(cv2.imread(frame_path), args.resolution) for frame_path in frames]\n            height, width = loaded_frames[0].shape[:2]\n        else:\n            cap = cv2.VideoCapture(args.video_path)\n            frame_rate = cap.get(cv2.CAP_PROP_FPS)\n            loaded_frames = []\n            while True:\n                ret, frame = cap.read()\n                if not ret:\n                    break\n                loaded_frames.append(resize_frame(frame, args.resolution))\n                if args.duration and len(loaded_frames) >= args.duration * frame_rate:\n                    break\n            cap.release()\n            height, width = loaded_frames[0].shape[:2]\n\n            if len(loaded_frames) == 0:\n                raise ValueError(\"No frames were loaded from the video.\")\n\n    fourcc = cv2.VideoWriter_fourcc(*'mp4v')\n    out = cv2.VideoWriter(args.video_output_path, fourcc, frame_rate, (width, height))\n\n    print(\"Running inference\")\n    with torch.inference_mode(), torch.autocast(\"cuda\", dtype=torch.float16):\n        print(\"Initializing state\")\n        state = predictor.init_state(frames_or_path, offload_video_to_cpu=True)\n        print(\"Adding new points or box\")\n        bbox, track_label = prompts[0]\n        print(bbox)\n        _, _, masks = predictor.add_new_points_or_box(state, box=bbox, frame_idx=0, obj_id=0)\n\n        print(\"Processing frames\")\n        for frame_idx, object_ids, masks in tqdm(predictor.propagate_in_video(state)):\n            mask_to_vis = {}\n            bbox_to_vis = {}\n\n            for obj_id, mask in zip(object_ids, masks):\n                mask = mask[0].cpu().numpy()\n                mask = mask > 0.0\n                non_zero_indices = np.argwhere(mask)\n                if len(non_zero_indices) == 0:\n                    bbox = [0, 0, 0, 0]\n                else:\n                    y_min, x_min = non_zero_indices.min(axis=0).tolist()\n                    y_max, x_max = non_zero_indices.max(axis=0).tolist()\n                    bbox = [x_min, y_min, x_max - x_min, y_max - y_min]\n                bbox_to_vis[obj_id] = bbox\n                mask_to_vis[obj_id] = mask\n\n            if args.save_to_video:\n                img = loaded_frames[frame_idx]\n                for obj_id, mask in mask_to_vis.items():\n                    mask_img = np.zeros((height, width, 3), np.uint8)\n                    mask_img[mask] = color[(obj_id + 1) % len(color)]\n                    img = cv2.addWeighted(img, 1, mask_img, 0.2, 0)\n\n                for obj_id, bbox in bbox_to_vis.items():\n                    cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), color[obj_id % len(color)], 2)\n\n                out.write(img)\n\n        if args.save_to_video:\n            out.release()\n\n    del predictor, state\n    gc.collect()\n    torch.clear_autocast_cache()\n    torch.cuda.empty_cache()\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--video_path\", required=True, help=\"Input video path or directory of frames.\")\n    parser.add_argument(\"--txt_path\", required=True, help=\"Path to ground truth text file.\")\n    parser.add_argument(\"--model_path\", default=\"sam2/checkpoints/sam2.1_hiera_base_plus.pt\", help=\"Path to the model checkpoint.\")\n    parser.add_argument(\"--video_output_path\", default=\"demo.mp4\", help=\"Path to save the output video.\")\n    parser.add_argument(\"--save_to_video\", default=True, help=\"Save results to a video.\")\n    parser.add_argument(\"--resolution\", type=int, help=\"Vertical resolution for resizing frames. Default is full resolution.\")\n    parser.add_argument(\"--duration\", type=int, help=\"Duration of the video to be used in seconds.\")\n    args = parser.parse_args()\n    main(args)\n```"
+      },
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-18T19:21:30Z",
+        "body": "`state = predictor.init_state(frames_or_path, offload_video_to_cpu=True, offload_state_to_cpu=True)`"
+      },
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-18T19:21:59Z",
+        "body": "Can you try setting it to `True` not `False`?"
+      },
+      {
+        "user": "GaiZhenbiao",
+        "created_at": "2025-02-19T04:06:20Z",
+        "body": "I tried, but the issue still persists. I wonder if this some kind of OS-specific bug, since I'm using Windows 11 instead of Linux?"
+      },
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-19T19:44:12Z",
+        "body": "We never tested our code in Windows, but I doubt it is related to operating system based on the description. \n\nCan you try creating a folder with only two images and run the demo script? Maybe we can trace down the problem from here."
+      },
+      {
+        "user": "GaiZhenbiao",
+        "created_at": "2025-02-20T14:38:27Z",
+        "body": "I ran demo.py on my Linux server, and noticed that the memory usage peaked at 95% of the available 256GB of system memory when initializing the predictor state. Afterward, the usage dropped to around 66% during frame processing. It appears that the script consumes a significant amount of system memory, and this behavior doesn’t seem to be related to any OS-specific factors."
+      }
+    ]
+  },
+  {
+    "number": 101,
+    "title": "Can Samurai track multi-object?",
+    "created_at": "2025-02-07T22:16:24Z",
+    "closed_at": "2025-02-10T03:38:48Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/101",
+    "body": "It seems like visual object tracking is tracking single object given bounding box for the first frame. Can Samurai track multiple objects if I provide multiple bounding boxes?\n",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/101/comments",
+    "author": "BaamPark",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-10T03:38:48Z",
+        "body": "No, the current version of samurai will not be able to track multiple objects at the same time as it requires individual memory banks, which is not consider in the current version of code."
+      }
+    ]
+  },
+  {
+    "number": 100,
+    "title": "Comfyui ?",
+    "created_at": "2025-02-05T04:25:48Z",
+    "closed_at": "2025-02-18T07:20:20Z",
+    "labels": [
+      "enhancement (no plan yet)"
+    ],
+    "url": "https://github.com/yangchris11/samurai/issues/100",
+    "body": "Comfyui node thanks ",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/100/comments",
+    "author": "ApexArtist",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-10T03:27:05Z",
+        "body": "Can you elaborate more about your question or suggestion? Thanks!"
+      }
+    ]
+  },
+  {
+    "number": 98,
+    "title": "Support for both reverse and forward propagation",
+    "created_at": "2025-02-02T00:39:49Z",
+    "closed_at": "2025-02-10T03:37:05Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/98",
+    "body": "It seems that the model only supports forward propagation, unlike forward and reverse propagation in SAM2. Is this correct ? This is because of no handling of reverse propagation in this part of the code \n\n```\nif self.samurai_mode:\n                valid_indices = [] \n                if frame_idx > 1:  # Ensure we have previous frames to evaluate\n                    for i in range(frame_idx - 1, 1, -1):  # Iterate backwards through previous frames\n                        iou_score = output_dict[\"non_cond_frame_outputs\"][i][\"best_iou_score\"]  # Get mask affinity score\n                        obj_score = output_dict[\"non_cond_frame_outputs\"][i][\"object_score_logits\"]  # Get object score\n                        kf_score = output_dict[\"non_cond_frame_outputs\"][i][\"kf_score\"] if \"kf_score\" in output_dict[\"non_cond_frame_outputs\"][i] else None  # Get motion score if available\n                        # Check if the scores meet the criteria for being a valid index\n                        if iou_score.item() > self.memory_bank_iou_threshold and \\\n                           obj_score.item() > self.memory_bank_obj_score_threshold and \\\n                           (kf_score is None or kf_score.item() > self.memory_bank_kf_score_threshold):\n                            valid_indices.insert(0, i)  \n                        # Check the number of valid indices\n                        if len(valid_indices) >= self.max_obj_ptrs_in_encoder - 1:  \n                            break\n                if frame_idx - 1 not in valid_indices: \n                    valid_indices.append(frame_idx - 1)\n                for t_pos in range(1, self.num_maskmem):  # Iterate over the number of mask memories\n                    idx = t_pos - self.num_maskmem  # Calculate the index for valid indices\n                    if idx < -len(valid_indices):  # Skip if index is out of bounds\n                        continue\n                    out = output_dict[\"non_cond_frame_outputs\"].get(valid_indices[idx], None)  # Get output for the valid index\n                    if out is None:  # If not found, check unselected outputs\n                        out = unselected_cond_outputs.get(valid_indices[idx], None)\n                    t_pos_and_prevs.append((t_pos, out))  # Append the temporal position and output to the list\n```\n\nIs this assessment correct ? If yes, are you planning to add support for reverse and forward propagation in the future ?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/98/comments",
+    "author": "sajalmaheshwari624",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2025-02-10T03:37:05Z",
+        "body": "Yes, @sajalmaheshwari624 your understanding is correct. We only implement the forward functionality for SAMurai right now as online tracking is one of the mainstream of VOT. We currently have no plan to add the reverse feature."
+      }
+    ]
+  },
+  {
+    "number": 92,
+    "title": "Try to train samurai",
+    "created_at": "2025-01-14T05:53:31Z",
+    "closed_at": "2025-01-20T06:36:15Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/92",
+    "body": "Even though I know it's zero-shot, I still want to know if the model supports me training it on other datasets",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/92/comments",
+    "author": "havinggood",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2025-01-19T23:37:40Z",
+        "body": "You may need to check the original SAM2 repo for fine-tuning instructions."
+      }
+    ]
+  },
+  {
+    "number": 86,
+    "title": " Problems when running train.py",
+    "created_at": "2025-01-01T12:09:43Z",
+    "closed_at": "2025-01-02T00:01:57Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/86",
+    "body": "\r\n--config has been given correctly, but the following problems will still occur when running. Please help answer the following questions. Thank you for your help.\r\nif __name__ == \"__main__\":\r\n\r\n    initialize_config_module(\"sam2\", version_base=\"1.2\")\r\n    parser = ArgumentParser()\r\n    parser.add_argument(\r\n        \"-c\",\r\n        \"--config\",\r\n        required=True,\r\n        type=str,\r\n        default=\"/home/cyy/code/grp/samurai-master/sam2/configs/sam2.1_training/sam2.1_hiera_b+_MOSE_finetune.yaml\",\r\n        help=\"path to config file (e.g. configs/sam2.1_training/sam2.1_hiera_b+_MOSE_finetune.yaml)\",\r\n    )\r\n    parser.add_argument(\r\n        \"--use-cluster\",\r\n        type=int,\r\n        default=0,\r\n        help=\"whether to launch on a cluster, 0: run locally, 1: run on a cluster\",\r\n    )\r\n    parser.add_argument(\"--partition\", type=str, default=\"PARTITION\", help=\"SLURM partition\")\r\n    parser.add_argument(\"--account\", type=str, default=\"ACCOUNT\", help=\"SLURM account\")\r\n    parser.add_argument(\"--qos\", type=str, default=\"QOS\", help=\"SLURM qos\")\r\n    parser.add_argument(\r\n        \"--num-gpus\", type=int, default=1, help=\"number of GPUS per node\"\r\n\r\nusage: train.py [-h] -c CONFIG [--use-cluster USE_CLUSTER]\r\n                [--partition PARTITION] [--account ACCOUNT] [--qos QOS]\r\n                [--num-gpus NUM_GPUS] [--num-nodes NUM_NODES]\r\ntrain.py: error: the following arguments are required: -c/--config\r\n",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/86/comments",
+    "author": "Grpab",
+    "comments": [
+      {
+        "user": "hsiangwei0903",
+        "created_at": "2025-01-02T00:01:57Z",
+        "body": "Our method does not need any training, if you want to train the model and faced any issue, you can refer to the SAM2 repo."
+      }
+    ]
+  },
+  {
+    "number": 85,
+    "title": "Problem running demo.py",
+    "created_at": "2025-01-01T11:34:08Z",
+    "closed_at": "2025-01-27T20:47:35Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/85",
+    "body": "Enter your own video and .txt runtime   \r\nif __name__ == \"__main__\":\r\n    parser = argparse.ArgumentParser()\r\n    #print(\"1111\")\r\n    parser.add_argument(\"--video_path\",default=\"./assets/3.mp4\", help=\"Input video path or directory of frames.\")\r\n    parser.add_argument(\"--txt_path\",default=\"./assets/test.txt\", help=\"Path to ground truth text file.\")\r\n    parser.add_argument(\"--model_path\", default=\"sam2/checkpoints/sam2.1_hiera_base_plus.pt\", help=\"Path to the model checkpoint.\")\r\n    parser.add_argument(\"--video_output_path\", default=\"./assets/output.mp4\", help=\"Path to save the output video.\")\r\n    parser.add_argument(\"--save_to_video\", default=True, help=\"Save results to a video.\")\r\n    args = parser.parse_args()\r\n    main(args)     \r\nThe following questions will appear. Please help me answer the specific reasons. thank you\r\n/home/cyy/anaconda3/envs/samurai/bin/python /home/cyy/code/grp/samurai-master/demo.py \r\nSAMURAI mode: True\r\n\r\nProcess finished with exit code 137 (interrupted by signal 9: SIGKILL)",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/85/comments",
+    "author": "Grpab",
+    "comments": [
+      {
+        "user": "hsiangwei0903",
+        "created_at": "2025-01-02T00:01:06Z",
+        "body": "Looks like you ran out of memory. You might need to use a shorter video. "
+      },
+      {
+        "user": "Grpab",
+        "created_at": "2025-01-02T00:47:22Z",
+        "body": "> 看来您的内存不足了。您可能需要使用较短的视频。\r\n\r\nThank you for your answer, I will try your suggestion"
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "input data issue",
+    "created_at": "2024-12-20T11:25:26Z",
+    "closed_at": "2024-12-26T08:05:41Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/79",
+    "body": "can we not run the sumurai by just providing the video and get the prediction",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/79/comments",
+    "author": "siddiqWasserstoff",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-12-26T08:05:41Z",
+        "body": "@siddiqWasserstoff Please see the demo.py script for more details about your question."
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "title": "Nuke Launch Error",
+    "created_at": "2024-12-17T04:30:10Z",
+    "closed_at": "2024-12-17T06:28:38Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/76",
+    "body": "I followed every steps in the description for installation, yet I encountered the following error: \r\n\r\nNukeX 15.0v4, 64 bit, built Feb  6 2024.\r\nCopyright (c) 2024 The Foundry Visionmongers Ltd.  All Rights Reserved.\r\nLicence expires on: 2025/3/17\r\n\r\nTraceback (most recent call last):\r\n  File \"C:/Program Files/Nuke15.0v4/plugins/NukeSamurai/menu.py\", line 4, in <module>\r\n    from scripts.nuke_samurai import CreateSamuraiNode, UpdatePath, GenerateMask, BoundingBox, InputInfos\r\n  File \"C:\\Program Files\\Nuke15.0v4\\pythonextensions\\site-packages\\shiboken2\\files.dir\\shibokensupport\\__feature__.py\", line 142, in _import\r\n    return original_import(name, *args, **kwargs)\r\n  File \"C:\\Program Files/Nuke15.0v4/plugins/NukeSamurai\\scripts\\nuke_samurai.py\", line 6, in <module>\r\n    import torch\r\n  File \"C:\\Program Files\\Nuke15.0v4\\pythonextensions\\site-packages\\shiboken2\\files.dir\\shibokensupport\\__feature__.py\", line 142, in _import\r\n    return original_import(name, *args, **kwargs)\r\n  File \"C:\\Users/USER/AppData/Local/Programs/Python/Python310/Lib/site-packages\\torch\\__init__.py\", line 132, in <module>\r\n    raise err\r\nOSError: [WinError 127] 找不到指定的程序。 Error loading \"C:\\Users/USER/AppData/Local/Programs/Python/Python310/Lib/site-packages\\torch\\lib\\c10_cuda.dll\" or one of its dependencies.",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/76/comments",
+    "author": "j89012g",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-12-17T06:28:38Z",
+        "body": "Please open the issue at the corresponding repo."
+      }
+    ]
+  },
+  {
+    "number": 75,
+    "title": "Is there a way to have \"samruai\" do a sequence of images and frame-by-frame tracking?",
+    "created_at": "2024-12-12T14:40:14Z",
+    "closed_at": "2025-01-05T17:43:41Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/75",
+    "body": "Hello,\r\n\r\nI am working on samruai. My goal is to label places on an image series with samruai. However, the original samruai can be given as frame to frame. Is it possible to do something in the same way here? Can I give it not as mp4 but as an image series and see the results from the 20th image to the 43rd image for example? So the first frame will be the 20th image and the last frame will be the 43rd image.\r\nIs there any possibility that I can give the image here as a numpy array and not as a path?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/75/comments",
+    "author": "Cestovatels",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-12-17T06:31:44Z",
+        "body": "It should be seemingless with SAM2 or SAMURAI of your mentioned functionality, the entry point you should be looking at is the `sam2/sam2/sam2_video_predictor.py` file (`propagate_in_video()`)."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "where position？",
+    "created_at": "2024-12-10T08:43:37Z",
+    "closed_at": "2025-01-05T17:43:26Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/73",
+    "body": "When I segment my own video, I give it the position of the object that needs to be tracked in the first frame, where is the positional information stored about the object that needs to be tracked next?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/73/comments",
+    "author": "LLlovecat",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-12-11T00:46:08Z",
+        "body": "You can check the original SAM2 paper. The positional information is stored in the memory bank."
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "title": "How do i use it for multi object tracking",
+    "created_at": "2024-12-05T06:55:59Z",
+    "closed_at": "2024-12-14T12:44:36Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/yangchris11/samurai/issues/65",
+    "body": "The demo only provides single-object tracking, how can it be used for multi-object tracking?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/65/comments",
+    "author": "mutouoa",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-12-05T17:46:57Z",
+        "body": "You can check following issues #3 #61."
+      }
+    ]
+  },
+  {
+    "number": 53,
+    "title": "Do I really need 230GB of data for this?",
+    "created_at": "2024-12-02T01:24:17Z",
+    "closed_at": "2024-12-10T05:51:39Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/53",
+    "body": "Hi all,\n\nI have a question about the LaSOT training data. Why is it necessary to download roughly 230GB of data just to create video files? The process seems incredibly slow, as it’s only using my CPU instead of my GPU, which makes it so , so slow.\n\nWouldn’t it be possible to provide the preprocessed video files directly? Or is it necessary to generate them myself? Also, do I even need these training files for the model to work properly, or can I skip this step altogether?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/53/comments",
+    "author": "eizoxx",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-12-02T01:49:30Z",
+        "body": "LaSOT is only for evaluation. You can run the demo without any training data."
+      }
+    ]
+  },
+  {
+    "number": 48,
+    "title": "On whether training will enhance results",
+    "created_at": "2024-11-30T08:50:59Z",
+    "closed_at": "2024-12-10T05:51:28Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/48",
+    "body": "Since the frames are now picked differently than before, I assume the time embedding should be fine-tunable for training?  Has the author tried training yet, I'd like to get some help related to starting training fine-tuning!",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/48/comments",
+    "author": "gjhhust",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-11-30T19:01:24Z",
+        "body": "SAMURAI is a training-free pipeline. We did the modification on the memory selection which does not require the re-training of the original SAM2"
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "사무라이",
+    "created_at": "2024-11-27T22:44:47Z",
+    "closed_at": "2024-11-27T23:21:40Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/37",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/37/comments",
+    "author": "bluelamp",
+    "comments": [
+      {
+        "user": "hsiangwei0903",
+        "created_at": "2024-11-27T23:21:40Z",
+        "body": "武士"
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "new questions",
+    "created_at": "2024-11-27T12:53:10Z",
+    "closed_at": "2024-12-01T06:19:48Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/36",
+    "body": "The program crashed because the memory was exhausted.",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/36/comments",
+    "author": "sunhui-3D",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-11-27T17:56:55Z",
+        "body": "May I ask how do you install the SAM 2?"
+      },
+      {
+        "user": "yangchris11",
+        "created_at": "2024-12-01T06:19:48Z",
+        "body": "Close due to inactive, reopen the issue with additional details if needed"
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "title": "use real-rtsp stream as input",
+    "created_at": "2024-11-27T10:00:09Z",
+    "closed_at": "2024-11-28T19:48:14Z",
+    "labels": [
+      "duplicate"
+    ],
+    "url": "https://github.com/yangchris11/samurai/issues/35",
+    "body": "The code is in a way that it accepts a video as input, but I am looking to give my webcam as input and see the resulting frame by frame. how is it possible?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/35/comments",
+    "author": "vamsi-krishna-mishran",
+    "comments": [
+      {
+        "user": "rese1f",
+        "created_at": "2024-11-27T12:49:20Z",
+        "body": "Technically, this is feasible. Our method only requires an initial bounding box (bbox) as reference, after which it performs inference on the video. You can try modifying the I/O part to meet your requirements."
+      },
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-11-27T19:47:14Z",
+        "body": "You can refer to this issue: #12 "
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "title": "Evaluation",
+    "created_at": "2024-11-27T01:48:55Z",
+    "closed_at": "2024-11-27T05:57:48Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/31",
+    "body": "Thanks for your great work! Could you please provide some details or examples about evaluation?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/31/comments",
+    "author": "Sam1224",
+    "comments": [
+      {
+        "user": "gjhhust",
+        "created_at": "2024-11-28T02:24:24Z",
+        "body": "> Thanks for your great work! Could you please provide some details or examples about evaluation?\r\n\r\nI have the same confusion, have you solved it yet, I don't know how to start the assessment, there is no script for it"
+      }
+    ]
+  },
+  {
+    "number": 29,
+    "title": "SAMURAI",
+    "created_at": "2024-11-26T15:00:23Z",
+    "closed_at": "2024-11-26T17:39:08Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/29",
+    "body": "How's this for a meaning:\r\n\r\n### Segment-Aware Motion-Utilized Representation for Adaptive Inference\r\n\r\n🙂",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/29/comments",
+    "author": "Hydra9268",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-11-26T17:39:08Z",
+        "body": "We want to acknowledge SAM by having it directly in the name, as we truly appreciate the effort and contributions by the authors behind SAM 2. Thanks for you suggested title tough, it is quite interesting :)"
+      },
+      {
+        "user": "Hydra9268",
+        "created_at": "2024-11-26T17:44:31Z",
+        "body": "I didn’t mean replacing the name SAMURAI—I was just thinking about what each letter could stand for to represent what SAMURAI does. :)"
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "Cache",
+    "created_at": "2024-11-26T01:49:44Z",
+    "closed_at": "2024-11-27T17:57:04Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/23",
+    "body": "Does emptying cache each frame cause issues? Maybe I've refactored the code wrong but after 15 frames or so the GPU has hit storage limits, emptying cache each frame seems to correct this and it runs smoothly. But does it clear RoPE information? ",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/23/comments",
+    "author": "jez-moxmo",
+    "comments": [
+      {
+        "user": "zhyjiang",
+        "created_at": "2024-11-26T02:43:49Z",
+        "body": "You can check line 165 in sam2/utils/misc.py. It will not clean the RoPE. Only the image itself is not cached."
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "Fix: config paths in demo.py",
+    "created_at": "2024-11-23T15:24:00Z",
+    "closed_at": "2024-11-23T18:31:50Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/pull/11",
+    "body": "Hi,\r\n\r\nthanks for your awesome work. \r\nI just noticed there might be a wrong path in demo.py.\r\nHope this fixes it :)",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/11/comments",
+    "author": "timHau",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-11-23T18:32:57Z",
+        "body": "Thank you for noticing the wrong config path, we plan to provide a more flexible demo script in the future! But we will merge the commit for now 🙏"
+      }
+    ]
+  },
+  {
+    "number": 4,
+    "title": "img or video miss match",
+    "created_at": "2024-11-22T15:52:36Z",
+    "closed_at": "2024-11-22T21:38:28Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/4",
+    "body": "I downloaded the data to test both for planes and tank. For both of them I always get the same error:\r\n\r\n`(sam2) (base) MacBook-Air samurai-master % python scripts/main_inference.py \r\nTraceback (most recent call last):\r\n  File \"/SAM2/samurai-master/scripts/main_inference.py\", line 57, in <module>\r\n    cid_name = video.split('-')[1]\r\nIndexError: list index out of range`\r\n\r\nNote that I set the same directory structure.",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/4/comments",
+    "author": "mirosaide",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-11-22T17:19:53Z",
+        "body": "Can you `ls` your folder or screenshot your folder structure? Also you might want to make sure that all the video sequences in `data/LaSOT/testing_set.txt` are properly downloaded or modify it baed on your subset of sequences."
+      },
+      {
+        "user": "mirosaide",
+        "created_at": "2024-11-22T21:26:40Z",
+        "body": "> Can you `ls` your folder or screenshot your folder structure? Also you might want to make sure that all the video sequences in `data/LaSOT/testing_set.txt` are properly downloaded or modify it baed on your subset of sequences.\r\n\r\nI have fixed the issue. It all runs smoothly now."
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "Missing requirements.txt?",
+    "created_at": "2024-11-21T02:10:25Z",
+    "closed_at": "2024-11-21T08:35:08Z",
+    "labels": [],
+    "url": "https://github.com/yangchris11/samurai/issues/1",
+    "body": "Thanks for the work! \r\n\r\nIn the main README.md, you make reference to a requirements.txt (with a `pip install requirements.txt`), but it appears that wasn't included in the repository.\r\n\r\nMaybe that was supposed to be committed but got left out?",
+    "comments_url": "https://api.github.com/repos/yangchris11/samurai/issues/1/comments",
+    "author": "burningion",
+    "comments": [
+      {
+        "user": "yangchris11",
+        "created_at": "2024-11-21T02:25:44Z",
+        "body": "Thank you for point out the missing requirements!\r\n\r\nWe had replaced the line with a list of packages to install for now."
+      }
+    ]
+  }
+]

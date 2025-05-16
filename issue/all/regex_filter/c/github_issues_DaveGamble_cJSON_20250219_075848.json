@@ -1,0 +1,1384 @@
+[
+  {
+    "number": 436,
+    "title": "Why is Object implemented as a Linked List instead of Hash Table?",
+    "created_at": "2020-03-03T02:17:03Z",
+    "closed_at": "2020-08-27T06:39:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/436",
+    "body": "I have some code similar to the following, excluding error checking and etc:\r\n\r\n    cJSON *rows = cJSON_Parse(input_string);\r\n    cJSON *row = NULL, *foo = NULL, *new_foo = NULL;\r\n\r\n    cJSON_ArrayForEach(row, rows) {\r\n        foo = cJSON_GetObjectItemCaseSensitive(row, \"foo\"); // O(n)\r\n\r\n        new_foo = cJSON_CreateNumber(atoi(foo->valueint));\r\n\r\n        cJSON_ReplaceItemInObjectCaseSensitive(row, \"foo\", new_foo);  // O(n)\r\n\r\n    }\r\n\r\nHowever, the object item is implemented as a linked list, and the `GetObject` and `ReplaceItemInObject` both have to loop over every item in the object.\r\n\r\nIs there a technical reason why object wasn't implemented as a hash table?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/436/comments",
+    "author": "mkmoisen",
+    "comments": [
+      {
+        "user": "Alanscut",
+        "created_at": "2020-03-18T08:22:28Z",
+        "body": "Good question! I think that when the author designed it, he paid more attention to the performance of parsing and stringify, but ignored the performance of manipulating JSON objects.  So if change the linkedlist to hash table, the performance of searching and adding will improve a lot. a PR is welcomed! :)"
+      },
+      {
+        "user": "maximkulkin",
+        "created_at": "2020-08-10T04:31:48Z",
+        "body": "@mkmoisen I guess because the library is used a lot in embedded world. Having a predictable memory footprint is much more important than performance of lookups. If your typical objects have 5-7 fields, and field names do not share a huge common prefix, searching for a proper field is not significantly slower, while creating and maintaining a hash maps is an extra memory. Plus might require a lot of small object allocations which have additional overhead per allocation. Or might require an additional infrastructure to allow customizing allocators."
+      },
+      {
+        "user": "Alanscut",
+        "created_at": "2020-08-27T06:39:34Z",
+        "body": "Based on above reason, cJSON will not change linkedlist to hashtable."
+      }
+    ]
+  },
+  {
+    "number": 348,
+    "title": "how to handle \"long long int \" in cJSON?",
+    "created_at": "2019-04-28T11:35:19Z",
+    "closed_at": "2019-04-30T16:22:05Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/348",
+    "body": "```\r\n    cJSON *root_js = cJSON_CreateObject();\r\n    cJSON_AddNumberToObject(root_js, \"value\", 1326545647980439);\r\n    char *data = cJSON_Print(root_js);\r\n    printf(\"%s\\n\", data);\r\n    \r\n    cJSON *value_js = cJSON_GetObjectItem(root_js, \"value\");\r\n```\r\n```\r\n    int64_t value = value_js->valueint;\r\n    int64_t value = value_js->valuedouble;\r\n```\r\n\r\nSo, how to get \"value\" ?  \r\nThe number is bigger than INT_MAX, \"uint64_t value = value_js->valueint\"  will be wrong.\r\nUse \"uint64_t value = value_js->valuedouble\" will have a type conversion.  Is there any possiblity that type conversion will have some problem ?\r\n\r\nSo what is the right way to get int64_t value ?  Thanks !\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/348/comments",
+    "author": "pukaifei",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-30T16:22:05Z",
+        "body": "There is no support for `int64_t` in C89, so cJSON doesn't support it. See #151 and #14.\r\n\r\nYou can use `valuedouble` to store up to 53 bit integers without loss of precision if you are using a system that uses IEEE 754 Double Precision Floating Point Numbers (which is almost every system out there).\r\n\r\n`valueint` is only there for legacy purposes, if you use `cJSON_SetNumberValue`, `valuedouble` will be set to whatever you pass to it and `valueint` will be either the result of casting the `double` to `int` or `INT_MAX`, `INT_MIN` if the `double` is outside of the range of an `int`."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-30T16:25:05Z",
+        "body": "Same goes for `cJSON_AddNumberToObject`, but be careful because `1326545647980439` is an integer literal and will be truncated by the compiler, so you need to use `1326545647980439.0` (and since this number takes 51 bits, it will fit in IEEE754 doubles."
+      }
+    ]
+  },
+  {
+    "number": 342,
+    "title": "Using version 1.7 stack overflow",
+    "created_at": "2019-04-02T13:25:18Z",
+    "closed_at": "2020-01-19T01:07:15Z",
+    "labels": [
+      "question",
+      "needs info"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/342",
+    "body": "When I export json using CJSON, vs informs me that the heap is corrupt.\r\nThe code that prompted me to make an error is as follows：\r\nstatic void * CJSON_CDECL internal_malloc(size_t size)\r\n{\r\n    return malloc(size);\r\n}\r\nI use it this way\r\ncJSON_AddNumberToObject(rtk_sol, \"npre\", sol->npre);\r\ncJSON_AddNumberToObject(rtk_sol, \"age\", sol->age);\r\nPlease tell me why this happens\r\nThank you for your\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/342/comments",
+    "author": "trainA",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-15T21:04:50Z",
+        "body": "I'm not sure why your heap is corrupted. Using `cJSON_AddNumberToObject` by itself shouldn't cause that."
+      },
+      {
+        "user": "Alanscut",
+        "created_at": "2020-01-19T01:07:15Z",
+        "body": "closed it due to lack of more infomation, feel free to reopen it when more details provided."
+      }
+    ]
+  },
+  {
+    "number": 336,
+    "title": "[Question] Free buffer after Parse?",
+    "created_at": "2019-02-18T19:11:46Z",
+    "closed_at": "2019-04-14T21:39:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/336",
+    "body": "Hi,\r\nI'm using this library in an embedded project. I'm thinking about returning a JSON object after reading a file. \r\nIf I read all the contents of the file to a buffer, then call cJSON_Parse() on that buffer, is it safe to free the buffer? Or the pointers inside the cJSON object use some memory locations of the buffer as pointers?\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/336/comments",
+    "author": "cocus",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-14T21:39:43Z",
+        "body": "Yes, it is safe to free the buffer. The tree of `cJSON` structs doesn't point to it."
+      }
+    ]
+  },
+  {
+    "number": 332,
+    "title": "cJSON_Print return NULL when has two child, but works well with single child",
+    "created_at": "2019-02-03T18:47:56Z",
+    "closed_at": "2020-01-19T01:08:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/332",
+    "body": "my codes is as following:\r\n```c\r\n#include \"cJSON.h\"\r\n\r\nchar* json_data = NULL;\r\ncJSON *json = NULL;\r\nvoid res_ProductInfo(){\r\n\tjson = cJSON_CreateObject();\r\n\r\n\tcJSON_AddItemToObject(json, \"product\", cJSON_CreateString(\"Javis-001\"));\r\n\tcJSON_AddItemToObject(json, \"author\", cJSON_CreateString(\"yunjian.zhang\"));   //commented cJSON_Print works well, uncommented cJSON_Print return NULL\r\n\r\n\tif(NULL == json){\r\n\t\tcJSON_Delete(json);\r\n\t\treturn;\r\n\t}\r\n\t\r\n\tjson_data = cJSON_Print(json);\r\n\tif(NULL == json_data){\r\n\t\tprintf(\"print fail!\");\r\n\t}\r\n\t\r\n\tcJSON_Delete(json);\r\n\tfree(json_data);\r\n}\r\n```\r\nwhen i comment the code:\r\n`cJSON_AddItemToObject(json, \"author\", cJSON_CreateString(\"yunjian.zhang\"));`\r\nthe function cJSON_Print works well.\r\nbut when i uncomment the code, the function cJSON_Print would return NULL.\r\n\r\nI'm not sure where is the problem, please help me take a look at the problem.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/332/comments",
+    "author": "wiener0zyj",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-14T21:37:06Z",
+        "body": "I tried your code and can't reproduce your issue.\r\nAre you using the latest version of cJSON?"
+      },
+      {
+        "user": "xiaobai-pan",
+        "created_at": "2019-09-24T03:31:26Z",
+        "body": "hi @wiener0zyj  \r\nI am running your code with version 1.7.12 cJsion and have not found the problem you said."
+      },
+      {
+        "user": "Alanscut",
+        "created_at": "2019-10-11T07:51:46Z",
+        "body": "@wiener0zyj hi, Are you running on a MCU? It has recently been discovered that cJSON may allocate memory failures in case of insufficient memory. It is recommended to determine whether the element is added successfully or not when use cJSON_AddXxToYy."
+      },
+      {
+        "user": "Alanscut",
+        "created_at": "2020-01-19T01:08:31Z",
+        "body": "closed it due to lack of more infomation, feel free to reopen it when more details provided."
+      }
+    ]
+  },
+  {
+    "number": 331,
+    "title": "Needs to cast cJSON_GetObjectItem to int to remove warning",
+    "created_at": "2019-02-03T17:08:20Z",
+    "closed_at": "2019-04-14T21:28:11Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/331",
+    "body": "Warning:\r\n```\r\n/home/spaceboyross/OS.js/src/packages/napi-provider/lib/rt/src/runtime.c: In function ‘osjs_onmessage’:\r\n/home/spaceboyross/OS.js/src/packages/napi-provider/lib/rt/src/runtime.c:15:19: warning: initialization of ‘cJSON *’ {aka ‘struct cJSON *’} from ‘int’ makes pointer from integer without a cast [-Wint-conversion]\r\n```\r\n\r\nCode being used:\r\n```c\r\ncJSON* params = cJSON_GetObjectItem(data, \"params\") || cJSON_AddArrayToObject(data, \"params\");\r\n```",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/331/comments",
+    "author": "RossComputerGuy",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2019-04-14T21:28:11Z",
+        "body": "The problem is in your code. What you are doing is essentially converting the return values from `cJSON_GetObjectItem` and `cJSON_AddArrayToObject` from `cJSON*` to `int`, which are then being interpreted as boolean values by the `||` operator.\r\n\r\nThat boolean value (of type `int`) is then assigned to `cJSON*`, which therefore can only either be `0` or `1` which doesn't sound like something you should dereference!"
+      }
+    ]
+  },
+  {
+    "number": 312,
+    "title": "How to enclose the json string in square brackets?",
+    "created_at": "2018-11-08T14:55:43Z",
+    "closed_at": "2018-11-08T18:30:43Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/312",
+    "body": "How can I get the output as:\r\n\r\n[{\r\n    \"cars\": [{\r\n            \"CarType\":  \"BMW\",\r\n            \"carID\":    \"bmw123\"\r\n        }, {\r\n            \"CarType\":  \"mercedes\",\r\n            \"carID\":    \"mercedes123\"\r\n        }]\r\n}]\r\n\r\nI'm able to get output as:\r\n{\r\n    \"cars\": [{\r\n            \"CarType\":  \"BMW\",\r\n            \"carID\":    \"bmw123\"\r\n        }, {\r\n            \"CarType\":  \"mercedes\",\r\n            \"carID\":    \"mercedes123\"\r\n        }]\r\n}\r\n\r\nhow can I enclose the string with square brackets?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/312/comments",
+    "author": "akhi3501",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-11-08T17:31:54Z",
+        "body": "Create an array and add the object to it. Then it will be surrounded by square braces."
+      },
+      {
+        "user": "akhi3501",
+        "created_at": "2018-11-08T17:49:18Z",
+        "body": "Thank you.It worked."
+      }
+    ]
+  },
+  {
+    "number": 311,
+    "title": "How to parse a dictionary?",
+    "created_at": "2018-11-08T10:24:52Z",
+    "closed_at": "2018-11-08T16:45:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/311",
+    "body": "Hello, \r\nI have the following sub-structure(part of a json) and I don't know how to parse it...I only see support for arrays, not dictionaries... thank you\r\np.s. please note that \"yahoo.com\" and \"google.com\" are not fixed, they come dynamically from the response.\r\n\r\n`\"cache\": \r\n  {\r\n    \"yahoo.com\": \r\n    {\r\n      \"c\": \r\n      [\r\n        1\r\n      ],\r\n      \"ttl\": 1800\r\n    },\r\n    \"google.com\": \r\n    {\r\n      \"c\": \r\n      [\r\n        1\r\n      ],\r\n      \"ttl\": 1800\r\n    }\r\n  }`",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/311/comments",
+    "author": "tawmoto",
+    "comments": [
+      {
+        "user": "tawmoto",
+        "created_at": "2018-11-08T16:45:13Z",
+        "body": "I managed it with some unorthodox methods :)"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-11-08T17:30:36Z",
+        "body": "Just treat the object as an array and read out the keys via `string` from each element. (I know, `string` is a strange name for something that is actually a key). "
+      },
+      {
+        "user": "tawmoto",
+        "created_at": "2018-11-08T17:49:43Z",
+        "body": "That's what I did, indeed it was strange to use 'string' but it worked :) thanks"
+      }
+    ]
+  },
+  {
+    "number": 309,
+    "title": "Reading Raw child",
+    "created_at": "2018-10-17T13:45:39Z",
+    "closed_at": "2018-11-08T07:38:41Z",
+    "labels": [
+      "question",
+      "needs info"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/309",
+    "body": "Hi, \r\nI have this Json string:\r\n{\"cmd\":10,\"uId\":\"221ed5a229405c0e6315\",\"pyl\":{\"time\":\"2359f846\", \"time2\":\"2359f846\"}}\r\n\r\nI need to access to \"pyl\" content and consider it as a RAW data\r\nHow can i achieve that?\r\n\r\nI've tried \t\r\npayloadJSON = cJSON_GetObjectItem(manageMessageJSON, \"pyl\");\r\nbut in that way i retrieve only the Object PYL and cannot access all the contents but cycling each child. I would like to parse PYL content and then access single fields.\r\n\r\nThanks in advance\r\nLeonardo",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/309/comments",
+    "author": "lordbarba",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-10-19T17:33:52Z",
+        "body": "I'm not entirely sure what you mean.\r\n\r\nYou want to parse your JSON in a way that the entire content of `pyl` is of type `cJSON_Raw`? If so: That is not possible. cJSON always parses the entire JSON and doesn't allow keeping parts of it as string. `cJSON_Raw` is only used for printing JSON."
+      },
+      {
+        "user": "lordbarba",
+        "created_at": "2018-11-07T09:22:25Z",
+        "body": "For example, how can i retrieve all values from:\r\n{ \"cmd\": 6, \"userId\": \"f0c77f16dcc7\", \"pyl\" :{  \"idx\": 66, \"val\": 25 } }\r\n\r\nThis is my code:\r\n\t\r\ncJSON *manageMessageJSON = cJSON_Parse(package);\r\nint iCmd = cJSON_GetObjectItem(manageMessageJSON, \"cmd\")->valueint;\r\npayloadJSON = cJSON_GetObjectItem(manageMessageJSON, \"pyl\");\r\n\r\nHow can i parse \"payloadJSON\" and retrieve \"idx\" and \"val\" values? Do i have to do manually? "
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-11-07T16:57:50Z",
+        "body": "Yes, you need to use `cJSON_GetObjectItemCaseSensitive` on `payloadJSON` for both keys (`idx` and `val`). Than you can acess `valuedouble` on them."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-11-07T16:58:30Z",
+        "body": "(after checking that they are actually numbers with `cJSON_IsNumber`)"
+      },
+      {
+        "user": "lordbarba",
+        "created_at": "2018-11-08T07:38:41Z",
+        "body": "It works like a charm..and i was a stupid :-p.\r\nI've already used all your suggestion in the past, but , i don't knowwhy, i forgot them \r\n\r\nThank you very much!"
+      }
+    ]
+  },
+  {
+    "number": 301,
+    "title": "cJSON_GetArraySize bug",
+    "created_at": "2018-09-15T06:46:35Z",
+    "closed_at": "2019-04-14T21:21:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/301",
+    "body": "{\r\n\t\"svn\":\t{\r\n\t\t\"sim\":\t1,\r\n\t\t\"fae\":\t2,\r\n\t\t\"zoo\":\t3\r\n\t},\r\n\t\"subject\":\t[{\r\n\t\t\t\"score\":\t77\r\n\t\t}, {\r\n\t\t\t\"score\":\t88\r\n\t\t}]\r\n}\r\n////////////////////////\r\narraysize = cJSON_GetArraySize(pChild);\r\n\"svn\" arraysize is 3;  //bug\r\n\r\nbut try\r\n\r\nif( cJSON_IsArray(pChild) ) is fail\r\n\r\n///////\r\nso should arraysize = cJSON_GetArraySize(pChild);\r\narraysize  should be 0 //bug fixed\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/301/comments",
+    "author": "fatalfeel",
+    "comments": [
+      {
+        "user": "fatalfeel",
+        "created_at": "2018-09-15T06:51:32Z",
+        "body": "//fix this way\r\n\r\nint cJSON_GetArraySize(const cJSON *array)\r\n{\r\n    cJSON *child = NULL;\r\n    size_t size = 0;\r\n\r\n    if (array == NULL)\r\n    {\r\n        return 0;\r\n    }\r\n\r\n\tif( (array->type & 0xFF) == cJSON_Array ) //by fatalfeel\r\n\t{\r\n\t\tchild = array->child;\r\n\r\n\t\twhile(child != NULL)\r\n\t\t{\r\n\t\t\tsize++;\r\n\t\t\tchild = child->next;\r\n\t\t}\r\n\t}\r\n\r\n    /* FIXME: Can overflow here. Cannot be fixed without breaking the API */\r\n\r\n    return (int)size;\r\n}"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-09-16T08:33:47Z",
+        "body": "I'm not sure if I understand you correctly.\r\n\r\nIf you mean that `cJSON_GetArraySize` works not only for arrays but also for objects: That is intentional!"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-09-16T08:34:46Z",
+        "body": "Internally both objects and arrays are linked lists of `cJSON` objects. `cJSON_GetArraySize`, although it has `Array` in it's name just calculates the length of this linked list."
+      }
+    ]
+  },
+  {
+    "number": 281,
+    "title": "how to free?",
+    "created_at": "2018-07-23T09:04:17Z",
+    "closed_at": "2018-07-23T13:25:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/281",
+    "body": "excuse me, in the example \"char* create_monitor(void)\", how to free the string after already used? using \"cJSON_free\" or \"free\"?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/281/comments",
+    "author": "junwanghust",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-07-23T13:25:28Z",
+        "body": "If you never changed the allocator using `cJSON_InitHooks`, you can use `free`. Otherwise you will probably know what allocator you did set and use the correct deallocator accordingly.\r\n\r\n`cJSON_malloc` and `cJSON_free` are intended to be used by library writers that use cJSON and expect their users to use cJSON directly as well. This way the library can work properly even if it's user has changed the global allocators."
+      },
+      {
+        "user": "junwanghust",
+        "created_at": "2018-07-24T02:19:40Z",
+        "body": "Thank you very much!"
+      }
+    ]
+  },
+  {
+    "number": 277,
+    "title": "How to compare two json objects?",
+    "created_at": "2018-06-26T19:46:42Z",
+    "closed_at": "2018-06-27T17:11:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/277",
+    "body": "I need to determine if two json objects are identical for a unit test.I don't see any built in function for this.\r\n\r\nThe order of the two isn't deterministic, so `strcmp` with `cJSON_Print` won't work.\r\n\r\nIs there any recommended way to do this, or do I have to do `cJSON_GetObjectItemCaseSensitive` for each item that will be in the object?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/277/comments",
+    "author": "iCodeSometime",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-06-27T17:11:01Z",
+        "body": "`cJSON_Compare`"
+      },
+      {
+        "user": "iCodeSometime",
+        "created_at": "2018-06-27T17:23:47Z",
+        "body": "Just double checked to be sure I hadn't missed this. It may be useful to add to the documentation :)"
+      }
+    ]
+  },
+  {
+    "number": 274,
+    "title": "What am I overlooking in my usage of cJSON ?",
+    "created_at": "2018-06-20T10:51:07Z",
+    "closed_at": "2018-06-21T08:40:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/274",
+    "body": "Hi,\r\n\r\nI have got a hefty chunk of code to read back some parameter values via JSON and I am using cJSON to do so. I use this JSON string to ask for the data:\r\n\r\n```\r\n{\r\n   \"getParameters\":[\r\n      \"requiredRxRssiLevel\",\r\n      \"accessPointSSID_1\"\r\n   ]\r\n}\r\n```\r\nThe code to process the request and output the JSON answer is way too large to show here but in esssence these are the cJSON operations it performs to produce the output string:\r\n```\r\nparameterPtr = cJSON_CreateObject();\r\nobjectPtr    = cJSON_CreateObject();\r\n               cJSON_AddItemToObject( parameterPtr, \"parameters\",  objectPtr );\r\nnumberPtr    = cJSON_CreateNumber( parameterValue );\r\n               cJSON_AddItemToObject( objectPtr,    parameterName, numberPtr );\r\nstringPtr    = cJSON_CreateString( parameterString );\r\n               cJSON_AddItemToObject( objectPtr, parameterName, stringPtr );\r\noutputString = cJSON_Print( parameterPtr );\r\n               cJSON_Delete ( parameterPtr );\r\n               free ( outputString );\r\n\r\n```\r\nThe result of the above is the following perfectly valid JSON string, at least the on line **JSON formatter & Validator** says so.\r\n```\r\n{\r\n   \"parameters\":{\r\n      \"requiredRxRssiLevel\": -75,\r\n      \"accessPointSSID_1\":   \"MyNetwork\"\r\n   }\r\n}\r\n```\r\nTo the best of my knowledge The code above should neatly handle creation of the output string and deleting all the stuff that was created. Deletion of the original cJSON object after parsing the JSON request string is handled by the calling layer and does the following:\r\n```\r\ncJSON *jsonData  = cJSON_Parse ( JsonObject );\r\ngetParametersPtr = cJSON_GetObjectItemCaseSensitive( jsonData, \"getParameters\" );\r\n                   cJSON_Delete ( jsonData );\r\n```\r\nIt simply parses the \"jsonObject\" which is simply the original JSON string with the \"getParameters\" request in it, locates where the getParameters array is and passes the pointer to it to the first bit of code to find out which parameter values need to be provided.\r\n\r\nStill, I am getting a \"Stack overflow\" from where the bit of code just above is called. Obviously I am overlooking/missing something but I have not been able to find out what that might be.  \r\n\r\nI will keep on digging but if there is someone who can point out what I am doing wrong I would very much appreciate it.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/274/comments",
+    "author": "fd9750",
+    "comments": [
+      {
+        "user": "fd9750",
+        "created_at": "2018-06-20T12:21:17Z",
+        "body": "Hi again,\r\n\r\nI have narrowed it down  to this:\r\n```\r\nnumberPtr    = cJSON_CreateNumber( parameterValue );\r\n               cJSON_AddItemToObject( objectPtr,    parameterName, numberPtr );\r\n```\r\nIf I comment out these two instructions it does not produce the answer containing both a numerical value and a string. Instead it produces this answer:\r\n```\r\n{\r\n   \"parameters\":{\r\n      \"accessPointSSID_1\":   \"MyNetwork\"\r\n   }\r\n}\r\n```\r\nOf course it is logical that it only produces the single string answer as the other possibility is commented out but the other difference is that there is no trace of any stack problem whatsoever.\r\n\r\nAt first I thought the problem might be that **parameterValue** is an **int32_t** whereas **cJSON_CreateNumber( parameterValue );** expects a **double** but no amount of casting or copying **parameterValue** to an alternative double value makes the slightest difference.\r\n\r\nThe mystery deepens: why is **cJSON_CreateNumber( parameterValue );** causing problems while apparently it does deliver the correct numerical value?\r\n\r\nUpdate 1: In the mean time I have tried something else: commenting out the code that produces the string value and reactivating the one that produces the numerical value. I still get only one response: the numerical parameter + its value but the stack problem remains as well.\r\n\r\nUpdate 2: Reactivated the generation of both the numeric and the string parameters but deactivated the use of **cJSON_Print**. Result: everything works fine, no stack problem whatsoever. It looks like the root cause is within **cJSON_Print**. \r\nNote: I did have a version a few days ago that did work flawlessly but the output result was slightly different:\r\n```\r\n{\r\n   \"parameters\":[\r\n      { \"requiredRxRssiLevel\": -75 },\r\n      { \"accessPointSSID_1\":   \"MyNetwork\" }\r\n   ]\r\n}\r\n```\r\nMy colleague, who is much more familiar with JSON because he takes care of the server side, said that syntax is OK but overkill in terms of complexity. so we decided to go for the simpler variant but it seems to cause problem within **cJSON_Print**.\r\n"
+      },
+      {
+        "user": "fd9750",
+        "created_at": "2018-06-21T08:40:36Z",
+        "body": "Here we are again,\r\n\r\nI nailed it: there is nothing wrong with the cJSON code or the way I use it. The problem is caused by a limitation in the stack size or something on the platform I am implementing my code for and using the cJSON library in ( an ESP32-WROVER based unit using the ESP-IDF library etc... ).\r\n\r\n I suppose that the **cJSON_Print** function eats up a fair amount of stack space to produce the string. In the code that calls that function I was using a locally declared string of 1984 bytes ( NVS storage limit for strings in ESP-IDF ). The combination of both things just pushed the stack over its limit and caused the stack problems at the higher program level.\r\n\r\nSolution: declare that same string as a static variable outside the function and everything works just fine.\r\n\r\n\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-06-21T18:55:00Z",
+        "body": "If I understand your code correctly (can't be sure since there is a lot of missing information), you still have a use after free:\r\n\r\n```c\r\ncJSON *jsonData  = cJSON_Parse ( JsonObject );\r\ngetParametersPtr = cJSON_GetObjectItemCaseSensitive( jsonData, \"getParameters\" );\r\ncJSON_Delete ( jsonData );\r\n```\r\nMake sure that `cJSON_Delete(jsonData)` is only called once you don't need `getParametersPtr` anymore. Otherwise you should use `cJSON_DetachItemFromObjectCaseSensitive` instead of `cJSON_GetObjectItemCaseSensitive`, then `cJSON_Delete(jsonData)` and then don't forget to `cJSON_Delete(getParametersPtr)` as well, once you're done using it."
+      },
+      {
+        "user": "fd9750",
+        "created_at": "2018-06-22T07:51:44Z",
+        "body": "Hi FSMaxB,\r\n\r\nThanks for the suggestion but no worries, I am 100% sure that the **cJSON_Delete ( jsonData )** is called at the correct moment, exactly at the point where I do not need **jsonData**, the result of parsing the incoming data, any more.\r\nYes: there is some of info missing in the summary I provided, I forgot to add the final **cJSON_Delete ( jsonData )** instruction but in the real code it is there where it should be.\r\n\r\nWhen processing the **getParameters** stuff I create a new cJSON object pointed to by **parameterPtr**  to produce the answer containing the requested data, generate the resulting JSON string and free up the memory for both the cJSON object and the printed JSON string before doing any further processing of the original **jsonData**  object."
+      }
+    ]
+  },
+  {
+    "number": 270,
+    "title": "cJSON_AddObjectToObject with a cJSON* parameter?",
+    "created_at": "2018-06-14T09:12:14Z",
+    "closed_at": "2018-06-15T12:22:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/270",
+    "body": "Is there any possibility to add a cJSON* object to another cJSON* object? The function that sounds like it would do what I want takes a string as parameter and doesn't seem to have any alternatives. Let me show why I need it:\r\nI have two structs:\r\n\r\n```c\r\ntypedef struct pet_t {\r\ncategory_t *category;\r\n} pet_t;\r\ntypedef struct category_t {\r\nchar *name;\r\nlong id;\r\n} category_t;\r\n```\r\nNow I would like to have a method for both of them like that:\r\n```c\r\ncJSON* pet_toJSON(pet_t *pet);\r\ncJSON* category_toJSON(category_t *category);\r\n```\r\nThe implementation I would like to have like that:\r\n```c\r\ncJSON *pet_toJSON(pet_t *pet) {\r\ncJSON *petJSONObject = cJSON_CreateObject();\r\ncJSON *categoryJSONObject = category_toJSON(pet->category);\r\ncJSON_AddObjectToObject(petJSONObject, \"category\", categoryJSONObject);\r\n```\r\nCurrently this is not possible and I do it like that:\r\n```c\r\ncJSON *pet_toJSON(pet_t *pet) {\r\ncJSON *petJSONObject = cJSON_CreateObject();\r\ncJSON *categoryJSONObject;\r\nif(cJSON_AddObjectToObject(petJSONObject, \"category\") == NULL) {\r\n\tgoto end;\r\n}\r\ncategoryJSONObject = cJSON_GetObjectItem(petJSONObject,\r\n\t                                                \"category\");\r\nif(cJSON_AddNumberToObject(categoryJSONObject, \"id\",\r\n\t                           pet->category->id) == NULL)\r\n{\r\n\tgoto end;\r\n}\r\n// Category->name\r\nif(cJSON_AddStringToObject(categoryJSONObject, \"name\",\r\n\t                          pet->category->name) == NULL)\r\n{\r\n\tgoto end;\r\n}\r\n```\r\n\r\nIs there any way to add a already created JSON Object to another one?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/270/comments",
+    "author": "PowerOfCreation",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-06-14T20:16:05Z",
+        "body": "I think you are looking for `cJSON_AddItemToObject`."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-06-14T20:33:18Z",
+        "body": "```c\r\n#include <stdio.h>\r\n#include <stdlib.h>\r\n#include <cjson/cJSON.h>\r\n\r\ntypedef struct category_t {\r\n\tchar *name;\r\n\tlong id;\r\n} category_t;\r\n\r\ntypedef struct pet_t {\r\n\tcategory_t *category;\r\n} pet_t;\r\n\r\ncJSON *category_toJSON(const category_t * const category) {\r\n\tif (category == NULL) {\r\n\t\treturn NULL;\r\n\t}\r\n\r\n\tdouble id = (double)category->id;\r\n\tif (id != category->id) {\r\n\t\t//over or underflow of the 2^53 bit integer that a double can store.\r\n\t\t//(assuming a IEEE 754 floating point implementation)\r\n\t\treturn NULL;\r\n\t}\r\n\r\n\tcJSON *category_json = cJSON_CreateObject();\r\n\tif (cJSON_AddStringToObject(category_json, \"name\", category->name) == NULL) {\r\n\t\tgoto fail;\r\n\t}\r\n\r\n\tif (cJSON_AddNumberToObject(category_json, \"id\", id) == NULL) {\r\n\t\tgoto fail;\r\n\t}\r\n\r\n\treturn category_json;\r\n\r\nfail:\r\n\tcJSON_Delete(category_json);\r\n\treturn NULL;\r\n}\r\n\r\ncJSON *pet_toJSON(const pet_t * const pet) {\r\n\tif (pet == NULL) {\r\n\t\treturn NULL;\r\n\t}\r\n\r\n\tcJSON *category = category_toJSON(pet->category);\r\n\tif (category == NULL) {\r\n\t\tgoto fail;\r\n\t}\r\n\r\n\tcJSON *pet_json = cJSON_CreateObject();\r\n\tif (pet_json == NULL) {\r\n\t\tgoto fail;\r\n\t}\r\n\r\n\tcJSON_AddItemToObject(pet_json, \"category\", category); //sadly we don't get any feedback if this fails (would break the API to fix this)\r\n\t//although we can manually check:\r\n\tif (pet_json->child == NULL) {\r\n\t\tgoto fail;\r\n\t}\r\n\r\n\treturn pet_json;\r\n\r\nfail:\r\n\tcJSON_Delete(pet_json);\r\n\treturn NULL;\r\n}\r\n\r\nint main(void) {\r\n\tcategory_t dog = {\r\n\t\t\"dog\",\r\n\t\t1\r\n\t};\r\n\r\n\tpet_t my_dog = {&dog};\r\n\r\n\tcJSON *dog_json = pet_toJSON(&my_dog);\r\n\tif (dog_json == NULL) {\r\n\t\tfprintf(stderr, \"Can't serialize my dog!\\n\");\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\tchar *dog_json_string = cJSON_Print(dog_json);\r\n\tcJSON_Delete(dog_json);\r\n\tif (dog_json_string == NULL) {\r\n\t\tfprintf(stderr, \"Can't print my serialized dog!\\n\");\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\tprintf(\"%s\\n\", dog_json_string);\r\n\tfree(dog_json_string);\r\n\r\n\treturn EXIT_SUCCESS;\r\n}\r\n```\r\n\r\nOutput:\r\n```\r\n{\r\n        \"category\":     {\r\n                \"name\": \"dog\",\r\n                \"id\":   1\r\n        }\r\n}\r\n```"
+      },
+      {
+        "user": "PowerOfCreation",
+        "created_at": "2018-06-15T12:22:08Z",
+        "body": "I have already tried exactly that, but was confused about the error \"void value cannot be ignored as it ought to be\" and thought that it is not possible to add another object cJSON object, but only numbers/strings. Turns out the problem was, that this function, as you have also commented, does not have a return value. If it had this would have saved me a lot of time."
+      }
+    ]
+  },
+  {
+    "number": 269,
+    "title": "Return values",
+    "created_at": "2018-06-05T08:15:40Z",
+    "closed_at": "2018-06-06T07:52:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/269",
+    "body": "Hello!\r\nThanks for library!\r\n\r\nPlease tell what is the return value of \"cJSON_GetObjectItem\" in case if \r\nfor example in server response there are no key \"lockname\"\r\n`cJSON *jslockName = cJSON_GetObjectItem(json,\"lockName\");`",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/269/comments",
+    "author": "kryvosheiaivan",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-06-05T18:43:59Z",
+        "body": "Simple: `NULL`!"
+      }
+    ]
+  },
+  {
+    "number": 268,
+    "title": "Limit on length valuestring?",
+    "created_at": "2018-05-31T05:46:18Z",
+    "closed_at": "2018-05-31T09:49:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/268",
+    "body": "Hi,\r\n\r\nThis is not really an issue but more of a question concerning the cJSON implementation: is there a limit on the maximum length of a valuestring?\r\nFrom looking at the code I don't think so but I thought I would ask the question where it was likely somebody would really know.\r\nI need to know for sure because I would like to use JSON as the method to transfer data to and from NVS in ESP32's ESP-IDF so I need to know if it can handle that library's 1984 byte limitation.\r\n\r\nAny help much appreciated.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/268/comments",
+    "author": "fd9750",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-05-31T07:13:40Z",
+        "body": "The length of valuestring is only limited by the allocator that is used and the available memory."
+      },
+      {
+        "user": "fd9750",
+        "created_at": "2018-05-31T09:49:04Z",
+        "body": "OK Thanks, I thought so but it is better to be sure.\r\nBest Regards"
+      }
+    ]
+  },
+  {
+    "number": 264,
+    "title": "do you have any plan to support finding parent method?",
+    "created_at": "2018-04-30T16:41:17Z",
+    "closed_at": "2018-04-30T21:06:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/264",
+    "body": "cJSON doesn't have a parent field ,so i cannot trace the parent node,do you have any plan to support finding parent method?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/264/comments",
+    "author": "mapway",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-04-30T21:06:16Z",
+        "body": "No. For one there can be any number of parents, not just one (nodes can be shared across different trees), this would be tricky to represent.\r\n\r\nIt would also make things more complicated and take up space for storing information that is already there in the most common scenario."
+      }
+    ]
+  },
+  {
+    "number": 257,
+    "title": "Not support base64 character= and -",
+    "created_at": "2018-04-17T05:59:38Z",
+    "closed_at": "2018-04-22T11:47:28Z",
+    "labels": [
+      "question",
+      "needs info"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/257",
+    "body": "when i parse base64 string contains '=' or '-' ,it return failed.\r\n '=' and '-' are standard character of base64 .",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/257/comments",
+    "author": "catigger",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-04-17T13:39:51Z",
+        "body": "I'm not sure what exactly you are trying to do.\r\n\r\nI'll just assume that you are trying to parse JSON that contains a string with base64 encoded data. Base64 should be totally fine, because it doesn't use any special characters that need to be escaped in JSON strings.\r\n\r\nI failed to quickly find an input, that encodes to a base64 with `-` and `=` (I think the coreutils base64 implementation doesn't even use `-`), so I used the following example:\r\n\r\n```c\r\n#include <stdlib.h>\r\n#include <stdio.h>\r\n\r\n#include <cjson/cJSON.h>\r\n\r\nconst char json[] = \"\\\"Some base64 with - and ending with=\\\"\";\r\n\r\nint main() {\r\n    cJSON *parsed_json = cJSON_Parse(json);\r\n    if (cJSON_IsString(parsed_json)) {\r\n        printf(\"%s\\n\", parsed_json->valuestring);\r\n    }\r\n\r\n    cJSON_Delete(parsed_json);\r\n}\r\n```\r\n\r\nWhen executed, this prints `Some base64 with - and ending with=`.\r\n\r\nCan you please provide more information on:\r\n1. What you are trying to do.\r\n2. How you are trying to do it.\r\n3. And how it fails."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-04-22T11:47:19Z",
+        "body": "I'm closing this because of no response, please comment if there is still an issue and I will reopen."
+      }
+    ]
+  },
+  {
+    "number": 254,
+    "title": "Can't differentiate between a double and a integer when using a whole number.",
+    "created_at": "2018-04-03T17:24:37Z",
+    "closed_at": "2018-04-09T14:57:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/254",
+    "body": "When valuedouble is set to a whole number such as \"2.0\" there doesn't seem to be a way to determine if this is a double or an integer. Is it possible to walk a JSON string and determine the data type of each number? I want to differentiate between integers and doubles.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/254/comments",
+    "author": "AustenS",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-04-03T20:10:06Z",
+        "body": "Take a look at #224, I showed several ways to distinguish between floating point and integer numbers in my comment there."
+      },
+      {
+        "user": "AustenS",
+        "created_at": "2018-04-04T13:58:07Z",
+        "body": "This works for any value with a decimal (ex:1.3) but does not solve the issue with whole numbers (ex:1.0). Just because a double is set to a whole number like 1.0 this does not mean it's not a double anymore.\r\n```c\r\nint valueint = 1;\r\ndouble valuedouble = 1.0;\r\nif (((double)valueint) == valuedouble) {\r\n\tprintf(\"INTEGER\");\r\n} else {\r\n\tprintf(\"DOUBLE\");\r\n}\r\n``` \r\nThis prints \"INTEGER\"\r\n```c\r\nint valueint = 1;\r\ndouble valuedouble = 1.3;\r\nif (((double)valueint) == valuedouble) {\r\n\tprintf(\"INTEGER\");\r\n} else {\r\n\tprintf(\"DOUBLE\");\r\n}\r\n```\r\nThis prints \"DOUBLE\".\r\n\r\nMy application is attempting to get the type from the JSON structure using this function\r\n```c\r\nint _json_encode_action_to_dw_type(JSON *json) {\r\n\tif (json->type == JSON_FALSE || json->type == JSON_TRUE) return DW_BOOL;\r\n\tif (json->type == JSON_STRING) return DW_STRING;\r\n\tif (json->type == JSON_NUMBER) {\r\n\t\t//TODO Floats are not working for whole numbers. EX: 1.0.\r\n\t\tif (((double)json->valueint) != json->valuedouble) {\r\n\t\t\tif (json->valuedouble >= DW_FLOAT4_MIN && json->valuedouble <= DW_FLOAT4_MAX) return DW_FLOAT4;\r\n\t\t}\r\n\t\tif (json->valuelonglong <= DW_INT4_MAX && json->valuelonglong >= DW_INT4_MIN) return DW_INT4;\r\n\t\tif (json->valuelonglong <= DW_UINT4_MAX && json->valuelonglong >= DW_UINT4_MIN) return DW_UINT4;\r\n\t\tif (json->valuelonglong <= DW_INT8_MAX && json->valuelonglong >= DW_INT8_MIN) return DW_INT8;\r\n\t}\r\n\treturn ERR_NOTFOUND;\r\n}\r\n```"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-04-05T02:06:23Z",
+        "body": "It doesn't look like you are using `cJSON` but maybe a fork of it?\r\n\r\nIn cJSON, the structs name is `cJSON`, not `JSON` and the types are `cJSON_...`, not `JSON_...`.\r\n\r\nAnd there is no `valuelonglong`.\r\n\r\nAlso note that in cJSON if you want to find out the type of a value, it is not correct to use `==`, because the types are actually bitflags, so you need to use `(item->type & 0xFF) == cJSON_...` (or better use the `cJSON_Is...` functions).\r\n\r\nI'm not sure if I understand what you are trying to do here, but the method I described works for differentiating integers and non-integer real numbers. But the kind of information about which literal has been used to define a number (e.g. with or without decimal point) is lost when cJSON parses the JSON, so there is no way to get it back and I don't plan to implement a way to do so (although there is a small possibility that I can support parsing numbers as strings in the future)."
+      }
+    ]
+  },
+  {
+    "number": 242,
+    "title": "how to get long long int value by cJSON_AddNumberToObject ",
+    "created_at": "2018-02-10T06:13:42Z",
+    "closed_at": "2018-02-12T12:25:57Z",
+    "labels": [
+      "question",
+      "needs info"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/242",
+    "body": "I have not received proper b byte value from JSON.\r\nAnybody have piece of code and latest c Json utility supported with this functionality.\r\nPlease provide us ASAP because I am facing too much problem.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/242/comments",
+    "author": "vihangjani",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-02-10T10:01:05Z",
+        "body": "I don't understand your question.\r\n\r\n> how to get long long int value by cJSON_AddNumberToObject\r\n\r\nYou cannot **get** anything with `cJSON_AddNumberToObject`. You can only **add**.\r\n\r\n> I have not received proper b byte value from JSON.\r\n\r\n\"b byte value\"?\r\n\r\n>  Anybody have piece of code and latest c Json utility supported with this functionality.\r\n\r\nWhat functionality?\r\n\r\n`cJSON` internally treats all numbers as `double` and officially only `IEEE754` is supported. This means that you get 53 bit precision integers (not including the sign bit).\r\n\r\n`long long int` by itself is not supported anywhere, you need to convert it to `double` first (or the other way around)."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-02-12T12:25:57Z",
+        "body": "I'm closing this because of no response."
+      }
+    ]
+  },
+  {
+    "number": 229,
+    "title": "Crashing program if calling cJSON on infinite loop",
+    "created_at": "2018-01-04T23:02:53Z",
+    "closed_at": "2018-01-06T09:14:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/229",
+    "body": "I use cJSON on programming STM32 and i calling cJSON on infinite loop.\r\nAfter run ~37 cycles program is crashed :(\r\n\r\nMay be cJSON_Delete is not work and memory leaking?\r\n\r\n```c\r\nchar *BLE_Transmit(void)\r\n{\r\n    char *BLE_JSON = NULL;\r\n    cJSON *BLE_OJSON = cJSON_CreateObject();\r\n    cJSON_AddStringToObject(BLE_OJSON, \"111\", \"111\");\r\n    cJSON_AddStringToObject(BLE_OJSON, \"222\", \"222\");\r\n    BLE_JSON = cJSON_Print(BLE_OJSON);\r\n    cJSON_Delete(BLE_OJSON);\r\n    return BLE_JSON;\r\n}\r\n\r\nwhile (1)\r\n  {\r\n      HAL_UART_Transmit(&huart1, (unsigned char*)  BLE_Transmit(), strlen( BLE_Transmit()),10);\r\n      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);\r\n      HAL_Delay(100);\r\n  }\r\n```\r\nPlease help me...\r\n  \r\nThis error in function cJSON_Print. While i call without function cJSON_Print code is correct run.\r\n\r\n  ",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/229/comments",
+    "author": "leech001",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-01-05T20:38:47Z",
+        "body": "Yes, this very much looks like a memory leak.\r\n\r\nYou create `BLE_JSON` with `cJSON_Print` and return it from `BLE_TRANSMIT`.  But the string needs to be freed. I guess that `HAL_UART_Transmit` doesn't free anything, so memory leaks and eventually you run out of memory.\r\n\r\nOnce out of memory, there might be different reasons why it would crash. For example `cJSON_Print` might return a `NULL` pointer that is then dereferenced somewhere or something like that."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-01-05T20:58:30Z",
+        "body": "`strlen` might be the point where it crashes, because `strlen` doesn't necessarily check for `NULL` pointers, but it could also be somewhere else.\r\n\r\nThis should work:\r\n\r\n```c\r\nchar *BLE_Transmit(void)\r\n{\r\n\tchar *BLE_JSON = NULL;\r\n\tcJSON *BLE_OJSON = cJSON_CreateObject();\r\n\tcJSON_AddStringToObject(BLE_OJSON, \"111\", \"111\");\r\n\tcJSON_AddStringToObject(BLE_OJSON, \"222\", \"222\");\r\n\tBLE_JSON = cJSON_Print(BLE_OJSON);\r\n\tcJSON_Delete(BLE_OJSON);\r\n\treturn BLE_JSON;\r\n}\r\n\r\nint main(void)\r\n{\r\n\twhile (1)\r\n\t{\r\n\t\tunsigned char *json = (unsigned char*)BLE_TRANSMIT();\r\n\t\tif (json == NULL)\r\n\t\t{\r\n\t\t\t//do some error handling\r\n\t\t\tbreak;\r\n\t\t}\r\n\t\tHAL_UART_Transmit(&huart1, json, strlen(json), 10);\r\n\t\tfree(json); /* <---- */\r\n\t\tHAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);\r\n\t\tHAL_Delay(100);\r\n\t}\r\n}\r\n```\r\n\r\nIf you know that the JSON will always be below a certain length, you could also print the JSON withouth any heap allocations using `cJSON_PrintPreallocated`:\r\n\r\n```c\r\nchar *BLE_Transmit(unsigned char * const buffer, size_t buffer_size)\r\n{\r\n\tchar *BLE_JSON = NULL;\r\n\tcJSON *BLE_OJSON = cJSON_CreateObject();\r\n\tcJSON_AddStringToObject(BLE_OJSON, \"111\", \"111\");\r\n\tcJSON_AddStringToObject(BLE_OJSON, \"222\", \"222\");\r\n\tif (!cJSON_PrintPreallocated(BLE_OJSON, buffer, buffer_size, 1)) {\r\n\t\tcJSON_Delete(BLE_OJSON);\r\n\t\treturn NULL;\r\n\t}\r\n\tcJSON_Delete(BLE_OJSON);\r\n\treturn BLE_JSON;\r\n}\r\n\r\nint main(void)\r\n{\r\n\tunsigned char buffer[BUFFER_SIZE];\r\n\r\n\twhile (1)\r\n\t{\r\n\t\tif (BLE_TRANSMIT(buffer, sizeof(buffer)) == NULL)\r\n\t\t{\r\n\t\t\t//do some error handling\r\n\t\t\tbreak;\r\n\t\t}\r\n\t\tHAL_UART_Transmit(&huart1, buffer, strlen(buffer), 10);\r\n\t\tHAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);\r\n\t\tHAL_Delay(100);\r\n\t}\r\n}\r\n```\r\n\r\nAs it seems like you are transmitting Data via BLE, it probably doesn't need to be human readable, so formatting can be disabled. So you might want to use `cJSON_PrintUnformatted` or replace the `1` in the call to `cJSON_PrintPreallocated` with a `0`.\r\n\r\nIf `cJSON_PrintPreallocated` is not an option because you don't know the maximum length of your JSON, you can still reduce the number of heap allocations by using `cJSON_PrintBuffered` and giving it a buffer size that is long enough for the majority of JSONs.\r\n  "
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-01-05T21:04:30Z",
+        "body": "Also if you are rebuilding the same JSON over and over again with only small modifications, you don't really need to rebuild the entire thing over and over again. It should be enough to build it once, replace the changed items with one of the `cJSON_ReplaceItem` functions and then print it again.\r\n\r\nIf large subtrees of the JSON are statically known, these can be provided as Strings as `cJSON_Raw` type to avoid having to print them over and over again."
+      },
+      {
+        "user": "leech001",
+        "created_at": "2018-01-06T09:14:26Z",
+        "body": "Sorry I'm a noob in C. Thank you very much for the clarification and examples. It is not enough examples with explanations for the library :("
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2018-01-07T17:01:49Z",
+        "body": "I recently updated the documentation. Did you use that already?\r\n\r\nAlthough more examples would always be good, I agree with you on that."
+      }
+    ]
+  },
+  {
+    "number": 227,
+    "title": "Array size",
+    "created_at": "2017-12-30T08:54:05Z",
+    "closed_at": "2018-01-04T20:46:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/227",
+    "body": "Should cJSON_GetArraySize return 0 elements on non array object type?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/227/comments",
+    "author": "Tangerino",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-30T20:00:18Z",
+        "body": "Actually the return value doesn't depend on the type of the item. It only depends on the `child` pointer and the linked list it points to."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-30T20:06:28Z",
+        "body": "But for non-objects/arrays that have been created using the functions provided by cJSON, the `cJSON_GetArraySize` will always be 0.\r\n\r\nThe only way for it not to be zero with non object/array types is if somebody manually modified the `cJSON` struct."
+      }
+    ]
+  },
+  {
+    "number": 224,
+    "title": "question about cJSON_Number",
+    "created_at": "2017-12-13T10:21:19Z",
+    "closed_at": "2017-12-14T07:25:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/224",
+    "body": "I have a question about cJSON_Number : in the cJSON struct there are 2 numbers, valueint and valuedouble. From what I saw while doing some tests, I understand that if type == cJSON_Number, I understood the number is stored in both values. What I would like to know if is there is any way to know if a cJSON_Number is an int or a double.\r\n\r\nI am asking this because I needed a function to convert cJSON objects to strings so I created one : \r\n```c\r\nvoid cJSON_ToString(cJSON* json, char str[200])\r\n{\r\n  cJSON* p_courant = json->child;\r\n  int j = cJSON_GetArraySize(json);\r\n  int i;\r\n  char n[12];\r\n  strcat(str,\"{\");\r\n  for (i = 1; i <= j ; i++)\r\n  {\r\n    strcat(str,\"\\\"\");\r\n    strcat(str,(char*)(p_courant->string));\r\n    strcat(str,\"\\\" : \");\r\n    if (p_courant->type == cJSON_String)\r\n    {\r\n      strcat(str,\"\\\"\");\r\n      strcat(str,(char*)(p_courant->valuestring));\r\n      strcat(str,\"\\\"\");\r\n    }\r\n    else if (p_courant->type == cJSON_Number)\r\n    {\r\n      sprintf(n,\"%f\",(double)(p_courant->valuedouble));\r\n      strcat(str,n);\r\n    }\r\n    if (i != j)\r\n    {\r\n      strcat(str,\",\");\r\n      p_courant = p_courant->next;\r\n    }\r\n  }\r\n  strcat(str,\"}\");\r\n}\r\n```\r\n\r\nbut I would like to be able to deal with both integers and floats, which I don't know how to do right now because cJSON_Number can be either.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/224/comments",
+    "author": "helo-ch",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-13T12:15:10Z",
+        "body": "Why don't you use `cJSON_Print`, or in your case `cJSON_PrintPreallocated` because you print to a fixed size buffer? It should print numbers correctly without decimal point if it is an integer.\r\n\r\n```c\r\ncJSON_bool cJSON_ToString(cJSON * const json, char buffer[200]) {\r\n    return cJSON_PrintPreallocated(json, buffer, 200, 0);\r\n}\r\n```\r\n\r\n`valueint` is only there for compatibility reasons, cJSON internally only uses `valuedouble` (but sets `valueint` as well for old applications).\r\n\r\nIf you want to find out if a number is an integer, there are several ways to do it.\r\n1. `((double)valueint) == valuedouble`\r\n2. `((double)((int)valuedouble)) == valuedouble` (not sure if there can be any rounding errors\r\n3. `double fractional; (modf(valuedouble, &fractional) == 0)`"
+      },
+      {
+        "user": "helo-ch",
+        "created_at": "2017-12-14T07:25:19Z",
+        "body": "using `cJSON_Print` or `cJSON_PrintPreallocated` didn't work with what I want to do, but your tips to find out if a number is an integer are working perfectly, thanks!"
+      }
+    ]
+  },
+  {
+    "number": 223,
+    "title": "Help! question about: cJSON_Print",
+    "created_at": "2017-12-13T09:26:26Z",
+    "closed_at": "2017-12-14T03:02:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/223",
+    "body": "**IDE:  Keil.**\r\n**MCU: STM32F303**\r\n\r\n**my test code:**\r\n\r\n```c\r\nvoid cJSON_test(void)\r\n{\r\n\tchar *s = \"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10},{\\\"name\\\":\\\"hua hua\\\",\\\"age\\\":11}]}\";\r\n\tcJSON *root = cJSON_Parse(s);\r\n\tif (!root)\r\n\t{\r\n\t\tprintf(\"Error before: [%s]\\n\",cJSON_GetErrorPtr());\r\n\t}\r\n\tprintf(\"%s \\r\\n\",s);\r\n\tchar *str = cJSON_Print(root);\r\n\tprintf(\"%s \\r\\n\",str);\r\n\tcJSON_Delete(root);\r\n}\r\n```\r\n\r\n**Result:**\r\n```json\r\n{\"list\":[{\"name\":\"xiao hong\",\"age\":10},{\"name\":\"hua hua\",\"age\":11}]} \r\n8\u0007\r\n```\r\n\r\nWhat's the happen of the second print????\r\ni can't understand that why the  cJSON_Parse is OK but cJSON_Print is wrong...I didn't change anything\r\n\r\nif I change the string s to `\"{\\\"list\\\":{\\\"name\\\":\\\"xiao hong\\\"}}\"`\r\n**Result:**\r\n```json\r\n{\"list\":{\"name\":\"xiao hong\"}}\r\n{\"list\":{\"name\":\"xiao hong\"}}\r\n```\r\n\r\n\r\nthe result is ok, and i want to find the cause by debug, i find that:\r\n\r\n```c\r\nstatic unsigned char *print(const cJSON * const item, cJSON_bool format, const internal_hooks * const hooks)\r\n{\r\n    printbuffer buffer[1];\r\n    unsigned char *printed = NULL;\r\n\r\n    memset(buffer, 0, sizeof(buffer));\r\n\r\n    /* create buffer */\r\n    buffer->buffer = (unsigned char*) hooks->allocate(256);\r\n    buffer->format = format;\r\n    buffer->hooks = *hooks;\r\n             //if result is wrong ,buffer ==0, i can't understand why the buffer will equal to 0?\r\n    if (buffer->buffer == NULL)\r\n    {\r\n        goto fail;\r\n    }\r\n```\r\n\r\n\r\nI am desperate,please help...\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/223/comments",
+    "author": "LittleProgrammer-L",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-13T11:54:35Z",
+        "body": "The code looks good to me except that you leak `str` and don't abort in case `root == NULL`.\r\n\r\nI tested it and it works fine. I will take a closer look."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-13T12:31:47Z",
+        "body": "`buffer` being `0` make absolutely no sense. This is a value on the stack, not a heap allocation. This is guaranteed to never be `0` though.\r\n\r\n`buffer->buffer` being `NULL` is another matter entirely though. This means that the allocation failed.\r\n\r\nAnd since you never checked if `string` is `NULL` it will print garbage in this case (or on most systems just SEGFAULT). You should really check `str` before passing it to `printf`!!"
+      },
+      {
+        "user": "LittleProgrammer-L",
+        "created_at": "2017-12-14T01:42:29Z",
+        "body": "Thank you for your answer.\r\nI'm sorry I did not make it clear before，Here I make it as clear as possible.\r\n\r\nmy test code is very easy:\r\n```c\r\nvoid cJSON_test(void)\r\n{\r\n\tchar *s = \"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10},{\\\"name\\\":\\\"hua hua\\\",\\\"age\\\":11}]}\";\t//print fail\r\n\t//char *s = \"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10}]}\";\t//print fail\r\n\t//char *s = \"{\\\"list\\\":{\\\"name\\\":\\\"xiao hong\\\"}}\";\t//print ok\r\n\tcJSON *root = cJSON_Parse(s);\r\n\tif (!root)\r\n\t{\r\n\t\tprintf(\"Error before: [%s]\\n\",cJSON_GetErrorPtr());\t//This print not appear mean root format is correct，right?\r\n\t}\r\n\tprintf(\"%s \\r\\n\",s);\r\n\tchar *str = cJSON_Print(root);\r\n\tprintf(\"%s \\r\\n\",str);\r\n\tcJSON_Delete(root);\r\n}\r\n```\r\n\r\n`printf(\"Error before: [%s]\\n\",cJSON_GetErrorPtr());` \r\nI am based on this print does not appear to determine the `root` format is correct.\r\n\r\nwhen s = `\"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10},{\\\"name\\\":\\\"hua hua\\\",\\\"age\\\":11}]}\"`\r\nprint result:\r\n```json\r\n{\"list\":[{\"name\":\"xiao hong\",\"age\":10},{\"name\":\"hua hua\",\"age\":11}]} \r\n8\u0007\r\n```\r\n\r\nwhen s = `\"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10}]}\"`\r\nprint result:\r\n```json\r\n{\"list\":[{\"name\":\"xiao hong\",\"age\":10}]} \r\n8\u0007\r\n```\r\n\r\nwhen s = `\"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10}]}\"`\r\nprint result:\r\n```json\r\n{\"list\":{\"name\":\"xiao hong\"}} \r\n{\"list\":{\"name\":\"xiao hong\"}}\r\n```\r\n\r\nSo, i debug the code and compared with the right print, find different places is here:\r\n```c\r\nstatic unsigned char *print(const cJSON * const item, cJSON_bool format, const internal_hooks * const hooks)\r\n{\r\n    printbuffer buffer[1];\r\n    unsigned char *printed = NULL;\r\n\r\n    memset(buffer, 0, sizeof(buffer));\r\n\r\n    /* create buffer */\r\n    buffer->buffer = (unsigned char*) hooks->allocate(256);    //The difference is here!!!\r\n    buffer->format = format;\r\n    buffer->hooks = *hooks;\r\n    if (buffer->buffer == NULL)    //I set the breakpoint here.\r\n    {\r\n        goto fail;\r\n    }\r\n```\r\nwhen print result is ok, `buffer->buffer` != 0\r\nwhen print result is fail, `buffer->buffer` == 0, it means the allocation failed? Is it related to the format of 'root'? Is not the format of 'root' correct?\r\n\r\nmy confusion is that why the `root` format is correct but print would be fail?  \r\n\r\nI still need to check `str`? It does not seem to be related to `str`.\r\n\r\nMany routines are like this is OK except mine, i need help..."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-14T02:29:28Z",
+        "body": "In any case you have to check the result of `cJSON_Print` and don't use it for `printf` if it is `NULL`.\r\n\r\nAlso the allocation clearly fails in the first two cases, but doesn't in the third. I have no idea why that happens and have no influence over it.\r\n\r\nA couple of things you should investigate:\r\n* What allocator are you using? Standard `malloc` and `free`?\r\n* Does the allocation failure depend on the number of allocations that are done by `cJSON_Parse`?\r\n* Or maybe because of the size?\r\n* What happens when you replace `cJSON_Print` with `cJSON_PrintBuffered` and vary the prebuffer amount?\r\n* If you allocate 256 Bytes with `free` before the `cJSON_Print`, will it return `NULL` as well?\r\n\r\nAlso I noticed something else: You are either not showing me the correct output or you are using a modified version of cJSON instead of the original one. Because `cJSON_Print` produces formatted output, so if you are using the real cJSON you should see:\r\n```json\r\n{\"list\":{\"name\":\"xiao hong\"}}\r\n{\r\n        \"list\": {\r\n                        \"name\": \"xiao hong\"\r\n                }\r\n}\r\n```\r\n\r\nnot\r\n\r\n```json\r\n{\"list\":{\"name\":\"xiao hong\"}} \r\n{\"list\":{\"name\":\"xiao hong\"}}\r\n```\r\n\r\nIn any case: cJSON is not doing anything wrong here. It does exactly the correct thing: Returning `NULL` from `cJSON_Print` because of an allocation failure.\r\n\r\nPlease check the return values from cJSON properly!!! Here is a fixed version of your test code together with some things to test for debugging the allocation failure:\r\n```c\r\nvoid cJSON_test(void)\r\n{\r\n    char *s = \"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10},{\\\"name\\\":\\\"hua hua\\\",\\\"age\\\":11}]}\";\r\n    //char *s = \"{\\\"list\\\":[{\\\"name\\\":\\\"xiao hong\\\",\\\"age\\\":10}]}\";\r\n    //fail//char *s = \"{\\\"list\\\":{\\\"name\\\":\\\"xiao hong\\\"}}\";\r\n    char *str = NULL;\r\n    cJSON *root = cJSON_Parse(s);\r\n    if (root == NULL)\r\n    {\r\n        printf(\"Error before: [%s]\\n\",cJSON_GetErrorPtr());\r\n        goto cleanup;\r\n    }\r\n\r\n    // BEGIN Things to test\r\n    /*\r\n     * Test heap allocations directly\r\n     */\r\n    /*\r\n    char *test = malloc(256);\r\n    if (test == NULL) {\r\n        printf(\"ERROR: Heap allocation failed.\");\r\n    } else {\r\n        free(test);\r\n    }\r\n    */\r\n\r\n    /*\r\n     * Test cJSON_PrintPreallocated\r\n     */\r\n    /*\r\n    const int prebuffer = 256; //play around with this value\r\n    const cJSON_bool format = 0;\r\n    str = cJSON_PrintPreallocated(root, prebuffer, format);\r\n    if (str == NULL) {\r\n        goto cleanup;\r\n    }\r\n    free(str);\r\n    str = NULL;\r\n     */\r\n    // END Things to test\r\n\r\n    printf(\"%s \\r\\n\",s);\r\n    str = cJSON_Print(root);\r\n    if (str == NULL) {\r\n        printf(\"ERROR: cJSON_Print failed.\");\r\n        goto cleanup;\r\n    }\r\n    printf(\"%s \\r\\n\",str);\r\n\r\ncleanup:\r\n    if (root != NULL) {\r\n        cJSON_Delete(root);\r\n    }\r\n\r\n    if (str != NULL) {\r\n        free(str);\r\n    }\r\n}\r\n```\r\n\r\ntl;dr (summary)\r\n----------------------\r\n* You have an allocation failure that **you** need to investigate, I can't fix it for you.\r\n* cJSON handles the allocation failure correctly. (by returning `NULL` from `cJSON_Print`)\r\n* You are dereferencing a `NULL` pointer in `printf(\"%s \\r\\n\",str);`, this is where the garbage comes from. Please check for `NULL` pointers before printing them as string with `printf`!\r\n* You are most certainly using a modified version of cJSON (because `cJSON_Print` produces formatted output in the original version)"
+      },
+      {
+        "user": "LittleProgrammer-L",
+        "created_at": "2017-12-14T03:02:52Z",
+        "body": "Thank you very much for your reply!\r\n\r\nWhat I need to correct is that the way I put the printed result is via `cJSON_PrintUnformatted` function, I'm sorry to make this point misleading.\r\n\r\nI think it should be the allocation of memory failure after I saw your answer, so I  find the file 'startup_stm32f303xe.s' and find the place where the stack is allocated:\r\n`Heap_Size      EQU     0x200`    //0x00000200 equal 512 Byte\r\nI change `0x200` to `0x400`, and all print results are normal.\r\n\r\nWhat still make me confuse is that the allocation fails in the first two cases but doesn't in the third. \r\n\r\nAnyway, thank you very much for your reply~\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-14T17:09:02Z",
+        "body": "Probably just the size. The parsed JSON is quite large, `sizeof(cJSON)` should be around 50 bytes or so."
+      }
+    ]
+  },
+  {
+    "number": 216,
+    "title": "cJSON_Print",
+    "created_at": "2017-11-15T13:58:54Z",
+    "closed_at": "2017-11-24T20:43:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/216",
+    "body": "Hi, \r\nwe are an italian team that works on cJSON in an Ingenico Environment for the development of a PoS application (Point of Sale iCT220 device that use processor ARM 32 bit).\r\n\r\nWe encountered an error when we want to deserialize an object to put in a string (char *) using cJSON_Print().\r\n\r\n`\tchar *body = cJSON_Print(myJSONObjSend);`\r\n\r\nThat instructions come from a fragment of a code that looks like:\r\n```\r\n\t//Example\r\n\tchar *cardSerialNumber = \"xxxxxxxxxxxxxxxxxxxx\";\r\n\tcJSON *myJSONObjSend;\r\n\tmyJSONObjSend = cJSON_CreateObject();\r\n\tcJSON_AddStringToObject(myJSONObjSend, \"serialNumber\", cardSerialNumber);\r\n\tchar *body = cJSON_Print(myJSONObjSend)\r\n```\r\nThat code works on a windows machine, and print correctly the body string.\r\n\r\nWith the release version 1.3.2 we got an exception of type: No source available for \"0x12c42\"\r\nGoing through the code the instructions that causes the exception is:\r\nLine 1598 of cJSON.c:\r\n`\tentries = (unsigned char**)cJSON_malloc(numentries * sizeof(unsigned char*));`\r\n\r\nWith last version of release we got a similar error at line 1088 of cJSON.c:\r\n`\tbuffer->buffer = (unsigned char*) hooks->allocate(256);`\r\n\r\nDid you have a tip for the resolution of the problem for our ARM environment?\r\n\r\nMy best regards,\r\nV.Colonnese",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/216/comments",
+    "author": "vcolonnese",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-15T15:30:55Z",
+        "body": "I didn't quite understand where your \"exception\" happens.\r\n\r\nMy understanding is that cJSON compiles without any problems for your ARM platform, but that you get the error while running inside of a debugger?\r\n\r\nIn that case your debugger probably tries to find the debugging symbols for the function that `hooks->allocate` points to (`malloc` by default or something else if you called `cJSON_InitHooks` to set a different allocator). My guess is that there are no Debugging symbols for your standard library implementation so the debugger doesn't find it, but usually it should just keep on running and display the assembly code instead.\r\n\r\nNot sure though, there was not enough information to actually determine what is going on."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-15T15:42:44Z",
+        "body": "Or maybe there are debugging symbols and it just doesn't find the source, in which case you might have to tell the debugger somehow where to find the source files.\r\n\r\nI can't help you with that though, because neither am I familiar with your platform, nor do I have access to it to try it myself."
+      },
+      {
+        "user": "vcolonnese",
+        "created_at": "2017-11-17T11:37:50Z",
+        "body": "Thanks for your answer.\r\n\r\nI confirm that we are trying to run code in debug mode.\r\nWe resolved the problem changing the code in this way:\r\n(The commented line are the original)\r\n\r\n```\r\n//buffer->buffer = (unsigned char*) hooks->allocate(256);\r\nbuffer->buffer = malloc(256);\r\n\r\n//printed = (unsigned char*) hooks->allocate(buffer->offset + 1);\r\nprinted = (unsigned char*) malloc(buffer->offset+1);\r\n\r\n//return global_hooks.allocate(size);\r\nreturn malloc(size);\r\n\r\n//copy = (unsigned char*)hooks->allocate(length);\r\ncopy = malloc(length);\r\n\r\n//global_hooks.allocate = hooks->malloc_fn;\r\nglobal_hooks.allocate = malloc;\r\n\r\n//cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));\r\ncJSON* node = (cJSON*) malloc(sizeof(cJSON));\r\n\r\n//newbuffer = (unsigned char*)p->hooks.allocate(newsize);\r\nnewbuffer = (unsigned char*)malloc(newsize);\r\n\r\n//output_buffer->hooks.deallocate(output_buffer->buffer);\r\nfree(output_buffer->buffer);\r\n\r\n//global_hooks.deallocate(object);\r\nreturn free(object);\r\n\r\n//global_hooks.deallocate = hooks->free_fn;\r\nglobal_hooks.deallocate = free;\r\n\r\n//p->hooks.deallocate(p->buffer);\r\nfree(p->buffer);\r\n```\r\nFurthermore this instruction cause a loop in the execution in the code:\r\n`if (((sscanf((char*)number_buffer, \"%lg\", &test) != 1) || (double)test != d))`\r\nWe resolved the problem changing it in:\r\n`if (((double)test != d) || (sscanf((char*)number_buffer, \"%lg\", &test) != 1) )`\r\n\r\nThis time the function Print return a String correctly formatted, except the numbers: every number it's changed with a different value, sometimes in exponential form.\r\nMay our changes impacts on this feature?\r\n\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-17T12:45:28Z",
+        "body": "Instead of changing the code it would be better to tell your debugger to not just bail out when it doesn't find the source (if that's possible). Or don't debug into cJSON maybe?\r\n\r\n> Furthermore this instruction cause a loop in the execution in the code:\r\n> `if (((sscanf((char*)number_buffer, \"%lg\", &test) != 1) || (double)test != d))`\r\n> We resolved the problem changing it in:\r\n> `if (((double)test != d) || (sscanf((char*)number_buffer, \"%lg\", &test) != 1) )`\r\n>\r\n> This time the function Print return a String correctly formatted, except the numbers: every number it's changed with a different value, sometimes in exponential form.\r\n> May our changes impacts on this feature?\r\n\r\nThe only way that I can think of that this can cause a loop is that the `sscanf` implementation has an issue. But maybe some other weird stuff is going on, maybe with the debugger.\r\n\r\nThe change you made is definitely incorrect though, because `(double)test != d` depends on the `sscanf`, you cannot just turn the order around. If at all, you should completely remove the `if` with the `sscanf` and change `%1.15g` to `%1.17g`. That would still produce correct numbers."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-17T12:49:01Z",
+        "body": "Also I wonder if everything works when not running in the debugger.\r\nAlso a debugger that doesn't support function pointers seems kind of useless to me ..."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-17T13:28:18Z",
+        "body": "And yes, you can safely replace `hooks->deallocate` with `free` and `hooks->allocate` with `malloc`, but then you should also remove `cJSON_InitHooks` completely."
+      }
+    ]
+  },
+  {
+    "number": 209,
+    "title": "Fixed-point suggestion",
+    "created_at": "2017-10-31T01:50:58Z",
+    "closed_at": "2017-11-01T12:40:15Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/209",
+    "body": "cJSON is awesome and I'm using it for an embedded IoT project. However, my microcontroller is very limited and has no enough power to deal with consecutive sprintfs call to parse double data type.\r\nI think it would be interesting to have a #define flag to isolate double data type allowing cJSON to be even lighter and functional for embedded platforms using just integers / fixed point representation.\r\nThanks a lot to the developer.\r\nSincerely, ",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/209/comments",
+    "author": "pliniofpa",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-01T12:40:15Z",
+        "body": "I understand that `double` is really bad news on platforms without floating point unit. Nevertheless I really don't like to increase the number of different compile time variants of cJSON.\r\n\r\nFor now I don't plan to support an integer-only version of cJSON. My opinion may change in the future, but for now it won't happen.\r\n\r\nYou might want to take a look at other JSON libraries that are specially designed for microcontrollers and also do other things such as avoiding dynamic allocations etc. that make it more fit for these kinds of environments."
+      }
+    ]
+  },
+  {
+    "number": 206,
+    "title": "problem of allocation and release memory. uC ARM M4 ATSAM4e8e",
+    "created_at": "2017-10-20T11:55:33Z",
+    "closed_at": "2017-10-20T12:48:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/206",
+    "body": "I am french, the message is a translation of google translation.\r\n\r\nhellos,\r\nI am writing to you because I have a problem with the creation and deletion of JSON object.\r\nfirst of all, here is the description of my system and the environment:\r\n     -μC: ARM cortex M4 atmel ATSAM4E8E\r\n     -IDE: atmel studio\r\n     -OS: freeRTOS 7.3.0\r\n     -library: cJSON 1.5.9\r\n     -no use of the MMU\r\n     -GCC compiler, without optimizations\r\n\r\nI develop a system where I have to exchange JSON files with a smartphone.\r\nthe JSON exchange system works, but the problem is that after a certain number of JSON analyzes and outputs I am either in memory overflow (then hard fault), or unable to get memory free to analyze the JSON with \"cJSON_Parse\".\r\nthe destruction of the JSON and the release of memory, does not happen as expected. so I tried several things.\r\nI am probably wrong about method.\r\n\r\nthe strangest thing is that by using the same method in two different functions I do not get the same result at all.\r\nin general the big problem comes from \"cJSON_Delete\", it makes me crash everything.\r\nthe concern is that my system is an industrial system. crash or memory overflow is not allowed. the system must be able to run for 10 years without being restarted. the watchdog must get us out of this situation but it must be an exceptional case.\r\n\r\nhere is the last test that I made (I agree on these two functions to solve the problem):\r\n\r\nexplanation of the two functions:\r\n\r\n     int8_t fct_json_parse_login (const char * ptr_buf, char * str_buf_login, char * str_buf_pwd, uint32_t nb_char_max)\r\n\r\n     ptr_buf: pointer to string in json format\r\n     str_buf_login: pointer to the string where I transfer the login to process it later\r\n     str_buf_pwd: pointer to the string where I transfer the password to process it later\r\n     nb_char_max: is the maximum number of characters in the password and login\r\n\r\n\r\n\r\nBool fct_json_parse_dateheure (const char * ptr_str_buf_json,\r\nuint8_t * ptr_annee, uint8_t * ptr_mois, uint8_t * ptr_jours, uint8_t * ptr_jours_sem,\r\nuint8_t * ptr_time, uint8_t * ptr_minute, uint8_t * ptr_seconde)\r\n\r\nptr_str_buf_json: pointer to string in json format\r\nptr_annee, ptr_mois, ptr_jours, ptr_jours_sem, ptr_heure, ptr_minute, ptr_seconde: pointers to the variables where I transfer the information\r\n\r\n```c\r\n//======================================================\r\n//nom de la fonction : fct_json_parse_dateheure\r\n//description : permet de recupérer la date et l'heure envoyé par le smartphone\r\n//parametres :\r\n//\t-ptr_str_buf_json : pointeur sur char vers le buffer contenant le fichier JSON\r\n//\t-ptr_annee_json : pointeur sur uint8_t vers la variable qui récupère l'année\r\n//\t-ptr_mois_json : pointeur sur uint8_t vers la variable qui récupère le moi\r\n//\t-ptr_jours_json : pointeur sur uint8_t vers la variable qui récupère le jour du moi\r\n//\t-ptr_jours_sem_json : pointeur sur uint8_t vers la variable qui récupère le jour de la semaine\r\n//\t-ptr_heure_json : pointeur sur uint8_t vers la variable qui récupère l'heure\r\n//\t-ptr_minute_json : pointeur sur uint8_t vers la variable qui récupère les minutes\r\n//\t-ptr_seconde_json : pointeur sur uint8_t vers la variable qui récupère les secondes\r\n//\r\n//retourne :\r\n//\t-booléen :\r\n//\t\t-false si erreur\r\n//\t\t-true si OK\r\n//\r\nBool fct_json_parse_dateheure(\tconst char* ptr_str_buf_json,\r\n\t\t\t\tuint8_t* ptr_annee, uint8_t* ptr_mois, uint8_t* ptr_jours, uint8_t* ptr_jours_sem,\r\n\t\t\t\tuint8_t* ptr_heure, uint8_t* ptr_minute, uint8_t* ptr_seconde)\r\n{\r\n\tBool b_erreur;\r\n\t\r\n\tcJSON *root = NULL;\r\n\troot = cJSON_Parse(ptr_str_buf_json);\r\n\t\r\n\tcJSON *ptr_annee_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"annee\");\r\n\tcJSON *ptr_mois_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"mois\");\r\n\tcJSON *ptr_jour_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"jour\");\r\n\tcJSON *ptr_jour_sem_json\t= cJSON_GetObjectItemCaseSensitive(root, \"jour_sem\");\r\n\tcJSON *ptr_heure_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"heure\");\r\n\tcJSON *ptr_minute_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"minute\");\r\n\tcJSON *ptr_seconde_json\t\t= cJSON_GetObjectItemCaseSensitive(root, \"seconde\");\r\n\r\n\t//==================================\r\n\t//acquisition de l'année\r\n\tif (cJSON_IsNumber(ptr_annee_json))\r\n\t{\r\n\t\tif (ptr_annee_json->valueint >= 2000)\r\n\t\t{\r\n\t\t\t*ptr_annee = ptr_annee_json->valueint - 2000;\r\n\t\t\tb_erreur=true;\r\n\t\t}\r\n\t\telse b_erreur=false;\r\n\t\t\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition du moi\r\n\tif( (cJSON_IsNumber(ptr_mois_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_mois = ptr_mois_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition du jour du moi\r\n\tif( (cJSON_IsNumber(ptr_jour_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_jours = ptr_jour_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition du jour de la semaine\r\n\t\r\n\t//==================================\r\n\t//si le jour de la semaine est le numero du jour\r\n\tif( (cJSON_IsNumber(ptr_jour_sem_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_jours_sem = ptr_jour_sem_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\t\r\n\t\t////==================================\r\n\t\t////si le jour de la semaine est le nom du jour\r\n\t\t//if( (cJSON_IsString(ptr_jour_sem_json))&&(b_erreur==true) )\r\n\t\t//{\r\n\t\t\t//if (strcmp(ptr_jour_sem_json->valuestring, \"lundi\")==0) \r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_LUNDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"mardi\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_MARDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"mercredi\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_MERCREDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"jeudi\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_JEUDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"vendredi\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_VENDREDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"samedi\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_SAMEDI;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else if (strcmp(ptr_jour_sem_json->valuestring, \"dimanche\")==0)\r\n\t\t\t//{\r\n\t\t\t\t//*ptr_jours_sem=DEF_DIMANCHE;\r\n\t\t\t\t//b_erreur=true;\r\n\t\t\t//}\r\n\t\t\t//else b_erreur=false;\r\n\t\t//}\r\n\t\t//else b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition de l'heure\r\n\tif( (cJSON_IsNumber(ptr_heure_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_heure = ptr_heure_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition de la minute\r\n\tif( (cJSON_IsNumber(ptr_minute_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_minute = ptr_minute_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//==================================\r\n\t//acquisition des secondes\r\n\tif( (cJSON_IsNumber(ptr_seconde_json))&&(b_erreur==true) )\r\n\t{\r\n\t\t*ptr_seconde = ptr_seconde_json->valueint;\r\n\t\tb_erreur=true;\r\n\t}\r\n\telse b_erreur=false;\r\n\t\r\n\t//cJSON_Delete(root);\r\n\t\r\n\t//=======================================================================================\r\n\t//pour le debug\r\n\t//fct_printf_uart(CONF_UART_EXT, \"root=%x\\r\\n\", root);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"annee=%x\\r\\n\", ptr_annee_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"mois=%x\\r\\n\", ptr_mois_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"jour=%x\\r\\n\", ptr_jour_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"jour_sem=%x\\r\\n\", ptr_jour_sem_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"heure=%x\\r\\n\", ptr_heure_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"minute=%x\\r\\n\", ptr_minute_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"seconde=%x\\r\\n\", ptr_seconde_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"free heap=%x\\r\\n\\r\\n\\r\\n\", xPortGetFreeHeapSize);\r\n\tsauv_ptr_root=root;\r\n\tsauv_ptr_annee_json=ptr_annee_json;\r\n\tsauv_ptr_mois_json=ptr_mois_json;\r\n\tsauv_ptr_jour_json=ptr_jour_json;\r\n\tsauv_ptr_jour_sem_json=ptr_jour_sem_json;\r\n\tsauv_ptr_heure_json=ptr_heure_json;\r\n\tsauv_ptr_minute_json=ptr_minute_json;\r\n\tsauv_ptr_seconde_json=ptr_seconde_json;\r\n\t//=======================================================================================\r\n\t\r\n\tcJSON_Delete(root);\r\n\tcJSON_free(ptr_annee_json);\r\n\tptr_annee_json=NULL;\r\n\tcJSON_free(ptr_mois_json);\r\n\tptr_mois_json=NULL;\r\n\tcJSON_free(ptr_jour_json);\r\n\tptr_jour_json=NULL;\r\n\tcJSON_free(ptr_jour_sem_json);\r\n\tptr_jour_sem_json=NULL;\r\n\tcJSON_free(ptr_heure_json);\r\n\tptr_heure_json=NULL;\r\n\tcJSON_free(ptr_minute_json);\r\n\tptr_minute_json=NULL;\r\n\tcJSON_free(ptr_seconde_json);\r\n\tptr_seconde_json=NULL;\r\n\tcJSON_free(root);\r\n\troot=NULL;\r\n\t\r\n\t\r\n\t\r\n\treturn b_erreur;\r\n}\r\n//======================================================\r\n```\r\n\r\n```c\r\n//======================================================\r\n//nom de la fonction : fct_json_parse_login\r\n//description : cherche dans le JSON le login et le mot de passe,\r\n//puis les copie dans les deux buffer (str_buf_login et str_buf_pwd)\r\n//\r\n//parametres :\r\n//\t-ptr_buf : pointeur sur char vers le buffer contenent le fichier JSON\r\n//\t-str_buf_login : pointeur sur char vers le buffer login\r\n//\t-str_buf_pwd : pointeur sur char vers le buffer mot de passe\r\n//\t-nb_char_max : nombre maximum que l'on peut copier. si la chaine est superieur alors il sera copié le nombre maximum de caractères et le dernier sera caractère nul\r\n//\r\n//retourne :\r\n//\t-si erreur (non trouvé), retourne 0\r\n//\t-si le nombre de caractères écrits est superieur au nombre max alors, retourne -1\r\n//\t-sinon le nombre total de caractères écrits (login + mot de passe)\r\n//\r\nint8_t fct_json_parse_login(const char* ptr_buf, char * str_buf_login, char * str_buf_pwd, uint32_t nb_char_max)\r\n{\r\n\t\r\n\tuint32_t nb_char_login=0;\r\n\tuint32_t nb_char_pwd=0;\r\n\t\r\n\tcJSON *root = NULL;\r\n\troot = cJSON_Parse(ptr_buf);\r\n\t\r\n\t//cJSON *ptr_login_json = NULL;\r\n\t//ptr_login_json = cJSON_GetObjectItemCaseSensitive(root, \"user\");\r\n\t//cJSON *ptr_pwd_json = NULL;\r\n\t//ptr_pwd_json = cJSON_GetObjectItemCaseSensitive(root, \"pwd\");\r\n\tcJSON *ptr_login_json = cJSON_GetObjectItemCaseSensitive(root, \"user\");\r\n\tcJSON *ptr_pwd_json = cJSON_GetObjectItemCaseSensitive(root, \"pwd\");\r\n\r\n\t\r\n\t\r\n\tif (cJSON_IsString(ptr_login_json))\r\n\t{\r\n\t\tdo\r\n\t\t{\r\n\t\t\tif (nb_char_login>=nb_char_max)\r\n\t\t\t{\r\n\t\t\t\tstr_buf_login[nb_char_login-1]=0;\r\n\t\t\t\t//nb_char_login=0;\r\n\t\t\t\t//cJSON_Delete(root);\r\n\t\t\t\t//return -1;\r\n\t\t\t\tbreak;\r\n\t\t\t}\r\n\t\t\tstr_buf_login[nb_char_login]=*ptr_login_json->valuestring;\r\n\t\t\tptr_login_json->valuestring++;\r\n\t\t\tnb_char_login++;\r\n\t\t//}while (ptr_chaine_json->valuestring-1!='\"');\r\n\t\t}while (*ptr_login_json->valuestring);\r\n\t\tstr_buf_login[nb_char_login]=0;\r\n\t\tnb_char_login++;\r\n\t}\r\n\telse \r\n\t{\r\n\t\t//cJSON_Delete(root);\r\n\t\t//break;\r\n\t\t//return 0;\r\n\t}\r\n\t\r\n\tif (cJSON_IsString(ptr_pwd_json))\r\n\t{\r\n\t\tdo\r\n\t\t{\r\n\t\t\tif (nb_char_pwd>=nb_char_max)\r\n\t\t\t{\r\n\t\t\t\tstr_buf_pwd[nb_char_pwd-1]=0;\r\n\t\t\t\t//nb_char_pwd=0;\r\n\t\t\t\t//cJSON_Delete(root);\r\n\t\t\t\tbreak;\r\n\t\t\t\t//return -1;\r\n\t\t\t}\r\n\t\t\tstr_buf_pwd[nb_char_pwd]=*ptr_pwd_json->valuestring;\r\n\t\t\tptr_pwd_json->valuestring++;\r\n\t\t\tnb_char_pwd++;\r\n\t\t//}while (ptr_chaine_json->valuestring-1!='\"');\r\n\t\t}while (*ptr_pwd_json->valuestring);\r\n\t\tstr_buf_pwd[nb_char_pwd]=0;\r\n\t\tnb_char_pwd++;\r\n\t}\r\n\telse \r\n\t{\r\n\t\t//cJSON_Delete(root);\r\n\t\t//break;\r\n\t\t//return 0;\r\n\t}\r\n\t\r\n\t//=======================================================================================\r\n\t//pour le debug\r\n\t\r\n\t//fct_printf_uart(CONF_UART_EXT, \"root=%x\\r\\n\", root);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"annee=%x\\r\\n\", ptr_login_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"mois=%x\\r\\n\", ptr_pwd_json);\r\n\t//fct_printf_uart(CONF_UART_EXT, \"free heap=%x\\r\\n\\r\\n\\r\\n\", xPortGetFreeHeapSize);\r\n\tsauv_ptr_root=root;\t//pour le debug\r\n\tsauv_ptr_annee_json=ptr_login_json;\t//pour le debug\r\n\tsauv_ptr_mois_json=ptr_pwd_json;\t//pour le debug\r\n\t\r\n\t//=======================================================================================\r\n\t\r\n\tcJSON_Delete(root);\r\n\tcJSON_free(ptr_login_json);\r\n\tptr_login_json=NULL;\r\n\tcJSON_free(ptr_pwd_json);\r\n\tptr_pwd_json=NULL;\r\n\t\r\n\t//cJSON_Delete(root);\r\n\tcJSON_free(root);\r\n\troot=NULL;\r\n\r\n\t\r\n\treturn (nb_char_login+nb_char_pwd);\r\n}\r\n//======================================================\r\n```\r\n\r\nthe two functions do not give me the same results:\r\n\r\n\"fct_json_parse_login ()\": crash on \"cJSON_Delete ()\"\r\n\r\n\"fct_json_parse_dateheure ()\": I could execute it more than 1000 times\r\n\r\nI used \"cJSON_Delete ()\" and \"cJSON_free ()\" because after several attempts, this enabled me to run the \"fct_json_parse_dateheure ()\" function correctly.\r\n\r\nhere is the value of the pointers at first execution \"fct_json_parse_login ()\":\r\nroot = 0x2001A558\r\nptr_login_json = 0x2001A558\r\nptr_pwd_json = 0x2001A5D8\r\n\r\nat the second execution the program crash on \"root = cJSON_Parse (ptr_buf);\"\r\nthis causes an interruption \"dummy_handler\" => error: hard fault\r\n\r\nhere is the value of the pointers at first execution \"fct_json_parse_dateheure ()\":\r\nroot=2001a558\r\nptr_annee_json=2001a588\r\nptr_mois_json=2001a5c8\r\nptr_jour_json=2001a608\r\nptr_jour_sem_json=2001a710\r\nptr_heure_json=2001a648\r\nptr_minute_json=2001a688\r\nptr_seconde_json=2001a6c8\r\n\r\nsecond execution :\r\nroot=2001a720\r\nptr_annee_json=2001a6f0\r\nptr_mois_json=2001a6b0\r\nptr_jour_json=2001a670\r\nptr_jour_sem_json=2001a570\r\nptr_heure_json=2001a630\r\nptr_minute_json=2001a5f0\r\nptr_seconde_json=2001a5b0\r\n\r\nthen they always have the same values. 1100 executions: OK\r\n\r\nhere are the two JSON that I receive:\r\n     1) {\"user\":\"UTI\",\"pwd\":\"0123456789\"}\r\n     2) {\"annee\":2017,\"mois\":10,\"jour\":19,\"heure\":20,\"minute\":21,\"seconde\":12,\"jour_sem\":4}\r\n\r\nso I do not know what to do.\r\ncan you help me, solve the problem, because it has been several days that I seek a solution without succeeding.\r\n\r\nanother thing, a small detail, but one that is important. I had a similar problem with the json output function \"cJSON_Print ()\". I had to use \"cJSON_PrintPreallocated ()\".\r\nso I use a buffer of 5000 bytes (5000 bytes, because the biggest JSON that will be analyzed will be 4000 bytes). this buffer is used for the analysis of a received JSON, or at the output of a JSON after request\r\n\r\nmaybe I do not do it right.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/206/comments",
+    "author": "SIEMELBE",
+    "comments": [
+      {
+        "user": "SIEMELBE",
+        "created_at": "2017-10-20T12:40:10Z",
+        "body": "I found why \"cJSON_Parse ()\" does everything crash.\r\nI am completely stupid.\r\n\r\nin the function \"fct_json_parse_login ()\", to copy the character string, I directly incrude the pointer of the cjson structure (ptr_login_json, and ptr_pxd_json).\r\n\r\nbig error, suddenly when the json tree was destroyed, \"cJSON_Delete ()\" no longer understands anything.\r\nit is I who breaks everything."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-20T12:48:16Z",
+        "body": "I don't understand your last comment.\r\n\r\nBut what I can see: There is only one place where memory is allocated: `cJSON_Parse`. Every other `cJSON*` is just an *alias*, but doesn't **own** the memory.  This means that to free the memory, all you have to do is `cJSON_Delete(root)`. Every other call to `cJSON_Delete` or `cJSON_free` would result in a double free, which can crash or even worse."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-20T14:29:42Z",
+        "body": "Here's what I would do:\r\n\r\n```c\r\n#include <stdint.h>\r\n#include <stdlib.h>\r\n#include <stdio.h>\r\n#include <string.h>\r\n#include <stdbool.h>\r\n#include <cjson/cJSON.h>\r\n\r\nbool parse_date(const char json[], uint8_t* year, uint8_t* month, uint8_t* day, uint8_t* weekday, uint8_t* hour, uint8_t* minute, uint8_t* second) {\r\n\tcJSON *root = cJSON_Parse(json);\r\n\r\n\t//year\r\n\tcJSON *year_json = cJSON_GetObjectItemCaseSensitive(root, \"year\");\r\n\tif (!cJSON_IsNumber(year_json) || (year_json->valueint < 2000) || (year_json->valueint > (UINT8_MAX + 2000))) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*year = year_json->valueint - 2000;\r\n\r\n\t//month\r\n\tcJSON *month_json = cJSON_GetObjectItemCaseSensitive(root, \"month\");\r\n\tif (!cJSON_IsNumber(month_json) || (month_json->valueint < 1) || (month_json->valueint > 12)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*month = month_json->valueint;\r\n\r\n\t//day\r\n\tcJSON *day_json = cJSON_GetObjectItemCaseSensitive(root, \"day\");\r\n\tif (!cJSON_IsNumber(day_json) || (day_json->valueint < 1) || (day_json->valueint > 31)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*day = day_json->valueint;\r\n\r\n\t//weekday\r\n\tcJSON *weekday_json = cJSON_GetObjectItemCaseSensitive(root, \"weekday\");\r\n\tif (!cJSON_IsNumber(weekday_json) || (weekday_json->valueint < 1) || (weekday_json->valueint > 7)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*weekday = weekday_json->valueint;\r\n\r\n\t//hour\r\n\tcJSON *hour_json = cJSON_GetObjectItemCaseSensitive(root, \"hour\");\r\n\tif (!cJSON_IsNumber(hour_json) || (hour_json->valueint < 0) || (hour_json->valueint > 23)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*hour = hour_json->valueint;\r\n\r\n\t//minute\r\n\tcJSON *minute_json = cJSON_GetObjectItemCaseSensitive(root, \"minute\");\r\n\tif (!cJSON_IsNumber(minute_json) || (minute_json->valueint < 0) || (minute_json->valueint > 59)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*minute = minute_json->valueint;\r\n\r\n\t//second\r\n\tcJSON *second_json = cJSON_GetObjectItemCaseSensitive(root, \"second\");\r\n\tif (!cJSON_IsNumber(second_json) || (second_json->valueint < 0) || (second_json->valueint > 59)) {\r\n\t\tgoto fail;\r\n\t}\r\n\t*second = second_json->valueint;\r\n\r\n\r\n\tcJSON_Delete(root);\r\n\treturn true;\r\n\r\nfail:\r\n\tcJSON_Delete(root);\r\n\treturn false;\r\n}\r\n\r\nint8_t parse_login(const char json[], char user_buffer[], char password_buffer[], const uint32_t buffer_length) {\r\n\tint8_t return_code = 0;\r\n\r\n\tcJSON *root = cJSON_Parse(json);\r\n\r\n\tcJSON *user_json = cJSON_GetObjectItemCaseSensitive(root, \"user\");\r\n\tif (!cJSON_IsString(user_json)) {\r\n\t\treturn_code = 0;\r\n\t\tgoto cleanup;\r\n\t}\r\n\tuint32_t user_length = strlen(user_json->valuestring) + sizeof(\"\");\r\n\tif (user_length > buffer_length) {\r\n\t\treturn_code = -1;\r\n\t\tgoto cleanup;\r\n\t}\r\n\r\n\tcJSON *password_json = cJSON_GetObjectItemCaseSensitive(root, \"password\");\r\n\tif (!cJSON_IsString(password_json)) {\r\n\t\treturn_code = 0;\r\n\t\tgoto cleanup;\r\n\t}\r\n\tuint32_t password_length = strlen(password_json->valuestring) + sizeof(\"\");\r\n\tif (password_length > buffer_length) {\r\n\t\treturn_code = -1;\r\n\t\tgoto cleanup;\r\n\t}\r\n\r\n\t//now copy the login and password\r\n\tif ((user_buffer == NULL) || (password_buffer == NULL)) {\r\n\t\treturn_code = -1;\r\n\t\tgoto cleanup;\r\n\t}\r\n\tmemcpy(user_buffer, user_json->valuestring, user_length);\r\n\tmemcpy(password_buffer, password_json->valuestring, password_length);\r\n\treturn_code = user_length + password_length;\r\n\r\ncleanup:\r\n\tcJSON_Delete(root);\r\n\treturn return_code;\r\n}\r\n\r\nconst char* weekday_name(uint8_t number) {\r\n\tswitch (number) {\r\n\t\tcase 1:\r\n\t\t\treturn \"Monday\";\r\n\r\n\t\tcase 2:\r\n\t\t\treturn \"Tuesday\";\r\n\r\n\t\tcase 3:\r\n\t\t\treturn \"Wednesday\";\r\n\r\n\t\tcase 4:\r\n\t\t\treturn \"Thursday\";\r\n\r\n\t\tcase 5:\r\n\t\t\treturn \"Friday\";\r\n\r\n\t\tcase 6:\r\n\t\t\treturn \"Saturday\";\r\n\r\n\t\tcase 7:\r\n\t\t\treturn \"Sunday\";\r\n\r\n\t\tdefault:\r\n\t\t\treturn \"(invalid weekday)\";\r\n\t}\r\n}\r\n\r\n#define min(a, b) ((a) > (b) ? (b) : (a))\r\n\r\nint main(void) {\r\n\tuint8_t year;\r\n\tuint8_t month;\r\n\tuint8_t day;\r\n\tuint8_t weekday;\r\n\tuint8_t hour;\r\n\tuint8_t minute;\r\n\tuint8_t second;\r\n\tif (!parse_date(\"{\\\"year\\\":2017,\\\"month\\\":10,\\\"day\\\":19,\\\"hour\\\":20,\\\"minute\\\":21,\\\"second\\\":12,\\\"weekday\\\":4}\", &year, &month, &day, &weekday, &hour, &minute, &second)) {\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\tprintf(\"%s %d.%d.%d %d:%d:%d\\n\", weekday_name(weekday), (int)day, (int)month, (int)year + 2000, (int)hour, (int)minute, (int)second);\r\n\r\n\tchar user[0xFF];\r\n\tchar password[0xFF];\r\n\tint8_t return_code = parse_login(\"{\\\"user\\\":\\\"UTI\\\",\\\"password\\\":\\\"0123456789\\\"}\", user, password, min(sizeof(user),sizeof(password)));\r\n\tif (return_code <= 0) {\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\tprintf(\"Total length: %d\\n\", (int)return_code);\r\n\tprintf(\"user: %s\\n\", user);\r\n\tprintf(\"password: %s\\n\", password);\r\n\r\n}\r\n```"
+      },
+      {
+        "user": "SIEMELBE",
+        "created_at": "2017-10-20T14:32:27Z",
+        "body": "sorry for the time I took you.\r\n\r\nmy problem was, that to recover the characters of a string I incremented the pointer of the structure cjson (\"valuestring\"). I broke the whole structure.\r\nsometimes stupidity has no limit.\r\n\r\nI used \"cjson_free ()\" and \"cjson_delete ()\" to find a solution. but I understood that you should use \"cjson_delete ()\" only once.\r\n\r\nthe corrections are made, and it works very well.\r\n\r\nGood day to you"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-20T14:40:48Z",
+        "body": "Just use `strncpy` or `memcpy` if you know the length, they are there for a reason."
+      }
+    ]
+  },
+  {
+    "number": 204,
+    "title": "Crash in cJSON_CreateString function.",
+    "created_at": "2017-10-10T11:19:32Z",
+    "closed_at": "2017-10-10T22:04:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/204",
+    "body": "It will crash if we provide null value here as a string. I think we need to add  \r\nif (!string) return cJSON_CreateNull();  this line. Correct me if I'm wrong.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/204/comments",
+    "author": "bhardwaj75",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-10T11:58:42Z",
+        "body": "I'm not sure what you mean.\r\n\r\n`cJSON_CreateNull()` doesn't take any parameters, it just returns a pointer to a `cJSON` struct that has been allocated on the heap. \r\n\r\nSo what exactly is the thing that crashes?"
+      },
+      {
+        "user": "bhardwaj75",
+        "created_at": "2017-10-10T12:02:49Z",
+        "body": "if we pass a null string in cJSON_CreateString function it will crash, because internally you are doing str_dup something like that. To avoid that I think, need to use the following line.\r\nif (!string) \r\n   return cJSON_CreateNull();"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-10T12:07:39Z",
+        "body": "`cJSON_CreateString` is not supposed to return a `null` JSON value. It should return `NULL` if the string that is passed to it is `NULL`.\r\n\r\nI'll take a look.\r\n\r\nIf you want the behavior that you described, you have to implement it manually."
+      },
+      {
+        "user": "bhardwaj75",
+        "created_at": "2017-10-10T12:09:08Z",
+        "body": "Thanks."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-10-10T12:10:20Z",
+        "body": "I looked at the code and I can't reproduce your crash! `cJSON_CreateString(NULL);` returns `NULL` as it is supposed to.\r\n\r\nYou are probably dereferencing the return value somewhere and that is causing the crash."
+      }
+    ]
+  },
+  {
+    "number": 201,
+    "title": "cJSON_Print return val, need to free the memory ?",
+    "created_at": "2017-09-07T11:35:18Z",
+    "closed_at": "2017-09-07T14:47:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/201",
+    "body": "When I use cJSON_Print get a char* type like this\r\n```char* str = cJSON_Print(root);```\r\n\r\nshould I  need to free the memory which the str pointer point to?\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/201/comments",
+    "author": "jhlpotato",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-09-07T14:47:57Z",
+        "body": "Short answer: Yes!\r\n\r\nSee also #190 "
+      }
+    ]
+  },
+  {
+    "number": 198,
+    "title": "unknow character appearing while using the exmaple Test",
+    "created_at": "2017-08-28T08:39:23Z",
+    "closed_at": "2017-08-28T08:57:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/198",
+    "body": "I am using your example code with ESP32. I get some '.' before every data ... \r\nhere is my output.\r\n```\r\nVersion: 1.5.8\r\n{\r\n.\"name\":.\"Jack (\\\"Bee\\\") Nimble\",\r\n.\"format\":.{\r\n..\"type\":.\"rect\",\r\n..\"width\":.1920,\r\n..\"height\":.1080,\r\n..\"interlace\":.false,\r\n..\"frame rate\":.24\r\n.}\r\n}\r\n[\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"]\r\n[[0, -1, 0], [1, 0, 0], [0, 0, 1]]\r\n{\r\n.\"Image\":.{\r\n..\"Width\":.800,\r\n..\"Height\":.600,\r\n..\"Title\":.\"View from 15th Floor\",\r\n..\"Thumbnail\":.{\r\n...\"Url\":.\"http:/*www.example.com/image/481989943\",\r\n...\"Height\":.125,\r\n...\"Width\":.\"100\"\r\n..},\r\n..\"IDs\":.[116, 943, 234, 38793]\r\n.}\r\n}\r\n[{\r\n..\"precision\":.\"zip\",\r\n..\"Latitude\":.37.7668,\r\n..\"Longitude\":.-122.3959,\r\n..\"Address\":.\"\",\r\n..\"City\":.\"SAN FRANCISCO\",\r\n..\"State\":.\"CA\",\r\n..\"Zip\":.\"94107\",\r\n..\"Country\":.\"US\"\r\n.}, {\r\n..\"precision\":.\"zip\",\r\n..\"Latitude\":.37.371991,\r\n..\"Longitude\":.-122.026,\r\n..\"Address\":.\"\",\r\n..\"City\":.\"SUNNYVALE\",\r\n..\"State\":.\"CA\",\r\n..\"Zip\":.\"94085\",\r\n..\"Country\":.\"US\"\r\n.}]\r\n{\r\n.\"number\":.null\r\n}\r\n```\r\n\r\nwhat are this dot's ?? is it only issue with the printf of ESP32 IDF? I will post it there to.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/198/comments",
+    "author": "shirish47",
+    "comments": [
+      {
+        "user": "shirish47",
+        "created_at": "2017-08-28T08:46:09Z",
+        "body": "ok thats a problem of software I was using for serial.. coolterm ... in arduino's serial its clean.\r\n\r\n\u001b[0;32mI (191) cpu_start: Starting scheduler on APP CPU.\u001b[0m\r\nVersion: 1.5.8\r\n```\r\n{\r\n\t\"name\":\t\"Jack (\\\"Bee\\\") Nimble\",\r\n\t\"format\":\t{\r\n\t\t\"type\":\t\"rect\",\r\n\t\t\"width\":\t1920,\r\n\t\t\"height\":\t1080,\r\n\t\t\"interlace\":\tfalse,\r\n\t\t\"frame rate\":\t24\r\n\t}\r\n}\r\n[\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"]\r\n[[0, -1, 0], [1, 0, 0], [0, 0, 1]]\r\n{\r\n\t\"Image\":\t{\r\n\t\t\"Width\":\t800,\r\n\t\t\"Height\":\t600,\r\n\t\t\"Title\":\t\"View from 15th Floor\",\r\n\t\t\"Thumbnail\":\t{\r\n\t\t\t\"Url\":\t\"http:/*www.example.com/image/481989943\",\r\n\t\t\t\"Height\":\t125,\r\n\t\t\t\"Width\":\t\"100\"\r\n\t\t},\r\n\t\t\"IDs\":\t[116, 943, 234, 38793]\r\n\t}\r\n}\r\n[{\r\n\t\t\"precision\":\t\"zip\",\r\n\t\t\"Latitude\":\t37.7668,\r\n\t\t\"Longitude\":\t-122.3959,\r\n\t\t\"Address\":\t\"\",\r\n\t\t\"City\":\t\"SAN FRANCISCO\",\r\n\t\t\"State\":\t\"CA\",\r\n\t\t\"Zip\":\t\"94107\",\r\n\t\t\"Country\":\t\"US\"\r\n\t}, {\r\n\t\t\"precision\":\t\"zip\",\r\n\t\t\"Latitude\":\t37.371991,\r\n\t\t\"Longitude\":\t-122.026,\r\n\t\t\"Address\":\t\"\",\r\n\t\t\"City\":\t\"SUNNYVALE\",\r\n\t\t\"State\":\t\"CA\",\r\n\t\t\"Zip\":\t\"94085\",\r\n\t\t\"Country\":\t\"US\"\r\n\t}]\r\n{\r\n\t\"number\":\tnull\r\n}\r\n\r\n```\r\n\r\nwhy is Bee not in double quotes here ??"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-08-28T08:57:33Z",
+        "body": "That dots are probably just a way that your terminal tells you that this is a tab character.\r\n\r\nAn `Bee` is in double quotes! But they are escaped with a backslash."
+      }
+    ]
+  },
+  {
+    "number": 197,
+    "title": "Copy some JSON element into a given JSON string",
+    "created_at": "2017-08-25T12:21:01Z",
+    "closed_at": "2017-08-25T15:22:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/197",
+    "body": "Hi,\r\n\r\nRunning this code make the program eat all available memory. It's actually the call to the `cJSON_AddItemToObject` function that does it.\r\n\r\n        cJSON *root = NULL;\r\n        cJSON *params = NULL;\r\n        cJSON *someparam = NULL;\r\n        const char *jsonString =\r\n                        \"{  \\\"params\\\":\"\\\r\n                        \"  {\"\\\r\n                        \"    \\\"someparam\\\":\"\\\r\n                        \"    {\"\\\r\n                        \"      \\\"attribute\\\": \\\"value\\\"\"\\\r\n                        \"    }\"\r\n                        \"  }\"\\\r\n                        \"}\";\r\n\r\n        root = cJSON_Parse(jsonString);\r\n        params = cJSON_GetObjectItem(root, \"params\");\r\n        someparam = cJSON_GetObjectItem(params, \"someparam\");\r\n        cJSON_AddItemToObject(params, \"someparam\", someparam);\r\n\r\n        printf(\"cJSON_Parse root : %s\\n\", cJSON_Print(root));\r\n        printf(\"cJSON_Parse params : %s\\n\", cJSON_Print(params));\r\n        printf(\"cJSON_Parse someparam : %s\\n\", cJSON_Print(someparam));\r\n\r\nObviously, I'm doing something wrong here and I'd like to have your feedback on how to re-insert an existing JSON element into a given JSON string, safely.\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/197/comments",
+    "author": "phsultan",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-08-25T15:14:51Z",
+        "body": "This is incorrect because the elements of an object are stored in a doubly linked list. This means that if you add the same item twice, it's `next` and `prev` get messed up and create a cycle.\r\n\r\nActually it's not the `cJSON_AddItemToObject` function that eats all your memory. It's `cJSON_Print` that does! That is because the cycle of `someparam` pointing to itself as the next item ist equivalent to having an infinite list of `someparam` items that `cJSON_Print` tries to print out, thereby running out of memory.\r\n\r\nYou can fix this in one of two ways:\r\n1. Use `cJSON_DetachItemFromObject` in the line before `cJSON_AddItemToObject`. In that case you will have only one instance of it in the result.\r\n2. Duplicate `someparam` with `cJSON_Duplicate` before adding the duplicate with `cJSON_AddItemToObject`. Note though that having two objects with the same key doesn't make any sense!\r\n\r\n"
+      },
+      {
+        "user": "phsultan",
+        "created_at": "2017-08-25T15:22:34Z",
+        "body": "Awesome, crystal clear, thanks a lot Max."
+      }
+    ]
+  },
+  {
+    "number": 192,
+    "title": "Question about \"standards\"",
+    "created_at": "2017-07-28T10:35:42Z",
+    "closed_at": "2017-07-28T14:21:59Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/192",
+    "body": "I have a question about \"standards\"\r\n\r\nI got crazy about a server that returns, for the same node, an array or an object depending on how many items are present.\r\nIf only one item is present, it returns an object. \r\nIf more items are present, it returns an array.\r\n**My question is: is it correct behave?**\r\n\r\nMy idea is that even if 1 item or zero items are present, it should return an array. But maybe I'm wrong\r\n\r\nBelow examples for the 2 conditions. Node changing type is \"Movimento\".\r\nFirst example is with one element, second example is with 3 elements.\r\n\r\nThanks in advance\r\nEros\r\n\r\n----------------------------------------------------\r\n```json\r\n{\r\n  \"status\" : {\r\n    \"code\" : \"OK\",\r\n    \"description\" : \"Transaction List retrieved successfully\"\r\n  },\r\n  \"error\" : {\r\n    \"description\": \"\"\r\n  },\r\n  \"payload\": [\r\n\t{\r\n  \"ListaMovimenti\" : {\r\n    \"Movimento\" : {\r\n      \"DataContabile\" : \"27/07/2017\",\r\n      \"Importo\" : \"100,00\",\r\n      \"Segno\" : \"A\",\r\n      \"Divisa\" : \"EUR\",\r\n      \"DataValuta\" : \"27/07/2017\",\r\n      \"Terminale\" : \"yyyyyy\",\r\n      \"CausaleVariabile\" : \"BD xxxxxxxxxxxxxxxxxxxxxxx\",\r\n      \"Controvalore\" : \"100,00\",\r\n      \"NumeroOperazioneH2O\" : \"19870987098789\",\r\n      \"NumeroProgressivoHost\" : \"765786576\",\r\n      \"IdMovimentoH2O\" : \"9879879087\"\r\n    }\r\n  }\r\n}\r\n  ]\r\n}\r\n```\r\n----------------------------------------------------\r\n```json\r\n{\r\n  \"status\" : {\r\n    \"code\" : \"OK\",\r\n    \"description\" : \"Transaction List retrieved successfully\"\r\n  },\r\n  \"error\" : {\r\n    \"description\": \"\"\r\n  },\r\n  \"payload\": [\r\n\t{\r\n  \"ListaMovimenti\" : {\r\n    \"Movimento\" : [ {\r\n      \"DataContabile\" : \"28/07/2017\",\r\n      \"Importo\" : \"293,57\",\r\n      \"Segno\" : \"A\",\r\n      \"Divisa\" : \"EUR\",\r\n      \"DataValuta\" : \"28/07/2017\",\r\n      \"Terminale\" : \"983\",\r\n      \"CausaleVariabile\" : \"IA ttttttttt58468 2707\",\r\n      \"Controvalore\" : \"293,57\",\r\n      \"NumeroOperazioneH2O\" : \"3452345\",\r\n      \"NumeroProgressivoHost\" : \"34523\",\r\n      \"IdMovimentoH2O\" : \"34523\"\r\n    }, {\r\n      \"DataContabile\" : \"28/07/2017\",\r\n      \"Importo\" : \"200,37\",\r\n      \"Segno\" : \"A\",\r\n      \"Divisa\" : \"EUR\",\r\n      \"DataValuta\" : \"28/07/2017\",\r\n      \"Terminale\" : \"983\",\r\n      \"CausaleVariabile\" : \"IA POS3077vvvvvvvv84-27/07\",\r\n      \"Controvalore\" : \"200,37\",\r\n      \"NumeroOperazioneH2O\" : \"3534523\",\r\n      \"NumeroProgressivoHost\" : \"345234\",\r\n      \"IdMovimentoH2O\" : \"3523\"\r\n    }, {\r\n      \"DataContabile\" : \"27/07/2017\",\r\n      \"Importo\" : \"100,00\",\r\n      \"Segno\" : \"A\",\r\n      \"Divisa\" : \"EUR\",\r\n      \"DataValuta\" : \"27/07/2017\",\r\n      \"Terminale\" : \"yyyyyy\",\r\n      \"CausaleVariabile\" : \"uyiuyiuyiuyiuyiuyiu    \",\r\n      \"Controvalore\" : \"100,00\",\r\n      \"NumeroOperazioneH2O\" : \"34523435235\",\r\n      \"NumeroProgressivoHost\" : \"35235\",\r\n      \"IdMovimentoH2O\" : \"3523452354\"\r\n    } ]\r\n  }\r\n}\r\n  ]\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/192/comments",
+    "author": "ErosOlmi",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-07-28T14:21:59Z",
+        "body": "The JSON standards are only describing the data format itself, not how to use them.\r\n\r\nThere are certainly standards out there about how data should be represented in JSON form, but I don't think there is any definitive standard on it. Also I'm not familiar enough with it to name any one standard.\r\n\r\nAll I can give you is my personal opinion: If something is a collection, it should stay a collection no matter how many entries. So in case of 0 elements it should be an empty array, one or more elements should be an array with entries. Anything else is just inconsistent and making it harder both for implementing the server and the client.\r\n\r\nBut just my opinion as I said."
+      },
+      {
+        "user": "ErosOlmi",
+        "created_at": "2017-07-28T15:29:27Z",
+        "body": "Thanks a lot.\r\nYour opinion is also my opinion.\r\nI will complain with who has created this export :)\r\n"
+      }
+    ]
+  },
+  {
+    "number": 188,
+    "title": "How to efficiently iterate over arrays",
+    "created_at": "2017-07-12T16:37:47Z",
+    "closed_at": "2017-07-12T22:22:53Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/188",
+    "body": "I would appreciate some help with memory leak issue I have been facing when accessing cSJON Arrays.\r\n\r\nI was using cJSON_GetArrayItem(cJSON *array,int item) to access array items from very large arrays that were part of the my main JSON object and found the performance to be slow. An example is shown in method 1 below\r\n\r\nI then started using the child and next pointers as shown in method 2 below which dramatically improved the access speed but when I do cJSON_Delete(pjRoot) I have a memory leak. \r\n\r\nHow do I still use method 2 and remove the memory leak.\r\n\r\nYour help is appreciated.\r\n\r\n```c\r\n/* method 1: Slow but no memory leak */\r\npjRoot = cJSON_Parse(pcVec);\r\npjIntArray = cJSON_GetObjectItem(pjRoot, \"intArray\");\r\npjDoubleArray = cJSON_GetObjectItem(pjRoot, \"doubleArray\");\r\nfor(n=0;n<10;n++){\r\n\tprintf(\"[%d, %.2f]\", cJSON_GetArrayItem(pjIntArray, n)->valueint,     cJSON_GetArrayItem(pjDoubleArray, n)->valuedouble);\r\n}\r\ncJSON_Delete(pjRoot);\r\n```\r\n\r\n```c\r\n/* method 2: Fast but memory leak */\r\npjRoot = cJSON_Parse(pcVec);\r\npjIntArray = cJSON_GetObjectItem(pjRoot, \"intArray\");\r\npjDoubleArray = cJSON_GetObjectItem(pjRoot, \"doubleArray\");\r\nfor(n=0;n<10;n++){\r\n\tprintf(\"[%d, %.2f]\", pjIntArray->child->valueint, pjDoubleArray->child->valuedouble);\r\n\tpjIntArray->child = pjIntArray->child->next;\r\n\tpjDoubleArray->child = pjDoubleArray->child->next;\r\n}\r\nprintf(\"\\n\");\r\ncJSON_Delete(pjRoot);\r\n```",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/188/comments",
+    "author": "rohangrover1",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-07-12T22:19:41Z",
+        "body": "Yes using `cJSON_GetArrayItem` is slow because it starts counting from the beginning every single time, making the runtime of the algorithm quadratic.\r\n\r\nAnd no wonder that this is going wrong, you shouldn't ever modify the array you are iterating over while you are iterating over it. At least not if you don't **exactly** know what you are doing.\r\n\r\nEssentially cJSON arrays look like this in memory:\r\n```\r\n+--------+\r\n| pArray |\r\n+--------+\r\n    | child\r\n    v\r\n+--------+ -> +--------+ -> +--------+ ... +--------+ (->)\r\n|   0    |    |   1    |    |   2    |     |   9    |      (potentially more)\r\n+--------+ <- +--------+ <- +--------+ ... +--------+ (<-)\r\n```\r\n\r\nWhat you do in your second loop is to move `PArray`'s child pointer to the right.\r\n\r\nThe result looks like this:\r\n```\r\n                                                           +--------+\r\n                                                           | pArray |\r\n                                                           +--------+\r\n                                                               | child\r\n                                                               v\r\n+--------+ -> +--------+ -> +--------+ ... +--------+ (->)\r\n|   0    |    |   1    |    |   2    |     |   9    |      (potentially more)\r\n+--------+ <- +--------+ <- +--------+ ... +--------+ (<-)\r\n\r\n```\r\n\r\nWhen `cJSON_Delete` delete's the array, it starts from `child` pointer and goes to the right. This means that 0-9 are not freed by `cJSON_Delete`, but you lost all your pointers to them, so they have leaked.\r\n\r\nWhat you should do is to leave the `child` pointer as it is and use some other pointer instead to loop over the array.\r\n\r\nIt should look like this:\r\n```\r\n+--------+\r\n| pArray |\r\n+--------+\r\n    | child\r\n    v\r\n+--------+ -> +--------+ -> +--------+ ... +--------+ (->)\r\n|   0    |    |   1    |    |   2    |     |   9    |      (potentially more)\r\n+--------+ <- +--------+ <- +--------+ ... +--------+ (<-)\r\n    ^\r\n    |   ->  moving in this direction\r\n iterator\r\n```\r\n\r\nAlso note that you should **always** check if there are actually any elements left.\r\n\r\nHow to do it properly\r\n============\r\nNow there are two ways to do this, either using the `cJSON_ArrayForEach` macro that is already provided by cJSON or iterate over it manually.\r\n\r\nIf you need to iterate over both arrays simultaneously, you have no choice but to write it yourself, but let's start with the case where you can iterate over them one after another:\r\n\r\nOne after the other\r\n---------------------------\r\n```c\r\n#include <cjson/cJSON.h>\r\n#include <stdlib.h>\r\n#include <stdio.h>\r\n\r\nint main(void) {\r\n\tchar *json = \"{\\\"ints\\\":[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], \\\"doubles\\\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}\";\r\n\tcJSON *int_array = NULL;\r\n\tcJSON *double_array = NULL;\r\n\tcJSON *iterator = NULL;\r\n\r\n\tcJSON *root = cJSON_Parse(json);\r\n\tif (!cJSON_IsObject(root)) {\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\tint_array = cJSON_GetObjectItem(root, \"ints\");\r\n\tif (!cJSON_IsArray(int_array)) {\r\n\t\tcJSON_Delete(root);\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\tdouble_array = cJSON_GetObjectItem(root, \"doubles\");\r\n\tif (!cJSON_IsArray(double_array)) {\r\n\t\tcJSON_Delete(root);\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\t/* iterate over ints */\r\n\tprintf(\"Integers:\\n\");\r\n\tcJSON_ArrayForEach(iterator, int_array) {\r\n\t\tif (cJSON_IsNumber(iterator)) {\r\n\t\t\tprintf(\"%d, \", iterator->valueint);\r\n\t\t} else {\r\n\t\t\tprintf(\"invalid, \");\r\n\t\t}\r\n\t}\r\n\tputs(\"\\n\\n\");\r\n\r\n\t/* iterate over doubles */\r\n\tprintf(\"Doubles:\\n\");\r\n\tcJSON_ArrayForEach(iterator, double_array) {\r\n\t\tif (cJSON_IsNumber(iterator)) {\r\n\t\t\tprintf(\"%f, \", iterator->valuedouble);\r\n\t\t} else {\r\n\t\t\tprintf(\"invalid, \");\r\n\t\t}\r\n\t}\r\n\tputchar('\\n');\r\n\r\n\tcJSON_Delete(root);\r\n}\r\n```\r\n\r\nBoth at the same time\r\n-------------------------------\r\nIf you need to iterate over both at the same time:\r\n```c\r\n#include <cjson/cJSON.h>\r\n#include <stdlib.h>\r\n#include <stdio.h>\r\n\r\nint main(void) {\r\n\tchar *json = \"{\\\"ints\\\":[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], \\\"doubles\\\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}\";\r\n\tcJSON *int_array = NULL;\r\n\tcJSON *double_array = NULL;\r\n\tcJSON *double_iterator = NULL;\r\n\tcJSON *int_iterator = NULL;\r\n\r\n\tcJSON *root = cJSON_Parse(json);\r\n\tif (!cJSON_IsObject(root)) {\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\tint_array = cJSON_GetObjectItem(root, \"ints\");\r\n\tif (!cJSON_IsArray(int_array)) {\r\n\t\tcJSON_Delete(root);\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\tdouble_array = cJSON_GetObjectItem(root, \"doubles\");\r\n\tif (!cJSON_IsArray(double_array)) {\r\n\t\tcJSON_Delete(root);\r\n\t\treturn EXIT_FAILURE;\r\n\t}\r\n\r\n\t/* iterate simultaneously */\r\n\tint_iterator = int_array->child;\r\n\tdouble_iterator = double_array->child;\r\n\tfor (; (double_iterator != NULL) && (int_iterator != NULL); double_iterator = double_iterator->next, int_iterator = int_iterator->next) {\r\n\t\tif (cJSON_IsNumber(int_iterator) && cJSON_IsNumber(double_iterator)) {\r\n\t\t\tprintf(\"[%d, %f], \", int_iterator->valueint, double_iterator->valuedouble);\r\n\t\t} else {\r\n\t\t\tprintf(\"invalid\");\r\n\t\t}\r\n\t}\r\n\tputchar('\\n');\r\n\r\n\tcJSON_Delete(root);\r\n}\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 169,
+    "title": "Printing to user-supplied buffer",
+    "created_at": "2017-05-19T08:19:51Z",
+    "closed_at": "2017-05-19T09:17:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/169",
+    "body": "It should be possible to print to a user-defined buffer:\r\n\r\n`size_t (bytes_written) cJSON_PrintUnformatted(cJSON *item, void *buf, size_t buf_len);`\r\n\r\nThis would halve memory consumption and avoid malloc() overhead. Doing this is currently impossible, because the printbuffer struct is not public.\r\n\r\n ",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/169/comments",
+    "author": "MrBuddyCasino",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-19T09:13:08Z",
+        "body": "Use `cJSON_PrintPreallocated`!\r\n\r\n```c\r\nif (!cJSON_PrintPreallocated(item, buf, len, 0))\r\n{\r\n    /* error handling */\r\n}\r\n```\r\n\r\nThe API is currently not optimal, I will add the following items on the TODO list for cJSON version 2:\r\n* Return the length\r\n* Use `unsigned char*` buffer\r\n* Use `size_t` instead of `int` (is on the list anyways)\r\n\r\nCurrently you need to use `strlen()` if you want to get the length.\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-19T09:16:16Z",
+        "body": "It is on purpose that `printbuffer` is not exposed."
+      },
+      {
+        "user": "MrBuddyCasino",
+        "created_at": "2017-05-20T09:15:29Z",
+        "body": "Thanks - it seems my SDK contains an outdated version, it does not contain cJSON_PrintPreallocated(). I'll try to update."
+      }
+    ]
+  },
+  {
+    "number": 167,
+    "title": "Is there an interface to iterate json keys?",
+    "created_at": "2017-05-10T03:15:42Z",
+    "closed_at": "2017-05-10T11:16:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/167",
+    "body": "i failed to find such an interface in cJSON.h, so can i work around to iterate json keys?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/167/comments",
+    "author": "buptUnixGuys",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-10T11:16:36Z",
+        "body": "`cJSON_ArrayForEach` can be used to iterate over arrays and objects."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-10T11:17:06Z",
+        "body": "I'll improve the documentation!"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-10T11:18:54Z",
+        "body": "ddf268b07443f0d6abde6bf2022e6ffb32291c57"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-05-10T11:22:57Z",
+        "body": "Just to be clear, this is how you actually use `cJSON_ArrayForEach` to iterate over the keys of an object:\r\n\r\n```c\r\ncJSON *current_element = NULL;\r\nchar *current_key = NULL;\r\n\r\ncJSON_ArrayForEach(current_element, object)\r\n{\r\n    current_key = current_element->string;\r\n    if (current_key != NULL)\r\n    {\r\n        /* do something with the key */\r\n    }\r\n}\r\n```"
+      },
+      {
+        "user": "buptUnixGuys",
+        "created_at": "2017-05-11T01:43:50Z",
+        "body": "thks so much! @FSMaxB "
+      }
+    ]
+  },
+  {
+    "number": 154,
+    "title": "client's responsibility to free memory?",
+    "created_at": "2017-04-20T22:32:52Z",
+    "closed_at": "2017-04-26T07:13:59Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/154",
+    "body": "Hey Folks, \r\n\r\nI'm playing with the library and I'm wondering if the client is responsible to release the memory allocated by the cJSON struct. Here is an example:\r\n\r\n```c\r\nchar * test(char * t)\r\n{\r\n   cJSON * r = cJSON_Parse(t);\r\n   free(t);\r\n   char * s;\r\n   cJSON *id =  cJSON_GetObjectItem(r, \"id\");\r\n   s = id->valuestring;\r\n   free(r);                   //with or without this, s still points to the valid data\r\n   return s;\r\n}\r\n```\r\n\r\nI was thinking that I need to allocate  memory for the returned string since 'id'  goes away and so does 'id-valuestring' once it returns, but a test shows that it actually points to correct data. I checked that 'id->valuestring' is dynamically allocated, then client has the responsibility to free it like the following? \r\n\r\n```c\r\nchar * id = test(jsonstring);\r\n//do something with id\r\nfree(id);\r\n```\r\nAlso, with or without 'free(r)', it returns the same, so should I release the cJSON structure once I'm done? Is there a cascading 'free' function that could free all the dynamically allocated memory in the structure? is that just cJSON_Delete(root)? What if I already make a few objects like\r\n\r\n```c\r\ncJSON * t = cJSON_GetObjectItem(id,  \"name\");\r\n```\r\nthis t is actually the direct child of id, not root, would cJSON.Delete(root) free the whole thing?\r\nThanks,\r\nRui",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/154/comments",
+    "author": "rui-wang-codebase",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-21T08:43:06Z",
+        "body": "Yes, the caller is always responsible to free the results from all variants of `cJSON_Parse` and `cJSON_Print` (except `cJSON_PrintPreallocated`, where the caller has full responsibility of the buffer)\r\n\r\nEither way you have a memory leak. If you just free `r`, all its children are still allocated.\r\n\r\ncJSON has a function `cJSON_Delete` that recursively frees a tree of `cJSON` structs. But if you do that, `s` will point to freed memory. So if you want a function that works like your function `test` that parses a JSON and returns a string from it, you need to clone the string in your `test` function by allocating a new buffer and copying it with `strcpy`.\r\n\r\nThis could look like this:\r\n```c\r\nchar * test(char * json)\r\n{\r\n   cJSON * root = cJSON_Parse(json);\r\n   free(json);\r\n\r\n   cJSON *id =  cJSON_GetObjectItem(root, \"id\");\r\n   if (!cJSON_IsString(id))\r\n   {\r\n      return NULL;\r\n   }\r\n\r\n   char *string = malloc(strlen(id->valuestring) + sizeof(\"\")); /* sizeof(\"\") accounts for '\\0' at the end */\r\n   strcpy(string, id->valuestring);\r\n   cJSON_Delete(root);\r\n\r\n   return string;\r\n}\r\n```\r\n\r\nAnd in the caller:\r\n```c\r\nchar *id = test(jsonstring);\r\nif (id == NULL)\r\n{\r\n   /* abort */\r\n}\r\n/* do something with id */\r\nfree(id);\r\n```"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-21T08:48:05Z",
+        "body": "Alternatively you could \"detach\" the valuestring and then return it directly like this:\r\n\r\n```c\r\nchar * test(char * json)\r\n{\r\n   cJSON * root = cJSON_Parse(json);\r\n   free(json);\r\n\r\n   cJSON *id =  cJSON_GetObjectItem(root, \"id\");\r\n   if (!cJSON_IsString(id))\r\n   {\r\n      return NULL;\r\n   }\r\n\r\n   char *string = id->valuestring;\r\n   /* this removes the pointer to the string from the tree\r\n       of cJSON structs thereby preventing cJSON_Delete\r\n       from freeing it */\r\n   id->valuestring = NULL;\r\n   cJSON_Delete(root);\r\n\r\n   return string;\r\n}\r\n```"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-21T08:50:59Z",
+        "body": "The second option is the more optimal one but requires more understanding of what the library does."
+      },
+      {
+        "user": "rui-wang-codebase",
+        "created_at": "2017-04-21T18:51:03Z",
+        "body": "Hey Max, thanks for the clarification. So...in the second option you showed above, the cJSON struct is actually 'damaged' to 'detach' the valuestring, thus it would be the caller to free the memory that valuestring points to, right? I didn't realize that user could just take the structure apart. :-) Btw, I'm curious why you used sizeof(\"\") instead of just 1 to accommodate for the '\\0' at the end of the string, do you mind educating me a bit? :-)"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-21T20:54:00Z",
+        "body": "That's correct, by detaching the string that `valuestring` points to, you transfer the responsibility of freeing it to the caller.\n\nI use `sizeof(\"\")` to make the intent clear. It contains more information than `1` but compiles to the same machine code.\n\nI would use `sizeof('\\0')` but sadly in C this is the same as `sizeof(int)` because, unlike in C++, character literals are of type `int`."
+      },
+      {
+        "user": "rui-wang-codebase",
+        "created_at": "2017-04-22T01:36:37Z",
+        "body": "Thanks, could you please look at this question?\r\n\r\ncJSON *id =  cJSON_GetObjectItem(r, \"id\");\r\ncJSON * t = cJSON_GetObjectItem(id,  \"name\");\r\n\r\nIf we run these 2 lines of code, I'm wondering if t is pointing to a subtree of id, or\r\nt has a duplicate of that subtree. (sorry I didn't get a chance to look into the source,\r\nand I should have done that) In another words, do I need to do\r\n\r\ncJSON_Delete(id);\r\ncJSON_Delete(t);\r\n\r\nor just \r\n\r\ncJSON_Delete(id);\r\n\r\nwould free both structs?\r\n\r\n\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-22T09:03:02Z",
+        "body": "Just `cJSON_Delete(id);` would free `id` and `t`. But this is dangerous because once you run `cJSON_Delete(r);` you will get at least one double free because `r` still has a pointer to `id` (directly or via the linked list of children). Or even worse, you could corrupt arbitrary memory.\n\nIf you want to treat `id` separately, you can detach it from `r` with `cJSON_DetachItemFromObject`. Once it has been detached you have to delete it separately."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-26T07:13:59Z",
+        "body": "I'm closing this. If you have further questions please reopen this issue or open a new one if it is unrelated to this issue."
+      }
+    ]
+  },
+  {
+    "number": 141,
+    "title": "Not compiling on Windows",
+    "created_at": "2017-03-31T19:13:51Z",
+    "closed_at": "2017-04-09T00:57:29Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/141",
+    "body": "When trying to compile the library on Windows to get the shared object library, I get the following when running make all:\r\n```\r\nprocess_begin: CreateProcess(NULL, sh -c \"uname -s 2>/dev/null || echo false\", .\r\n..) failed.\r\ncc -c -fPIC -std=c89 -pedantic -Wall -Werror -Wstrict-prototypes -Wwrite-strings\r\n -Wshadow -Winit-self -Wcast-align -Wformat=2 -Wmissing-prototypes -Wstrict-over\r\nflow=2 -Wcast-qual -Wc++-compat -Wundef -Wswitch-default -Wconversion -fstack-pr\r\notector-strong  cJSON.c\r\nprocess_begin: CreateProcess(NULL, cc -c -fPIC -std=c89 -pedantic -Wall -Werror\r\n-Wstrict-prototypes -Wwrite-strings -Wshadow -Winit-self -Wcast-align -Wformat=2\r\n -Wmissing-prototypes -Wstrict-overflow=2 -Wcast-qual -Wc++-compat -Wundef -Wswi\r\ntch-default -Wconversion -fstack-protector-strong cJSON.c, ...) failed.\r\nmake (e=2): The system cannot find the file specified.\r\nMakefile:68: recipe for target 'cJSON.o' failed\r\nmingw32-make: *** [cJSON.o] Error 2\r\n```\r\nAnd the following with \"cmake ..\" while in a subdir.\r\n```\r\nCMake Error at CMakeLists.txt:6 (project):\r\n  The CMAKE_C_COMPILER:\r\n\r\n    cl\r\n\r\n  is not a full path and was not found in the PATH.\r\n\r\n  To use the NMake generator with Visual C++, cmake must be run from a shell\r\n  that can use the compiler cl from the command line.  This environment is\r\n  unable to invoke the cl compiler.  To fix this problem, run cmake from the\r\n  Visual Studio Command Prompt (vcvarsall.bat).\r\n\r\n  Tell CMake where to find the compiler by setting either the environment\r\n  variable \"CC\" or the CMake cache entry CMAKE_C_COMPILER to the full path to\r\n  the compiler, or to the compiler name if it is in the PATH.\r\n\r\n\r\n-- Configuring incomplete, errors occurred!\r\nSee also \"C:/Users/Mattia/Downloads/cJSON-master/build/CMakeFiles/CMakeOutput.lo\r\ng\".\r\nSee also \"C:/Users/Mattia/Downloads/cJSON-master/build/CMakeFiles/CMakeError.log\r\n\".\r\n```\r\nI'm using mingw as compiler.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/141/comments",
+    "author": "altermetax",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-31T19:51:26Z",
+        "body": "I never tried building cJSON on windows, I'm not familiar with the process and currently I don't have windows available (my only windows system is at home, where I am not), so maybe somebody else who already did compile it with MinGW on Windows can help you.\r\n\r\nThe Makefile doesn't support Windows, so you should definitely use CMake or compile the C-File directly.\r\n\r\nIt seems like CMake doesn't find your C compiler, so maybe you just have to set the `CC` environment variable to fix your problem. Not sure though.\r\n\r\nAlso you should include more information. Like how exactly did you try to compile it on Windows. Did you use msys2 for example, or some other method?"
+      },
+      {
+        "user": "dertuxmalwieder",
+        "created_at": "2017-04-01T16:47:43Z",
+        "body": "CMake on Windows can't just use the includes.\r\n\r\nThe documentation states:\r\n\r\n> Because the entire library is only one C file and one header file, you can just copy cJSON.h and cJSON.c to your projects source and start using it.\r\n\r\nI use Visual Studio 2015 (14,0) with CMake on Windows 10 and it fails. My code says:\r\n\r\n    #include \"cJSON/cJSON.h\"\r\n\r\nIt should work. Well, it doesn't:\r\n\r\n> (ClCompile Ziel) ->\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(45): error C2491: \"cJSON_GetErrorPtr\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(55): error C2491: \"cJSON_Version\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(114): error C2491: \"cJSON_InitHooks\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(158): error C2491: \"cJSON_Delete\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(220): error C2491: \"cJSON_SetNumberHelper\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(847): error C2491: \"cJSON_ParseWithOpts\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(887): error C2491: \"cJSON_Parse\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(944): error C2491: \"cJSON_Print\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(949): error C2491: \"cJSON_PrintUnformatted\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(954): error C2491: \"cJSON_PrintBuffered\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(981): error C2491: \"cJSON_PrintPreallocated\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1475): error C2491: \"cJSON_GetArraySize\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1490): error C2491: \"cJSON_GetArrayItem\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1502): error C2491: \"cJSON_GetObjectItem\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj ]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1512): error C2491: \"cJSON_GetObjectItemCaseSensitive\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1530): error C2491: \"cJSON_HasObjectItem\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj ]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1558): error C2491: \"cJSON_AddItemToArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxpro j]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1585): error C2491: \"cJSON_AddItemToObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxpr oj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1598): error C2491: \"cJSON_AddItemToObjectCS\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcx proj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1616): error C2491: \"cJSON_AddItemReferenceToArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1621): error C2491: \"cJSON_AddItemReferenceToObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1657): error C2491: \"cJSON_DetachItemFromArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.v cxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1667): error C2491: \"cJSON_DeleteItemFromArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.v cxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1672): error C2491: \"cJSON_DetachItemFromObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc. vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1689): error C2491: \"cJSON_DeleteItemFromObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc. vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1695): error C2491: \"cJSON_InsertItemInArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcx proj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1750): error C2491: \"cJSON_ReplaceItemInArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vc xproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1760): error C2491: \"cJSON_ReplaceItemInObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.v cxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1783): error C2491: \"cJSON_CreateNull\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1794): error C2491: \"cJSON_CreateTrue\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1805): error C2491: \"cJSON_CreateFalse\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1816): error C2491: \"cJSON_CreateBool\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1827): error C2491: \"cJSON_CreateNumber\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1853): error C2491: \"cJSON_CreateString\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1870): error C2491: \"cJSON_CreateRaw\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1887): error C2491: \"cJSON_CreateArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1898): error C2491: \"cJSON_CreateObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1910): error C2491: \"cJSON_CreateIntArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxpro j]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1945): error C2491: \"cJSON_CreateFloatArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxp roj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(1981): error C2491: \"cJSON_CreateDoubleArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcx proj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2017): error C2491: \"cJSON_CreateStringArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcx proj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2054): error C2491: \"cJSON_Duplicate\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2133): error C2491: \"cJSON_Minify\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2197): error C2491: \"cJSON_IsInvalid\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2207): error C2491: \"cJSON_IsFalse\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2217): error C2491: \"cJSON_IsTrue\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2228): error C2491: \"cJSON_IsBool\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2237): error C2491: \"cJSON_IsNull\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2247): error C2491: \"cJSON_IsNumber\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2257): error C2491: \"cJSON_IsString\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2267): error C2491: \"cJSON_IsArray\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2277): error C2491: \"cJSON_IsObject\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n>   C:\\Projects\\testproject\\cJSON\\cJSON.c(2287): error C2491: \"cJSON_IsRaw\": Definition von Funktion für dllimport nicht zulässig [C:\\Projects\\testproject\\rndtc.vcxproj]\r\n\r\nHuh?"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-01T17:31:59Z",
+        "body": "ping @mjerris This might be related to the `CJSON_PUBLIC` macro."
+      },
+      {
+        "user": "mjerris",
+        "created_at": "2017-04-01T17:38:38Z",
+        "body": "yeah it for sure is related... need to add the defines in to the build.  I'll take a look this weekend and get a patch back to you.  It needs the define for dllexport in the build."
+      },
+      {
+        "user": "dertuxmalwieder",
+        "created_at": "2017-04-01T17:43:35Z",
+        "body": "Thank you, I'll wait. :-)"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-04T18:43:55Z",
+        "body": "@dertuxmalwieder For now you only have to add the define `CJSON_EXPORT_SYMBOLS` and it should work."
+      },
+      {
+        "user": "dertuxmalwieder",
+        "created_at": "2017-04-05T18:11:26Z",
+        "body": "Confirmed, thank you. :-)"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-04-09T00:57:29Z",
+        "body": "Closing this because of missing response from the original reporter. (and the second issue has been solved)."
+      }
+    ]
+  },
+  {
+    "number": 132,
+    "title": "How to get the JSON size before invoke cJSON_PrintPreallocated",
+    "created_at": "2017-03-22T15:16:15Z",
+    "closed_at": "2017-03-22T16:51:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/132",
+    "body": "Hi,\r\nI have a question about the JSON size.\r\nI built a JSON Object and I need to print it into a char buffer allocated dynamically.\r\nTo allocate the buffer I need to compute the length of the JSON.\r\n \r\nI tried to invoke the **cJSON_PrintPreallocated** passing a buffer with the exactly size of JSON (computed by hand) but the function fails. If I add an extra 30 byte the cJSON_PrintPreallocated return success.\r\n\r\nIs there a function to create a buffer which length is exactly equal to the size of my JSON?\r\n\r\nThanks!\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/132/comments",
+    "author": "fedex03",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T15:32:11Z",
+        "body": "No, for now you should always add 63 bytes because `print_number` always reserves 64 bytes."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T15:36:47Z",
+        "body": "`cJSON_PrintPreallocated` was a recent addition to cJSON and cJSON hasn't been optimized too much for that use case.\r\n\r\nI'll add a comment to the header that mentions this."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T15:44:44Z",
+        "body": "Ok thanks for the clarification.\r\n\r\nAnother question: I need to print a big JSON, something like 16 Kbyte. For this purpose I think to use `cJSON_PrintPreallocated` with a pre-allocated buffer because `cJSON_PrintUnformatted` fails during print big JSON. \r\nIs it true (or my fault)?\r\nWhich is the best approach to print JSON with very big length?\r\n\r\nThanks."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T15:46:41Z",
+        "body": "So it fails because of memory usage?"
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T15:49:04Z",
+        "body": "It fails into `print`, in particular here:\r\n```\r\n/* copy the buffer over to a new one */\r\n    printed = (unsigned char*) hooks->allocate(buffer->offset + 1);\r\n    if (printed == NULL)\r\n    {\r\n        goto fail;\r\n    }\r\n```"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T16:03:03Z",
+        "body": "Yes, that means that it is running out of memory.\r\n\r\nThe different functions have different memory tradeoffs.\r\n\r\n`cJSON_Print` and `cJSON_PrintUnformatted` essentially do the following:\r\n1. `cJSON_PrintBuffered()` with 256 buffer size. This doubles the memory every time it runs out of memory and copies the old memory over.\r\n2. Take the length of the result, allocate a new buffer with that size and copy the json over to the new buffer, then freeing the old one.\r\n\r\nIn the absolute worst case, this can take up to 3 times the size of the printed JSON for a short amount of time, but it only takes the amount of memory of the JSON's size when it is finished.\r\n\r\nIf you are on a system without an MMU, buffered printing can be really bad because it can create memory fragmentation. In this case it mgith even take much more than 3 times the size of the JSON in total memory to make this work.\r\n\r\nSo if you know approximately how big your JSON will be, `cJSON_PrintPreallocated` is the way to go both in terms of performance and peak memory usage. If the JSON ist stored in memory for a long time, you still might want to copy to a new, smaller buffer after printing is finished."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T16:35:16Z",
+        "body": "Yes my JSON has a know size and with `cJSON_PrintPreallocated` the system works. I use cJSON into an embedded system ( Cortex-M4 ).\r\n\r\nI don't understand your last statement: \r\n> If the JSON ist stored in memory for a long time, you still might want to copy to a new, smaller buffer after printing is finished."
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T16:36:56Z",
+        "body": "What I mean is that you can reclaim the memory that is wasted by using a too large buffer with cJSON_PrintPreallocated by first getting the actual length of the JSON and then creating a new memory location, copy it over and free the old buffer."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T16:39:50Z",
+        "body": "After each `cJSON_PrintPreallocated `, I send the JSON to a server and then I free the buffer. Why should I copy the buffer to a new one?"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-22T16:40:39Z",
+        "body": "In that case it doesnt make sense."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T16:50:46Z",
+        "body": "Ok. Question solved! Thanks for your time!"
+      }
+    ]
+  },
+  {
+    "number": 130,
+    "title": "Custom free function that requires the size of the allocated area",
+    "created_at": "2017-03-21T16:02:31Z",
+    "closed_at": "2017-03-21T19:32:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/130",
+    "body": "Hi there, \r\n\r\nI using cJSON for C into an embedded MCU with Real Time OS.\r\n\r\nIs it possible to remap the malloc/free/realloc function with the functions for the dynamic allocation provided by my RTOS?\r\n\r\nLooking into the code i saw the hook that maps the function to allocate/deallocate/reallocate the heap memory.\r\n\r\nI need to replace the standard C malloc/free/realloc with:\r\n\r\n`OS_MemoryAlloc( uint16_t memSize );` \r\n`OS_MemoryFree( void* pMemAddr, uint16_t memSize )`\r\n\r\nI think that malloc can be replaced easily, but the my OS_MemoryFree requires the memSize that isn't handled by the standard free. \r\n\r\nIs it a bad idea?\r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/130/comments",
+    "author": "fedex03",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-21T16:47:11Z",
+        "body": "That is not supported and it can't be added because cJSON itself doesn't track the size of it's allocations. There have been suggestions on allowing to pass a `void*` pointer to the allocator and deallocator, but this isn't currently supported and probably wouldn't help you much in this case anyways.\r\n\r\nWhat you could do is the following, knowing the maximum required alignment of your processor:\r\n```c\r\n/* THIS CODE MIGHT CONTAIN ERRORS, IT'S JUST TO SHOW THE IDEA */\r\n\r\nconst size_t MAXIMUM_ALIGNMENT = 8; /* just an example */\r\n\r\nvoid *allocate(size_t size) {\r\n\t/* ensure it doesn't overflow */\r\n\tif (size > (UINT16_MAX - MAXIMUM_ALIGNMENT)) {\r\n\t\treturn NULL;\r\n\t}\r\n\r\n\t/* allocate the memory */\r\n\tvoid *object = OS_MemoryAlloc( (uint16_t) (size + MAXIMUM_ALIGNMENT));\r\n\tif (object == NULL) {\r\n\t\treturn NULL;\r\n\t}\r\n\r\n\t/* put the size of the allocation at the beginning of the allocated area */\r\n\t((size_t*)object)[0] = size;\r\n\r\n\t/* return the next aligned position,\r\n\tthe casts are needed to avoid undefined behavior\r\n\tand make the pointer arithmetic work correctly */\r\n\treturn (void*) (((uint8_t*)object) + MAXIMUM_ALIGNMENT);\r\n}\r\n\r\nvoid deallocate(void *object) {\r\n\tif (object == NULL) {\r\n\t\treturn;\r\n\t}\r\n\r\n\t/* get back the original pointer */\r\n\tvoid *original_object = (void*) (((uint8_t)object) - MAXIMUM_ALIGNMENT);\r\n\r\n\t/* extract the size */\r\n\tsize_t size = ((size_t*)original_object)[0];\r\n\r\n\t/* now free the memory */\r\n\tOS_MemoryFree(allocated_object, (uint16_t)size);\r\n}\r\n```\r\n\r\nEssentially putting the size of the memory area at the beginning of said memory area. Note that this will cost you `MAXIMUM_ALIGNMENT` bytes of memory on every allocation."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-22T08:16:57Z",
+        "body": "Hi FSMaxB,\r\nthanks for you hint! It's tricky but I like it!\r\nI will try it\r\nAfter a research I understand that my RTOS remap automatically the malloc/free/realloc to the same functions that I told you. So the problem should be resolved.\r\n\r\nThanks for your time."
+      }
+    ]
+  },
+  {
+    "number": 129,
+    "title": "cjson_Delete doesn't free all memory",
+    "created_at": "2017-03-21T13:28:41Z",
+    "closed_at": "2017-03-21T13:54:29Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/129",
+    "body": "I using cJson ( C ) into an embedded project to parse a JSON object.\r\n\r\nAfter an intense debugging session I found a problem. The memory requested by the cJSON object isn't released completely. I found this problem printing on UART the free heap size.\r\n\r\nThis is my code:\r\n```c\r\ncJSON    *jsonObject;\r\ncJSON    *jsonItem;\r\nuint8_t  protocolVersion;\r\nchar     machineId[DATA_PROTOCOL_PROPERTY_MACHINE_ID_MAX_LEN];\r\n\r\n/* Free Heap: 22688 Byte */\r\njsonObject = cJSON_CreateObject();\r\n/* Free Heap: 22640 Byte. cJSON object uses 48 Byte */\r\n\r\njsonObject = cJSON_Parse( jsonMessage );\r\n\r\njsonItem = cJSON_GetObjectItem( jsonObject, \"ProtocolVerison\" );\r\nprotocolVersion = (uint8_t)jsonItem->valueint;\r\n\r\njsonItem = cJSON_GetObjectItem( jsonObject, \"MachineID\" );\r\nstrncpy( machineId, jsonItem->valuestring, SDK_DATA_PROTOCOL_PROPERTY_MACHINE_ID_MAX_LEN );\r\n\r\n/* Free Heap: 22152 Byte. cJSON object occupies 488 Byte */\r\ncJSON_Delete( jsonObject );\r\n/* Free Heap: 22640 Byte. cJSON object deleted */\r\n\r\n```\r\n\r\nThe difference between the free heap memory at start (22688 byte) and the free heap at the end ( 22640 byte ) is 48 byte equal to the cJSON object before start parsing.\r\n\r\nThis 48 byte, after several loop bring the system into a memory leak ( my application consume the entire heap).",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/129/comments",
+    "author": "fedex03",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-21T13:54:29Z",
+        "body": "Yes, there is a memory leak in your code. Although it is not created by cJSON.\r\n\r\n```c\r\ncJSON    *jsonObject;\r\ncJSON    *jsonItem;\r\nuint8_t  protocolVersion;\r\nchar     machineId[SDK_DATA_PROTOCOL_PROPERTY_MACHINE_ID_MAX_LEN];\r\n\r\n/* This code mallocs your 48 bytes */\r\njsonObject = cJSON_CreateObject(); /* this line is unnecessary and creates the memory leak */\r\n\r\n/* here you are overwriting your pointer to the 48 bytes by overwriting it with the newly parsed object, thereby creating a memory leak */\r\njsonObject = cJSON_Parse( jsonMessage );\r\n/* please check if jsonObject is NULL and abort if it is */\r\n\r\njsonItem = cJSON_GetObjectItem( jsonObject, \"ProtocolVerison\" );\r\n/* same here, before using jsonItem, check if it is NULL */\r\n/* Also check the type, you can check if it is a number using cJSON_IsNumber(jsonItem) */\r\nprotocolVersion = (uint8_t)jsonItem->valueint;\r\n\r\njsonItem = cJSON_GetObjectItem( jsonObject, \"MachineID\" );\r\n/* same here, check if jsonItem is NULL and check if it is a string using cJSON_IsString(jsonItem) */\r\nstrncpy( machineId, jsonItem->valuestring, SDK_DATA_PROTOCOL_PROPERTY_MACHINE_ID_MAX_LEN ); /* you could also use sizeof(machineId) */\r\n\r\n/* This only frees what has been parsed by cJSON_Parse, your 48 bytes have already been lost earlier */\r\ncJSON_Delete( jsonObject );\r\n```"
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-21T14:00:09Z",
+        "body": "Thanks FSMaxB.\r\n\r\nI don't understand that cJSON_Parse allocates the cJson Object.\r\n\r\nThanks for your time\r\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-21T14:01:18Z",
+        "body": "It has to, since it returns a pointer to a cJSON object. What you did would be correct if the return type were `cJSON` instead of `cJSON *`."
+      },
+      {
+        "user": "fedex03",
+        "created_at": "2017-03-21T14:07:28Z",
+        "body": "Now I understand.\r\n\r\nThanks for the suggestions into my code. I added the NULL check and if the jsonItem in NULL, the program returns and I free the jsonObject. I also added the type checking.\r\n\r\nThanks so much!"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-03-21T14:13:17Z",
+        "body": "No problem."
+      }
+    ]
+  },
+  {
+    "number": 87,
+    "title": "valueint support uint64_t",
+    "created_at": "2016-12-19T03:09:29Z",
+    "closed_at": "2016-12-19T21:46:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/87",
+    "body": "If I want to export or read json number exceeding int, valueint will be overflow. How can I do with this?\r\n\r\nAnother advice:\r\n\r\n```c\r\ntypedef struct cJSON\r\n{\r\n    /* next/prev allow you to walk array/object chains. Alternatively, use GetArraySize/GetArrayItem/GetObjectItem */\r\n    struct cJSON *next;\r\n    struct cJSON *prev;\r\n    /* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */\r\n    struct cJSON *child;\r\n\r\n    /* The type of the item, as above. */\r\n    int type;\r\n\r\n    /* The item's string, if type==cJSON_String */\r\n    char *valuestring;\r\n    /* The item's number, if type==cJSON_Number */\r\n    int valueint;\r\n    /* The item's number, if type==cJSON_Number */\r\n    double valuedouble;\r\n\r\n    /* The item's name string, if this item is the child of, or is in the list of subitems of an object. */\r\n    char *string;\r\n} cJSON;\r\n```\r\n\r\nAnd I think \"valuestring,valueint,valuedouble\" can be in one union.",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/87/comments",
+    "author": "crazy-william",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2016-12-19T21:46:25Z",
+        "body": "Use `valuedouble`, then you get 53 bits of integer precision on most platforms. You're not the first to suggest the use of a union, changing the cJSON struct is not possible for the current version though, because of compatibility reasons. Version 2 will fix this, see #63.\r\n\r\nThere's currently no estimated release date of version 2 though."
+      }
+    ]
+  },
+  {
+    "number": 68,
+    "title": "Is cJSON thread-safe",
+    "created_at": "2016-11-18T07:14:59Z",
+    "closed_at": "2016-11-18T09:07:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/68",
+    "body": "could u tell me if the cJSON library thread-safe?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/68/comments",
+    "author": "chuanwang66",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2016-11-18T09:06:40Z",
+        "body": "In general: **No**.\n\nBut it depends on how you use it.\n\nThere are three global variables:\n- `global_ep`: If parsing fails it contains a pointer to the position in the input string where it happened. It is automatically set by `cJSON_Parse`.\n- `cJSON_Malloc` and `cJSON_Free`: Function pointers pointing to the allocator and deallocator that is used by cJSON. They can be set with `cJSON_InitHooks`.\n\nIf you don't rely on these, cJSON is thread safe. You can avoid using `global_ep` by parsing with `cJSON_ParseWithOpts`, if not `NULL`, it will use `return_parse_end` instead of `global_ep`.\n\nSo cJSON **is thread safe** under these **conditions**:\n- Use `cJSON_ParseWithOpts` and pass in your own error pointer via `return_parse_end`\n- Either don't use `cJSON_InitHooks`, or only do it once at the beginning, before any thread starts using the library.\n\nWith the **upcoming 2.0.0** release, cJSON **will be thread safe** though, because the global variables will be replaced by ones that are passed in on every function call. But I can not make any guarantees as to when 2.0.0 will be ready.\n"
+      },
+      {
+        "user": "matze",
+        "created_at": "2019-11-04T11:14:23Z",
+        "body": "> Use cJSON_ParseWithOpts and pass in your own error pointer via return_parse_end\r\n\r\nI don't think this is correct. At the beginning `global_error.json` and `global_error.position` are reset unconditionally and in the failure case, `global_error` is overwritten unconditionally.\r\n\r\nIs there a timeline for a 2.0 release?"
+      }
+    ]
+  },
+  {
+    "number": 67,
+    "title": "cjson vs cJSON?",
+    "created_at": "2016-11-17T16:52:11Z",
+    "closed_at": "2016-11-17T17:00:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/67",
+    "body": "I'm working on some projects where we bring in cJSON (or cjson) via yocto & would like to know if we should leave the name of the library set as `libcjson` or should we use `libcJSON`?",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/67/comments",
+    "author": "schmidtw",
+    "comments": [
+      {
+        "user": "schmidtw",
+        "created_at": "2016-11-17T16:53:08Z",
+        "body": "It looks like the latest 1.0.0 release (_awesome_) is using `libcjson` do you want to stick with that going forward?\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2016-11-17T17:00:34Z",
+        "body": "Yes. By releasing 1.0.0 with the library name `libcjson` this was set in stone for the foreseeable future.\n"
+      }
+    ]
+  },
+  {
+    "number": 220,
+    "title": "Please add details for building through Cmake on windows environment in build section",
+    "created_at": "2017-11-28T03:50:23Z",
+    "closed_at": "2017-12-30T01:35:14Z",
+    "labels": [
+      "enhancement",
+      "help wanted",
+      "build system",
+      "documentation"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/220",
+    "body": "",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/220/comments",
+    "author": "atulkumarpccs",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-28T08:56:03Z",
+        "body": "I will add this to the TODO list of the documentation rewrite in #215 "
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-11-28T09:08:51Z",
+        "body": "Or do you want to make a pull request?"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2017-12-30T01:35:13Z",
+        "body": "It's not much, but I've added a small note to the new readme. See #215."
+      }
+    ]
+  },
+  {
+    "number": 47,
+    "title": "Future management of the project",
+    "created_at": "2016-11-03T13:39:13Z",
+    "closed_at": "2016-11-03T13:43:28Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/DaveGamble/cJSON/issues/47",
+    "body": "Hey,\r\n\r\n@FSMaxB this post is largely aimed at you :)\r\n\r\nI'm finding that I don't have enough free time to manage this project properly. Would you consider taking the primary role in maintaining this project?\r\n",
+    "comments_url": "https://api.github.com/repos/DaveGamble/cJSON/issues/47/comments",
+    "author": "DaveGamble",
+    "comments": [
+      {
+        "user": "FSMaxB",
+        "created_at": "2016-11-03T13:43:28Z",
+        "body": "Sure, I can do that.\n"
+      },
+      {
+        "user": "FSMaxB",
+        "created_at": "2016-11-03T13:45:35Z",
+        "body": "As mentioned, my goal is to improve the current state of the library as it is, not adding a whole lot of new features. So this is what I'm willing to do.\n\nHelp by others welcome.\n"
+      }
+    ]
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "number": 2885,
+    "title": "accessor.Context is null when using DataLoader with a custom document executor",
+    "created_at": "2022-01-27T12:31:58Z",
+    "closed_at": "2022-01-27T14:06:29Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/graphql-dotnet/graphql-dotnet/issues/2885",
+    "body": "## Summary\r\n\r\nIn my Startup file I have the following configuration:\r\n```cs\r\n        public class CustomDocumentExecuter : DocumentExecuter { }\r\n\r\n        public void ConfigureServices(IServiceCollection services)\r\n        {\r\n            GraphQL.MicrosoftDI.GraphQLBuilderExtensions\r\n                .AddGraphQL(services)\r\n                .AddServer(true)\r\n                .AddSystemTextJson()\r\n                .AddErrorInfoProvider(opt => opt.ExposeExceptionStackTrace = Environment.IsDevelopment())\r\n                .AddDocumentExecuter<CustomDocumentExecuter>()\r\n                .AddSchema<StarWarsSchema>()\r\n                .AddGraphTypes(typeof(StarWarsSchema).Assembly)\r\n                .AddDataLoader();\r\n        }\r\n```\r\n\r\nThe StarWarsSchema contains a field that uses the DataLoader in the usual way:\r\n```\r\n            Field<StringGraphType>(\r\n                \"batchedName\",\r\n                resolve: context => accessor.Context.GetOrAddBatchLoader<string, string>(\r\n                    \"LoadName\", data.NameById).LoadAsync(context.Source.Id)\r\n                );\r\n```\r\n\r\nEverything works as expected if I leave out the `AddDocumentExecuter` call in the configuration, or if I add the standard `DocumentExecuter`. However, when I add the `CustomDocumentExecuter` above, even though it does not override anything, the dataloader accessor does not work any more - the `accessor.Context` then always gives `null`. The rest seems to work, only the fields using DataLoader show the problem.\r\n\r\nAm I doing anything wrong or is this a bug? How can I use a custom DocumentExecuter together with the DataLoader?\r\n\r\n### Environment\r\n\r\n```\r\n    <TargetFramework>net6.0</TargetFramework>\r\n```\r\n```\r\n    <PackageReference Include=\"GraphQL\" Version=\"4.7.1\" />\r\n    <PackageReference Include=\"GraphQL.DataLoader\" Version=\"4.7.1\" />\r\n    <PackageReference Include=\"GraphQL.MicrosoftDI\" Version=\"4.7.1\" />\r\n    <PackageReference Include=\"GraphQL.Server.Core\" Version=\"5.2.0\" />\r\n    <PackageReference Include=\"GraphQL.Server.Transports.AspNetCore\" Version=\"5.2.0\" />\r\n    <PackageReference Include=\"GraphQL.Server.Transports.AspNetCore.SystemTextJson\" Version=\"5.2.0\" />\r\n```",
+    "comments_url": "https://api.github.com/repos/graphql-dotnet/graphql-dotnet/issues/2885/comments",
+    "author": "Cito",
+    "comments": [
+      {
+        "user": "Shane32",
+        "created_at": "2022-01-27T13:14:00Z",
+        "body": "Just guessing but your custom document executor probably doesn\u2019t have the proper constructor that allows dependency injection to inject all the necessary classes. You need the most complex one available for proper operation. "
+      },
+      {
+        "user": "Cito",
+        "created_at": "2022-01-27T14:01:16Z",
+        "body": "Thanks for reminding me that in C# the constructors are not inherited. After adding the most complex one, as you suggested, it works now.\r\n\r\nActually all I want to do is change the ExecutionStrategy for Queries from Parallel to Serial. So I'm using the following class now as DocumentExecuter. Is there a simpler way to achieve this?\r\n\r\n```cs\r\n    public class SerialDocumentExecuter : DocumentExecuter\r\n    {\r\n        public SerialDocumentExecuter(\r\n            IDocumentBuilder documentBuilder, IDocumentValidator documentValidator,\r\n            IComplexityAnalyzer complexityAnalyzer, IDocumentCache documentCache,\r\n            IEnumerable<IConfigureExecution>? configurations)\r\n            : base(documentBuilder, documentValidator, complexityAnalyzer, documentCache, configurations) { }\r\n\r\n        protected override IExecutionStrategy SelectExecutionStrategy(ExecutionContext context)\r\n        {\r\n            return context.Operation.OperationType switch\r\n            {\r\n                OperationType.Query => SerialExecutionStrategy.Instance,\r\n                OperationType.Mutation => SerialExecutionStrategy.Instance,\r\n                OperationType.Subscription => throw new NotSupportedException(\r\n                    \"DocumentExecuter does not support executing subscriptions.\"),\r\n                _ => throw new InvalidOperationException(\r\n                    $\"Unexpected OperationType {context.Operation.OperationType}\")\r\n            };\r\n        }\r\n    }\r\n```\r\n"
+      },
+      {
+        "user": "Shane32",
+        "created_at": "2022-01-27T14:02:39Z",
+        "body": "No, that is the recommended pattern."
+      },
+      {
+        "user": "Cito",
+        "created_at": "2022-01-27T14:06:29Z",
+        "body": "Thanks a lot, @Shane32, you saved my day."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the DataLoader doesn't work with a custom DocumentExecuter",
+      "Guidance on properly implementing a custom DocumentExecuter that works with DataLoader",
+      "Confirmation that their approach to changing execution strategy is appropriate"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:02:35"
+    }
+  },
+  {
+    "number": 1445,
+    "title": "Classes derived from InputObjectGraphType *sometimes* return error when given a name and a field is given a description.",
+    "created_at": "2019-12-02T15:25:07Z",
+    "closed_at": "2019-12-03T05:49:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/graphql-dotnet/graphql-dotnet/issues/1445",
+    "body": "After a ton of testing to figure out exactly why my mutations were sometimes working and sometimes not I've finally isolated the problem down to whether or not the InputObjectGraphType class has been given a name and a field in that class has a description but this only seems to matter _sometimes_ as bizarre as that is.\r\n\r\nFor example, this\r\n```\r\n    public class WololoInputType : InputObjectGraphType\r\n    {\r\n        public WololoInputType()\r\n        {\r\n            Name = \"Enemies are red, allies are blue, WOLOLO, now you're blue too.\";\r\n            /// Attribute Fields\r\n            FieldAsync<NonNullGraphType<EntityReferenceInputType>, EntityReferenceType>(\"customerid\").Description == \"PepperoniPizza\";\r\n        }\r\n    }\r\n```\r\n\r\nGives me this error:\r\n\r\n```\r\n{\r\n    \"errors\": [\r\n        {\r\n            \"message\": \"GraphQL.Validation.ValidationError: Variable \\\"salesorder\\\" cannot be non-input type \\\"SalesOrderCreateInput\\\".\",\r\n            \"locations\": [\r\n                {\r\n                    \"line\": 1,\r\n                    \"column\": 10\r\n                }\r\n            ],\r\n            \"extensions\": {\r\n                \"code\": \"5.7.3\"\r\n            }\r\n        },\r\n        {\r\n            \"message\": \"GraphQL.Validation.ValidationError: Unknown type SalesOrderCreateInput.\",\r\n            \"locations\": [\r\n                {\r\n                    \"line\": 1,\r\n                    \"column\": 23\r\n                }\r\n            ],\r\n            \"extensions\": {\r\n                \"code\": \"5.4.1.2\"\r\n            }\r\n        }\r\n    ]\r\n}\r\n```\r\n\r\nHowever this:\r\n\r\n```\r\n    public class WololoInputType : InputObjectGraphType\r\n    {\r\n        public WololoInputType()\r\n        {\r\n            /// Attribute Fields\r\n            FieldAsync<NonNullGraphType<EntityReferenceInputType>, EntityReferenceType>(\"customerid\");\r\n        }\r\n    }\r\n```\r\n\r\nWill perform the mutation as expected.\r\n\r\nThe _strangest_ part about this error is that if I delete just the field description, rebuild the solution and run it, I still get the above error. However, if I delete both of them, rebuild it and then _add name back to class_ it runs fine, only failing yet again if I add Description back to any field.\r\n",
+    "comments_url": "https://api.github.com/repos/graphql-dotnet/graphql-dotnet/issues/1445/comments",
+    "author": "bigbizze",
+    "comments": [
+      {
+        "user": "sungam3r",
+        "created_at": "2019-12-02T18:09:32Z",
+        "body": "Name is a GraphType's name, not description. Name must have only alphanumeric symbols. Try the latest preview version and you will see runtime error about that when schema is built."
+      },
+      {
+        "user": "bigbizze",
+        "created_at": "2019-12-03T05:49:28Z",
+        "body": "Ah, this makes sense then why it would often confuse one input type for another. Good to know, not sure how I mixed up the name and description properties so thoroughly, thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of the correct usage of the Name property in GraphType classes",
+      "Clarification on why the error occurs with certain naming patterns",
+      "Information about the distinction between name and description properties in GraphQL types"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:05:03"
+    }
+  }
+]

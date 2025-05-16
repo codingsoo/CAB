@@ -1,0 +1,177 @@
+[
+  {
+    "number": 66,
+    "title": "Refactor APIs for async and sync interactions",
+    "created_at": "2025-01-20T17:39:51Z",
+    "closed_at": "2025-01-23T11:46:47Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/66",
+    "body": "The goal of this PR is to offer means to clearly separate asynchronous, non-blocking client interaction from potentially blocking, synchronous, and imperative APIs.\r\n\r\nIt addresses issue #48 and refactors both the `McpClient` and `McpServer` sides.\r\n\r\nThe main change from the user perspective is the proposed client creation:\r\n\r\n```java\r\n// Synchronous client API\r\nMcpClient.sync(transport)\r\n    ...\r\n    .build();\r\n```\r\n\r\nand\r\n\r\n```java\r\n// Asynchronous client API\r\nMcpClient.async(transport)\r\n    ...\r\n    .build();\r\n```\r\n\r\nThe server side is similar.\r\n\r\nAlso, `RequestHandler` has been made type-aware of the response. So far it used `Object`.\r\n\r\nDeprecations:\r\n* `McpClient#using(ClientMcpTransport)` - use `McpClient#sync(ClientMcpTransport)` or `McpClient#async(ClientMcpTransport)` instead.\r\n* `McpClient.Builder` in favour of the above.\r\n* `McpAsyncClient` constructor which accepted non-reactive types.\r\n* TODO: list server side changes",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/66/comments",
+    "author": "chemicL",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-23T11:46:47Z",
+        "body": "Added docs, squashed and merged at 6839d3b"
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "title": "feat: Make SSE endpoint configurable in server transports",
+    "created_at": "2025-01-16T14:34:45Z",
+    "closed_at": "2025-01-16T18:05:58Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/65",
+    "body": "This commit updates the WebFluxSseServerTransport, WebMvcSseServerTransport, and HttpServletSseServerTransport classes to accept the SSE endpoint path as a constructor argument.\r\n\r\nThis change provides more flexibility in configuring the SSE endpoint, allowing it to be customized instead of being hardcoded to \"/sse\". It also aligns the Java SDK's behavior with the Python SDK's SseServerTransport, which already supports this customization.\r\n\r\nA default SSE endpoint of \"/sse\" is maintained for backward compatibility.\r\n\r\nAlso, addressed minor code quality issues identified by SonarLint and reordered modifiers for static final fields to conform with the Java Language Specification.",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/65/comments",
+    "author": "apappascs",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-16T18:05:27Z",
+        "body": "A configurable SSE endpoint makes sense.  Thanks for the contribution @apappascs "
+      }
+    ]
+  },
+  {
+    "number": 64,
+    "title": "Set method scope properly",
+    "created_at": "2025-01-14T16:00:10Z",
+    "closed_at": "2025-01-15T08:49:50Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/64",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/64/comments",
+    "author": "CrazyHZM",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-15T08:49:35Z",
+        "body": "Thanks @CrazyHZM "
+      }
+    ]
+  },
+  {
+    "number": 50,
+    "title": "Remove Logback from production JAR",
+    "created_at": "2025-01-04T15:43:27Z",
+    "closed_at": "2025-01-04T17:06:53Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/50",
+    "body": "Move Logback dependency to test scope to make it possible for applications using this library to choose their implementation of the SLF4J API. For example, Spring Boot provides one out of the box already.\r\n\r\nFixes gh-49",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/50/comments",
+    "author": "ThomasVitale",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-04T17:03:24Z",
+        "body": "Thanks @ThomasVitale "
+      },
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-04T17:06:53Z",
+        "body": "Rebased and merged at 68ae2395529ffb1efd3d873637fbafc5bc425a32"
+      }
+    ]
+  },
+  {
+    "number": 48,
+    "title": "Refactor MCP Client/Server API for proper reactive programming compliance",
+    "created_at": "2025-01-04T09:22:33Z",
+    "closed_at": "2025-01-23T11:39:14Z",
+    "labels": [
+      "bug",
+      "client",
+      "server",
+      "sync",
+      "async"
+    ],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/issues/48",
+    "body": "## Problem\r\nThe current implementation of McpAsyncServer and McpAsyncClient mixes blocking and non-blocking operations, which violates reactive programming principles. Specifically:\r\n\r\n1. McpAsyncServer uses blocking collections and consumers: `List<ToolRegistration> tools`, `Map<String, ResourceRegistration> resources`, `List<McpSchema.ResourceTemplate> resourceTemplates`, `Map<String, PromptRegistration> prompts`, `List<Consumer<List<McpSchema.Root>>> rootsChangeConsumers`.\r\n2. McpAsyncClient  uses blocking collections and consumers: `Map<String, Root> roots`,`List<Consumer<List<McpSchema.Tool>>> toolsChangeConsumers`,`List<Consumer<List<McpSchema.Resource>>> resourcesChangeConsumers`,`List<Consumer<List<McpSchema.Prompt>>> promptsChangeConsumers`,`List<Consumer<McpSchema.LoggingMessageNotification>> loggingConsumers`,`Function<CreateMessageRequest, CreateMessageResult> samplingHandler`\r\n3. The builder pattern doesn't properly separate sync/async concerns, leading to potential blocking operations in async contexts.\r\n\r\n## Proposed Solution\r\n\r\n1. Split the builder pattern into distinct sync and async implementations:\r\n```java\r\n// Async-specific builder\r\nMcpServer.builder().async()  // Returns AsyncMcpServerSpec\r\n    .tool(Mono<ToolRegistration>)\r\n    .resource(Mono<ResourceRegistration>)\r\n    .prompt(Mono<PromptRegistration>)\r\n    .build();\r\n\r\n// Sync-specific builder\r\nMcpServer.builder().sync()   // Returns SyncMcpServerSpec\r\n    .tool(Supplier<ToolRegistration>)\r\n    .resource(Supplier<ResourceRegistration>)\r\n    .prompt(Supplier<PromptRegistration>)\r\n    .build();\r\n```\r\n\r\n3. Make async API purely reactive:\r\n- Replace blocking collections with reactive types\r\n- Use Flux/Mono for all async operations\r\n- Remove direct use of blocking operations\r\n\r\n4. Implement sync-to-async bridging:\r\n- Sync client delegates to async instance\r\n- Use appropriate scheduler strategies:\r\n  - `subscribeOn(boundedElastic)` for user-provided blocking code\r\n  - `publishOn(boundedElastic)` for consuming reactive streams in blocking manner\r\n  \r\n## Implementation Details\r\n\r\n1. New AsyncMcpServerSpec interface:\r\n```java\r\npublic interface AsyncMcpServerSpec {\r\n    AsyncMcpServerSpec tool(Mono<ToolRegistration>);\r\n    AsyncMcpServerSpec resource(Mono<ResourceRegistration>);\r\n    AsyncMcpServerSpec prompt(Mono<PromptRegistration>);\r\n    AsyncMcpServerSpec rootsChangeListener(Flux<List<McpSchema.Root>>);\r\n    McpAsyncServer build();\r\n}\r\n```\r\n2. New SyncMcpServerSpec interface:\r\n```java\r\npublic interface SyncMcpServerSpec {\r\n    SyncMcpServerSpec tool(Supplier<ToolRegistration>);\r\n    SyncMcpServerSpec resource(Supplier<ResourceRegistration>);\r\n    SyncMcpServerSpec prompt(Supplier<PromptRegistration>);\r\n    SyncMcpServerSpec rootsChangeListener(Consumer<List<McpSchema.Root>>);\r\n    McpSyncServer build();\r\n}\r\n```\r\n3. Bridging example in sync client:\r\n```java\r\npublic class McpSyncServer {\r\n    private final McpAsyncServer asyncServer;\r\n    \r\n    public void addTool(Supplier<ToolRegistration> toolSupplier) {\r\n        Mono.fromSupplier(toolSupplier)\r\n            .subscribeOn(Schedulers.boundedElastic())\r\n            .flatMap(asyncClient::addTool)\r\n            .block();\r\n    }\r\n    \r\n    public List<Tool> listTools() {\r\n        return asyncServer.listTools()\r\n            .publishOn(Schedulers.boundedElastic())\r\n            .block();\r\n    }\r\n}\r\n```\r\n\r\n```java\r\npublic class McpSyncClient {\r\n    private final McpAsyncClient asyncClient;\r\n        \r\n    public List<Tool> listTools() {\r\n        return asyncClient.listTools()\r\n            .publishOn(Schedulers.boundedElastic())\r\n            .block();\r\n    }\r\n}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/48/comments",
+    "author": "tzolov",
+    "comments": [
+      {
+        "user": "ThomasVitale",
+        "created_at": "2025-01-04T15:14:26Z",
+        "body": "It would be great if there was a complete distinction between standard implementation and reactive implementation, so to make it possible for non-reactive applications not to have any reactive dependency, and rely on Java own features for the async behaviour (using virtual threads). And then have the reactive implementation fully Reactor-based. Similar to other Spring projects (Spring Data, Spring Security, Spring Web...)."
+      },
+      {
+        "user": "chemicL",
+        "created_at": "2025-01-14T08:05:11Z",
+        "body": "Hey, @ThomasVitale 👋 \r\n\r\n> and rely on Java own features for the async behaviour (using virtual threads)\r\n\r\nCan you elaborate on this one? The current design is following the practices from Spring for GraphQL. Users can be exposed to an imperative experience with blocking methods, which are backed by a non-blocking, reactive behaviour underneath. They can also directly use the reactive paradigm and avoid blocking in a type-safe manner.\r\nIf you were able to highlight some of the async API choices you'd like to see that is free of reactive signatures for the MCP implementation, it would be very helpful. Thanks in advance."
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "Fix potential NullPointerException in toolsListRequestHandler",
+    "created_at": "2024-12-31T03:38:23Z",
+    "closed_at": "2025-01-01T11:55:45Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/36",
+    "body": "In certain scenarios, the 'params' argument could be null, resulting in a null 'request' object. This could lead to a NullPointerException when attempting to access request.cursor().",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/36/comments",
+    "author": "qiangmao",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2024-12-31T13:34:16Z",
+        "body": "Thanks for the catch @qiangmao . \r\nBut given that currently the mcp server implementation doesn't support pagination (e.g. all tools are returned together) we don't need the request nor the logging.\r\nI will clean this part of the code. "
+      },
+      {
+        "user": "tzolov",
+        "created_at": "2025-01-01T11:55:45Z",
+        "body": "Resolved with #37"
+      },
+      {
+        "user": "qiangmao",
+        "created_at": "2025-01-03T10:28:40Z",
+        "body": "@tzolov When can we have a new release tag? Looking forward to it."
+      }
+    ]
+  },
+  {
+    "number": 23,
+    "title": "Internals rework",
+    "created_at": "2024-12-18T16:40:45Z",
+    "closed_at": "2024-12-19T08:13:52Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/23",
+    "body": "Opening in draft mode because it requires revisiting the documentation side of things and perhaps a little cleanup.\r\n\r\nThe essence of the changes is as follows:\r\n\r\n* The core module has been refactored to remove unnecessary abstraction between the SSE transport and the STDIO transport.\r\n* Tests have been improved and no longer complain about multiple subscriptions to single-subscriber Sink.\r\n* SSE transport layer is now assuming non-blocking execution and no longer makes thread hops when not needed.",
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/23/comments",
+    "author": "chemicL",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2024-12-19T08:06:38Z",
+        "body": "Thanks @chemicL . Great refactoring. \r\n"
+      },
+      {
+        "user": "tzolov",
+        "created_at": "2024-12-19T08:13:52Z",
+        "body": "Rebased, add some additional improvements:\r\n- Rename transport classes to better reflect client-side role (*ServerTransport -> *ClientTransport)\r\n- Introduce fluent builder pattern for client configuration\r\n- Simplify DefaultMcpSession by removing ObjectMapper dependency\r\n- Move unmarshal responsibility to transport layer\r\n- Update documentation and diagrams to reflect new architecture\r\n- Clean up test implementations\r\nand merged at 7a98a935af83b4975f2b12955781a3946aa5707d"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "title": "Reworked the transport state management and refactored tests",
+    "created_at": "2024-12-12T12:02:16Z",
+    "closed_at": "2024-12-12T13:33:33Z",
+    "labels": [],
+    "url": "https://github.com/spring-projects-experimental/spring-ai-mcp/pull/1",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/spring-projects-experimental/spring-ai-mcp/issues/1/comments",
+    "author": "chemicL",
+    "comments": [
+      {
+        "user": "tzolov",
+        "created_at": "2024-12-12T13:33:33Z",
+        "body": "rebased and merged at 9081b6345ff59f08be7085171970488b7a8b7626"
+      }
+    ]
+  }
+]

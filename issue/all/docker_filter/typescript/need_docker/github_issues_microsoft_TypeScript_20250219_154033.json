@@ -1,0 +1,268 @@
+[
+  {
+    "number": 23195,
+    "title": "getSourceFile().moduleName is undefined",
+    "created_at": "2018-04-06T05:25:58Z",
+    "closed_at": "2018-04-06T18:25:14Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/23195",
+    "body": "**TypeScript Version:**  2.8.1\r\n\r\n\r\n**Code**\r\n\r\n**index.ts**\r\n```ts\r\nit('should', () => \"\");\r\n```\r\n\r\n**checker.ts**\r\n```ts\r\nimport * as ts from \"typescript\"\r\n\r\nconst program = ts.createProgram([\"./index.ts\"], { types: [\"jasmine\"] });\r\nconst sourceFile = program.getSourceFile(\"./index.ts\");\r\nconst checker = program.getTypeChecker();\r\n\r\nts.forEachChild(sourceFile, checkNested);\r\n\r\nfunction checkNested(node: ts.Node) {\r\n  if (ts.isCallExpression(node)) {\r\n    const signature = checker.getResolvedSignature(node);\r\n    const file = signature.getDeclaration().getSourceFile();\r\n\r\n    // file.fileName -> \u200b\u200b\u200b\u200b\u200bc:/git/testing-typescript/node_modules/@types/jasmine/index.d.ts\u200b\u200b\u200b\u200b\u200b\r\n    // file.moduleName -> \u200b\u200b\u200b\u200b\u200bundefined\u200b\u200b\u200b\u200b\u200b\r\n  }\r\n\r\n  ts.forEachChild(node, checkNested);\r\n}\r\n```\r\n\r\n**Expected behavior:**\r\nI expected that the moduleName returned is not undefined but the moduleName of the source file.\r\n\r\nMy end goal here is that I want to know in which module the expression that I am using is defined in that case the Jasmine `it`. \r\n\r\n**Actual behavior:**\r\nWhen I run checker.ts The filename is resolved and the moduleName is always undefined.",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/23195/comments",
+    "author": "alan-agius4",
+    "comments": [
+      {
+        "user": "ajafff",
+        "created_at": "2018-04-06T06:17:34Z",
+        "body": "You actually want to use `file.fileName`.\r\n\r\n`moduleName` is something related to AMD modules. But that comment is not present in the generated declaration files."
+      },
+      {
+        "user": "alan-agius4",
+        "created_at": "2018-04-06T06:57:16Z",
+        "body": "Is there anyway to get the moduleName ie: 'jasmine' in any other way?"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2018-04-06T15:52:16Z",
+        "body": "@alan-agius4 That's not really easy since it requires going backwards from a module path to the way it was imported. You could construct a reverse mapping yourself by looping over the imports of each module and getting what they resolved to:\r\n```ts\r\nfunction add<K, V>(map: Map<K, V[]>, key: K, value: V): void {\r\n    const values = map.get(key);\r\n    if (values) values.push(value); else map.set(key, [value]);\r\n}\r\n\r\nfunction createReverseMap(program: ts.Program): Map<ts.SourceFile, string[]> {\r\n    const checker = program.getTypeChecker();\r\n    const map = new Map<ts.SourceFile, string[]>();\r\n    for (const importer of program.getSourceFiles()) {\r\n        for (const statement of importer.statements) {\r\n            if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;\r\n            const importedSym = checker.getSymbolAtLocation(statement.moduleSpecifier)!;\r\n            for (const decl of importedSym.declarations!) {\r\n                if (ts.isSourceFile(decl)) {\r\n                    add(map, decl, statement.moduleSpecifier.text);\r\n                }\r\n            }\r\n        }\r\n    }\r\n    return map;\r\n}\r\n```\r\n\r\nIf you're wondering how we synthesize imports for completions, see `function getNewImportInfos` in `importFixes.ts` in this repository, but that method's pretty complicated."
+      },
+      {
+        "user": "alan-agius4",
+        "created_at": "2018-04-06T16:15:56Z",
+        "body": "Thanks @andy-ms for your response and help. I'll have a look at the mentioned implementations. Though my biggest problem was that I don't have `import` declarations as the module I am interested in is an ambient module.\r\n\r\nI ended up doing something  along these lines;\r\n\r\n```ts\r\nfunction isJasmineExpression(checker: Checker, node: ts.CallExpression): boolean {\r\n  // get the `jasmine` module file path\r\n  const jasmineNode = checker.typeChecker\r\n    .getAmbientModules()\r\n    .find(x => x.name.replace(/\"/g, '') === 'jasmine');\r\n\r\n  if (!jasmineModule) {\r\n    return false;\r\n  }\r\n  const declarations = jasmineModule.getDeclarations();\r\n  let jasmineModulePath = '';\r\n  if (declarations && declarations.length) {\r\n    jasmineModulePath = declarations[0].getSourceFile().fileName;\r\n  }\r\n\r\n  const signature = checker.typeChecker.getResolvedSignature(node);\r\n  const file = signature.getDeclaration().getSourceFile();\r\n\r\n  // math the file path of the `it` with that of `jasmine`\r\n  return jasmineModulePath === file.fileName;\r\n}\r\n```"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A way to determine which module (specifically 'jasmine') a function or expression comes from",
+      "A method to identify ambient module declarations when direct imports aren't available",
+      "A way to match function declarations to their source modules",
+      "An alternative to the non-functional moduleName property"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 22:58:53"
+    }
+  },
+  {
+    "number": 22372,
+    "title": "Using createVariableStatement in a compiler transformer breaks the compiler",
+    "created_at": "2018-03-07T11:15:49Z",
+    "closed_at": "2018-03-07T19:16:36Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/22372",
+    "body": "**TypeScript Version:**  2.8.0-dev.20180307\r\n\r\n**Search Terms:** createVariableStatement const\r\n\r\n**Code (compiler)**\r\n\r\n```ts\r\n// A *self-contained* demonstration of the problem follows...\r\nimport * as ts from 'typescript';\r\n\r\nfunction transformer(program: ts.Program): ts.TransformerFactory<ts.SourceFile> {\r\n    return (context: ts.TransformationContext) => (file: ts.SourceFile) => transformFile(program, context, file);\r\n}\r\n\r\nfunction transformFile(program: ts.Program, context: ts.TransformationContext, file: ts.SourceFile): ts.SourceFile {\r\n    const transformedFile = ts.visitEachChild(file, child => visit(child, context, file), context);\r\n    return transformedFile;\r\n}\r\nfunction visit(node: ts.Node, context: ts.TransformationContext, file: ts.SourceFile): ts.Node {\r\n    if (ts.isMethodDeclaration(node)) {\r\n        const newNode = ts.createMethod(\r\n            [ts.createToken(ts.SyntaxKind.StaticKeyword)], \r\n            [], \r\n            null, \r\n            node.name, \r\n            null, \r\n            [], \r\n            node.parameters, \r\n            node.type, \r\n            ts.createBlock([ \r\n                ts.createVariableStatement(\r\n                    [ts.createToken(ts.SyntaxKind.ConstKeyword)], \r\n                    [ts.createVariableDeclaration('myConst', null, ts.createLiteral('value'))]\r\n                ),\r\n                ...(node.body ? node.body.statements : [])\r\n            ])\r\n        );\r\n        console.log(ts.createPrinter().printNode(ts.EmitHint.Unspecified, newNode, file));\r\n        return newNode;\r\n    }\r\n    return ts.visitEachChild(node, child => visit(child, context, file), context);\r\n}\r\n\r\nconst program = ts.createProgram([\r\n  '../transformer-issue-src/src/A.ts'\r\n], {\r\n    target: ts.ScriptTarget.ES5,\r\n    module: ts.ModuleKind.CommonJS,\r\n    moduleResolution: ts.ModuleResolutionKind.NodeJs,\r\n    importHelpers: true,\r\n    alwaysStrict: true,\r\n    noImplicitAny: true,\r\n    noImplicitThis: true,\r\n    removeComments: true,\r\n    sourceMap: true,\r\n    outDir: \"../transformer-issue-src/lib\",\r\n    declaration: true,\r\n    declarationDir: \"../transformer-issue-src/lib\",\r\n    lib: [\r\n      \"lib.es2017.d.ts\",\r\n    ],\r\n    experimentalDecorators: true,\r\n    noEmitOnError: true,\r\n});\r\n\r\nconst transformers = {\r\n  before: [\r\n    transformer(program),\r\n  ]\r\n}\r\nconst result = program.emit(undefined, undefined, undefined, false, transformers);\r\n```\r\n\r\n**Code (test program, ../transformer-issue-src/src/A.ts)**\r\n\r\n```ts\r\nexport class A {\r\n    static myMethod() {\r\n        return 'value';\r\n    }\r\n}\r\n```\r\n\r\n**Expected behavior:**\r\nThe .js file should be emitted.\r\nThe `console.log` statement should print the following:\r\n\r\n```ts\r\nstatic myMethod() { const myConst = \"value\"; return 'value'; }\r\n```\r\n\r\n**Actual behavior:**\r\nThe .js file is not emitted due to a compiler exception. Message and stack trace:\r\n\r\n```\r\nTypeError: Cannot read property 'transformFlags' of null\r\n    at aggregateTransformFlagsForNode (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:54626:18)\r\n    at Object.aggregateTransformFlags (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:54611:9)\r\n    at visitNode (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:53754:12)\r\n    at Object.visitEachChild (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:54053:108)\r\n    at visitVariableDeclaration (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:61625:30)\r\n    at Object.flatMap (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:2047:25)\r\n    at visitVariableDeclarationList (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:61510:39)\r\n    at visitJavaScript (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:60282:28)\r\n    at visitor (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:60243:24)\r\n    at visitNode (d:\\solutions\\transformer-issue-compiler\\node_modules\\typescript\\lib\\typescript.js:53755:23)\r\n```\r\n\r\nEven if I remove the `ts.createToken(ts.SyntaxKind.ConstKeyword)` token, this exception is still thrown.\r\n\r\nAlso, the `console.log` statement prints the following (the var keyword is left there):\r\n\r\n```ts\r\nstatic myMethod() { const var myConst = \"value\"; return 'value'; }\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/22372/comments",
+    "author": "pedro-pedrosa",
+    "comments": [
+      {
+        "user": "RyanCavanaugh",
+        "created_at": "2018-03-07T17:43:02Z",
+        "body": "80% sure the problem is that you're passing `null` instead of `undefined` for some of those parameters. The TS API basically never uses `null` and will behave badly if given it because it's only ever checking for ` === undefined`"
+      },
+      {
+        "user": "pedro-pedrosa",
+        "created_at": "2018-03-07T18:33:44Z",
+        "body": "Replacing the `null` in `createVariableDeclaration` with `undefined` made the exception go away (wasn't needed on createMethod), however it still prints `const var`."
+      },
+      {
+        "user": "RyanCavanaugh",
+        "created_at": "2018-03-07T18:56:58Z",
+        "body": "Pass `NodeFlags.Const` to `createVariableDeclarationList` rather than trying to push in a `const` keyword in the array.\r\n\r\nThere are lots of examples in the TypeScript codebase that show calling this function correctly."
+      },
+      {
+        "user": "pedro-pedrosa",
+        "created_at": "2018-03-07T19:16:36Z",
+        "body": "That worked, I have a correct output now.\r\n\r\nThank you."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that prevents the compiler exception when creating variable statements in a transformer",
+      "Correct syntax generation for variable declarations with const keyword",
+      "Proper usage guidance for TypeScript's transformer API"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 22:59:07"
+    }
+  },
+  {
+    "number": 20055,
+    "title": "Weird behavior scanning recursive template strings",
+    "created_at": "2017-11-15T22:26:46Z",
+    "closed_at": "2017-11-15T22:33:58Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/20055",
+    "body": "**TypeScript Version:**  2.7.0-dev.20171115\r\n\r\n**Code**\r\n\r\n```ts\r\nimport * as tsc from \"typescript\";\r\n\r\nconst scanner = tsc.createScanner(tsc.ScriptTarget.ES2016, true, tsc.LanguageVariant.Standard);\r\nconst str = \"`a${`c` + `d${'e'}f`}g`\";\r\nscanner.setText(str);\r\n\r\nwhile( scanner.getTextPos() < str.length ) {\r\n    scanner.scan();\r\n    console.log(`${scanner.getTokenText()}\\t=> ${scanner.getToken()}`);\r\n}\r\n```\r\n\r\n**Expected behavior:**\r\n```diff\r\n    `a${    => 14 //TemplateHead\r\n    `c`     => 13 //NoSubstitutionTemplateLiteral\r\n    +       => 37\r\n    `d${    => 14 //TemplateHead\r\n    'e'     => 9\r\n+   }f`     => 16 //TemplateTail\r\n+   }g`     => 16 //TemplateTail\r\n```\r\n\r\n**Actual behavior:**\r\n```diff\r\n    `a${    => 14 //TemplateHead\r\n    `c`     => 13 //NoSubstitutionTemplateLiteral\r\n    +       => 37\r\n    `d${    => 14 //TemplateHead\r\n    'e'     => 9\r\n-   }       => 18 //CloseBraceToken\r\n-   f       => 71 //Identifier\r\n-   `}g`    => 13 //NoSubstitutionTemplateLiteral\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/20055/comments",
+    "author": "lmcarreiro",
+    "comments": [
+      {
+        "user": "RyanCavanaugh",
+        "created_at": "2017-11-15T22:31:45Z",
+        "body": "You can't just blindly call `scan`. See the function `parseTemplateSpan` in `parser.ts` - when encountering a `CloseBraceToken` you need to `reScanTemplateToken`"
+      },
+      {
+        "user": "lmcarreiro",
+        "created_at": "2017-11-15T22:33:58Z",
+        "body": "I thought that the scanner was a state machine that knows its state.\r\n\r\nThanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why the scanner doesn't automatically handle nested template literals",
+      "Information about the correct approach to scanning template literals",
+      "Clarification on the scanner's state management limitations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:00:08"
+    }
+  },
+  {
+    "number": 16927,
+    "title": "Failed to launch external program tsc -p ts spawn tsc ENOENT",
+    "created_at": "2017-07-04T16:06:56Z",
+    "closed_at": "2017-08-17T17:25:56Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/16927",
+    "body": "**TypeScript Version:**  2.4.1\r\n**VSCode Version:** 1.3.1\r\n**OS Version:** Linux Mint 18.1\r\n**node:** 6.11.0\r\n**npm:** 5.0.3\r\n\r\nSteps to Reproduce:\r\n\r\nOpen VSCode insider from Nemo or from terminal\r\nTry to run build task **Ctrl+Shift+B** (using tsc -p in task.json 'args')\r\n\r\ntasks.json\r\n```javascript\r\n{\r\n    \"version\": \"0.1.0\",\r\n    \"command\": \"tsc\",\r\n    \"isShellCommand\": true,\r\n    \"args\": [\"-p\", \"ts\"],\r\n    \"showOutput\": \"silent\",\r\n    \"problemMatcher\": \"$tsc\"\r\n}\r\n```\r\n\r\nhelloworld.ts in **ts** folder\r\n```typescript\r\nclass HelloWorld {\r\n    \r\n}\r\n```\r\ntsconfig.json\r\n```javascript\r\n{\r\n    \"compilerOptions\": {\r\n        \"target\": \"es5\",\r\n        \"outFile\": \"../js/app.js\",\r\n        \"sourceMap\": true\r\n    }\r\n}\r\n```\r\n\r\nEmpty folder **js**\r\n\r\n**Expected behavior:**\r\nI believe that this setup should compile the typescrpt files in my project to js files and put them in my js folder.\r\n\r\n**Actual behavior:**\r\nWhen I hit **Ctrl+Shift+B** i get: \r\n**Failed to launch external program tsc -p ts.**\r\n**spawn tsc ENOENT**\r\nin the output window\r\n\r\nIts worth noting that if I run the **tsc** command with args in the VSCode terminal window in my projects root directory (tsc -p ts) it **DOES** seem to work fine(I get the expected behavior). \r\n\r\nThis issues is similar to #8434 \r\nI do have custom code in my .profile and .bashrc, but in my case it does not matter if I open from the terminal or from the file explorer\r\n\r\nrunning process.env.PATH in VScode dev tools console outputs the same path as running echo $PATH from my command line. ",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/16927/comments",
+    "author": "kylerdanielster",
+    "comments": [
+      {
+        "user": "leonadler",
+        "created_at": "2017-07-05T13:00:43Z",
+        "body": "This is normally caused by `tsc` not being in your $PATH. Double-check if your global node_modules/.bin is reachable outside of bash, e.g. via running `which tsc` in `sh`/`zsh`.\r\n\r\nWhile not a fix for your issue per se, consider running the local `tsc` in your project:\r\n```json\r\n{\r\n    \"version\": \"0.1.0\",\r\n    \"command\": \"node\",\r\n    \"isShellCommand\": true,\r\n    \"args\": [\"${workSpaceRoot}/node_modules/typescript/bin/tsc\", \"-p\", \"ts\"],\r\n    \"showOutput\": \"silent\",\r\n    \"problemMatcher\": \"$tsc\"\r\n}\r\n```\r\n\r\nThis allows you to track the version of the TypeScript compiler you want to use in your package.json independent of the globally installed one (`npm i -g typescript`)."
+      },
+      {
+        "user": "kylerdanielster",
+        "created_at": "2017-07-09T02:00:22Z",
+        "body": "This worked.\r\n\r\nInstalled typescript locally with `npm i typescript` and changed tasks.json to \r\n```\r\n{\r\n    \"version\": \"0.1.0\",\r\n    \"command\": \"node\",\r\n    \"isShellCommand\": true,\r\n    \"args\": [\"{pathToWorkSpaceRoot}/node_modules/typescript/bin/tsc\", \"-p\", \"ts\"],\r\n    \"showOutput\": \"silent\",\r\n    \"problemMatcher\": \"$tsc\"\r\n}\r\n```\r\nWhich as you say \"allows you to track the version of the TypeScript compiler you want to use in your package.json independent of the globally installed one\". Seems like a good idea. \r\n\r\nI think it is worth noting that: ~/.npm-global/bin is in my path which contains the tsc package. This should be equivalent to node_modules/.bin I believe. \r\n\r\nRegardless, running 'sh' and 'tcs' I get 'tsc: not found'."
+      },
+      {
+        "user": "leonadler",
+        "created_at": "2017-07-10T09:36:25Z",
+        "body": "@kylerdanielster glad it solves your issue!\r\nJust a little addendum, since you wrote \"{pathToWorkSpaceRoot}\", I assume you hard-coded the path - you can use the actual string `${workSpaceRoot}` so it works regardless of where you checkout the project."
+      },
+      {
+        "user": "kylerdanielster",
+        "created_at": "2017-07-11T00:14:53Z",
+        "body": "@leonadler \"${workSpaceRoot}/node_modules/typescript/bin/tsc\" did not work for me, that is why I hard coded it. \r\n\r\nI played around with the path some more and \"node_modules/typescript/bin/tsc\" this did the trick as well.\r\n\r\nCurrent task.json (in .vscode folder)\r\n```\r\n{\r\n    \"version\": \"0.1.0\",\r\n    \"command\": \"node\",\r\n    \"isShellCommand\": true,\r\n    \"args\": [\"node_modules/typescript/bin/tsc\", \"-p\", \"ts\"],\r\n    \"showOutput\": \"silent\",\r\n    \"problemMatcher\": \"$tsc\"\r\n}\r\n```"
+      },
+      {
+        "user": "mhegazy",
+        "created_at": "2017-08-17T17:25:56Z",
+        "body": "Automatically closing this issue for housekeeping purposes. The issue labels indicate that it is unactionable at the moment or has already been addressed."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A working configuration that allows TypeScript compilation tasks to run in VSCode",
+      "A solution that addresses the PATH-related issues when VSCode tries to access the TypeScript compiler",
+      "A way to use a project-specific TypeScript compiler rather than depending on a global installation",
+      "A tasks.json configuration that works regardless of how VSCode is launched (terminal or file explorer)"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:02:08"
+    }
+  },
+  {
+    "number": 4192,
+    "title": "Bug: code repeated in my cordova appBundle.js",
+    "created_at": "2015-08-06T18:33:46Z",
+    "closed_at": "2015-08-06T21:02:52Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/4192",
+    "body": "With Visual Studio 2015 RTM, In my cordova project, the compiled appBundle.js is repeating code at the end of the file, and doesn't repeat it sequentially.  For example, in the following example, debugMode is false when I use it in my project code, but it should be true.\n\nHere is a simplified example of what happens : \n\nFile config.ts\n\n```\nvar debugMode: boolean = false;\ndebugMode = true;\nvar enableWindowLog: boolean = false;\nvar configMode: string = \"\"\n\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\n```\n\nFile index.ts\n\n```\n//My app code\n```\n\nCompiled appBundle.js\n\n```\nvar debugMode = false;\ndebugMode = true;\nvar enableWindowLog = false;\nvar configMode = \"\";\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\n\n// My project code compiled\n\nvar debugMode = false;\nvar enableWindowLog = false;\nvar configMode = \"\";\nvar debugMode = false;\ndebugMode = true;\nvar enableWindowLog = false;\nvar configMode = \"\";\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\nvar debugMode = false;\ndebugMode = true;\nvar enableWindowLog = false;\nvar configMode = \"\";\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\nvar debugMode = false;\ndebugMode = true;\nvar enableWindowLog = false;\nvar configMode = \"\";\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\nvar debugMode = false;\ndebugMode = true;\nvar enableWindowLog = false;\nvar configMode = \"\";\nif (debugMode) {\n    enableWindowLog = true;\n    configMode = \"-dev\";\n}\nvar debugMode = false;\nvar enableWindowLog = false;\nvar configMode = \"\";\n```\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/4192/comments",
+    "author": "NGumby",
+    "comments": [
+      {
+        "user": "danquirk",
+        "created_at": "2015-08-06T19:31:42Z",
+        "body": "Can you share the actual compiler invocation command that's causing this? (presumably in the Output window)\n"
+      },
+      {
+        "user": "NGumby",
+        "created_at": "2015-08-06T20:36:35Z",
+        "body": "1>Target \"PreComputeCompileTypeScript\" in file \"C:\\Program Files (x86)\\MSBuild\\Microsoft\\VisualStudio\\v14.0\\TypeScript\\Microsoft.TypeScript.targets\" from project \"D:\\CompuSport\\trunk\\CS Cordova\\CS.Cordova\\CS.Cordova.jsproj\" (target \"CompileTypeScript\" depends on it):\n1>Using \"VsTsc\" task from assembly \"C:\\Program Files (x86)\\MSBuild\\Microsoft\\VisualStudio\\v14.0\\TypeScript\\TypeScript.tasks.dll\".\n1>Task \"VsTsc\"\n1>  C:\\Program Files (x86)\\Microsoft SDKs\\TypeScript\\1.5\\tsc.exe --project \"D:\\CompuSport\\trunk\\CS Cordova\\CS.Cordova\\scripts\" COMPUTE_PATHS_ONLY\n1>Done executing task \"VsTsc\".\n\nhere is my tsconfig.json\n\n```\n{\n    \"compilerOptions\": { \n        \"noImplicitAny\": false,\n        \"noEmitOnError\": true,\n        \"removeComments\": false,\n        \"sourceMap\": false,\n        \"out\": \"www/scripts/appBundle.js\",\n        \"target\": \"es5\"\n    }\n}\n```\n"
+      },
+      {
+        "user": "RyanCavanaugh",
+        "created_at": "2015-08-06T20:46:18Z",
+        "body": "I'm guessing what's happening is that the Cordova project system, or something else (maybe a source code control tool?), is mirroring config.ts to some other locations in the project folder. `tsconfig` without a file will pick up all .ts files, recursively, in its containing folder. Can you verify that only the two .ts files that you expect to be there exist in the project folder?\n"
+      },
+      {
+        "user": "NGumby",
+        "created_at": "2015-08-06T21:02:52Z",
+        "body": "Oh yeah, I had a subfolders with a bunch of config.xxxx.ts files that overwrites config.ts with a grunt task.  It was the fact that the repeats where at the end that threw me off.\n\nSorry about that, and thanks for pointing me in the good direction.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the root cause of code repetition in the compiled appBundle.js file",
+      "Explanation of how the TypeScript compilation process is handling multiple similar files",
+      "Guidance that helps diagnose project structure issues affecting TypeScript compilation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:12:11"
+    }
+  },
+  {
+    "number": 3405,
+    "title": "Cannot find module during runtests",
+    "created_at": "2015-06-07T07:06:16Z",
+    "closed_at": "2015-06-08T20:36:30Z",
+    "labels": [
+      "Question"
+    ],
+    "url": "https://github.com/microsoft/TypeScript/issues/3405",
+    "body": "Put these two files under tests/cases/compiler, and run `jake runtests tests=Blade`\n\n**BladeMaterial.ts**\n\n``` ts\n//@module: amd\n\n/**\n * The base blade material class.\n */\nexport default class BladeMaterial {\n    stiffness: number\n    hardness: number\n    constructor(public name: string) {\n    }\n}\n```\n\n**BladeCompositeMaterial.ts**\n\n``` ts\n//@module: amd\n\nimport BladeMaterial from \"BladeMaterial\";\n\n/**\n * Composite material for blade.\n */\nexport default class BladeCompositeMaterial extends BladeMaterial {\n    constructor(public name: string) {\n        super(name);\n    }\n}\n```\n\nThe **BladeCompositeMaterial.ts** fails with TS2307: Cannot find module 'BladeMaterial`.\n\nI tap into `program.getSourceFile` and add:\n\n``` ts\nconsole.log(`${fileName}, hasProperty(...) => ${hasProperty(filesByName, fileName)}, filesByName: ${filesByName[fileName]}`);\n```\n\ni.e.\n\n``` ts\n\nfunction getSourceFile(fileName: string) {\n    fileName = host.getCanonicalFileName(normalizeSlashes(fileName));\n    console.log(`${fileName}, hasProperty(...) => ${hasProperty(filesByName, fileName)}, filesByName: ${filesByName[fileName]}`);\n    return hasProperty(filesByName, fileName) ? filesByName[fileName] : undefined;\n}\n```\n\nthe output result of `jake runtests tests=Blade` shows the order of the file matters:\ntests/cases/compiler/bladematerial.ts, hasProperty(...) => true, filesByName: undefined\ntests/cases/compiler/bladematerial.d.ts, hasProperty(...) => true, filesByName: undefined\ntests/cases/bladematerial.ts, hasProperty(...) => true, filesByName: undefined\ntests/cases/bladematerial.d.ts, hasProperty(...) => true, filesByName: undefined\ntests/bladematerial.ts, hasProperty(...) => true, filesByName: undefined\ntests/bladematerial.d.ts, hasProperty(...) => true, filesByName: undefined\nbladematerial.ts, hasProperty(...) => true, filesByName: undefined\nbladematerial.d.ts, hasProperty(...) => true, filesByName: undefined\n\n  \u2024\u2024\u2024\u2024\u2024\u2024\u2024\u2024\u2024tests/cases/compiler/bladematerial.ts, hasProperty(...) => true, filesByName: [object Object]\ntests/cases/compiler/bladematerial.ts, hasProperty(...) => true, filesByName: [object Object]\ntests/cases/compiler/bladematerial.ts, hasProperty(...) => true, filesByName: [object Object]\n\nThe caller of `program.getSourceFile()` which creates this problem is in checker.ts: 882, in function `resolveExternalModuleName`: `sourceFile = forEach(supportedExtensions, extension => host.getSourceFile(fileName + extension));`\n",
+    "comments_url": "https://api.github.com/repos/microsoft/TypeScript/issues/3405/comments",
+    "author": "unional",
+    "comments": [
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-06-07T18:52:19Z",
+        "body": "Tests in `compiler` and conformance` are independent of one another. If I recall correctly, you can make a multifile test in one file as so:\n\n``` TypeScript\n// @filename: BladeMaterial.ts\nexport function blah() {\n}\n\n// @filename: BladeCompositeMaterial\nimport { blah } from \"BladeMaterial\";\n```\n\nLet us know if that helps.\n"
+      },
+      {
+        "user": "unional",
+        "created_at": "2015-06-07T18:59:49Z",
+        "body": "Yeah, I found that out after digging through the harness.ts, program.ts for a few hours. :(.\nIt may help others if CONTRIBUTING.md would mention that. :)\n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-06-07T20:05:57Z",
+        "body": "Sorry about that - that's a good suggestion, I'll fix it up in a bit.\n"
+      },
+      {
+        "user": "danquirk",
+        "created_at": "2015-06-08T20:27:34Z",
+        "body": "Yeah we should probably put it in the wiki too.\n"
+      },
+      {
+        "user": "DanielRosenwasser",
+        "created_at": "2015-06-08T20:36:29Z",
+        "body": "Done in #3424.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how to properly create multi-file tests in TypeScript's test framework",
+      "Documentation improvements for TypeScript contributors regarding test creation",
+      "Clarification on how module resolution works in the TypeScript test framework"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:13:02"
+    }
+  }
+]

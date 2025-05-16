@@ -1,0 +1,391 @@
+[
+  {
+    "number": 2162,
+    "title": "[bug]\u5728\u5b9a\u65f6\u5668\u4e2d\u521b\u5efa\u5b50\u7a0b\u5e8f\u4f1a\u76f4\u63a5\u53d8\u6210\u50f5\u5c38",
+    "created_at": "2018-11-29T06:38:24Z",
+    "closed_at": "2018-11-29T10:53:51Z",
+    "labels": [
+      "question",
+      "coroutine",
+      "good question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2162",
+    "body": "timer \u672c\u8eab\u662f\u4e2a\u5b50\u8fdb\u7a0b\uff0c\u6258\u7ba1\u5728manager\u4e0b\u3002\r\n\u770b\u5b98\u65b9\u6587\u6863\uff0c\u597d\u50cf\u8bf4 start\u4f1a\u6e05\u9664\u7236\u8fdb\u7a0b\u7684 timer\uff0c\u4f46\u662f\u6211\u8fd9\u4e2atimer\u53ef\u4ee5\u4e00\u76f4\u6253\u5370log\uff0c\u4f46\u662f\u5b59\u8fdb\u7a0b\u521b\u5efa\u51fa\u6765\u5c31\u662f\u50f5\u5c38\uff08\u5b83\u7684\u7236\u8fdb\u7a0b\u662f\u8fd9\u4e2atimer\u8fdb\u7a0b\uff0c\u800ctimer\u8fdb\u7a0b\u6ca1\u6b7b\uff09\r\n\r\n\u8bf4\u660e\uff1a\u521b\u5efa\u5b59\u8fdb\u7a0b\u65f6\u65e0\u62a5\u9519\uff0c\u6210\u529f\u8fd4\u56depid\u3002\u5b59\u8fdb\u7a0b\u91cc\u7684 exec \u4e0d\u4f1a\u6709\u9519\uff0c\u8ddf\u5b83\u6ca1\u5173\uff0c\u5199\u4ec0\u4e48\u90fd\u8fd9\u6837\u3002\r\n\r\n```php\r\n<?php\r\n\r\nnamespace Pkg\\Swoola\\Components\\Swoole\\Process;\r\n\r\ntrait QueueWorkerTrait\r\n{\r\n    protected $queueWorkerPids = [];\r\n\r\n    public function addQueueWorker()\r\n    {\r\n        $self = $this;\r\n        $process = new \\Swoole\\Process(function(\\Swoole\\Process $worker) {\r\n            \\Pkg\\Swoola\\set_process_name('swoola - timer process ');\r\n            \\Swoole\\Process::signal(SIGCHLD, function($sig) {\r\n                // \u5fc5\u987b\u4e3afalse\uff0c\u975e\u963b\u585e\u6a21\u5f0f\r\n                while($ret = \\Swoole\\Process::wait(false)) {\r\n                    echo \"PID={$ret['pid']}\\n\";\r\n                }\r\n            });\r\n\r\n            swoole_timer_tick(1000, function() {\r\n                if (!$this->queueWorkerPids) {\r\n                    $this->createQueueWorker();\r\n                } else {\r\n                    foreach ($this->queueWorkerPids as $idx => $pid) {\r\n                        $current_time = date('H:i:s');\r\n                        if (\\Swoole\\Process::kill($pid, 0)) {\r\n                            echo \"PID[{$pid}] is alived({$current_time}).\\n\";\r\n                        } else {\r\n                            echo \"PID[{$pid}] is died.\\n\";\r\n                            unset($this->queueWorkerPids[$idx]);\r\n                            $this->createQueueWorker($idx);\r\n                        }\r\n                    }\r\n                }\r\n            });\r\n        });\r\n\r\n        $this->server->addProcess($process);\r\n        // $process->start();\r\n    }\r\n\r\n    protected function createQueueWorker($idx = null)\r\n    {\r\n        $num = is_null($idx) ? 2 : 1;\r\n\r\n        for ($i = 0; $i < $num; $i++) {\r\n            $process = new \\Swoole\\Process(function(\\Swoole\\Process $worker) use($i, $idx) {\r\n                $worker->exec(PHP_BINARY, [SWOOLA_APP_DIR.'/artisan', 'queue:work']);\r\n            });\r\n\r\n            $pid = $process->start();\r\n            if (is_null($idx)) {\r\n                $this->queueWorkerPids[$i] = $pid;\r\n            } else {\r\n                $this->queueWorkerPids[$idx] = $pid;\r\n            }\r\n\r\n            // if ($pid) {\r\n\r\n            // } else {\r\n            //     $errno = swoole_errno();\r\n            //     var_dump(swoole_strerror($errno));\r\n            // }\r\n        }\r\n    }\r\n}\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2162/comments",
+    "author": "fanybook",
+    "comments": [
+      {
+        "user": "fanybook",
+        "created_at": "2018-11-29T06:55:05Z",
+        "body": "```\r\n            // swoole_timer_tick(1000, function() {\r\n            while (true) {\r\n                if (!$this->queueWorkerPids) {\r\n                    $this->createQueueWorker();\r\n                } else {\r\n                    foreach ($this->queueWorkerPids as $idx => $pid) {\r\n                        $current_time = date('H:i:s');\r\n                        if (\\Swoole\\Process::kill($pid, 0)) {\r\n                            echo \"PID[{$pid}] is alived({$current_time}).\\n\";\r\n                        } else {\r\n                            echo \"PID[{$pid}] is died.\\n\";\r\n                            unset($this->queueWorkerPids[$idx]);\r\n                            $this->createQueueWorker($idx);\r\n                        }\r\n                    }\r\n                }\r\n\r\n                sleep(1);\r\n            }\r\n            // });\r\n```\r\n\u6539\u6210\u6b7b\u5faa\u73af\uff0c\u521b\u5efa\u7684\u5b59\u7a0b\u5e8f\u5c31\u6ca1\u95ee\u9898\r\n\r\n\r\n```\r\n            swoole_timer_tick(1000, function() {\r\n                echo '2333333';\r\n            });\r\n\r\n            // swoole_timer_tick(1000, function() {\r\n            while (true) {\r\n                if (!$this->queueWorkerPids) {\r\n                    $this->createQueueWorker();\r\n                } else {\r\n                    foreach ($this->queueWorkerPids as $idx => $pid) {\r\n                        $current_time = date('H:i:s');\r\n                        if (\\Swoole\\Process::kill($pid, 0)) {\r\n                            echo \"PID[{$pid}] is alived({$current_time}).\\n\";\r\n                        } else {\r\n                            echo \"PID[{$pid}] is died.\\n\";\r\n                            unset($this->queueWorkerPids[$idx]);\r\n                            $this->createQueueWorker($idx);\r\n                        }\r\n                    }\r\n                }\r\n\r\n                sleep(1);\r\n            }\r\n            // });\r\n```\r\n\u5728\u6b7b\u5faa\u73af\u5916\uff0c\u52a0timer\uff0c\u521b\u5efa\u51fa\u5b59\u7a0b\u5e8f\u4e5f\u53d8\u6210\u50f5\u5c38"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2018-11-29T10:49:00Z",
+        "body": "\u8bf7\u4f7f\u7528\u534f\u7a0b\u6a21\u5f0f\r\n\r\n```php\r\n<?php\r\ngo(function() {\r\n    while(1)\r\n    {\r\n        co::sleep(1);\r\n        var_dump(co::exec(\"ps aux\"));\r\n    }\r\n});\r\n\r\nswoole_event_wait();\r\n```\r\n"
+      },
+      {
+        "user": "fanybook",
+        "created_at": "2018-11-29T11:14:47Z",
+        "body": "\u61c2\u4e86  \ud83d\udc4d"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An alternative approach to process management that avoids zombie child processes",
+      "A solution that properly handles process lifecycle within the Swoole framework",
+      "A more appropriate way to execute external commands in Swoole"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:06:42"
+    }
+  },
+  {
+    "number": 2031,
+    "title": "Does not work installed signal if in swoole_process run a sleep(1) function",
+    "created_at": "2018-10-12T00:49:55Z",
+    "closed_at": "2018-10-12T21:23:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/2031",
+    "body": "Hi,\r\n\r\nI wrote a simple daemon program that starts up a few subprocesses. I also set up a signal handler for the master and child processes with swoole::signal(). If I use sleep(1) within the child process, the child process does not respond to the signal given by swoole::kill(). usleep (1000000) function does not have this problem.\r\n\r\n// $worker is master process\r\n```php \r\n        $process = new swoole_process(function(swoole_process $process) use($worker, $id){\r\n            \r\n            if (self::$status === self::STATUS_STARTING) {\r\n                self::resetStd();\r\n            }\r\n            \r\n            self::$pidMap  = array();\r\n            self::$workers = array($worker->workerId => $worker);\r\n            Timer::delAll();\r\n            \r\n            $process->name('Messenger: worker process  ' . $worker->name);\r\n            $worker->setUserAndGroup();\r\n            $worker->id = $id;\r\n            \r\n            self::$status = self::STATUS_RUNNING;\r\n        \r\n            register_shutdown_function(array(\"\\\\Jetmail\\\\Server\\\\Messenger\", 'checkErrors'));\r\n            self::reinstallSignal();\r\n            \r\n            // Init Timer.\r\n            Timer::init();\r\n            \r\n            $timerid = Timer::add(3,function()use($process,&$timerid){\r\n                \r\n                while($msg = $process->pop()){\r\n                    if ($msg === false) {\r\n                        break;\r\n                    }\r\n\r\n                    sleep(1);\r\n                    //usleep(1000000);\r\n                }\r\n            },[1,2,3],true);            \r\n        });\r\n        \r\n        $process->useQueue(rand(1,1000), swoole_process::IPC_NOWAIT);\r\n        $pid = $process->start();\r\n```\r\n\r\n\r\nI do not know this is a bug or my knowledge is incomplete. I applied sleep (1) instead of a specific task until I did the daemon program. Program execution is waiting for 1 second to simulate the execution time of the real task\r\n\r\nSubprocess's reactions to the signal were never responded, and there was a program state when child processes ceased as soon as they received a signal. I always sent the SIGUSR2 signal.\r\n\r\n\r\nswoole support => enabled\r\nVersion => 4.1.2\r\nAuthor => Swoole Group[email: team@swoole.com]\r\ncoroutine => enabled\r\nepoll => enabled\r\neventfd => enabled\r\nsignalfd => enabled\r\ncpu affinity => enabled\r\nspinlock => enabled\r\nrwlock => enabled\r\nsockets => enabled\r\nopenssl => enabled\r\nhttp2 => enabled\r\npcre => enabled\r\nzlib => enabled\r\nbrotli => enabled\r\nmutex_timedlock => enabled\r\npthread_barrier => enabled\r\nfutex => enabled\r\nmysqlnd => enabled\r\nredis client => enabled\r\npostgresql client => enabled\r\n\r\nDirective => Local Value => Master Value\r\nswoole.enable_coroutine => On => On\r\nswoole.aio_thread_num => 2 => 2\r\nswoole.display_errors => On => On\r\nswoole.use_namespace => On => On\r\nswoole.use_shortname => On => On\r\nswoole.fast_serialize => Off => Off\r\nswoole.unixsock_buffer_size => 8388608 => 8388608\r\n\r\n\r\nPhp version: PHP 7.2.9 (cli) (built: Aug 17 2018 16:21:18) ( NTS )\r\nKernel: Arch Linux, Linux malinal-arch 4.18.6-arch1-1-ARCH #1 SMP PREEMPT Wed Sep 5 11:54:09 UTC 2018 x86_64 GNU/Linux\r\ngcc: gcc 8.2.1+20180831-1\r\n\r\n\r\nThanks for your help.\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/2031/comments",
+    "author": "optimode",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2018-10-12T02:31:57Z",
+        "body": "swoole::signal() is based on signalfd and\r\n eventloop, can not use it in sync blocked server, please use pcntl_signal."
+      },
+      {
+        "user": "optimode",
+        "created_at": "2018-10-12T13:23:15Z",
+        "body": "Oh, I understand, thank you. So with swoole i can use pcntl_ functions (eg signal, kill)? Actually, I do not want to use sleep (), it was just an occasional idea.\r\n\r\nI would like to develop an email sender application (composer and symfony based) that currently retrieves the data from a redis queue and logs sending data into a mysql database.\r\nWhat php functions or classes can not I use?\r\n\r\nAn another question: in php the sleep() function works in the background: \r\nsleep() -> php_sleep() -> SleepEx() ?"
+      },
+      {
+        "user": "twose",
+        "created_at": "2018-10-12T13:45:51Z",
+        "body": "as I know, just system call `sleep`."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why swoole::signal() doesn't work with sleep()",
+      "Alternative signal handling approaches that work with blocking operations",
+      "Clarification on compatibility between Swoole and standard PHP functions",
+      "Technical information about how sleep() is implemented in PHP"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:06:58"
+    }
+  },
+  {
+    "number": 1991,
+    "title": "Unable to load dynamic library 'swoole'",
+    "created_at": "2018-09-19T14:16:40Z",
+    "closed_at": "2018-09-19T15:41:06Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1991",
+    "body": "Please answer these questions before submitting your issue. Thanks!\r\n\r\n1. What did you do? If possible, provide a recipe for reproducing the error.\r\n\r\n    `updated php from 7.1.x to 7.2.10 and rebuilt and reinstalled php-swoole AUR package`\r\n\r\n\r\n2. What did you expect to see?\r\n    `swoole ext loaded with php properly`\r\n\r\n\r\n3. What did you see instead?\r\n`PHP Warning:  PHP Startup: Unable to load dynamic library 'swoole' (tried: /usr/lib/php/modules/swoole (/usr/lib/php/modules/swoole: cannot open shared object file: No such file or directory), /usr/lib/php/modules/swoole.so (/usr/lib/php/modules/swoole.so: undefined symbol: strpprintf)) in Unknown on line 0`\r\n\r\n\r\n4. What version of Swoole are you using (`php --ri swoole`)?\r\n\r\n    `4.2.1`\r\n\r\n\r\n5. What is your machine environment used (including version of kernel & php & gcc) ? \r\n```\r\nArch Linux \r\n4.17.14.a-1-hardened x86_64\r\nphp 7.2.10\r\ngcc 8.2.1+20180831-1\r\n```\r\n\r\n\r\n6. If you are using ssl, what is your openssl version?\r\n    `openssl 1.1.1-1`\r\n\r\nNOTE: `/usr/lib/php/modules/swoole.so does exist in filesystem.`\r\n`swoole ext won't load whether i have .so in php.ini or not.`\r\n\r\nThanks",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1991/comments",
+    "author": "ITwrx",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2018-09-19T15:13:21Z",
+        "body": "if you `make clean` and rerun the right(new version's) `phpize` then `./configure xxx && make && sudo make install`?\r\n\r\ncheck your phpize version, it may shows these:\r\n```C\r\nConfiguring for:\r\nPHP Api Version:         20170718\r\nZend Module Api No:      20170718\r\nZend Extension Api No:   320170718\r\n```\r\n\r\ncheck your version num is PHP72"
+      },
+      {
+        "user": "ITwrx",
+        "created_at": "2018-09-19T15:41:06Z",
+        "body": "@twose just running \"make clean\" in the src directory of the previous build then re-running \"makepkg\" did the trick. thanks for the help."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to properly rebuild the PHP extension after PHP version upgrade",
+      "A solution that resolves the 'undefined symbol' error in the PHP extension",
+      "Instructions that work within the Arch Linux package management workflow"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:07:04"
+    }
+  },
+  {
+    "number": 1583,
+    "title": "Segmentation fault \u9519\u8bef",
+    "created_at": "2018-04-25T10:37:06Z",
+    "closed_at": "2018-04-26T02:35:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1583",
+    "body": "CentOS 6.9 x64 Kernel 4.4.127\r\nphp 7.1.16 with yac\r\nswoole 2.1.3\r\n\r\n\r\n\r\n\u4e0b\u9762\u662f\u6709\u6548\u7684\u8c03\u8bd5\u4fe1\u606f\r\n\r\n(gdb) bt\r\n#0  0x00007fea2e0f595d in swShareMemory_mmap_create (object=0x7ffcc05f0950, size=2097248, mapfile=0x0)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:122\r\n#1  0x00007fea2e0f56a5 in sw_shm_malloc (size=2097248) at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:25\r\n#2  0x00007fea2e0f5e4e in swMemoryGlobal_new_page (gm=0x7ffcc05f0a10)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/MemoryGlobal.c:80\r\n#3  0x00007fea2e0f5d52 in swMemoryGlobal_new (pagesize=2097152, shared=1 '\\001')\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/MemoryGlobal.c:51\r\n#4  0x00007fea2e0e8985 in swoole_init () at /opt/distfiles/php/swoole-src-2.1.3/src/core/base.c:64\r\n#5  0x00007fea2dff89fb in zm_startup_swoole (type=1, module_number=62) at /opt/distfiles/php/swoole-src-2.1.3/swoole.c:1024\r\n#6  0x0000000000a21478 in zend_startup_module_ex (module=0x27a6f50) at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1843\r\n#7  0x0000000000a214da in zend_startup_module_zval (zv=0x2765510) at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1858\r\n#8  0x0000000000a2f192 in zend_hash_apply (ht=0x14b10e0, apply_func=0xa214b7 <zend_startup_module_zval>)\r\n    at /opt/distfiles/php/php-7.1.16/Zend/zend_hash.c:1507\r\n#9  0x0000000000a21a9f in zend_startup_modules () at /opt/distfiles/php/php-7.1.16/Zend/zend_API.c:1969\r\n#10 0x0000000000988d00 in php_module_startup (sf=0x1488d80, additional_modules=0x0, num_additional_modules=0)\r\n    at /opt/distfiles/php/php-7.1.16/main/main.c:2300\r\n#11 0x0000000000af930f in php_cli_startup (sapi_module=0x1488d80) at /opt/distfiles/php/php-7.1.16/sapi/cli/php_cli.c:427\r\n#12 0x0000000000afb22a in main (argc=2, argv=0x2722070) at /opt/distfiles/php/php-7.1.16/sapi/cli/php_cli.c:1348\r\n(gdb) f 1\r\n#1  0x00007fea2e0f56a5 in sw_shm_malloc (size=2097248) at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:25\r\n25          mem = swShareMemory_mmap_create(&object, size, NULL);\r\n(gdb) f 0\r\n#0  0x00007fea2e0f595d in swShareMemory_mmap_create (object=0x7ffcc05f0950, size=2097248, mapfile=0x0)\r\n    at /opt/distfiles/php/swoole-src-2.1.3/src/memory/ShareMemory.c:122\r\n122             swWarn(\"mmap(%ld) failed. Error: %s[%d]\", size, strerror(errno), errno);\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1583/comments",
+    "author": "yxgong",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2018-04-25T10:45:10Z",
+        "body": "\u8bf7\u52ff\u4f7f\u7528 ` --enable-hugepage` \u7f16\u8bd1\u53c2\u6570"
+      },
+      {
+        "user": "yxgong",
+        "created_at": "2018-04-25T11:07:35Z",
+        "body": "\u591a\u8c22\u554a\uff0c\u679c\u7136\r\n\u4e0d\u7528--enable-hugepage \u5168\u65b0\u7f16\u8bd1\u540e\u5c31\u89e3\u51b3\u4e86\r\n\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the segmentation fault error when using Swoole with PHP",
+      "Guidance on proper compilation configuration for Swoole on the user's system",
+      "A simple, actionable fix that doesn't require complex debugging"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:07:31"
+    }
+  },
+  {
+    "number": 1527,
+    "title": "Swoole not supported HTTP Client SSL SNI? (ssl handshake failure)",
+    "created_at": "2018-03-18T03:38:36Z",
+    "closed_at": "2018-03-19T10:59:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1527",
+    "body": "Swoole not supported HTTP_Client SSL SNI?\r\n\r\nTest script:\r\n\r\n```\r\n<?php\r\n\r\n$domain = 'intoconsultoria.com';\r\n$ip = gethostbyname($domain);\r\n\r\n$cli = new swoole_http_client($ip, 443, true);\r\n\r\n$cli->set(array(\r\n    'timeout' => -1,\r\n    'debug_mode'=> 1,\r\n));\r\n\r\n$cli->setHeaders([\r\n    'Host' => $domain,\r\n    'cache-control' => 'no-cache',\r\n]);\r\n\r\n$cli->get('/', function ($cli) {\r\n    print_r($cli->body);\r\n});\r\n\r\n?>\r\n```\r\n\r\nOutput: WARNING swSSL_connect: SSL_connect() failed. Error: (null)[1]\r\n\r\nTest SSL with openssl (without SNI):\r\n```\r\nshell: openssl s_client -connect intoconsultoria.com:443\r\n\r\noutput: SSL routines:ssl3_read_bytes:tlsv1 alert internal error:ssl/record/rec_layer_s3.c:1399:SSL alert number 80\r\n```\r\n\r\nTest SSL with openssl (with SNI):\r\n\r\n```\r\nshell: openssl s_client -connect intoconsultoria.com:443 -servername intoconsultoria.com\r\n\r\nSsl test successfully.\r\n```\r\n\r\nHow to make swoole work properly with SSL-SNI?\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1527/comments",
+    "author": "emdfreeman",
+    "comments": [
+      {
+        "user": "emdfreeman",
+        "created_at": "2018-03-18T16:02:14Z",
+        "body": "How to enable ssl_tls_sni in swoole?"
+      },
+      {
+        "user": "matyhtf",
+        "created_at": "2018-03-19T06:56:56Z",
+        "body": "Please set the `ssl_host_name` option.\r\n\r\n```php\r\n<?php\r\n\r\n$domain = 'intoconsultoria.com';\r\n$ip = gethostbyname($domain);\r\n\r\n$cli = new swoole_http_client($ip, 443, true);\r\n\r\n$cli->set(array(\r\n    'timeout' => -1,\r\n    'ssl_host_name' => $domain,\r\n    'debug_mode'=> 1,\r\n));\r\n\r\n$cli->setHeaders([\r\n    'Host' => $domain,\r\n    'cache-control' => 'no-cache',\r\n]);\r\n\r\n$cli->get('/', function ($cli) {\r\n    print_r($cli->body);\r\n});\r\n\r\n?>\r\n```"
+      },
+      {
+        "user": "emdfreeman",
+        "created_at": "2018-03-19T10:59:40Z",
+        "body": "Thank you!\r\n\r\nP.S. I checked but with an error ('ssl_host_name' => 'https: /intoconsultoria.com',)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Instructions for enabling SSL SNI support in Swoole HTTP client",
+      "Configuration parameters needed for proper SSL handshake with SNI-enabled servers",
+      "A working code example showing the correct implementation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:07:55"
+    }
+  },
+  {
+    "number": 1524,
+    "title": "php\u7684\u5185\u90e8\u5f02\u5e38,\u5728error_handle\u5904\u7406\u540e,worker\u8fdb\u7a0b\u9000\u51fa,\u4e0d\u7ba1\u662f\u534f\u7a0b\u7248\u672c\u6216\u975e\u534f\u7a0b\u7248\u672c\u90fd\u662f\u5982\u6b64",
+    "created_at": "2018-03-17T02:45:00Z",
+    "closed_at": "2018-03-28T10:51:28Z",
+    "labels": [
+      "question",
+      "wontfix"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1524",
+    "body": "Please answer these questions before submitting your issue. Thanks!\r\n\r\n1. What did you do? If possible, provide a recipe for reproducing the error.\r\n```php\r\n<?php\r\n\r\nset_error_handler('errorHandle');\r\n$http = new swoole_http_server(\"127.0.0.1\", 9501);\r\n\r\nfunction testWeb(\\Swoole\\Http\\Response $response)\r\n{\r\n    $response->header(\"Content-Type\", \"text/html\");\r\n    //\u5185\u90e8\u5f02\u5e38\r\n    require 'ab.php';\r\n    //\u666e\u901a\u53ef\u6355\u83b7\r\n    //$a = $b;\r\n    //throw new \\Exception('aaa');\r\n    $response->end('<html>hello</html>');\r\n}\r\n\r\n$http->on(\"request\", function (\\Swoole\\Http\\Request $request, $response) {\r\n    try{\r\n        testWeb($response);\r\n    }catch (Exception $e){\r\n        echo 'e';\r\n    }catch (Throwable $t){\r\n        echo 't';\r\n    }finally{\r\n        echo 'f';\r\n    }\r\n});\r\n\r\nfunction errorHandle($errno, $errstr, $errfile, $errline)\r\n{\r\n    if (!(error_reporting() & $errno)) {\r\n        // This error code is not included in error_reporting, so let it fall\r\n        // through to the standard PHP error handler\r\n        return false;\r\n    }\r\n    /* Don't execute PHP internal error handler */\r\n    return true;\r\n}\r\n\r\n$http->start();\r\n```\r\n\r\n2. What did you expect to see?\r\n\r\n\u8fdb\u7a0b\u4e0d\u5e94\u9000\u51fa,\u4e0d\u5e94\u8be5\u4e2d\u65ad\u4ee3\u7801\u7684\u6267\u884c,\u540e\u679c\u4e5f\u662f\u4e25\u91cd\u7684,\u6bd4\u5982\u534f\u7a0b\u5904\u7406\u4e2d\u65ad\u4e86\r\n\r\n3. What did you see instead?\r\n\r\n/usr/local/Cellar/php71/7.1.13_24/bin/php -dxdebug.remote_enable=1 -dxdebug.remote_mode=req -dxdebug.remote_port=9000 -dxdebug.remote_host=127.0.0.1 /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php\r\nPHP Fatal error:  require(): Failed opening required 'ab.php' (include_path='.:') in /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php on line 12\r\nPHP Stack trace:\r\nPHP   1. {main}() /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:0\r\nPHP   2. swoole_http_server->start() /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:40\r\nPHP   3. {closure:/Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:16-27}($request = *uninitialized*, $response = *uninitialized*) /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:40\r\nPHP   4. testWeb($response = *uninitialized*) /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:18\r\n\r\nFatal error: require(): Failed opening required 'ab.php' (include_path='.:') in /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php on line 12\r\n\r\nCall Stack:\r\n    0.0387     358592   1. {main}() /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:0\r\n    0.0463     362440   2. swoole_http_server->start() /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:40\r\n    3.5838     367992   3. {closure:/Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:16-27}(???, ???) /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:40\r\n    3.5839     367992   4. testWeb(???) /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php:18\r\n\r\n[2018-03-17 10:43:15 *2497.0]\tERROR\tzm_deactivate_swoole (ERROR 503): Fatal error: require(): Failed opening required 'ab.php' (include_path='.:') in /Users/tsingsun/workspace/ThirdTools/yii2-swoole/demo/web/swoole_ori_server.php on line 12.\r\n[2018-03-17 10:43:15 $2496.0]\tWARNING\tswManager_check_exit_status: worker#0 abnormal exit, status=255, signal=0\r\n\r\n\r\n4. What version of Swoole are you using (`php --ri swoole`)?\r\n\r\nswoole 1.10.1 2.1.1 ,2.0.12 \r\n\r\n5. What is your machine environment used (including version of kernel & php & gcc) ? \r\n\r\nmac\r\nphp 7.1.8\r\n\r\n6. If you are using ssl, what is your openssl version?\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1524/comments",
+    "author": "tsingsun",
+    "comments": [
+      {
+        "user": "twose",
+        "created_at": "2018-03-24T17:07:59Z",
+        "body": "\u597d\u9669, \u4f5c\u4e3aphp\u840c\u65b0, \u5dee\u70b9\u88ab\u8fd9\u4e2a\u95ee\u9898\u8ff7\u60d1\u4e86.\r\n\u8fd9\u548cswoole\u65e0\u5173, \u800c\u4e14\u987a\u5e26require\u662f\u6709IO\u64cd\u4f5c\u7684.\r\n\r\n### Fatal error\r\n\u8bf7\u628a\u4f60\u7684\u4ee3\u7801\u8d34\u5230php-cli\u4e2d\u8dd1\u4e00\u4e0b, \u4f60\u4f1a\u5f97\u5230\u4e00\u4e2a`Fatal error`.\r\n\u7136\u540e\u8bf7\u770bPHP\u5b98\u7f51\u6587\u6863\r\n> \u4ee5\u4e0b\u7ea7\u522b\u7684\u9519\u8bef\u4e0d\u80fd\u7531\u7528\u6237\u5b9a\u4e49\u7684\u51fd\u6570\u6765\u5904\u7406\uff1a E_ERROR\u3001 E_PARSE\u3001 E_CORE_ERROR\u3001 E_CORE_WARNING\u3001 E_COMPILE_ERROR\u3001 E_COMPILE_WARNING\uff0c\u548c\u5728 \u8c03\u7528 set_error_handler() \u51fd\u6570\u6240\u5728\u6587\u4ef6\u4e2d\u4ea7\u751f\u7684\u5927\u591a\u6570 E_STRICT\u3002\r\n\r\n----\r\n### \u5f02\u5e38\u6355\u83b7\u7684\u4f5c\u7528\r\n\r\n\u5bf9\u4e8e`\u8fdb\u7a0b\u4e0d\u5e94\u9000\u51fa,\u4e0d\u5e94\u8be5\u4e2d\u65ad\u4ee3\u7801\u7684\u6267\u884c,\u540e\u679c\u4e5f\u662f\u4e25\u91cd\u7684,\u6bd4\u5982\u534f\u7a0b\u5904\u7406\u4e2d\u65ad\u4e86`\u8fd9\u6bb5\u8bdd\u6211\u4e5f\u6709\u4e0d\u540c\u7684\u610f\u89c1, \u6211\u8ba4\u4e3a\u4e25\u91cd\u7684\u9519\u8bef\u5e94\u8be5\u5c3d\u5feb\u89e3\u51b3\u98ce\u9669\u800c\u4e0d\u662f\u6291\u5236\u5b83, \u4e25\u91cd\u7684\u9519\u8bef\u629b\u51fa\u963b\u6b62\u4ee3\u7801\u6267\u884c\u662f\u975e\u5e38\u6709\u5fc5\u8981\u7684(\u5982set_error_handler\u4f1a\u4f7f\u5f97\u4ee3\u7801\u7ee7\u7eed\u8fd0\u884c,\u8fd9\u5f88\u5371\u9669), \u771f\u6b63\u9700\u8981\u6355\u83b7\u5e76\u6291\u5236\u7684\u5e94\u8be5\u662f\u7531\u5f00\u53d1\u8005(\u5e93)\u5b9a\u4e49\u7684\u5404\u79cdexception\u6216trigger_error\u548c\u4e00\u4e9b(\u9884\u6599\u4e2d\u7684)\u53ef\u5ffd\u89c6\u9519\u8bef(\u5bf9\u540e\u7eed\u6267\u884c\u65e0\u5a01\u80c1\u7684).\r\n\r\n**\u6211\u5b81\u613f\u8ba9\u670d\u52a1\u5b95\u673a\u4e5f\u4e0d\u4f1a\u8ba9\u9519\u8bef\u4ee3\u7801\u4e00\u76f4\u8dd1\u4e0b\u53bb**\r\n\r\n\r\n\u5e76\u4e14\u5728php\u5b98\u65b9\u6587\u6863\u4e2d\u4e5f\u6709\u8be6\u7ec6\u89e3\u91ca\r\n\u9519\u8bef\u6355\u83b7\u81ea\u5b9a\u4e49\u51fd\u6570\u7684\u7528\u9014\r\n>\u672c\u51fd\u6570\u53ef\u4ee5\u7528\u4f60\u81ea\u5df1\u5b9a\u4e49\u7684\u65b9\u5f0f\u6765\u5904\u7406\u8fd0\u884c\u4e2d\u7684\u9519\u8bef\uff0c \u4f8b\u5982\uff0c\u5728\u5e94\u7528\u7a0b\u5e8f\u4e2d\u4e25\u91cd\u9519\u8bef\u53d1\u751f\u65f6\uff0c\u6216\u8005\u5728\u7279\u5b9a\u6761\u4ef6\u4e0b\u89e6\u53d1\u4e86\u4e00\u4e2a\u9519\u8bef(\u4f7f\u7528 trigger_error())\uff0c\u4f60\u9700\u8981\u5bf9\u6570\u636e/\u6587\u4ef6\u505a\u6e05\u7406\u56de\u6536\u3002\r\n\u5e76\u4e14\r\n>\u540c\u65f6\u6ce8\u610f\uff0c\u5728\u9700\u8981\u65f6\u4f60\u6709\u8d23\u4efb\u4f7f\u7528 die()\u3002 \u5982\u679c\u9519\u8bef\u5904\u7406\u7a0b\u5e8f\u8fd4\u56de\u4e86\uff0c\u811a\u672c\u5c06\u4f1a\u7ee7\u7eed\u6267\u884c\u53d1\u751f\u9519\u8bef\u7684\u540e\u4e00\u884c\u3002\r\n\r\n----\r\n### Swoole\u7684exit\r\n\u6bd4\u5982\u5728swoole,\u4e2d\u9014\u8df3\u51fa\u4e1a\u52a1\u903b\u8f91\u5c42,\u5b9e\u73b0php\u7684exit\u6548\u679c\r\n```php\r\ntry{\r\n  // \u4ee3\u7801\u53c8\u81ed\u53c8\u957f, \u4e0d\u80fd\u7528if\u5757\u6765\u5206\u5272\u5f71\u54cd\u7f8e\u89c2\r\n  if (\u547d\u4e2d\u7f13\u5b58\u63d0\u524d\u8f93\u51fa\u4e86, \u540e\u7eed\u4ee3\u7801\u4e0d\u518d\u6267\u884c){\r\n    throw new \\ExitException(); //\u6211\u8981\u9000\u51fa\u5566\r\n  }\r\n // \u6162\u67e5\u8be2\r\n // balabala\r\n} catch (\\ExitException $e){\r\n  // \u51fa\u6765\u5566\r\n} catch (\\Exception $e) {\r\n  // \u5411\u7528\u6237\u89e3\u91ca\u9519\u8bef\u539f\u56e0\u6216\u8005\u8f93\u51fa500\r\n} finally {\r\n   $response->end();\r\n}\r\n```\r\n----\r\n### \u6355\u83b7\u4e25\u91cd\u9519\u8bef\r\n\r\n\u7136\u540e, \u8fd9\u79cd\u7ea7\u522b\u7684\u9519\u8bef, \u8fdb\u7a0b\u9000\u51fa\u662f\u5408\u7406\u4e14\u4e0d\u53ef\u907f\u514d\u7684, \u5982\u679c\u4f60\u8981\u505a\u64e6\u5c41\u80a1\u5904\u7406, \u9700\u8981\u7528**register_shutdown_function()\u642d\u914derror_get_last() \u5904\u7406**, \u9001\u4e0a\u7b80\u5355\u7684\u5b9e\u73b0\u4ee3\u7801.\r\n\r\n```php\r\nfunction serializeTrace($traces):string {\r\n    $default_trace = [\r\n        'file'     => 'unknown',\r\n        'line'     => 0,\r\n        'function' => 'unknown'\r\n    ];\r\n    $r = '';\r\n    foreach ($traces as $i => $t) {\r\n        $t = $t + $default_trace;\r\n        $r .= \"#$i {$t['file']}({$t['line']}): \";\r\n        if (isset($t['object']) and is_object($t['object'])) {\r\n            $r .= get_class($t['object']).'->';\r\n        }\r\n        $r .= \"{$t['function']}()\\n\";\r\n    }\r\n    \r\n    return $r;\r\n}\r\n$shutdown_error_handle = function () {\r\n    $error = error_get_last();\r\n    if (!empty($error)) {\r\n        $log = \"Shutdown Error: [{$error['type']}] {$error['message']} \".\r\n            \"in {$error['file']}:{$error['line']}\\n\".\r\n            \"Stack trace:\";\r\n        $log .= serializeTrace(debug_backtrace());\r\n        $this->errorLog($log);\r\n    }\r\n};\r\nregister_shutdown_function($shutdown_error_handle);\r\n```"
+      },
+      {
+        "user": "tsingsun",
+        "created_at": "2018-03-26T15:08:50Z",
+        "body": "\u5f88\u4e0d\u5e78, \u8fd9\u662fswoole\u7684\u7f3a\u9677,php\u672c\u6765\u6709register_exception_handle+register_error_handle\u6765\u5904\u7406\u5404\u79cd\u7c7b\u578b\u7684exception\u548cerror,\u4f46\u662fswoole\u5e76\u4e0d\u652f\u6301register_exception_handle,\u5bfc\u81f4\u5728\u5904\u7406\u73af\u8282\u4e2d\u5374\u4e86\u4e00\u73af,\u5e76\u4e14\u8fd9\u4e2aerror\u662f\u65e0\u6cd5\u88ab\u6355\u83b7,\u4e0d\u53ef\u6015\u5417?\u7531\u4e8e\u534f\u7a0b\u7684\u5b58\u5728\u8fd8\u653e\u5927\u4e86\u8be5\u95ee\u9898,\u60f3\u50cf\u4e00\u4e0b,\u5728\u4e00\u6b21\u652f\u4ed8\u8bf7\u6c42,\u7531\u4e8e\u67d0\u4e9b\u4e0d\u53ef\u6355\u83b7\u7684error,\u5bfc\u81f4\u8fdb\u7a0b\u4e2d\u7684\u8bf7\u6c42\u5168\u8d25\u4e86."
+      },
+      {
+        "user": "twose",
+        "created_at": "2018-03-26T16:43:14Z",
+        "body": "@tsingsun \r\nswoole\u53ea\u662f\u4e0d\u80fd\u4f7f\u7528`set_exception_handler`, \u4f46\u4efb\u610fexception\u90fd\u53ef\u4ee5\u7528try\u6355\u83b7.\r\n\u56e0\u4e3a\u4f60\u793a\u4f8b\u4ee3\u7801\u4e2d\u8d34\u51fa\u7684`require\u9519\u8bef`\u5e76\u4e0d\u662f`exception`\u800c\u662f\u4e00\u4e2a`\u4e25\u91cderror`, \u5c31\u7b97\u4f60\u5728php-cli\u73af\u5883\u4e0b\u8fd0\u884c\u4e5f\u4f1a\u5f02\u5e38\u9000\u51fa\u800c\u4e0d\u80fd\u88ab\u6355\u83b7.\r\n\u800c\u4e14\u6211\u4e5f\u8d34\u4e86\r\n>\u4ee5\u4e0b\u7ea7\u522b\u7684\u9519\u8bef\u4e0d\u80fd\u7531\u7528\u6237\u5b9a\u4e49\u7684\u51fd\u6570\u6765\u5904\u7406\uff1a E_ERROR\u3001 E_PARSE\u3001 E_CORE_ERROR\u3001 E_CORE_WARNING\u3001 E_COMPILE_ERROR\u3001 E_COMPILE_WARNING\uff0c\u548c\u5728 \u8c03\u7528 set_error_handler() \u51fd\u6570\u6240\u5728\u6587\u4ef6\u4e2d\u4ea7\u751f\u7684\u5927\u591a\u6570 E_STRICT\u3002"
+      },
+      {
+        "user": "twose",
+        "created_at": "2018-03-26T16:52:18Z",
+        "body": "@tsingsun \u8fd9\u662f\u5728\u666e\u901a\u7684php\u73af\u5883\u4e0b\u8fd0\u884c, \u5e76\u6ca1\u6709\u4efb\u4f55\u6355\u83b7\u65b9\u6cd5\u594f\u6548, \u53ea\u6253\u5370\u51fa\u4e86error_handle, \u8fdb\u7a0b\u4ecd\u65e7\u5f02\u5e38\u9000\u51fa\u4e86\u540e\u7eed\u4ee3\u7801\u4e5f\u672a\u6267\u884c.\r\n```php\r\n<?php\r\nset_error_handler(function () {\r\n    echo 'error_handle';\r\n    \r\n    return true;\r\n});\r\n\r\nset_exception_handler(function () {\r\n    echo 'exception_handle';\r\n    \r\n    return true;\r\n});\r\n\r\ntry {\r\n    require 'ab.php';\r\n} catch (Error $e) {\r\n    echo 'catch error';\r\n} catch (Exception $e) {\r\n    echo 'catch exception';\r\n} catch (Throwable $t) {\r\n    echo 'catch throwable';\r\n} finally {\r\n    echo 'finally';\r\n}\r\n```\r\n\r\n```bash\r\nPHP Fatal error:  require(): Failed opening required 'ab.php' (include_path='.:/usr/local/Cellar/php/7.2.3_3/share/pear') in /Users/twosee/Toast/test/error.php on line 21\r\nerror_handle\r\nFatal error: require(): Failed opening required 'ab.php' (include_path='.:/usr/local/Cellar/php/7.2.3_3/share/pear') in /Users/twosee/Toast/test/error.php on line 21\r\n\r\nProcess finished with exit code 255\r\n```"
+      },
+      {
+        "user": "tsingsun",
+        "created_at": "2018-03-27T12:52:44Z",
+        "body": "@twose \u4ece\u65b0\u770b\u4e86php\u6587\u6863,\u4f60\u662f\u5bf9\u7684,E_ERROR\u7b49\u5f02\u5e38\u4f1a\u5bfc\u81f4\u811a\u672c\u4e2d\u65ad,\u8fd9\u6837swoole\u80fd\u505a\u7684\u786e\u5b9e\u6709\u9650,\u4f46\u8fd8\u662f\u89c9\u5f97\u8fdb\u7a0b\u9000\u51fa\u7684\u4ee3\u4ef7\u592a\u5927."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how PHP handles fatal errors and why they cannot be caught with try-catch or error handlers",
+      "Clarification on the relationship between Swoole and PHP's error handling mechanisms",
+      "Explanation of the difference between exceptions and fatal errors in PHP"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:08:04"
+    }
+  },
+  {
+    "number": 1221,
+    "title": "TCP server\u6267\u884c \u4e00\u76f4\u62a5check \u4e4b\u524d\u8fd0\u884c\u6ca1\u6709\u95ee\u9898",
+    "created_at": "2017-05-24T05:23:10Z",
+    "closed_at": "2017-05-24T08:25:40Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/1221",
+    "body": "\u5728\u672c\u5730\u865a\u62df\u673a\u6267\u884c\u4e5f\u6ca1\u6709\u62a5\u9519\uff0c\u5728\u516c\u53f8\u6d4b\u8bd5\u670d\u52a1\u5668\u62a5\u9519\u65e0\u6cd5\u8fde\u63a5\r\n`\r\n[root@localhost test]# php ChipPro.php\r\n[/usr/local/src/swoole-src-1.9.9/swoole_server.c:361@php_swoole_server_before_start]Create swoole_server host=0.0.0.0, port=6000, mode=3, type=1\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:359@swServer_start_proxy]hb timer start, time: 120 live time:600\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:1487@swHeartbeatThread_loop]check fd=3\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:1487@swHeartbeatThread_loop]check fd=3\r\n`\r\n\u8fde\u63a5\u65f6\u62a5\u9519\r\n`\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/memory/ShareMemory.c:66@sw_shm_free]check:\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:1487@swHeartbeatThread_loop]check fd=3\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:1487@swHeartbeatThread_loop]check fd=3\r\n[/usr/local/src/swoole-src-1.9.9/src/network/Server.c:145@swServer_master_onAccept][Master] Accept new connection. maxfd=3|reactor_id=4|conn=26\r\nSegmentation fault (core dumped)\r\n`\r\n\r\n\u6211\u4ee3\u7801\u5e94\u8be5\u6ca1\u6709\u95ee\u9898- -  \u672c\u5730\u8fd0\u884c\u6210\u529f\uff0c\u5bf9\u4e86  \u672c\u5730\u73af\u5883\u662fphp7 swoole 2.0.6\r\n\u6d4b\u8bd5\u670d\u52a1\u5668\u5f53\u524d\u7248\u672cphp5.6 swoole 1.9.9  \u4e4b\u524d2.0.5\u4e0d\u80fd\u7528\u624d\u6362\u76841.9.9\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/1221/comments",
+    "author": "RandalTeng",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2017-05-24T08:25:40Z",
+        "body": "\u8bf7\u52ff\u5f00\u542f `--enable-swoole-debug` \u7f16\u8bd1\u9009\u9879"
+      },
+      {
+        "user": "RandalTeng",
+        "created_at": "2017-05-24T08:49:55Z",
+        "body": "\u6ca1\u6709\u7528\u554a- -  \u6211\u91cd\u65b0\u7f16\u8bd1\u4e86swoole\u6a21\u5757- -  \u8fd8\u662f\u62a5\u4e00\u6837\u7684\u9519- -\r\n`\r\n./configure --enable-async-redis --enable-coroutine --with-php-config=/usr/local/php5/bin/php-config  --enable-openssl  --enable-sockets  --enable-swoole\r\n`"
+      },
+      {
+        "user": "wangjinbei",
+        "created_at": "2017-05-25T02:28:55Z",
+        "body": "make clean\u8fc7\uff1f"
+      },
+      {
+        "user": "RandalTeng",
+        "created_at": "2017-05-25T03:02:24Z",
+        "body": "- -  \u597d\u5427- -  \u6ca1\u6709clean- -   \u91cd\u65b0make\u53ef\u4ee5\u4e86  \u8c22\u8c22\u5927\u4f6c~~"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the Swoole server segmentation fault error on the test server",
+      "A proper build/compilation process for the Swoole extension",
+      "Guidance that accounts for differences between development and production environments"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:08:49"
+    }
+  },
+  {
+    "number": 940,
+    "title": "zend_mm_heap corrupted",
+    "created_at": "2016-12-09T18:52:38Z",
+    "closed_at": "2016-12-12T03:01:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/940",
+    "body": "When declare swoole server in class, like so :\r\n\r\n```\r\n<?php\r\nclass Server {\r\n  private $server;\r\n  public function run() {\r\n    $this->server = new swoole_websocket_server(\"0.0.0.0\", 443, SWOOLE_BASE, SWOOLE_SOCK_TCP | SWOOLE_SSL);\r\n    $this->server->start();\r\n  }\r\n}\r\n$srv = new Server();\r\n$srv->run();\r\n```\r\n\r\nI get \"zend_mm_heap corrupted\" error\r\nBUT\r\nwhen you run the server directly :\r\n\r\n```\r\n<?php\r\n$server = new swoole_websocket_server(\"0.0.0.0\", 443, SWOOLE_BASE, SWOOLE_SOCK_TCP | SWOOLE_SSL);\r\n```\r\n\r\nit's ok",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/940/comments",
+    "author": "laurenti",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-12-12T03:01:25Z",
+        "body": "This is caused by the `server::set` method.\r\nThe latest code has been fixed."
+      },
+      {
+        "user": "laurenti",
+        "created_at": "2016-12-12T13:57:12Z",
+        "body": "with latest code it's ok."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A fix for the 'zend_mm_heap corrupted' error when declaring a Swoole server inside a class",
+      "An updated version of the Swoole library that resolves the class-based instantiation issue",
+      "Understanding of the root cause of the error"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:09:00"
+    }
+  },
+  {
+    "number": 912,
+    "title": "\u5728swoole_websocket_server start\u56de\u8c03\u542f\u52a8\u7684swoole_process\u4e2d\u65e0\u6cd5\u5411\u5ba2\u6237\u7aefpush\u6d88\u606f?",
+    "created_at": "2016-11-15T02:39:40Z",
+    "closed_at": "2016-11-15T07:56:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/912",
+    "body": "\u5b9e\u4f8b\u4ee3\u7801\u5982\u4e0b:\r\n```php\r\n<?php\r\n$server = new \\swoole_websocket_server(\"0.0.0.0\", 9443);\r\n\r\n$server->set(array(\r\n    'worker_num' => 1,\r\n    'max_request' => 500,\r\n    'task_worker_num' => 1,\r\n    'max_connection' => 1024\r\n));\r\n\r\n$server->on('start', function (\\swoole_websocket_server $server) {\r\n    $pid = getmypid();\r\n    $mPid = getmypid();\r\n    echo \"this is Master pid: $mPid\\n\";\r\n    \r\n    $process = new swoole_process('process');\r\n    $pid = $process->start();\r\n});\r\n\r\n$server->on('message', function (\\swoole_websocket_server $server, $frame) {\r\n    echo \"receive from {$frame->fd}:{$frame->data},opcode:{$frame->opcode},fin:{$frame->finish} workerid: {$server->worker_id}\\n\";\r\n});\r\n\r\n$server->on('task', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\r\n$server->on('finish', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\r\n\r\n$server->start();\r\n\r\nfunction process(swoole_process $process)\r\n{\r\n    global $server;\r\n    swoole_set_process_name(\"php processor\");\r\n    // \u7b49\u5f85\u5ba2\u6237\u7aef\u8fde\u63a5, 20\u79d2\u540e\u5411\u5ba2\u6237\u7aef\u5faa\u73af\u53d1\u9001\u6570\u636e\r\n    swoole_timer_after(20 * 1000, function() use ($server){\r\n        foreach ($server->connections as $fd) {\r\n            var_dump($fd);\r\n            $server->push($fd, 'hello');\r\n        }\r\n    });\r\n    \r\n}\r\n```\r\n20\u79d2\u540e, var_dump\u51fa\u4e86fd, \u4f46\u662f\u5ba2\u6237\u7aef\u6ca1\u6709\u6536\u5230\u6570\u636e.",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/912/comments",
+    "author": "kings36503",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2016-11-15T07:56:16Z",
+        "body": "\u4f7f\u7528`addProcess`\uff0c\u4e0d\u8981\u5728`onStart`\u56de\u8c03\u51fd\u6570\u4e2d\u521b\u5efaprocess\n"
+      },
+      {
+        "user": "kings36503",
+        "created_at": "2016-11-15T09:04:16Z",
+        "body": "ok, \u53ef\u4ee5\u4e86, \u591a\u8c22.\n"
+      },
+      {
+        "user": "kings36503",
+        "created_at": "2016-11-15T09:04:52Z",
+        "body": "\u8d34\u4e0a\u4fee\u6539\u540e\u7684\u5b9e\u4f8b\u4ee3\u7801:\n\n``` php\n<?php\n$server = new \\swoole_websocket_server(\"0.0.0.0\", 9443);\n\n$server->set(array(\n    'worker_num' => 1,\n    'max_request' => 500,\n    'task_worker_num' => 1,\n    'max_connection' => 1024\n));\n\n$process = new swoole_process('process');\n$pid = $process->start();\n$server->addProcess($process);\n\n\n$server->on('start', function (\\swoole_websocket_server $server) {\n    $pid = getmypid();\n    echo \"this is Master pid: $pid\\n\";\n});\n\n$server->on('message', function (\\swoole_websocket_server $server, $frame) {\n    echo \"receive from {$frame->fd}:{$frame->data},opcode:{$frame->opcode},fin:{$frame->finish} workerid: {$server->worker_id}\\n\";\n});\n\n$server->on('task', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\n$server->on('finish', function (\\swoole_server $serv, $task_id, $from_id, $data) {});\n\n$server->start();\n\nfunction process(swoole_process $process)\n{\n    global $server;\n    swoole_set_process_name(\"php processor\");\n\n    swoole_timer_after(10 * 1000, function() use ($server){\n        foreach ($server->connections as $fd) {\n            var_dump($fd);\n            $server->push($fd, 'hello');\n        }\n    });\n\n}\n```\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A correct approach to create and manage processes in Swoole that allows pushing messages to WebSocket clients",
+      "Proper integration between Swoole processes and the WebSocket server's connection management",
+      "A solution that maintains proper access to the server object across different Swoole components"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:09:17"
+    }
+  },
+  {
+    "number": 464,
+    "title": "onReceive\u4e2d\u4f1a\u6536\u5230\u622a\u65ad\u7684\u6570\u636e",
+    "created_at": "2015-12-31T09:01:10Z",
+    "closed_at": "2016-01-02T10:57:19Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/swoole/swoole-src/issues/464",
+    "body": "\u8bbe\u7f6e\u4e86\\r\\n\\r\\n\u4e3a\u7ed3\u675f\u7b26,\u8fde\u7eed\u53d1\u9001100\u6bb5\u6570\u636e(\u7528fsockopen\u6253\u5f00, \u7136\u540e\u901a\u8fc7write\u53d1\u9001, \u5faa\u73af100\u6b21, \u6700\u540eclose), \u5176\u4e2d\u6bcf\u6bb5\u6570\u636e\u7684\u6700\u540e\u4e5f\u7528\\r\\n\\r\\n\u4f5c\u4e3a\u7ed3\u675f\n\u4f46\u662f\u6709\u4e9b\u65f6\u5019, \u53d1\u9001\u7684100\u6bb5\u6570\u636e\u4e2d,\u4f1a\u67091-2\u6bb5\u6570\u636e\u51fa\u9519, \u7ecf\u8fc7\u65e5\u5fd7\u6253\u5370, \u53d1\u73b0\u6570\u636e\u88ab\u622a\u65ad\u4e86\n\u4e2d\u95f4\u5e76\u6ca1\u6709\\r\\n\\r\\n, \u4f46\u662f\u88ab\u62c6\u6210\u4e862\u6b21onReceive\n\n\u6211\u81ea\u5df1\u7528\u65e5\u5fd7\u6253\u5370\u4e86\u4e00\u4e0b, \u53d1\u73b0onReceive\u7684\u56de\u8c03\u51fd\u6570\u91cc\u9762\u6253\u5370\u7684\u6570\u636e, \u88ab\u62c6\u6210\u4e862\u6b21\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/T\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:89]save log to db error: <E9><9D><9E><E6><B3><95><E6><95><B0><E6><8D><AE>\n<E5><AF><B9><E8><B1><A1><EF><BC><81>\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]estAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei42\",\"thread\":\"29697\"}\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:89]save log to db error: <E9><9D><9E><E6><B3><95><E6><95><B0><E6><8D><AE>\n<E5><AF><B9><E8><B1><A1><EF><BC><81>\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/TestAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei43\",\"thread\":\"29697\"}\n[2015-12-31 16:52:53][DEBUG][Command][IndexManager/save_log:81][0][save_log]{\"logger_name\":\"Story_online\",\"timestamp\":\"2015-12-31 16:52:53\",\"file\":\"App\\/Lib\\/Action\\/Story\\/TestAction.class.php\",\"line\":23,\"class_name\":\"TestAction\",\"method\":\"log\",\"level\":6,\"message\":\"bianwei44\",\"thread\":\"29697\"}\n",
+    "comments_url": "https://api.github.com/repos/swoole/swoole-src/issues/464/comments",
+    "author": "poisonbian",
+    "comments": [
+      {
+        "user": "matyhtf",
+        "created_at": "2015-12-31T09:20:31Z",
+        "body": "\u662f\u5426\u542f\u7528\u4e86 open_eof_split\n"
+      },
+      {
+        "user": "poisonbian",
+        "created_at": "2016-01-02T06:28:58Z",
+        "body": "\u4e4b\u524d\u6ca1\u6709\u5f00\u542fopen_eof_split\uff0c\u56e0\u4e3a\u4f1a\u51fa\u9519\uff0c\u770b\u5230\u4f60\u53e6\u5916\u4e00\u4e2a\u56de\u590d\uff0c\u5173\u95ed\u4e86ringbuffer\uff0c\u91cd\u65b0\u5f00\u542f\u4e86open_eof_split\u4e4b\u540e\uff0c\u8fd9\u4e2a\u95ee\u9898\u5c31\u6ca1\u6709\u518d\u590d\u73b0\u4e86~\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that prevents data from being split across multiple onReceive callbacks when using end-of-data markers",
+      "Guidance on proper configuration of the open_eof_split option",
+      "Information about potential conflicts between ringbuffer and open_eof_split settings"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:09:40"
+    }
+  }
+]

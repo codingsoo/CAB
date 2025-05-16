@@ -1,0 +1,114 @@
+[
+  {
+    "number": 9309,
+    "title": "[rllib] Cannot detect pybullet environments.",
+    "created_at": "2020-07-06T00:56:25Z",
+    "closed_at": "2020-07-06T03:43:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ray-project/ray/issues/9309",
+    "body": "### Pybullet Environments Cannot Be Detected By Ray/rllib\r\n\r\nHi, I'm trying to use rllib to train pybullet games. My environment is ray 0.8.4, ubuntu 16.04, Pytorch  1.2.0. It seems that ray cannot detect these games and said the game was not registered. But I can make the gym environment outside ray within the same script. I attached a simple code to show what's wrong. Could someone help with this? Thanks!!\r\n\r\n```\r\nimport ray\r\nfrom ray.rllib.agents.ppo import PPOTrainer\r\nfrom ray.tune.registry import register_env\r\nimport gym\r\nimport pybullet_envs\r\n\r\nenv = gym.make('HumanoidBulletEnv-v0')\r\nprint(\"Made Successfully\")\r\n\r\nclass MyEnv(gym.Env):\r\n    def __init__(self, env_config):\r\n        self.env = gym.make('HumanoidBulletEnv-v0')\r\n        self.action_space = self.env.action_space\r\n        self.observation_space = self.env.observation_space\r\n\r\n    def reset(self):\r\n        obs = self.env.reset()\r\n        return obs\r\n\r\n    def step(self, action):\r\n        action = self.action_space.high * action\r\n        obs, reward, done, info = self.env.step(action)\r\n        return obs, reward, done, info\r\n\r\nregister_env(\"myenv\", lambda config: MyEnv(config))\r\n\r\n\r\ndef main():\r\n    ray.init()    \r\n    trainer = PPOTrainer(env=\"myenv\", config={\r\n        \"use_pytorch\": True,\r\n        })\r\n\r\n    for i in range(100):\r\n        trainer.train()\r\n\r\n    trainer.stop()\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n```\r\n\r\n\r\nWhen I run the code, the environment outside ray could be made successfully and 'Made Successfully' was printed. But then I get the error that \r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"pybullet_train.py\", line 44, in <module>\r\n    main()\r\n  File \"pybullet_train.py\", line 39, in main\r\n    trainer.train()\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/agents/trainer.py\", line 502, in train\r\n    raise e\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/agents/trainer.py\", line 491, in train\r\n    result = Trainable.train(self)\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/tune/trainable.py\", line 261, in train\r\n    result = self._train()\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/agents/trainer_template.py\", line 150, in _train\r\n    fetches = self.optimizer.step()\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/optimizers/sync_samples_optimizer.py\", line 59, in step\r\n    for e in self.workers.remote_workers()\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/utils/memory.py\", line 29, in ray_get_and_free\r\n    result = ray.get(object_ids)\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/worker.py\", line 1513, in get\r\n    raise value.as_instanceof_cause()\r\nray.exceptions.RayTaskError(UnregisteredEnv): ray::RolloutWorker.__init__() (pid=8430, ip=192.168.1.8)\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/gym/envs/registration.py\", line 118, in spec\r\n    return self.env_specs[id]\r\nKeyError: 'HumanoidBulletEnv-v0'\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nray::RolloutWorker.__init__() (pid=8430, ip=192.168.1.8)\r\n  File \"python/ray/_raylet.pyx\", line 414, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 414, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 414, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 449, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 450, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 452, in ray._raylet.execute_task\r\n  File \"python/ray/_raylet.pyx\", line 407, in ray._raylet.execute_task.function_executor\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/ray/rllib/evaluation/rollout_worker.py\", line 287, in __init__\r\n    self.env = _validate_env(env_creator(env_context))\r\n  File \"pybullet_train.py\", line 27, in <lambda>\r\n    register_env(\"myenv\", lambda config: MyEnv(config))\r\n  File \"pybullet_train.py\", line 14, in __init__\r\n    self.env = gym.make('HumanoidBulletEnv-v0')\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/gym/envs/registration.py\", line 142, in make\r\n    return registry.make(id, **kwargs)\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/gym/envs/registration.py\", line 86, in make\r\n    spec = self.spec(path)\r\n  File \"/home/xxx/anaconda3/lib/python3.7/site-packages/gym/envs/registration.py\", line 128, in spec\r\n    raise error.UnregisteredEnv('No registered env with id: {}'.format(id))\r\ngym.error.UnregisteredEnv: No registered env with id: HumanoidBulletEnv-v0\r\n```\r\n\r\nI know 'import pybullet_envs' will register the environments in gym. It looked like rollout workers didn't detect these environments. Could someone tell me how to solve this? Thank you!",
+    "comments_url": "https://api.github.com/repos/ray-project/ray/issues/9309/comments",
+    "author": "KarlXing",
+    "comments": [
+      {
+        "user": "ericl",
+        "created_at": "2020-07-06T02:59:30Z",
+        "body": "Can you try moving the import into the constructor for your class? The problem is the import only applies locally and not on the Ray workers."
+      },
+      {
+        "user": "KarlXing",
+        "created_at": "2020-07-06T03:43:13Z",
+        "body": "Great! Importing pybullet_envs inside MyEnv class works. Thank you for the quick reply."
+      },
+      {
+        "user": "Glaucus-2G",
+        "created_at": "2020-07-14T08:27:50Z",
+        "body": "> Great! Importing pybullet_envs inside MyEnv class works. Thank you for the quick reply.\r\n\r\n\r\nCould you show me your codes? I am learning how to use it! Thank you!"
+      },
+      {
+        "user": "Glaucus-2G",
+        "created_at": "2020-07-15T02:25:16Z",
+        "body": "> > Great! Importing pybullet_envs inside MyEnv class works. Thank you for the quick reply.\r\n\r\n> Could you show me your codes? I am learning how to use it! Thank you!\r\n\r\nI think I have got it.  Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the pybullet environments aren't being detected by Ray workers",
+      "A solution that makes pybullet environments accessible to Ray workers",
+      "A quick response to the technical issue"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 22:59:35"
+    }
+  },
+  {
+    "number": 8622,
+    "title": "Restoring from checkpoint on different machine",
+    "created_at": "2020-05-26T17:23:53Z",
+    "closed_at": "2020-05-26T19:35:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ray-project/ray/issues/8622",
+    "body": "<!--Please include [tune], [rllib], [autoscaler] etc. in the issue title if relevant-->\r\n\r\n### What is your question?\r\nI trained a model on one machine and I am able to load and restore properly from a saved checkpoint on that machine. When I copied over the checkpoint and try to restore and execute on a different machine, I get the following error:\r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"test_rllib_model.py\", line 77, in <module>\r\n    test_agent.restore(checkpoint_path)\r\n  File \"/home/mlab/rl_dev/lib/python3.6/site-packages/ray/tune/trainable.py\", line 417, in restore\r\n    self._restore(checkpoint_path)\r\n  File \"/home/mlab/rl_dev/lib/python3.6/site-packages/ray/rllib/agents/trainer.py\", line 639, in _restore\r\n    self.__setstate__(extra_data)\r\n  File \"/home/mlab/rl_dev/lib/python3.6/site-packages/ray/rllib/agents/trainer_template.py\", line 192, in __setstate__\r\n    Trainer.__setstate__(self, state)\r\n  File \"/home/mlab/rl_dev/lib/python3.6/site-packages/ray/rllib/agents/trainer.py\", line 1070, in __setstate__\r\n    self.optimizer.restore(state[\"optimizer\"])\r\nAttributeError: 'NoneType' object has no attribute 'restore'\r\n```\r\nAm I missing some files or something? I've copied over all the files in the checkpoint directory and also the `params.pkl` and `params.json` file. \r\nI'm creating a trainer instance and restoring from the checkpoint. \r\n\r\n*Ray version and other system information (Python version, TensorFlow version, OS):*\r\n",
+    "comments_url": "https://api.github.com/repos/ray-project/ray/issues/8622/comments",
+    "author": "jangkj09",
+    "comments": [
+      {
+        "user": "sven1977",
+        "created_at": "2020-05-26T18:14:29Z",
+        "body": "Maybe the ray versions are different on the two machines? Could you post your specs?"
+      },
+      {
+        "user": "jangkj09",
+        "created_at": "2020-05-26T19:35:30Z",
+        "body": "Yes, that solved the problem. On one machine I had the stable 0.8.5 and on the other I had 0.9.0.dev0\r\nRe-installing with 0.8.5 resolved the problem. \r\n\r\nI don't know if this exists somewhere in the docs, but it would be helpful to indicate this difference more explicitly. I spent over an hour trying to debug what was going on. Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Information about version compatibility requirements when transferring checkpoints between machines",
+      "Clear guidance on how to resolve checkpoint restoration errors across different environments",
+      "Documentation references or best practices for checkpoint portability"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 22:59:51"
+    }
+  },
+  {
+    "number": 7490,
+    "title": "[rllib] why the RolloutWorker uses the default config  everytime",
+    "created_at": "2020-03-06T17:57:35Z",
+    "closed_at": "2020-03-07T03:58:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ray-project/ray/issues/7490",
+    "body": "<!--Please include [tune], [rllib], [autoscaler] etc. in the issue title if relevant-->\r\n\r\n### What is your question?\r\n\r\n*Ray version and other system information (Python version, TensorFlow version, OS):*\r\nRay: 0.8.2\r\nPython: 3.6\r\nTF: 2.0\r\nOS: macOS Catalina\r\n\r\nI  create some RolloutWorker instances in our customized training flow, you can run the code.\r\n\r\n```python\r\nimport argparse\r\n\r\nimport ray\r\nimport gym\r\nimport copy\r\nimport random\r\nimport numpy as np\r\n\r\nfrom ray import tune\r\nfrom ray.rllib.utils import try_import_tf\r\n\r\nfrom ray.rllib.models import ModelCatalog\r\nfrom ray.rllib.models.tf.tf_modelv2 import TFModelV2\r\n\r\nfrom ray.rllib.models.tf.tf_action_dist import Categorical\r\nfrom ray.rllib.agents.pg.pg import PGTFPolicy\r\n\r\nfrom ray.rllib.evaluation import RolloutWorker\r\nfrom ray.rllib.evaluation.metrics import collect_metrics\r\nfrom ray.rllib.policy.sample_batch import SampleBatch\r\nfrom ray.rllib.policy.tests.test_policy import TestPolicy\r\nfrom ray.rllib.policy.tf_policy import TFPolicy\r\n\r\nfrom ray.rllib.offline import NoopOutput, IOContext, OutputWriter, InputReader\r\n\r\nfrom ray.rllib.agents.trainer import with_common_config\r\n\r\nfrom ray.rllib.evaluation.postprocessing import Postprocessing, compute_advantages\r\nfrom ray.rllib.policy.tf_policy_template import build_tf_policy\r\n\r\n\r\nfrom ray.rllib.models.tf.misc import normc_initializer, get_activation_fn\r\n\r\n\r\ntf = try_import_tf()\r\n\r\n\r\nclass CustomCategorical(Categorical):\r\n    def __init__(self, inputs, model=None, temperature=1.0):\r\n        \"\"\" The inputs are action logits \"\"\"\r\n        super().__init__(inputs, model, temperature)\r\n        self.softmax = tf.nn.softmax(inputs)\r\n\r\n    def prob(self, actions):\r\n        _prob_given_action = tf.one_hot(actions, depth=self.softmax.get_shape().as_list()[-1]) * self.softmax\r\n        return tf.reduce_sum(_prob_given_action, axis=-1)\r\n\r\n\r\nclass DemoModel(TFModelV2):\r\n    def __init__(self, obs_space, action_space, num_outputs, model_config, name):\r\n        super(DemoModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)\r\n\r\n        self.loss_inputs = [\r\n            ('taken_actions', tf.placeholder(tf.int32, (None,))),\r\n            ('returns', tf.placeholder(tf.float32, (None,)))\r\n        ]\r\n        self.ph_obs_input = tf.placeholder(tf.float32, (None,)+obs_space.shape)\r\n\r\n        self.ph_all_inputs = {k: v for _, (k, v) in enumerate(self.loss_inputs + [(\"obs\", self.ph_obs_input)])}\r\n        self.ph_all_inputs['prev_actions'] = tf.placeholder(tf.int32, (None,))\r\n        self.ph_all_inputs['prev_rewards'] = tf.placeholder(tf.float32, (None,))\r\n\r\n        inputs = tf.keras.layers.Input(\r\n            shape=(np.product(obs_space.shape), ))\r\n\r\n        _layer_out = tf.keras.layers.Dense(\r\n            128,\r\n            activation=tf.nn.tanh,\r\n            kernel_initializer=normc_initializer(1.0))(inputs)\r\n\r\n        self._layer_out = tf.keras.layers.Dense(\r\n            num_outputs,\r\n            activation=None,\r\n            kernel_initializer=normc_initializer(1.0))(_layer_out)\r\n\r\n        self._value_out = tf.keras.layers.Dense(\r\n            1,\r\n            activation=None,\r\n            kernel_initializer=normc_initializer(0.01))(_layer_out)\r\n\r\n        self.action_dist = CustomCategorical(self._layer_out, None)\r\n        self.predicted_actions = self.action_dist.sample()\r\n\r\n        # self.model and self.base_model are different\r\n        self.model = tf.keras.Model(inputs, [self._layer_out, self._value_out])\r\n        self.register_variables(self.model.variables)\r\n\r\n    def forward(self, input_dict, state, seq_lens):\r\n        model_out, self._value_out = self.model(input_dict[\"obs_flat\"])\r\n        return model_out, state\r\n\r\n    def custom_loss(self, policy_loss, loss_inputs):\r\n        return policy_loss\r\n\r\n    def from_batch(self, train_batch, is_training=True):\r\n        \"\"\"Convenience function that calls this model with a tensor batch.\r\n\r\n        All this does is unpack the tensor batch to call this model with the\r\n        right input dict, state, and seq len arguments.\r\n        \"\"\"\r\n\r\n        input_dict = {\r\n            \"obs\": train_batch[SampleBatch.CUR_OBS],\r\n            \"is_training\": is_training,\r\n        }\r\n        if SampleBatch.PREV_ACTIONS in train_batch:\r\n            input_dict[\"prev_actions\"] = train_batch[SampleBatch.PREV_ACTIONS]\r\n        if SampleBatch.PREV_REWARDS in train_batch:\r\n            input_dict[\"prev_rewards\"] = train_batch[SampleBatch.PREV_REWARDS]\r\n        states = []\r\n        i = 0\r\n        while \"state_in_{}\".format(i) in train_batch:\r\n            states.append(train_batch[\"state_in_{}\".format(i)])\r\n            i += 1\r\n        return self.__call__(input_dict, states, train_batch.get(\"seq_lens\"))\r\n\r\n    def value_function(self):\r\n        return tf.reshape(self._value_out, [-1])\r\n\r\n    def metrics(self):\r\n        \"\"\"Override to return custom metrics from your model.\r\n\r\n        The stats will be reported as part of the learner stats, i.e.,\r\n            info:\r\n                learner:\r\n                    model:\r\n                        key1: metric1\r\n                        key2: metric2\r\n\r\n        Returns:\r\n            Dict of string keys to scalar tensors.\r\n        \"\"\"\r\n        return {}\r\n\r\n\r\ndef pg_tf_loss(policy, model, dist_class, train_batch):\r\n    \"\"\"The basic policy gradients loss.\"\"\"\r\n    logits, _ = model.from_batch(train_batch)\r\n    action_dist = dist_class(logits, model)\r\n    return -tf.reduce_mean(\r\n        action_dist.logp(train_batch[SampleBatch.ACTIONS]) * train_batch[SampleBatch.REWARDS])\r\n\r\n\r\n# def post_process_advantages(policy,\r\n#                             sample_batch,\r\n#                             other_agent_batches=None,\r\n#                             episode=None):\r\n#     \"\"\"This adds the \"advantages\" column to the sample train_batch.\"\"\"\r\n#     return compute_advantages(\r\n#         sample_batch,\r\n#         0.0,\r\n#         policy.config[\"gamma\"],\r\n#         use_gae=False,\r\n#         use_critic=False)\r\n\r\n\r\nDEFAULT_CONFIG = with_common_config({\r\n    # # No remote workers by default.\r\n    # \"num_workers\": 0,\r\n    # # Learning rate.\r\n    # \"lr\": 0.0004,\r\n})\r\n\r\n\r\nCustomPolicy = build_tf_policy(\r\n    name=\"CustomPolicy\",\r\n    get_default_config=lambda: DEFAULT_CONFIG,\r\n    # postprocess_fn=post_process_advantages,\r\n    loss_fn=pg_tf_loss)\r\n\r\n\r\ndef set_variables(policy: CustomPolicy):\r\n    policy._variables = ray.experimental.tf_utils.TensorFlowVariables(\r\n        [], policy._sess, policy.variables())\r\n\r\n\r\ndef training_workflow(config, reporter):\r\n    sess = tf.Session()\r\n    env = gym.make(\"CartPole-v0\")\r\n\r\n    # policy = CustomPolicy(observation_space=env.observation_space, action_space=env.action_space, config=config,\r\n    #                       sess=sess, model=model, loss_inputs=model.loss_inputs, loss='Not None',\r\n    #                       action_sampler=model.predicted_actions, obs_input=model.ph_obs_input)\r\n\r\n    conf = {'config': config, 'sess': sess, 'model': model, 'loss_inputs': model.loss_inputs, 'loss': 'Not None',\r\n            'action_sampler': model.predicted_actions, 'obs_input': model.ph_obs_input}\r\n\r\n    policy = CustomPolicy(env.observation_space, env.action_space,\r\n                          config=config)  # , existing_inputs=model.ph_all_inputs)#, existing_model=model)\r\n    set_variables(policy)\r\n    workers = [\r\n        RolloutWorker.as_remote().remote(env_creator=lambda c: gym.make(\"CartPole-v0\"),\r\n                                         policy=CustomPolicy\r\n                                         )\r\n        for _ in range(config[\"num_workers\"])\r\n    ]\r\n\r\n    for i in range(config[\"num_iters\"]):\r\n        # Broadcast weights to the policy evaluation workers\r\n        weights = ray.put({\"default_policy\": policy.get_weights()})\r\n        for w in workers:\r\n            w.set_weights.remote(weights)\r\n\r\n        # Gather a batch of samples\r\n        T1 = SampleBatch.concat_samples(\r\n            ray.get([w.sample.remote() for w in workers]))\r\n\r\n        # Update the remote policy replicas and gather another batch of samples\r\n        # new_value = policy.get_weights()\r\n        # for w in workers:\r\n        #     w.for_policy.remote(lambda p: p.update_some_value(new_value))\r\n\r\n        # Gather another batch of samples\r\n        T2 = SampleBatch.concat_samples(\r\n            ray.get([w.sample.remote() for w in workers]))\r\n\r\n        # Improve the policy using the T1 batch\r\n        policy.learn_on_batch(T1)\r\n\r\n        # Do some arbitrary updates based on the T2 batch\r\n        # print(f'iter: {i}, sum_rewards: {(sum(T2[\"rewards\"])):.2f}')\r\n\r\n        reporter(**collect_metrics(remote_workers=workers))\r\n\r\n\r\nif __name__ == \"__main__\":\r\n\r\n    parser = argparse.ArgumentParser()\r\n    parser.add_argument(\"--gpu\", action=\"store_true\")\r\n    parser.add_argument(\"--num-iters\", type=int, default=3)\r\n    parser.add_argument(\"--num-workers\", type=int, default=1)\r\n    parser.add_argument(\"--num-cpus\", type=int, default=0)\r\n\r\n    args = parser.parse_args()\r\n    ray.init(num_cpus=args.num_cpus or None)\r\n    ModelCatalog.register_custom_model(\"demo_model\", DemoModel)\r\n\r\n    tune.run(\r\n        training_workflow,\r\n        # resources_per_trial={\r\n        #     \"gpu\": 1 if args.gpu else 0,\r\n        #     \"cpu\": 1,\r\n        #     \"extra_cpu\": args.num_workers,\r\n        # },\r\n        config={\r\n            \"num_workers\": args.num_workers,\r\n            \"num_iters\": args.num_iters,\r\n            \"lr\": 1e-3,\r\n            \"model\": {\r\n                \"custom_model\": \"demo_model\",\r\n                \"max_seq_len\": 20,\r\n                \"custom_options\": {\r\n                    \"activation\": tf.nn.tanh,\r\n                }\r\n            },\r\n        },\r\n    )\r\n```\r\n\r\nIn\r\n```\r\n    workers = [\r\n        RolloutWorker.as_remote().remote(env_creator=lambda c: gym.make(\"CartPole-v0\"),\r\n                                         policy=CustomPolicy\r\n                                         )\r\n        for _ in range(config[\"num_workers\"])\r\n    ]\r\n```\r\nThe RolloutWorker creates a instance by using the default config not the config passed into the workflow. \r\n\r\nAre there any methods to fix it?",
+    "comments_url": "https://api.github.com/repos/ray-project/ray/issues/7490/comments",
+    "author": "GoingMyWay",
+    "comments": [
+      {
+        "user": "ericl",
+        "created_at": "2020-03-06T21:56:48Z",
+        "body": "You need to explicitly pass it via RolloutWorker.remote(policy_config=config), or use `WorkerSet(trainer_config=config)` to create the rollout workers."
+      },
+      {
+        "user": "GoingMyWay",
+        "created_at": "2020-03-07T02:34:41Z",
+        "body": "> You need to explicitly pass it via RolloutWorker.remote(policy_config=config), or use `WorkerSet(trainer_config=config)` to create the rollout workers.\r\n\r\nExactly. Thanks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to pass custom configuration to RolloutWorker instances",
+      "A concise explanation of the correct parameter to use when creating RolloutWorker instances",
+      "Alternative approaches to achieve the same configuration goal"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:00:39"
+    }
+  }
+]

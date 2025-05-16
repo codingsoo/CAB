@@ -1,0 +1,237 @@
+[
+  {
+    "number": 6778,
+    "title": "No TPU devices were found.",
+    "created_at": "2021-04-01T05:38:18Z",
+    "closed_at": "2021-04-02T05:16:18Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/Lightning-AI/pytorch-lightning/issues/6778",
+    "body": "Thanks for great framework.  \r\nI tried to train with tpu (Google Cloud Platform Environment). I encounter error like this:\r\n```\r\nkaki_ai@kaki-ins:~/kopite-bot$ python3 train_blender.py\r\n16:14:31 | Overriding opt[\"no_cuda\"] to True (previously: False)\r\n16:14:31 | Loading model with `--beam-block-full-context false`\r\n16:14:31 | loading dictionary from /home/kaki_ai/ParlAI/data/models/blender/blender_90M/model.dict\r\n16:14:31 | num words = 54944\r\n16:14:32 | DEPRECATED: XLM should only be used for backwards compatibility, as it involves a less-stable layernorm operation.\r\n16:14:33 | Total parameters: 87,508,992 (87,508,992 trainable)\r\n16:14:33 | Loading existing model params from /home/kaki_ai/ParlAI/data/models/blender/blender_90M/model\r\nTraceback (most recent call last):\r\n  File \"train_blender.py\", line 47, in <module>\r\n    val_dataloader=test_loader,\r\n  File \"/home/kaki_ai/kopite-bot/training/lightning_base.py\", line 135, in fit\r\n    accumulate_grad_batches=self.accumulate_grad_batches,\r\n  File \"/opt/conda/lib/python3.7/site-packages/pytorch_lightning/trainer/connectors/env_vars_connector.py\", line 39, in insert_env_defaults\r\n    return fn(self, **kwargs)\r\n  File \"/opt/conda/lib/python3.7/site-packages/pytorch_lightning/trainer/trainer.py\", line 321, in __init__\r\n    replace_sampler_ddp, deterministic, precision, amp_backend, amp_level, plugins\r\n  File \"/opt/conda/lib/python3.7/site-packages/pytorch_lightning/trainer/connectors/accelerator_connector.py\", line 91, in __init__\r\n    self.tpu_cores = device_parser.parse_tpu_cores(tpu_cores)\r\n  File \"/opt/conda/lib/python3.7/site-packages/pytorch_lightning/utilities/device_parser.py\", line 113, in parse_tpu_cores\r\n    raise MisconfigurationException('No TPU devices were found.')\r\npytorch_lightning.utilities.exceptions.MisconfigurationException: No TPU devices were found.\r\n```\r\n\r\nIf you have any doubts, please help me. Thank you!",
+    "comments_url": "https://api.github.com/repos/Lightning-AI/pytorch-lightning/issues/6778/comments",
+    "author": "sooftware",
+    "comments": [
+      {
+        "user": "kaushikb11",
+        "created_at": "2021-04-01T06:50:27Z",
+        "body": "Hi @sooftware,\r\nDid you export the env variables required to connect to TPU? TPU_IP_ADDRESS & XRT_TPU_CONFIG.\r\n\r\nIf yes, could you try the master and update us on it? We pushed an update last night #6767. Thanks!"
+      },
+      {
+        "user": "sooftware",
+        "created_at": "2021-04-01T06:57:19Z",
+        "body": "Thank you! I will try."
+      },
+      {
+        "user": "kaushikb11",
+        "created_at": "2021-04-01T07:01:14Z",
+        "body": "Haha, don't close the issue. Would like to know if it's working as expected. Thanks!"
+      },
+      {
+        "user": "sooftware",
+        "created_at": "2021-04-01T07:03:33Z",
+        "body": "@kaushikb11 Ah Okay! Whether it works or not, I'll leave the results here!"
+      },
+      {
+        "user": "sooftware",
+        "created_at": "2021-04-02T00:22:40Z",
+        "body": "I set `export XRT_TPU_CONFIG=\"tpu_worker;0;$TPU_IP_ADDRESS:xxxx\"` and It works. Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Instructions for properly configuring TPU environment variables",
+      "Guidance on resolving the 'No TPU devices were found' error",
+      "Information about required setup steps for TPU usage in Google Cloud Platform"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:04:01"
+    }
+  },
+  {
+    "number": 5897,
+    "title": "Auto_scale_batch_size fails for to bigger batch sizes, cuDNN failure",
+    "created_at": "2021-02-10T08:51:55Z",
+    "closed_at": "2021-02-15T15:44:41Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/Lightning-AI/pytorch-lightning/issues/5897",
+    "body": "## \ud83d\udc1b Bug\r\n\r\n<!-- A clear and concise description of what the bug is. -->\r\nI'm using a pre-trained ResNet50 on 224x224 images with 16-bit precision, I wanted to test the auto_scale_batch_size functionality.\r\n\r\nThe output in the terminal is the following:\r\nGPU available: True, used: True\r\nTPU available: None, using: 0 TPU cores\r\nLOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]\r\nUsing native 16bit precision.\r\nBatch size 2 succeeded, trying batch size 4\r\nBatch size 4 succeeded, trying batch size 8\r\nBatch size 8 succeeded, trying batch size 16\r\nBatch size 16 succeeded, trying batch size 32\r\nBatch size 32 succeeded, trying batch size 64\r\nBatch size 64 succeeded, trying batch size 128\r\nBatch size 128 succeeded, trying batch size 256\r\n\r\nAll good till then. On batch size 256 the GPU's memory certainly is not sufficient and it fails on a 2d convolution.\r\nThe auto_scaling should be aborted at this point and the batch_size fixed to 128.\r\nInstead the script fails with the message \"RuntimeError: Unable to find a valid cuDNN algorithm to run convolution\".\r\n\r\n### To Reproduce\r\nI'm not doing anything exceptional:\r\n1. Parsing arguments with \"--auto_scale_batch_size\", \"true\"\r\n2. Initiating model, datamodule and trainer using the parsed arguments\r\n3. trainer.tune(model, dm)\r\n\r\n### Question\r\nIs this a problem on the Pytorch Lightning side not capturing the exception or is this anyhow linked to Cuda and installing a different version could be enough?\r\n\r\n\r\n### Environment\r\n1x GeForce RTX 2080Ti\r\nUbuntu 20.10\r\nPython 3.8.5\r\nPytorch Lightning 1.1.8\r\nPytorch 1.7.1\r\nCuda 11.2\r\nEnv created with miniconda, packages installed with pip\r\n",
+    "comments_url": "https://api.github.com/repos/Lightning-AI/pytorch-lightning/issues/5897/comments",
+    "author": "FlorianMF",
+    "comments": [
+      {
+        "user": "justusschock",
+        "created_at": "2021-02-10T08:56:45Z",
+        "body": "Hi @FlorianMF,\r\n\r\nHave you tried to run that network with batchsize 256 without the auto_scaling? Because we don't do anything special on the convolutional side and this seems to be a bug in PyTorch.\r\n\r\nAlso could you try with `torch.backends.cudnn.benchmark = True` and/or `torch.backends.cudnn.enabled = False`? "
+      },
+      {
+        "user": "FlorianMF",
+        "created_at": "2021-02-10T09:22:45Z",
+        "body": "Hi @justusschock, \r\nI get the same error without auto_scaling for a batch_size=256, as well when adding 'torch.backends.cudnn.benchmark = True' at the top of the script.\r\nWhen adding \"torch.backends.cudnn.enabled = False\" the error message \"RuntimeError: CUDA out of memory\" confirms my assumption.\r\n\r\nSo, am I 'forced' to use 'auto_scale_batch_size' once to get the maximum batch size and then rerun the script without the flag? I think your goal proposing this functionality is that this is not needed though.\r\n"
+      },
+      {
+        "user": "justusschock",
+        "created_at": "2021-02-10T10:03:05Z",
+        "body": "No, usually you don't have to rerun it. But with torch.backends.cudnn.enabled = False, PyTorch will use some other algorithm for convolutions, which may be more memory demanding. So for some reason there seems to be a bug within PyTorch for the cudnn convolution. Our tuner only listens to the `Runtime: CUDA out of memory`-Error as everything else could also be a user-error.\r\n\r\nUnfortunately there is nothing else we can do on that"
+      },
+      {
+        "user": "FlorianMF",
+        "created_at": "2021-02-10T10:24:26Z",
+        "body": "You're right. The error is captured when 'torch.backends.cudnn.enabled = False' is added at the top and the script continues."
+      },
+      {
+        "user": "tchaton",
+        "created_at": "2021-02-15T15:44:41Z",
+        "body": "Hey @FlorianMF,\n\nClosing this issue as it seems resolved.\n\nBest,\nT.C"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A workaround that allows auto_scale_batch_size to complete successfully when encountering cuDNN algorithm failures",
+      "An explanation of why the auto_scale_batch_size functionality was failing",
+      "Confirmation of whether this is a Lightning issue or a PyTorch/CUDA issue"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:04:20"
+    }
+  },
+  {
+    "number": 5027,
+    "title": "On \"import pytorch-lightning\": AttributeError: python: undefined symbol: THCudaHalfTensor_normall",
+    "created_at": "2020-12-08T19:40:09Z",
+    "closed_at": "2020-12-09T14:56:05Z",
+    "labels": [
+      "help wanted",
+      "priority: 1"
+    ],
+    "url": "https://github.com/Lightning-AI/pytorch-lightning/issues/5027",
+    "body": "## \ud83d\udc1b Bug\r\n\r\n<!-- A clear and concise description of what the bug is. -->\r\nSimply by importing pytorch-lightning, I receive the following error: `AttributeError: python: undefined symbol: THCudaHalfTensor_normall`\r\n\r\nTraceback:\r\n```\r\nTraceback (most recent call last):\r\n  File \"test.py\", line 1, in <module>\r\n    import pytorch_lightning\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/pytorch_lightning/__init__.py\", line 56, in <module>\r\n    from pytorch_lightning import metrics\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/pytorch_lightning/metrics/__init__.py\", line 14, in <module>\r\n    from pytorch_lightning.metrics.metric import Metric\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/pytorch_lightning/metrics/metric.py\", line 26, in <module>\r\n    from pytorch_lightning.utilities.apply_func import apply_to_collection\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/pytorch_lightning/utilities/__init__.py\", line 25, in <module>\r\n    from apex import amp\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/apex-0.1-py3.7-linux-x86_64.egg/apex/__init__.py\", line 12, in <module>\r\n    from . import optimizers\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/apex-0.1-py3.7-linux-x86_64.egg/apex/optimizers/__init__.py\", line 2, in <module>\r\n    from .fp16_optimizer import FP16_Optimizer\r\n  File \"/data/nv419/anaconda3/lib/python3.7/site-packages/apex-0.1-py3.7-linux-x86_64.egg/apex/optimizers/fp16_optimizer.py\", line 8, in <module>\r\n    lib.THCudaHalfTensor_normall.argtypes=[ctypes.c_void_p, ctypes.c_void_p]\r\n  File \"/data/nv419/anaconda3/lib/python3.7/ctypes/__init__.py\", line 377, in __getattr__\r\n    func = self.__getitem__(name)\r\n  File \"/data/nv419/anaconda3/lib/python3.7/ctypes/__init__.py\", line 382, in __getitem__\r\n    func = self._FuncPtr((name_or_ordinal, self))\r\nAttributeError: python: undefined symbol: THCudaHalfTensor_normall\r\n```\r\n\r\n### To Reproduce\r\n`import pytorch-lightning`\r\n\r\n### Expected behavior\r\nFor pytorch-lightning to import and be used correctly\r\n\r\n### Environment\r\n* CUDA:\r\n        - GPU:\r\n                - Tesla V100-PCIE-32GB\r\n                - Tesla V100-PCIE-32GB\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n                - GeForce RTX 2080 Ti\r\n        - available:         True\r\n        - version:           10.1\r\n* Packages:\r\n        - numpy:             1.17.2\r\n        - pyTorch_debug:     False\r\n        - pyTorch_version:   1.6.0+cu101\r\n        - tqdm:              4.54.1\r\n* System:\r\n        - OS:                Linux\r\n        - architecture:\r\n                - 64bit\r\n                -\r\n        - processor:         x86_64\r\n        - python:            3.7.4\r\n        - version:           #59~18.04.1-Ubuntu SMP Wed Oct 21 12:14:56 UTC 2020\r\n\r\n### Additional context\r\npytorch-lightning version is 1.0.8 (couldn't import it in obviously...)\r\n",
+    "comments_url": "https://api.github.com/repos/Lightning-AI/pytorch-lightning/issues/5027/comments",
+    "author": "nihirv",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2020-12-08T19:41:02Z",
+        "body": "Hi! thanks for your contribution!, great first issue!"
+      },
+      {
+        "user": "awaelchli",
+        "created_at": "2020-12-09T03:04:09Z",
+        "body": "From your error message it looks like you have apex installed. \r\nTry to import apex: \r\n`from apex import amp`\r\nand you will probably see the same error. Check your apex installation, maybe it is incompatible with your pytorch version or it wasn't correctly compiled. "
+      },
+      {
+        "user": "nihirv",
+        "created_at": "2020-12-09T14:56:05Z",
+        "body": "> From your error message it looks like you have apex installed.\r\n> Try to import apex:\r\n> `from apex import amp`\r\n> and you will probably see the same error. Check your apex installation, maybe it is incompatible with your pytorch version or it wasn't correctly compiled.\r\n\r\nThis was the issue! Fixed it by uninstalling apex (`pip uninstall apex`). Thanks!\r\n\r\nClosing the issue\r\n"
+      },
+      {
+        "user": "awaelchli",
+        "created_at": "2020-12-09T14:57:02Z",
+        "body": "Awesome! You're welcome"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the root cause of the import error",
+      "A practical solution to resolve the PyTorch Lightning import error",
+      "Guidance on how to diagnose similar dependency conflicts"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:05:15"
+    }
+  },
+  {
+    "number": 3169,
+    "title": "RuntimeError: Cannot replicate if number of devices (1) is different from 8 Exception in device=TPU:2: Cannot replicate if number of devices (1) is different from 8",
+    "created_at": "2020-08-25T17:49:27Z",
+    "closed_at": "2020-08-26T04:48:31Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/Lightning-AI/pytorch-lightning/issues/3169",
+    "body": "I am getting the above (title) error on Kaggle when I am doing \r\n\r\n`trainer.fit(model, dm)`\r\n\r\nwhere `trainer = Trainer(tpu_cores = 8, logger = wandblogger, max_epochs = 20)`\r\n\r\nFollowing is the trace:\r\n\r\n>   File \"/opt/conda/lib/python3.7/site-packages/torch_xla/distributed/xla_multiprocessing.py\", line 330, in _mp_start_fn\r\n    _start_fn(index, pf_cfg, fn, args)\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/distributed/xla_multiprocessing.py\", line 323, in _start_fn\r\n    _setup_replication()\r\nTraceback (most recent call last):\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/distributed/xla_multiprocessing.py\", line 330, in _mp_start_fn\r\n    _start_fn(index, pf_cfg, fn, args)\r\nException in device=TPU:2: Cannot replicate if number of devices (1) is different from 8\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/core/xla_model.py\", line 287, in xla_replication_devices\r\n    format(len(local_devices), len(kind_devices)))\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/distributed/xla_multiprocessing.py\", line 316, in _setup_replication\r\n    xm.set_replication(device, [device])\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/core/xla_model.py\", line 315, in set_replication\r\n    replication_devices = xla_replication_devices(devices)\r\nTraceback (most recent call last):\r\n  File \"/opt/conda/lib/python3.7/site-packages/torch_xla/distributed/xla_multiprocessing.py\", line 323, in _start_fn\r\n    _setup_replication()\r\n\r\n\r\n\r\nI am using Kaggle Kernel. Here is my LightningDataModule.\r\n\r\n```python\r\nclass ProteinModule(pl.LightningDataModule):\r\n  def __init__(self, config, path, invalid_proteins):\r\n    super().__init__()\r\n\r\n    self.path = path\r\n    self.bs = config['bs']\r\n    self.state = config['seed']\r\n    self.invalid = invalid_proteins\r\n\r\n  def setup(self, stage=None):\r\n\r\n    all_protein_ids = os.listdir(self.path)\r\n    all_protein_ids = [protein for protein in all_protein_ids if protein not in self.invalid]\r\n    train_ids, val_ids = train_test_split(all_protein_ids, test_size = 0.2, random_state = self.state)\r\n\r\n    self.traindataset = ProteinDataset(path, train_ids)\r\n    self.valdataset = ProteinDataset(path, val_ids)\r\n\r\n\r\n  def train_dataloader(self):\r\n\r\n    return DataLoader(self.traindataset, batch_size = self.bs, shuffle = True)\r\n\r\n  def val_dataloader(self):\r\n\r\n    return DataLoader(self.valdataset, batch_size = self.bs, shuffle = False)\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/Lightning-AI/pytorch-lightning/issues/3169/comments",
+    "author": "VirajBagal",
+    "comments": [
+      {
+        "user": "rohitgr7",
+        "created_at": "2020-08-25T18:24:46Z",
+        "body": "Did you call `xm.xla_device()` somewhere? Or maybe try restarting the kernel and run again."
+      },
+      {
+        "user": "VirajBagal",
+        "created_at": "2020-08-26T04:47:39Z",
+        "body": "Thanks, @rohitgr7, I was using `xm.xla_device()` in one place. This error is resolved but I have got another error now. I'll open another issue for it. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the root cause of the TPU replication error",
+      "A simple troubleshooting step to resolve the TPU configuration issue",
+      "Guidance that doesn't require major code restructuring"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:06:52"
+    }
+  },
+  {
+    "number": 1322,
+    "title": "Training loop temporarily hangs after every 4 steps",
+    "created_at": "2020-03-31T17:35:57Z",
+    "closed_at": "2020-04-05T15:07:16Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/Lightning-AI/pytorch-lightning/issues/1322",
+    "body": "I am porting some of my code to pytorch lightning, and everything seems to work fine. However, for some reason after every 4 training steps I see some temporary hanging (~1 second), which is severely slowing down my overall training time. Am I missing some obvious configuration?  This is my Trainer configuration:\r\n\r\n```\r\n    trainer = pl.Trainer(\r\n        gpus=8\r\n        num_nodes=1,\r\n        distributed_backend='ddp',\r\n        checkpoint_callback=False,\r\n        max_epochs=50,\r\n        max_steps=None,\r\n        progress_bar_refresh_rate=1,\r\n        check_val_every_n_epoch=1,\r\n        val_check_interval=1.0,\r\n        gradient_clip_val=0.0,\r\n        log_save_interval=0,\r\n        num_sanity_val_steps=0,\r\n        amp_level='O0',\r\n    )\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/Lightning-AI/pytorch-lightning/issues/1322/comments",
+    "author": "VitorGuizilini-TRI",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2020-03-31T17:36:45Z",
+        "body": "Hi! thanks for your contribution!, great first issue!"
+      },
+      {
+        "user": "williamFalcon",
+        "created_at": "2020-04-04T12:34:00Z",
+        "body": "@PyTorchLightning/core-contributors "
+      },
+      {
+        "user": "ethanwharris",
+        "created_at": "2020-04-04T12:39:03Z",
+        "body": "Thanks for the issue! Would it be possible to post the code that reproduces this error? I've only seen this sort of behaviour before when the number of data loading workers is low - are you working with large data here (e.g. big images)?"
+      },
+      {
+        "user": "VitorGuizilini",
+        "created_at": "2020-04-04T16:24:16Z",
+        "body": "I increased the number of workers and it works perfectly now, thank you very much! You can close this issue."
+      },
+      {
+        "user": "williamFalcon",
+        "created_at": "2020-04-04T16:27:14Z",
+        "body": "should we throw a warning when users use few workers?"
+      },
+      {
+        "user": "VitorGuizilini",
+        "created_at": "2020-04-04T16:34:04Z",
+        "body": "If possible, sure! Seems like an obvious solution now, but it could save a couple of hours for other people. :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that eliminates the temporary hanging during training",
+      "Guidance on optimizing data loading performance",
+      "A simple configuration adjustment rather than a code rewrite"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-13 23:08:31"
+    }
+  }
+]

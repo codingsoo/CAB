@@ -1,0 +1,861 @@
+[
+  {
+    "number": 59251,
+    "title": "Port is not opened on keepers only using composable protocols",
+    "created_at": "2024-01-26T08:54:26Z",
+    "closed_at": "2024-01-26T10:31:15Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/59251",
+    "body": "\r\n**Description**\r\nWhen using the composable protocols configuration for serving prometheus metrics with tls, clickhouse server with only keeper configuration does not open specified port.\r\n\r\n**How to reproduce**\r\n* Clickhouse version 23.3.19.32\r\n\r\nTo reproduce the issue two nodes should be deployed, one as \"data\" node and the other one as a keeper.\r\nExample config:\r\n```xml\r\n<remote_servers>\r\n<example>\r\n  <shard>\r\n    <internal_replication>true</internal_replication>\r\n    <replica>\r\n      <host>data-node.example.com</host>\r\n      <port>9000</port>\r\n      <secure>true</secure>\r\n    </replica>\r\n  </shard>\r\n</example>\r\n</remote_servers>\r\n\r\n<keeper_server>\r\n  <server_id>1</server_id>\r\n  <tcp_port_secure>2181</tcp_port_secure>\r\n  <raft_configuration>\r\n      <secure>true</secure>\r\n\r\n      <server>\r\n          <id>1</id>\r\n          <hostname>keeper-node.example.com</hostname>\r\n          <port>2182</port>\r\n      </server>\r\n  </raft_configuration>\r\n</keeper_server>\r\n\r\n\r\n```\r\n\r\nIn both configs I do specify prometheus metrics endpoint using composable protocols following explanation given in this issue #49003:\r\n```xml\r\n<prometheus>\r\n  <endpoint>/metrics</endpoint>\r\n  <metrics>true</metrics>\r\n  <events>true</events>\r\n  <asynchronous_metrics>true</asynchronous_metrics>\r\n</prometheus>\r\n\r\n<protocols>\r\n  <prometheus_protocol>\r\n      <type>prometheus</type>\r\n      <description>prometheus protocol</description>\r\n  </prometheus_protocol>\r\n\r\n  <prometheus_secure>\r\n      <type>tls</type>\r\n      <impl>prometheus_protocol</impl>\r\n      <port>9999</port>\r\n      <description>prometheus over tls</description>\r\n  </prometheus_secure>\r\n</protocols>\r\n\r\n```\r\n\r\n\r\n**Expected behavior**\r\nPort 9999 is opened on both \"data\" node and keeper node and is under TLS.\r\n\r\n**Actual behavior**\r\nPort 9999 is only opened on the \"data\" and not the keeper node.\r\n\r\n**Logs**\r\nThere were no messages in log with a mention of this prometheus configuration, checked it on trace level.\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/59251/comments",
+    "author": "ilyatrefilov",
+    "comments": [
+      {
+        "user": "antonio2368",
+        "created_at": "2024-01-26T09:51:44Z",
+        "body": "Keeper currently doesn't support composable protocols so the \"old\" way should be used of specifying `<port>` under `<prometheus>`."
+      },
+      {
+        "user": "ilyatrefilov",
+        "created_at": "2024-01-26T10:13:15Z",
+        "body": "@antonio2368 Thank you for the clarification on this point.\r\nIs there any chance of composable protocols support on keepers in near future or it's better to look for workaround in long term?\r\nSeems like there are no out-of-box solutions left to collect metrics in secure way."
+      },
+      {
+        "user": "antonio2368",
+        "created_at": "2024-01-26T10:31:15Z",
+        "body": "@ilyatrefilov I can't promise you anything specific but I think it should be done in the near future along with some small changes to Keeper prometheus metrics (send only Keeper specific data).\r\n\r\nI'll close this issue for now and ping you when there is update for it."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification on whether composable protocols are supported for Keeper nodes",
+      "Information about alternative configuration methods for Keeper nodes",
+      "Insight into future support for composable protocols on Keeper nodes"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:12:37"
+    }
+  },
+  {
+    "number": 47521,
+    "title": "OOM on group by query",
+    "created_at": "2023-03-13T06:45:57Z",
+    "closed_at": "2023-03-14T21:03:41Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/47521",
+    "body": "> You have to provide the following information whenever possible.\r\n\r\nselect v, count(*) ... group by 1 produces OOM\r\n\r\n> A clear and concise description of what works not as it is supposed to.\r\n\r\nI created table from external tsv as MergeTree:\r\n\r\nset max_memory_usage = 8000000000;\r\nset max_memory_usage_for_user = 8000000000;\r\nset max_bytes_before_external_group_by = 10000000;\r\nset max_bytes_before_external_sort = 10000000;\r\n\r\ncreate table if not exists t ENGINE = MergeTree() order by v1 as\r\nselect *\r\nfrom file('/usr/proj/tsv-*', TabSeparated, 'v1 text, v2 text, v3 text, seq bigint');\r\n\r\nTable has 3B rows.\r\n\r\nI run following query:\r\n\r\nselect v1, count(*) from t group by 1 limit 5;\r\n\r\nI receive following error:\r\n\r\nCode: 241. DB::Exception: Received from localhost:9000. DB::Exception: Memory limit (for query) exceeded: would use 7.45 GiB (attempt to allocate chunk of 4225696 bytes), maximum: 7.45 GiB.: While executing SourceFromNativeStream. (MEMORY_LIMIT_EXCEEDED)\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/47521/comments",
+    "author": "rikuiki",
+    "comments": [
+      {
+        "user": "rikuiki",
+        "created_at": "2023-03-14T06:16:32Z",
+        "body": "Alexey, maybe you have a chance to comment why do you think it is not a potential bug?.."
+      },
+      {
+        "user": "nickitat",
+        "created_at": "2023-03-14T21:03:40Z",
+        "body": "memory limit currently strictly limits only pre aggregation phase (separate aggregation on execution threads). at the time of merging we need to bring smth around `total_aggr_state_size * aggregation_memory_efficient_merge_threads / NUM_BUCKETS (=256)` into memory. and you got error at merging phase as you see.\r\nas a workaround you could try to lower `aggregation_memory_efficient_merge_threads` if increasing memory limit is not an option.\r\n#40588 is aimed to address this issue \r\nP.S. it is not a good idea to set `max_bytes_before_external_group_by` too low. the lower this setting the more intermediate files will be generated. apart from consuming time it also affect memory usage in a bad way: for reading these files we will allocate 1MB buffer for each of them. you could easily get hundreds or even thousands of such small files with really small `max_bytes_before_external_group_by`. good default value is half of the memory limit."
+      },
+      {
+        "user": "rikuiki",
+        "created_at": "2023-03-15T01:36:23Z",
+        "body": "Thank you for explanation!\r\n\r\n> it is not a good idea to set max_bytes_before_external_group_by too low. \r\n\r\nI did this just for testing purposes, to check if ClickHouse can handle aggregation when data doesn't fit into memory, and reduced it even more when seen OOM."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the group by query is causing an out-of-memory error despite setting memory limits",
+      "A workaround or solution to execute the group by query without hitting memory limits",
+      "Guidance on proper configuration of memory-related settings for large aggregation queries",
+      "Information about how ClickHouse handles memory during different phases of query execution"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:15:53"
+    }
+  },
+  {
+    "number": 42858,
+    "title": "ParsingException when importing Point data from CSV",
+    "created_at": "2022-11-01T11:03:47Z",
+    "closed_at": "2022-11-02T08:48:53Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/42858",
+    "body": "When importing CSV files with geo Point data, I always get this error:\r\n\r\n> `Code: 27. DB::ParsingException: Cannot parse input: expected '\"' before: '(10, 10)\"'`\r\n\r\nTo reproduce the problem under simple conditions, I created a table with a Point column:\r\n`CREATE TABLE default.geo_point (p Point) ENGINE = Memory()`\r\n\r\nI also created a geo_point.csv file with a single point in it:\r\n```\r\n\"(10, 10)\"\r\n```\r\n\r\nI import the file with the clickhouse client (version 22.9.3.18) like this:\r\n`cat geo_point.csv | clickhouse-client -q 'INSERT INTO default.geo_point FORMAT CSV'`\r\n\r\nI get the above error, even when removing the double quotes. Not sure if this is a bug, or if I need to pass a certain flag to the clickhouse-client (I didn't find a flag that works). \r\n\r\nOther datatypes are imported just fine. Also, when I change the data type from Point to String, the import works fine.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/42858/comments",
+    "author": "aimfeld",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2022-11-02T08:48:53Z",
+        "body": "it should be `10,10` in CSV.\r\n\r\n```\r\nINSERT INTO geo_point VALUES((10, 10));\r\n\r\nselect * from default.geo_point format CSV;\r\n10,10\r\n\r\ninsert  into default.geo_point format CSV 20,20\r\n              ;\r\n\r\nselect * from default.geo_point;\r\n\u250c\u2500p\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\r\n\u2502 (10,10) \u2502\r\n\u2502 (20,20) \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```"
+      },
+      {
+        "user": "aimfeld",
+        "created_at": "2022-11-08T15:36:06Z",
+        "body": "Thanks, I tried TabSeparated format instead of CSV, and it worked. I can now import my postgres table into clickhouse, using psql and clickhouse-client:\r\n\r\n`psql -d my_db -U postgres -h localhost -c \"\\COPY (SELECT * FROM my_table) TO stdout WITH (FORMAT TEXT)\" | clickhouse-client  -q 'INSERT INTO my_db.my_table FORMAT TabSeparated'`\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A working method to import Point data from CSV into ClickHouse",
+      "Understanding of the correct format for Point data during import",
+      "A practical command or approach for importing geo data from external sources",
+      "Alternative format options that work with Point data"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:17:40"
+    }
+  },
+  {
+    "number": 41714,
+    "title": "When I bulk insert the replica table, all the data in the table becomes empty",
+    "created_at": "2022-09-23T07:51:23Z",
+    "closed_at": "2022-09-23T14:56:55Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/41714",
+    "body": "**Describe what's wrong**\r\n\r\n> When I bulk insert the replica table, all the data in the table becomes empty\r\n\r\n**How to reproduce**\r\n\r\n* Which ClickHouse server version to use\r\nclickhouse-version: **v22.6.3.35-stable**\r\nzookeeper-version: **3.4.9**\r\n\r\n* Firstly, I create a replica table\r\n```sql\r\nCREATE TABLE IF NOT EXISTS test_db.test1 (\r\n    `token_id` String,\r\n    `event_id` String,\r\n    `login_id` String,\r\n    `distinct_id` String,\r\n    `ctime` DateTime64(3),\r\n    `utime` DateTime64(3),\r\n    `cdate` String,\r\n    `udate` String\r\n)\r\nENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/test_db/test1', '{replica}')\r\nORDER BY ( distinct_id, login_id, utime, token_id)\r\nPARTITION BY (toYYYYMMDD(utime))\r\nTTL toDateTime(udate) + toIntervalMonth(4)\r\nSETTINGS index_granularity = 8192;\r\n```\r\n* Then I batched 3 times, each batch of 40,000 pieces of data, a total of 120,000 pieces of data were inserted,\r\n\r\n```\r\nSELECT count()\r\nFROM test_db.test1\r\n\r\nQuery id: 8b2071f7-7a50-49e2-a5fc-6dc18e46da07\r\n\r\n\u250c\u2500count()\u2500\u2510\r\n\u2502  120000 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 row in set. Elapsed: 0.009 sec.\r\n```\r\n\r\n* Then I inserted 40,000 pieces of data in batches, each batch of 10,000 pieces of data, a total of 4 batches. During the insert process, I keep querying and find that the data has been decreasing\r\n\r\n> **The data inserted above, each batch has more than 100 partitions of data;**\r\n\r\n```\r\nSELECT count()\r\nFROM test_db.test1\r\n\r\nQuery id: 174d0072-f9c9-44ea-b8c5-bff5d2527dc4\r\n\r\n\u250c\u2500count()\u2500\u2510\r\n\u2502   22993 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 row in set. Elapsed: 0.014 sec. \r\n\r\n```\r\n```\r\nSELECT count()\r\nFROM test_db.test1\r\n\r\nQuery id: 978eb77c-b517-4296-b84e-f6955efbec03\r\n\r\n\u250c\u2500count()\u2500\u2510\r\n\u2502    8038 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 row in set. Elapsed: 0.007 sec\r\n\r\n```\r\n\r\n```\r\nSELECT count()\r\nFROM test_db.test1\r\n\r\nQuery id: dd5287da-fb75-42f3-b455-225bbfa05803\r\n\r\n\u250c\u2500count()\u2500\u2510\r\n\u2502   10000 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 row in set. Elapsed: 0.012 sec\r\n\r\n```\r\n* In the end I only get 10000 pieces of data, but I want to get 160000. I don't know why the data is lost, I checked the logs, the local files are all cleaned up\r\n  \r\n```\r\n2022.09.23 15:36:55.302288 [ 16832 ] {} <Trace> test_db.test1 (ReplicatedMergeTreeCleanupThread): Cleared 196 old blocks from ZooKeeper\r\n2022.09.23 15:36:55.302539 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will drop empty part 20220725_1_6_1\r\n2022.09.23 15:36:55.302574 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will try to insert a log entry to DROP_RANGE for part 20220725_1_6_1\r\n2022.09.23 15:36:55.313579 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will drop empty part 20220726_1_6_1\r\n2022.09.23 15:36:55.313632 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will try to insert a log entry to DROP_RANGE for part 20220726_1_6_1\r\n2022.09.23 15:36:55.315411 [ 16720 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Pulling 1 entries to queue: log-0000000891 - log-0000000891\r\n2022.09.23 15:36:55.319817 [ 16720 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Pulled 1 entries to queue.\r\n2022.09.23 15:36:55.321111 [ 16663 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Executing DROP_RANGE 20220725_1_6_1\r\n2022.09.23 15:36:55.321264 [ 16663 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Removed 0 entries from queue. Waiting for 0 entries that are currently executing.\r\n2022.09.23 15:36:55.321386 [ 16663 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing parts.\r\n2022.09.23 15:36:55.325987 [ 16663 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removed 7 parts inside 20220725_1_6_1.\r\n2022.09.23 15:36:55.332289 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will drop empty part 20220727_1_6_1\r\n2022.09.23 15:36:55.332332 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will try to insert a log entry to DROP_RANGE for part 20220727_1_6_1\r\n2022.09.23 15:36:55.334647 [ 16734 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Pulling 1 entries to queue: log-0000000892 - log-0000000892\r\n2022.09.23 15:36:55.336885 [ 16734 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Pulled 1 entries to queue.\r\n2022.09.23 15:36:55.337758 [ 16691 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Executing DROP_RANGE 20220726_1_6_1\r\n2022.09.23 15:36:55.337782 [ 16691 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Removed 0 entries from queue. Waiting for 0 entries that are currently executing.\r\n2022.09.23 15:36:55.337837 [ 16691 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing parts.\r\n2022.09.23 15:36:55.342937 [ 16691 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removed 7 parts inside 20220726_1_6_1.\r\n2022.09.23 15:36:55.348930 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will drop empty part 20220728_1_6_1\r\n2022.09.23 15:36:55.348958 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Will try to insert a log entry to DROP_RANGE for part 20220728_1_6_1\r\n...\r\n...\r\n2022.09.23 15:36:57.503607 [ 16832 ] {} <Trace> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Found 560 old parts to remove.\r\n2022.09.23 15:36:57.503822 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing 560 old parts from ZooKeeper\r\n2022.09.23 15:36:57.511469 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_1_1_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512061 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_1_6_1 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512068 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_2_2_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512073 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_3_3_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512078 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_4_4_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512082 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_5_5_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512085 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220725_6_6_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512091 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220726_1_1_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512096 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220726_1_6_1 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512100 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220726_2_2_0 in ZooKeeper, it was only in filesystem\r\n2022.09.23 15:36:57.512104 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): There is no part 20220726_3_3_0 in ZooKeeper, it was only in filesystem\r\n...\r\n...\r\n2022.09.23 15:36:57.535842 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removed 560 old parts from ZooKeeper. Removing them from filesystem.\r\n2022.09.23 15:36:57.536166 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_1_6_1\r\n2022.09.23 15:36:57.536167 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_1_1_0\r\n2022.09.23 15:36:57.536836 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_2_2_0\r\n2022.09.23 15:36:57.537405 [ 16780 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeQueue): Pulling 1 entries to queue: log-0000000971 - log-0000000971\r\n2022.09.23 15:36:57.537988 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_3_3_0\r\n2022.09.23 15:36:57.538036 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_4_4_0\r\n2022.09.23 15:36:57.538724 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_5_5_0\r\n2022.09.23 15:36:57.538762 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220725_6_6_0\r\n2022.09.23 15:36:57.539189 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220726_1_1_0\r\n2022.09.23 15:36:57.539742 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220726_1_6_1\r\n2022.09.23 15:36:57.540188 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220726_2_2_0\r\n2022.09.23 15:36:57.540191 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20220726_3_3_0\r\n...\r\n2022.09.23 15:36:57.702064 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20221012_3_3_0\r\n2022.09.23 15:36:57.702507 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20221012_4_4_0\r\n2022.09.23 15:36:57.702957 [ 20682 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20221012_5_5_0\r\n2022.09.23 15:36:57.702959 [ 16871 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removing part from filesystem 20221012_6_6_0\r\n2022.09.23 15:36:57.704515 [ 16832 ] {} <Debug> test_db.test1 (4352a7d2-72dd-45c6-992a-e55542fd1e98): Removed 560 old parts\r\n2022.09.23 15:36:57.721899 [ 16832 ] {} <Debug> test_db.test1 (ReplicatedMergeTreeCleanupThread): Removed 81 old log entries: log-0000000881 - log-0000000961\r\n2022.09.23 15:36:57.724084 [ 16832 ] {} <Trace> test_db.test1 (ReplicatedMergeTreeCleanupThread): Execution took 221 ms.\r\n\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/41714/comments",
+    "author": "JohnZp",
+    "comments": [
+      {
+        "user": "tavplubix",
+        "created_at": "2022-09-23T10:55:48Z",
+        "body": "> TTL toDateTime(udate) + toIntervalMonth(4)\r\n\r\nI suppose that's the answer "
+      },
+      {
+        "user": "JohnZp",
+        "created_at": "2022-09-23T13:44:08Z",
+        "body": "> > TTL toDateTime(udate) + toIntervalMonth(4)\r\n> \r\n> I suppose that's the answer\r\n\r\nI can guarantee that the expiration time is not reached"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2022-09-23T14:12:14Z",
+        "body": "@JohnZp check server time `select now()`,\r\nremove TTL and check data insertion without TTL."
+      },
+      {
+        "user": "tavplubix",
+        "created_at": "2022-09-23T14:12:58Z",
+        "body": "> I can guarantee that the expiration time is not reached\r\n\r\nPlease share a reproducible example then, so we will check if there's a bug in TTL"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2022-09-23T14:15:44Z",
+        "body": ">`udate` String\r\n>TTL toDateTime(udate)\r\n\r\nAlso probably your String contains something which is evaluated to `1970-01-01` with toDateTime.\r\n\r\n```\r\nselect toDateTime('haba-01-01 01:21:33');\r\n\u250c\u2500toDateTime('haba-01-01 01:21:33')\u2500\u2510\r\n\u2502               1970-01-01 00:00:00 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```"
+      },
+      {
+        "user": "JohnZp",
+        "created_at": "2022-09-23T14:56:42Z",
+        "body": "Oh! you are right! It is indeed caused by TTL. I used toDatetime('yyyyMMdd'), and then all were converted to 1970-xx-xx\r\n```\r\nSELECT toDateTime('20220701')\r\n\r\nQuery id: ae080147-81c5-474b-8cfa-50219519cd8b\r\n\r\n\u250c\u2500toDateTime('20220701')\u2500\u2510\r\n\u2502    1970-08-23 08:51:41 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n1 row in set. Elapsed: 0.002 sec.\r\n```\r\n\r\n**Thank you very very very  much!!**  @den-crane @tavplubix \r\n\r\n\r\n"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2022-09-23T21:35:03Z",
+        "body": "```sql\r\nSELECT parseDateTimeBestEffort('20220701')\r\n\r\n\r\n\u250c\u2500parseDateTimeBestEffort('20220701')\u2500\u2510\r\n\u2502                 2022-07-01 00:00:00 \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```\r\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the root cause of data disappearance in the replica table",
+      "Explanation of how the TTL expression is causing premature data deletion",
+      "Guidance on proper DateTime format conversion for TTL expressions"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:18:38"
+    }
+  },
+  {
+    "number": 35444,
+    "title": "data_compressed_bytes and data_uncompressed_bytes in system.columns table are zero",
+    "created_at": "2022-03-20T14:23:37Z",
+    "closed_at": "2022-03-20T14:45:30Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/35444",
+    "body": "Clickhouse version: 22.3.2.1\r\n\r\nI create a MergeTree table and add some data to it, then I want to see how much space is used by its columns querying `system.columns` table, but it returns 0 for both `data_compressed_bytes` and `data_uncompressed_bytes`. I believe it worked a few months ago.\r\n\r\n```sql\r\ncreate table t (number Int32) engine = MergeTree() order by number as\r\nselect * from numbers(100000);\r\n\r\nselect name, type, data_compressed_bytes, data_uncompressed_bytes, compression_codec\r\nfrom system.columns where table = 't';\r\n```\r\nI get the following results:\r\n| name | type | data\\_compressed\\_bytes | data\\_uncompressed\\_bytes | compression\\_codec |\r\n| :--- | :--- | :--- | :--- | :--- |\r\n| number | Int32 | 0 | 0 |  |",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/35444/comments",
+    "author": "stas-sl",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2022-03-20T14:45:30Z",
+        "body": "It's expected/intended behaviour for compact parts.\r\n\r\n```\r\nselect table, name, part_type from system.parts where table = 't';\r\n\u250c\u2500table\u2500\u252c\u2500name\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500part_type\u2500\u2510\r\n\u2502 t     \u2502 all_1_1_0 \u2502 Compact   \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n\r\ncreate table t (number Int32) engine = MergeTree() order by number settings min_bytes_for_wide_part=0 as\r\nselect * from numbers(100000);\r\n\r\nselect table, name, part_type from system.parts where table = 't';\r\n\u250c\u2500table\u2500\u252c\u2500name\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500part_type\u2500\u2510\r\n\u2502 t     \u2502 all_1_1_0 \u2502 Wide      \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\nselect name, type, data_compressed_bytes, data_uncompressed_bytes, compression_codec\r\nfrom system.columns where table = 't';\r\n\u250c\u2500name\u2500\u2500\u2500\u252c\u2500type\u2500\u2500\u252c\u2500data_compressed_bytes\u2500\u252c\u2500data_uncompressed_bytes\u2500\u252c\u2500compression_codec\u2500\u2510\r\n\u2502 number \u2502 Int32 \u2502                401725 \u2502                  400000 \u2502                   \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```\r\n"
+      },
+      {
+        "user": "stas-sl",
+        "created_at": "2022-03-20T14:56:32Z",
+        "body": "Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the system.columns table shows zero values for data_compressed_bytes and data_uncompressed_bytes",
+      "Information about the relationship between part types and column size reporting",
+      "A working solution to view actual column storage metrics"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:23:01"
+    }
+  },
+  {
+    "number": 29181,
+    "title": "Can't import large files to server running under docker: \"Broken pipe, while writing to socket\"",
+    "created_at": "2021-09-19T21:58:06Z",
+    "closed_at": "2021-09-19T23:42:23Z",
+    "labels": [
+      "question",
+      "obsolete-version"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/29181",
+    "body": "I've started ClickHouse server as a docker container on my Windows machine:\r\n\r\n`docker run --restart always -d --name ch --ulimit nofile=262144:262144 -p 8123:8123 -p 9000:9000 -p 9009:9009 --volume=/e/ClickHouse:/var/lib/clickhouse yandex/clickhouse-server`\r\n\r\nThen I've opened an Ubuntu session (over WSL2)  and tried to import the data (2.1G csv file):\r\n\r\n`clickhouse-client --query \"INSERT INTO test.time_test FORMAT CSV\" --max_insert_block_size=100000 < /mnt/e/temp/time_test.csv`\r\n\r\nBut it failed:\r\n`Code: 210. DB::NetException: I/O error: Broken pipe, while writing to socket (127.0.0.1:9000)`\r\n\r\nIt reproduces for any file large enough. Tiny files are imported fine. Any ideas what could went wrong and how to diagnose it?\r\n\r\nOS: Windows 10\r\nClickHouse version: 21.9.3.30\r\nClickHouse client version: 18.16.1\r\nDocker Desktop: 20.10.8 (over WSL2)",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/29181/comments",
+    "author": "sogawa-sps",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2021-09-19T23:37:08Z",
+        "body": "18.16.1 is out of support.\r\nMost probably CH server restarts because of lack of memory.\r\nCheck `/var/log/clickhouse-server/clickhouse-server.log` for more info."
+      },
+      {
+        "user": "sogawa-sps",
+        "created_at": "2021-09-20T00:58:07Z",
+        "body": "Looks like it was an issue with the client indeed. It came from official Ubuntu rep, I've updated it using ClickHouse's repository and now everything works fine. Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of compatibility issues between client and server versions",
+      "A solution that enables successful import of large files"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:25:17"
+    }
+  },
+  {
+    "number": 28506,
+    "title": "i got a exception when create a table use RabbitMQ engine",
+    "created_at": "2021-09-02T09:17:27Z",
+    "closed_at": "2021-09-03T01:05:51Z",
+    "labels": [
+      "question",
+      "question-answered",
+      "comp-rabbitmq"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/28506",
+    "body": "the clickhouse run in docker\r\n```\r\nsudo mkdir /var/docker/clickhouse/\r\nsudo mkdir /var/docker/clickhouse/config\r\nsudo mkdir /var/docker/clickhouse/config/config.d\r\necho \"<yandex>\r\n     <!-- Listen wildcard address to allow accepting connections from other containers and host network. -->\r\n    <listen_host>::</listen_host>\r\n    <listen_host>0.0.0.0</listen_host>\r\n    <listen_try>1</listen_try>\r\n\r\n    <!--\r\n    <logger>\r\n        <console>1</console>\r\n    </logger>\r\n    -->\r\n</yandex>\" | sudo tee /var/docker/clickhouse/config/config.d/docker_related_config.xml\r\necho \"<yandex>\r\n <rabbitmq>\r\n    <username>guest</username>\r\n    <password>guest</password>\r\n </rabbitmq>\r\n</yandex>\" | sudo tee /var/docker/clickhouse/config/config.d/rabbit.xml\r\n\r\ndocker container stop clickhouse && docker container rm clickhouse\r\ndocker run -d \\\r\n  --name clickhouse \\\r\n  --restart on-failure \\\r\n  --ulimit nofile=262144:262144 \\\r\n  -p 8123:8123 \\\r\n  -p 9000:9000 \\\r\n  --volume=/var/docker/clickhouse:/var/lib/clickhouse \\\r\n  --volume=/var/docker/clickhouse/config/users.d:/etc/clickhouse-server/users.d \\\r\n  --volume=/var/docker/clickhouse/config/config.d:/etc/clickhouse-server/config.d \\\r\n  yandex/clickhouse-server\r\n\r\n```\r\nrabbitMQ is docker also\r\n```\r\nsudo docker run \\\r\n  -d \\\r\n  --name rabbitmq \\\r\n  -p 5672:5672 \\\r\n  -p 15672:15672 \\\r\n  rabbitmq:management\r\n```\r\n\r\nthen i create a teble and query it\r\n```\r\nCREATE TABLE queue\r\n(\r\n\tkey   UInt64,\r\n\tvalue UInt64,\r\n\tdate  DateTime\r\n) ENGINE = RabbitMQ SETTINGS rabbitmq_host_port = 'localhost:5672',\r\n\trabbitmq_exchange_name = 'exchange1',\r\n\trabbitmq_format = 'JSONEachRow',\r\n\trabbitmq_num_consumers = 5,\r\n\tdate_time_input_format = 'best_effort';\r\n\r\nselect *\r\nfrom queue;\r\n```\r\n\r\ni got a exception\r\n`Code: 530, e.displayText() = DB::Exception: RabbitMQ setup not finished. Connection might be lost (version 21.8.4.51 (official build))`\r\n\r\nthe log of clickhouse\r\n```\r\n2021.09.02\u00a009:10:26.877248\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Trace>\u00a0RabbitMQConnectionTask:\u00a0Execution\u00a0took\u00a04002\u00a0ms.\r\n2021.09.02\u00a009:10:27.377358\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Trace>\u00a0StorageRabbitMQ\u00a0(queue):\u00a0Trying\u00a0to\u00a0restore\u00a0connection\u00a0to\u00a0localhost:5672\r\n2021.09.02\u00a009:10:27.577754\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Error>\u00a0StorageRabbitMQ\u00a0(queue):\u00a0Library\u00a0error\u00a0report:\u00a0connection\u00a0lost\r\n2021.09.02\u00a009:10:31.379727\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Trace>\u00a0RabbitMQConnectionTask:\u00a0Execution\u00a0took\u00a04002\u00a0ms.\r\n2021.09.02\u00a009:10:31.879822\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Trace>\u00a0StorageRabbitMQ\u00a0(queue):\u00a0Trying\u00a0to\u00a0restore\u00a0connection\u00a0to\u00a0localhost:5672\r\n2021.09.02\u00a009:10:32.080192\u00a0[\u00a0216\u00a0]\u00a0{}\u00a0<Error>\u00a0StorageRabbitMQ\u00a0(queue):\u00a0Library\u00a0error\u00a0report:\u00a0connection\u00a0lost\r\n```\r\n\r\nclickhouse :\r\nselect version();=21.8.4.51\r\nrabbitmq is version 3.9.5\r\n\r\nsystem: windows 10 wsl debian\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/28506/comments",
+    "author": "AiSY-Yang",
+    "comments": [
+      {
+        "user": "kssenii",
+        "created_at": "2021-09-02T10:28:06Z",
+        "body": "I assume it does not work becuase you have both clickhouse and rabbitmq in different docker containers and then pass `localhost` to RabbitMQ engine. It should not be localhost."
+      },
+      {
+        "user": "AiSY-Yang",
+        "created_at": "2021-09-03T01:05:51Z",
+        "body": "> I assume it does not work becuase you have both clickhouse and rabbitmq in different docker containers and then pass `localhost` to RabbitMQ engine. It should not be localhost.\r\n\r\nthanks\r\nyou are right \r\ni add the argument  `  --link rabbitmq:rabbitmq`  when i run clickhouse\r\n\r\nset rabbitmq_host_port = 'rabbitmq:5672'\r\n\r\nI successfully created the table"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution to the connection issue between Docker containers",
+      "Proper configuration for inter-container communication in Docker",
+      "Correct host:port configuration for the RabbitMQ engine in ClickHouse"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:26:08"
+    }
+  },
+  {
+    "number": 28004,
+    "title": "build failed error:FAILED: src/libdbms.so ",
+    "created_at": "2021-08-23T02:03:36Z",
+    "closed_at": "2021-08-25T10:58:00Z",
+    "labels": [
+      "question",
+      "build",
+      "st-need-info"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/28004",
+    "body": "Hi\uff0cI compile cl on ubuntu 20.04, and always encounter this error. I don\u2019t know why. I also agree with the error on other debians.\r\n\r\n```\r\n12/672] Creating preprocessed file...c/lib/gssapi/krb5/gssapi_err_krb5.c\r\n+ /usr/bin/awk -f /home/hrp/Click/ClickHouse/contrib/krb5/src/util/et/et_h.awk outfile=gssapi_err_krb5.h /home/hrp/Click/ClickHouse/contrib/krb5/src/lib/gssapi/krb5/gssapi_err_krb5.et\r\n+ /usr/bin/awk -f /home/hrp/Click/ClickHouse/contrib/krb5/src/util/et/et_c.awk outfile=gssapi_err_krb5.c textdomain= localedir= /home/hrp/Click/ClickHouse/contrib/krb5/src/lib/gssapi/krb5/gssapi_err_krb5.et\r\n[421/672] Linking CXX shared library src/libdbms.so\r\nFAILED: src/libdbms.so\r\n: && /usr/bin/c++ -fPIC -fdiagnostics-color=always -fsized-deallocation  -\r\n\r\n```\r\n\r\nIs this file missing?  src/libdbms.so\uff1f\r\n\r\nI downloaded the source code  with submodules directly\uff0cis right\uff1f\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/28004/comments",
+    "author": "rouse2617",
+    "comments": [
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-08-23T10:31:21Z",
+        "body": "Check the amount of free space on your machine."
+      },
+      {
+        "user": "rouse2617",
+        "created_at": "2021-08-24T01:15:06Z",
+        "body": "Thank you for your suggestion, I tried to expand the memory is compiled, but when packaging deb I encountered this situation, in addition, I would like to ask, packaging deb can be continued, each time have to wait a long time, to the end reported wrong, but also to come again, thank you\r\n\r\nthis is package deb error\r\n```\r\n\r\n/home/hrp/ClickHouse/programs/main.cpp:29:5: error: 'ENABLE_CLICKHOUSE_SERVER' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_SERVER\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:32:5: error: 'ENABLE_CLICKHOUSE_CLIENT' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_CLIENT\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:35:5: error: 'ENABLE_CLICKHOUSE_LOCAL' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_LOCAL\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:38:5: error: 'ENABLE_CLICKHOUSE_BENCHMARK' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_BENCHMARK\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:41:5: error: 'ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:44:5: error: 'ENABLE_CLICKHOUSE_COMPRESSOR' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_COMPRESSOR\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:47:5: error: 'ENABLE_CLICKHOUSE_FORMAT' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_FORMAT\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:50:5: error: 'ENABLE_CLICKHOUSE_COPIER' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_COPIER\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:53:5: error: 'ENABLE_CLICKHOUSE_OBFUSCATOR' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_OBFUSCATOR\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:56:5: error: 'ENABLE_CLICKHOUSE_GIT_IMPORT' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_GIT_IMPORT\r\n    ^\r\n/home/hrp/ClickHouse/programs/main.cpp:59:5: error: 'ENABLE_CLICKHOUSE_KEEPER' is not defined, evaluates to 0 [-Werror,-Wundef]\r\n#if ENABLE_CLICKHOUSE_KEEPER\r\n```\r\n"
+      },
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-08-24T12:38:52Z",
+        "body": "This is wrong. These options should be enabled.\r\n\r\nI recommend to:\r\n- do static build (as default) instead of shared;\r\n- use all the defaults, don't specify any parameters;\r\n- if you need to build Debian packages, use `docker/packager`."
+      },
+      {
+        "user": "rouse2617",
+        "created_at": "2021-08-26T01:51:09Z",
+        "body": "Thank you, I made it"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Guidance on resolving the build failure for libdbms.so",
+      "Information about system resource requirements for compilation",
+      "Recommendations for the correct build configuration approach",
+      "Specific guidance on the proper way to build Debian packages"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:26:31"
+    }
+  },
+  {
+    "number": 25698,
+    "title": "Populating a materialized view results in unexpected values",
+    "created_at": "2021-06-25T06:19:21Z",
+    "closed_at": "2021-06-28T10:52:20Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/25698",
+    "body": "Please forgive me if i'm missing something fairly obvious here.\r\n\r\n**Describe the unexpected behaviour**\r\nPopulating a materialized view results in unexpected values.\r\n\r\n**How to reproduce**\r\n* Which ClickHouse server version to use: 21.3.13.9\r\n\r\n```bash\r\ndocker run -d --name some-clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server:21.3.13.9\r\ndocker exec -it some-clickhouse-server clickhouse-client\r\n\r\n:) CREATE TABLE tmp_aggregated\r\n(\r\n  `window_start` DateTime64 Codec(DoubleDelta, LZ4),\r\n  `metrics_name` Array(LowCardinality(String)) Codec(LZ4),\r\n  `organization_id` LowCardinality(String) Codec(LZ4)\r\n)\r\nENGINE MergeTree()\r\nPARTITION BY (organization_id) ORDER BY (window_start)\r\n\r\n:) create materialized view tmp_names (\r\n  organization_id LowCardinality(String),\r\n  metric_names SimpleAggregateFunction(groupUniqArrayArray, Array(String)),\r\n  window_start_day DateTime64\r\n)\r\nEngine=MergeTree()\r\norder by (window_start_day)\r\npopulate as select\r\n  organization_id,\r\n  groupUniqArray(metrics_name),\r\n  toStartOfDay(window_start)\r\nfrom tmp_aggregated array join metrics_name\r\ngroup by toStartOfDay(window_start), organization_id\r\n\r\n:) insert into tmp_aggregated values ('2021-06-24 07:15:09.000', ['metric1'], 'org-id');\r\n\r\n:) select * from tmp_names \\G\r\nRow 1:\r\n\u2500\u2500\u2500\u2500\u2500\u2500\r\norganization_id:  org-id\r\nmetric_names:     []\r\nwindow_start_day: 1970-01-01 00:00:00\r\n\r\n:) select * from tmp_aggregated \\G\r\nRow 1:\r\n\u2500\u2500\u2500\u2500\u2500\u2500\r\nwindow_start:    2021-06-24 07:15:09.000\r\nmetrics_name:    ['metric1']\r\norganization_id: org-id\r\n\r\n```\r\n\r\n**Expected behavior**\r\n\r\nWhen executing `select * from tmp_names \\G` I expected values stored in tmp_names to be:\r\n\r\n```\r\nRow 1:\r\n\u2500\u2500\u2500\u2500\u2500\u2500\r\norganization_id:  org-id\r\nmetric_names:      ['metric1']\r\nwindow_start_day: 2021-06-24 07:15:09.000\r\n```\r\n\r\n**Error message and/or stacktrace**\r\nIf applicable, add screenshots to help explain your problem.\r\n\r\n**Additional context**\r\nAdd any other context about the problem here.\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/25698/comments",
+    "author": "shivamMg",
+    "comments": [
+      {
+        "user": "SaltTan",
+        "created_at": "2021-06-26T20:05:09Z",
+        "body": "The names of the columns in the MV query and the destination table must match:\r\n\r\n as select\r\n  organization_id,\r\n  groupUniqArray(metrics_name) **as metric_names**,\r\n  toStartOfDay(window_start) **as window_start_day**\r\n\r\n"
+      },
+      {
+        "user": "shivamMg",
+        "created_at": "2021-06-28T10:52:20Z",
+        "body": "Thank you."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of why column names in the materialized view query need to match the destination table structure",
+      "Identification of the specific syntax correction needed in the SQL query"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:27:24"
+    }
+  },
+  {
+    "number": 25322,
+    "title": "Kafka _timestamp / _timestamp_ms not working?",
+    "created_at": "2021-06-16T10:57:19Z",
+    "closed_at": "2021-06-16T11:21:17Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/25322",
+    "body": "**Describe the bug**\r\n\r\nAppears that _timestamp and _timestamp_ms virtual columns are returning 0 for kafka. Perhaps it is somehow due to JSONEachRow format?\r\n\r\nIssue is in docker 21.6.4.26 and 21.2.2.8 at least.\r\n\r\nI'm using amazon MSK 2.6.1\r\n\r\n**How to reproduce**\r\n\r\n```\r\ncreate table kafka ( name String ) ENGINE=Kafka() SETTINGS kafka_broker_list = '...', kafka_topic_list = 'test-events', kafka_group_name='test', kafka_format='JSONEachRow';\r\ncreate table t (time DateTime64(3), name String) ENGINE=MergeTree() ORDER BY tuple();\r\ncreate materialized view kafka_mv to t AS select _timestamp_ms, name FROM kafka;\r\n```\r\n\r\n```\r\necho '{\"name\":\"test\"}' | bin/kafka-console-producer.sh ...\r\n```\r\n\r\nClickhouse table just looks like:\r\n\r\n```\r\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500time\u2500\u252c\u2500name\u2500\u2510\r\n\u2502 1970-01-01 00:00:00.000 \u2502 test \u2502\r\n...\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```\r\n\r\nIf checking with kafka consumer:\r\n\r\n```\r\nbin/kafka-console-consumer.sh ... --from-beginning --property print.timestamp=true\r\nCreateTime:1623839664050        {\"name\":\"test\"}\r\nCreateTime:1623839989619        {\"name\":\"test\"}\r\nCreateTime:1623840562909        {\"name\":\"test\"}\r\nCreateTime:1623840285113        {\"name\":\"test\"}\r\n```\r\n\r\nI see the same with _timestamp col",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/25322/comments",
+    "author": "mzealey",
+    "comments": [
+      {
+        "user": "filimonov",
+        "created_at": "2021-06-16T11:18:18Z",
+        "body": "Mapping of columns in mv happens by names, not by positions.\r\n\r\nSo that should help:\r\n```\r\ncreate materialized view kafka_mv to t AS select _timestamp_ms as time, name FROM kafka;\r\n```"
+      },
+      {
+        "user": "mzealey",
+        "created_at": "2021-06-16T11:21:17Z",
+        "body": "Gah yes that fixed it. Normally I thought there were errors when creating a mv or inserting into it like this, but I did not see anything on console or in the logs :-/"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the Kafka timestamp values are showing as zero/1970 in the target table",
+      "Guidance on proper column mapping between Kafka source and target tables in materialized views",
+      "A working configuration that correctly transfers Kafka message timestamps to the target table"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:27:31"
+    }
+  },
+  {
+    "number": 23958,
+    "title": "Dictionary with postgres source fails",
+    "created_at": "2021-05-08T12:02:31Z",
+    "closed_at": "2021-05-12T07:50:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/23958",
+    "body": "Hi,\r\n\r\nI created a dictionary with a postgres source and creation works fine. But when I try to query it, it says that the source table in postgres doesn't exist.\r\n\r\n```\r\n SQL Error [156]: ClickHouse exception, code: 156, host: my.clickhouse.server, port: 8123; Code: 156, e.displayText() = DB::Exception: Failed to load dictionary 'chdatabase.dictionary_table': std::exception. Code: 1001, type: pqxx::undefined_table, e.what() = ERROR:  relation \"pgschema.pgtable\" does not exist\r\nLINE 1: ...e\", \"iso3_code\", \"continent_id\", \"adjective\" FROM \"analytics...\r\n                                                             ^\r\n, (version 21.3.9.83 (official build))\r\n```\r\n\r\nThe dictionary is configured using a DDL statement:\r\n\r\n```\r\nCREATE DICTIONARY chdatabase.dictionary_table (\r\n\tid Int32,\r\n\tname String,\r\n\tiso2_code String,\r\n\tiso3_code String\r\n)\r\nPRIMARY KEY id\r\nSOURCE(POSTGRESQL(\r\n  port 5432 \r\n  host 'postgreshost' \r\n  user  'postgresuser'\r\n  password 'postgrespassword'\r\n  db 'pgdatabase'\r\n  table 'pgschema.pgtable'\r\n  )\r\n)\r\nLIFETIME(MIN 300 MAX 360)\r\nLAYOUT(COMPLEX_KEY_HASHED());\r\n```\r\n\r\nI've confirmed that the user defined in in the postgresql source has access to the table and can query it.",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/23958/comments",
+    "author": "electrical",
+    "comments": [
+      {
+        "user": "kssenii",
+        "created_at": "2021-05-08T12:48:16Z",
+        "body": "@electrical, it does not work because ability to specify postgres `schema` of table was added only for table engine / table function, not for dictionary source. I'll add it for dictionary also.."
+      },
+      {
+        "user": "electrical",
+        "created_at": "2021-05-08T13:02:22Z",
+        "body": "@kssenii Ahh okay :-) Thank you.\r\nI made the wrong assumption it was in there.\r\nDo you have an idea if this will be in an LTS release soon or should i revert back to the ODBC driver?"
+      },
+      {
+        "user": "kssenii",
+        "created_at": "2021-05-08T13:20:34Z",
+        "body": "@electrical I suppose it will not get into LTS, because it is not a bug fix.."
+      },
+      {
+        "user": "electrical",
+        "created_at": "2021-05-08T13:42:06Z",
+        "body": "@kssenii I see. \r\nI would partially disagree with since it's a missing function for the postgresql source in dictionaries while, as you say, it's there for the table engine / table function."
+      },
+      {
+        "user": "kssenii",
+        "created_at": "2021-05-08T13:46:22Z",
+        "body": "@electrical hm, I agree, may be it will get into lts."
+      },
+      {
+        "user": "kssenii",
+        "created_at": "2021-05-14T08:59:43Z",
+        "body": "@electrical, the fix is in 21.3."
+      },
+      {
+        "user": "electrical",
+        "created_at": "2021-05-14T09:23:44Z",
+        "body": "@kssenii thank you so much!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Support for specifying PostgreSQL schema in dictionary sources",
+      "Information about when the fix would be available in a release",
+      "Alternative approaches while waiting for the fix"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:28:15"
+    }
+  },
+  {
+    "number": 19878,
+    "title": "Altering Enum in ordering key doesn't work on ReplicatedMergeTree",
+    "created_at": "2021-01-31T11:07:29Z",
+    "closed_at": "2021-02-02T08:54:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/19878",
+    "body": "**Describe the bug**\r\nReproduces at 20.8.12.2 Clickhouse version.\r\n\r\n```\r\nCREATE TABLE t ON CLUSTER replicated\r\n(\r\n    `a` UInt64,\r\n    `b` Enum8('a' = 1, 'b' = 2)\r\n)\r\nENGINE = ReplicatedMergeTree('/clickhouse/tables/default/{shard}/t', '{replica}')\r\nORDER BY (b, a)\r\n\r\nINSERT INTO t VALUES (1,1),(2,2)\r\n\r\nALTER TABLE t ON CLUSTER replicated MODIFY COLUMN b Enum8('a' = 1)\r\n```\r\nThe last statement falls into error: `Cannot execute replicated DDL query, maximum retires exceeded`\r\n\r\nIn case of local alter: \r\n`ALTER TABLE t ON CLUSTER replicated MODIFY COLUMN b Enum8('a' = 1)`\r\n\r\nthe error is next:\r\n```\r\nReceived exception from server (version 20.8.12):\r\nCode: 524. DB::Exception: Received from localhost:9100. DB::Exception: ALTER of key column b from type Enum8('a' = 1, 'b' = 2) to type Enum8('a' = 1) must be metadata-only.\r\n```\r\n\r\n\r\n**Expected behavior**\r\nThe same as on non-Replicated MergeTree",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/19878/comments",
+    "author": "Blackmorse",
+    "comments": [
+      {
+        "user": "alesapin",
+        "created_at": "2021-02-01T13:23:52Z",
+        "body": "Hi!\r\n\r\nAlter of the key columns in ClickHouse is quite limited. You can alter enums but only add new values. Removing old values can change the representation of the primary key. \r\n```\r\n:) ALTER TABLE t\r\n    MODIFY COLUMN `b` Enum8('a' = 1)\r\n\r\nReceived exception from server (version 21.2.1):\r\nCode: 524. DB::Exception: Received from localhost:9000. DB::Exception: ALTER of key column b from type Enum8('a' = 1, 'b' = 2) to type Enum8('a' = 1) is not safe because it can change the representation of primary key. \r\n```\r\nbut the extension is allowed:\r\n```\r\n\r\nALTER TABLE t\r\n    MODIFY COLUMN `b` Enum8('a' = 1, 'b' = 2, 'c' = 3)\r\n\r\nOk.\r\n\r\n```\r\n"
+      },
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2021-02-01T14:03:43Z",
+        "body": "> The same as on non-Replicated MergeTree\r\n\r\nBut how it's related to Replicated / non-Replicated MergeTree?"
+      },
+      {
+        "user": "Blackmorse",
+        "created_at": "2021-02-01T16:26:59Z",
+        "body": "@alesapin , \r\n\r\n>  You can alter enums but only add new values\r\n\r\nBut documentation says:\r\n\r\n> The Enum type can be changed without cost using ALTER, if only the set of values is changed. It is possible to both add and remove members of the Enum using ALTER (removing is safe only if the removed value has never been used in the table)\r\n\r\n"
+      },
+      {
+        "user": "Blackmorse",
+        "created_at": "2021-02-01T16:31:19Z",
+        "body": "@alexey-milovidov \r\n\r\n> But how it's related to Replicated / non-Replicated MergeTree?\r\n\r\nSorry, I was sure that the same operation works on simple MergeTree(). My bad"
+      },
+      {
+        "user": "alesapin",
+        "created_at": "2021-02-02T08:27:27Z",
+        "body": "> @alesapin ,\r\n> \r\n> > You can alter enums but only add new values\r\n> \r\n> But documentation says:\r\n> \r\n> > The Enum type can be changed without cost using ALTER, if only the set of values is changed. It is possible to both add and remove members of the Enum using ALTER (removing is safe only if the removed value has never been used in the table)\r\n\r\nAs the documentation says:\r\n`> removing is safe only if the removed value has never been used in the table`\r\n\r\nWe restrict unsafe operations for the primary key columns because it can lead not only to the single-column corruption but to the whole table became broken."
+      },
+      {
+        "user": "Blackmorse",
+        "created_at": "2021-02-02T08:41:03Z",
+        "body": "@alesapin , So , It is correct behaviour, right?"
+      },
+      {
+        "user": "alesapin",
+        "created_at": "2021-02-02T08:43:21Z",
+        "body": "> @alesapin , So , It is correct behaviour, right?\r\n\r\nYes, it's expected, maybe we have to improve docs."
+      },
+      {
+        "user": "Blackmorse",
+        "created_at": "2021-02-02T08:54:35Z",
+        "body": "Thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification on whether the behavior is expected or a bug",
+      "Explanation of the limitations around altering Enum columns in ordering keys",
+      "Reconciliation between documentation and actual system behavior"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:30:59"
+    }
+  },
+  {
+    "number": 17312,
+    "title": "PDO integration",
+    "created_at": "2020-11-23T14:58:22Z",
+    "closed_at": "2020-11-23T19:52:47Z",
+    "labels": [
+      "question",
+      "comp-mysql"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/17312",
+    "body": "**Describe the bug**\r\n\r\nI can't connect to ClickHouse via the mysql interface using PDO\r\n\r\n**How to reproduce**\r\n* version 20.11.2.1 (official build)\r\n* PHP 7.4.3\r\n\r\n```php\r\n$pdo=new PDO(\"mysql:host=127.0.0.1;port=8123;dbname=test\", \"default\",\"\",[PDO::ATTR_TIMEOUT => 5,PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/17312/comments",
+    "author": "god1dog",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2020-11-23T15:48:12Z",
+        "body": "```\r\ncat /etc/clickhouse-server/config.xml|grep mysql\r\n    <mysql_port>9004</mysql_port>\r\n\r\n```\r\nYou should use port 9004 not `port=8123`;"
+      },
+      {
+        "user": "god1dog",
+        "created_at": "2020-11-23T19:52:47Z",
+        "body": "Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Information about the correct port to use for MySQL protocol connections to ClickHouse",
+      "A solution that enables successful PDO connection to ClickHouse using MySQL interface"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:33:34"
+    }
+  },
+  {
+    "number": 16421,
+    "title": "cannot start server 20.10.2.20,reports <jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.",
+    "created_at": "2020-10-27T08:42:24Z",
+    "closed_at": "2020-11-25T10:14:14Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/16421",
+    "body": "the old version  19.17.5.18\r\nservice clickhouse-server stop does not work, so I  stop the old server by kill, then run rpm -Uvh to update the software, then service clickhouse-server start failed\r\n\r\n```\r\n[root@localhost ~]# service clickhouse-server stop\r\n[root@localhost ~]# clickhouse-client -m\r\nClickHouse client version 19.17.5.18 (official build).\r\nConnecting to localhost:9000 as user default.\r\nConnected to ClickHouse server version 19.17.5 revision 54428.\r\n\r\nlocalhost :) \\q;\r\nBye.\r\n[root@localhost ~]# ps -ef|grep click\r\nroot     32900 32878  0 Sep18 ?        02:51:20 clickhouse-server --config-file=/etc/clickhouse-server/config.xml\r\nroot     50565 50287  0 15:57 pts/1    00:00:00 grep click\r\n[root@localhost ~]# kill 32900\r\n[root@localhost ~]# ps -ef|grep click\r\nroot     50651 50287  0 16:00 pts/1    00:00:00 grep click\r\n\r\n[root@localhost tmp]# rpm -q click*\r\npackage clickhouse-client-20.10.2.20-2.noarch.rpm is not installed\r\npackage clickhouse-common-static-20.10.2.20-2.x86_64.rpm is not installed\r\npackage clickhouse-server-20.10.2.20-2.noarch.rpm is not installed\r\n[root@localhost tmp]# rpm -Uvh click*\r\nwarning: clickhouse-client-20.10.2.20-2.noarch.rpm: Header V4 RSA/SHA1 Signature, key ID e0c56bd4: NOKEY\r\nPreparing...                ########################################### [100%]\r\n   1:clickhouse-common-stati########################################### [ 33%]\r\n   2:clickhouse-client      ########################################### [ 67%]\r\n   3:clickhouse-server      ########################################### [100%]\r\n\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nPath to data directory in /etc/clickhouse-server/config.xml: /var/lib/clickhouse/\r\n\r\n[root@localhost tmp]# service clickhouse-server start\r\nStart clickhouse-server service: <jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nPath to data directory in /etc/clickhouse-server/config.xml: /var/lib/clickhouse/\r\nChanging owner of [/var/lib/clickhouse/] to [clickhouse:clickhouse]\r\nChanging owner of [/var/log/clickhouse-server/*] to [clickhouse:clickhouse]\r\nChanging owner of [/var/log/clickhouse-server] to [root:clickhouse]\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nUNKNOWN\r\n[root@localhost tmp]# clickhouse-client -m\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nClickHouse client version 20.10.2.20 (official build).\r\nConnecting to localhost:9000 as user default.\r\nCode: 210. DB::NetException: Connection refused (localhost:9000)\r\n\r\n[root@localhost tmp]# cat /proc/version\r\nLinux version 2.6.32-573.el6.x86_64 (mockbuild@kojibuilder-ve) (gcc version 4.4.7 20120313 (GCC) ) #1 SMP Wed Feb 24 13:34:24 CST 2016\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/16421/comments",
+    "author": "l1t1",
+    "comments": [
+      {
+        "user": "filimonov",
+        "created_at": "2020-10-27T14:00:42Z",
+        "body": "1) please check /var/log/clickhouse-server/clickhouse-server.err.log and /var/log/clickhouse-server/clickhouse-server.log\r\n2) what is your OS? "
+      },
+      {
+        "user": "l1t1",
+        "created_at": "2020-10-28T00:10:09Z",
+        "body": "clickhouse-server.err.log\r\n```\r\n[root@localhost ~]# tail  /var/log/clickhouse-server/clickhouse-server.err.log\r\n24. 0x7fb90d9a3075 DB::NullAndDoCopyBlockInputStream::readImpl() /usr/bin/clickhouse\r\n25. 0x7fb90d8555ca DB::IBlockInputStream::read() /usr/bin/clickhouse\r\n26. 0x7fb90d84e69b DB::AsynchronousBlockInputStream::calculate() /usr/bin/clickhouse\r\n27. 0x7fb90d84ea60 ? /usr/bin/clickhouse\r\n28. 0x7fb90a64917e ThreadPoolImpl<ThreadFromGlobalPool>::worker(std::_List_iterator<ThreadFromGlobalPool>) /usr/bin/clickhouse\r\n29. 0x7fb90a64978e ThreadFromGlobalPool::ThreadFromGlobalPool<ThreadPoolImpl<ThreadFromGlobalPool>::scheduleImpl<void>(std::function<void ()>, int, std::optional<unsigned long>)::{lambda()#3}>(ThreadPoolImpl<ThreadFromGlobalPool>::scheduleImpl<void>(std::function<void ()>, int, std::optional<unsigned long>)::{lambda()#3}&&)::{lambda()#1}::operator()() const /usr/bin/clickhouse\r\n30. 0x7fb90a646c4c ThreadPoolImpl<std::thread>::worker(std::_List_iterator<std::thread>) /usr/bin/clickhouse\r\n31. 0x7fb9103d0ec0 ? /usr/bin/clickhouse\r\n\r\n2020.10.27 15:54:07.005337 [ 1 ] {} <Error> Application: DB::Exception: Cannot lock file /var/lib/clickhouse/status. Another server instance in same directory is already running.\r\n\r\n```\r\nclickhouse-server.log\r\n```\r\n[root@localhost ~]# tail -100 /var/log/clickhouse-server/clickhouse-server.log\r\n2020.10.27 15:54:07.005337 [ 1 ] {} <Error> Application: DB::Exception: Cannot lock file /var/lib/clickhouse/status. Another server instance in same directory is already running.\r\n2020.10.27 15:54:07.005839 [ 1 ] {} <Information> Application: shutting down\r\n2020.10.27 15:54:07.005863 [ 1 ] {} <Debug> Application: Uninitializing subsystem: Logging Subsystem\r\n2020.10.27 15:54:07.007098 [ 2 ] {} <Information> BaseDaemon: Stop SignalListener thread\r\n2020.10.27 15:57:10.521311 [ 87 ] {} <Trace> TCPHandlerFactory: TCP Request. Address: [::1]:40251\r\n2020.10.27 15:57:10.521527 [ 87 ] {} <Debug> TCPHandler: Connected ClickHouse client version 19.17.0, revision: 54428, user: default.\r\n2020.10.27 15:57:10.530121 [ 88 ] {} <Trace> TCPHandlerFactory: TCP Request. Address: [::1]:40252\r\n2020.10.27 15:57:10.530263 [ 88 ] {} <Debug> TCPHandler: Connected ClickHouse client version 19.17.0, revision: 54428, user: default.\r\n2020.10.27 15:57:10.532893 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> executeQuery: (from [::1]:40252) SELECT DISTINCT arrayJoin(extractAll(name, '[\\\\w_]{2,}')) AS res FROM (SELECT name FROM system.functions UNION ALL SELECT name FROM system.table_engines UNION ALL SELECT name FROM system.formats UNION ALL SELECT name FROM system.table_functions UNION ALL SELECT name FROM system.data_type_families UNION ALL SELECT name FROM system.settings UNION ALL SELECT concat(func.name, comb.name) FROM system.functions AS func CROSS JOIN system.aggregate_function_combinators AS comb WHERE is_aggregate UNION ALL SELECT name FROM system.databases LIMIT 10000 UNION ALL SELECT DISTINCT name FROM system.tables LIMIT 10000 UNION ALL SELECT DISTINCT name FROM system.columns LIMIT 10000) WHERE notEmpty(res)\r\n2020.10.27 15:57:10.536672 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> Join: setSampleBlock: comb.name String String(size = 0)\r\n2020.10.27 15:57:10.539658 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> Join: setSampleBlock: comb.name String String(size = 0)\r\n2020.10.27 15:57:10.542160 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> Join: setSampleBlock: comb.name String String(size = 0)\r\n2020.10.27 15:57:10.543592 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.543653 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.543702 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.543735 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.543816 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.544097 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.544542 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.544685 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.544781 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.544985 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.545070 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.545989 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> executeQuery: Query pipeline:\r\nExpression\r\n Distinct\r\n  Union\r\n   Distinct \u00d7 6\r\n    Expression\r\n     Filter\r\n      Converting\r\n       Expression\r\n        Expression\r\n         One\r\n   Distinct\r\n    Expression\r\n     Filter\r\n      Converting\r\n       Expression\r\n        CreatingSets\r\n         Lazy\r\n         Expression\r\n          Filter\r\n           Expression\r\n            One\r\n   Distinct\r\n    Expression\r\n     Filter\r\n      Converting\r\n       Limit\r\n        Expression\r\n         Expression\r\n          One\r\n   Distinct\r\n    Expression\r\n     Filter\r\n      Converting\r\n       Limit\r\n        Expression\r\n         Distinct\r\n          Expression\r\n           Tables\r\n   Distinct\r\n    Expression\r\n     Filter\r\n      Converting\r\n       Limit\r\n        Expression\r\n         Distinct\r\n          Expression\r\n           Columns\r\n\r\n2020.10.27 15:57:10.549108 [ 98 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> CreatingSetsBlockInputStream: Creating join. \r\n2020.10.27 15:57:10.550504 [ 98 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> InterpreterSelectQuery: FetchColumns -> Complete\r\n2020.10.27 15:57:10.551153 [ 98 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> CreatingSetsBlockInputStream: Created. Join with 9 entries from 9 rows. In 0.001 sec.\r\n2020.10.27 15:57:10.555171 [ 21 ] {} <Trace> SystemLog (system.trace_log): Flushing system log\r\n2020.10.27 15:57:10.555870 [ 21 ] {} <Debug> DiskSpaceMonitor: Reserving 1.00 MiB on disk `default`, having unreserved 23.59 GiB.\r\n2020.10.27 15:57:10.556061 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> UnionBlockInputStream: Waiting for threads to finish\r\n2020.10.27 15:57:10.556087 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> UnionBlockInputStream: Waited for threads to finish\r\n2020.10.27 15:57:10.556187 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Information> executeQuery: Read 2767 rows, 111.92 KiB in 0.023 sec., 119154 rows/sec., 4.71 MiB/sec.\r\n2020.10.27 15:57:10.556206 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> MemoryTracker: Peak memory usage (for query): 1.04 MiB.\r\n2020.10.27 15:57:10.556268 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> UnionBlockInputStream: Waiting for threads to finish\r\n2020.10.27 15:57:10.556282 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Trace> UnionBlockInputStream: Waited for threads to finish\r\n2020.10.27 15:57:10.564214 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Debug> MemoryTracker: Peak memory usage (total): 1.04 MiB.\r\n2020.10.27 15:57:10.564243 [ 21 ] {} <Trace> system.trace_log: Renaming temporary part tmp_insert_202010_63_63_0 to 202010_200_200_0.\r\n2020.10.27 15:57:10.564256 [ 88 ] {19d923ba-9002-4230-ae6d-0f7a1673668a} <Information> TCPHandler: Processed in 0.033 sec.\r\n2020.10.27 15:57:10.564290 [ 88 ] {} <Information> TCPHandler: Done processing connection.\r\n2020.10.27 15:57:19.166554 [ 87 ] {} <Information> TCPHandler: Done processing connection.\r\n2020.10.27 16:00:22.919041 [ 112 ] {} <Information> Application: Received termination signal (Terminated)\r\n2020.10.27 16:00:22.919329 [ 1 ] {} <Debug> Application: Received termination signal.\r\n2020.10.27 16:00:22.919434 [ 1 ] {} <Debug> Application: Waiting for current connections to close.\r\n2020.10.27 16:00:23.831890 [ 1 ] {} <Information> Application: Closed all listening sockets.\r\n2020.10.27 16:00:23.831933 [ 1 ] {} <Information> Application: Closed connections.\r\n2020.10.27 16:00:23.837146 [ 1 ] {} <Information> Application: Shutting down storages.\r\n2020.10.27 16:00:23.939019 [ 1 ] {} <Trace> BackgroundSchedulePool: Waiting for threads to finish.\r\n2020.10.27 16:00:23.939511 [ 1 ] {} <Debug> Application: Shutted down storages.\r\n2020.10.27 16:00:23.942859 [ 1 ] {} <Debug> Application: Destroyed global context.\r\n2020.10.27 16:00:23.943143 [ 1 ] {} <Information> Application: shutting down\r\n2020.10.27 16:00:23.943155 [ 1 ] {} <Debug> Application: Uninitializing subsystem: Logging Subsystem\r\n2020.10.27 16:00:23.943207 [ 112 ] {} <Information> BaseDaemon: Stop SignalListener thread\r\n```"
+      },
+      {
+        "user": "l1t1",
+        "created_at": "2020-10-28T00:13:02Z",
+        "body": "same error if i run ```clickhouse-server --config-file=/etc/clickhouse-server/config.xml```\r\n```\r\n[root@localhost ~]# clickhouse-server --config-file=/etc/clickhouse-server/config.xml\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nProcessing configuration file '/etc/clickhouse-server/config.xml'.\r\nInclude not found: clickhouse_remote_servers\r\nInclude not found: clickhouse_compression\r\nLogging trace to /var/log/clickhouse-server/clickhouse-server.log\r\nLogging errors to /var/log/clickhouse-server/clickhouse-server.err.log\r\nLogging trace to console\r\n2020.10.28 07:44:47.987507 [ 25804 ] {} <Information> SentryWriter: Sending crash reports is disabled\r\n2020.10.28 07:44:47.992744 [ 25804 ] {} <Information> Pipe: Cannot get pipe capacity, errno: 22, strerror: Invalid argument. Very old Linux kernels have no support for this fcntl.\r\n2020.10.28 07:44:48.043623 [ 25804 ] {} <Information> : Starting ClickHouse 20.10.2.20 with revision 54441, no build id, PID 25804\r\n2020.10.28 07:44:48.043772 [ 25804 ] {} <Information> Application: starting up\r\n2020.10.28 07:44:48.052278 [ 25804 ] {} <Trace> Application: Will do mlock to prevent executable memory from being paged out. It may take a few seconds.\r\n2020.10.28 07:44:48.084764 [ 25804 ] {} <Trace> Application: The memory map of clickhouse executable has been mlock'ed, total 164.02 MiB\r\n2020.10.28 07:44:48.085210 [ 25804 ] {} <Error> Application: DB::Exception: Effective user of the process (root) does not match the owner of the data (clickhouse). Run under 'sudo -u clickhouse'.\r\n2020.10.28 07:44:48.085253 [ 25804 ] {} <Information> Application: shutting down\r\n2020.10.28 07:44:48.085263 [ 25804 ] {} <Debug> Application: Uninitializing subsystem: Logging Subsystem\r\n2020.10.28 07:44:48.087090 [ 25807 ] {} <Trace> BaseDaemon: Received signal -2\r\n2020.10.28 07:44:48.087170 [ 25807 ] {} <Information> BaseDaemon: Stop SignalListener thread\r\n```"
+      },
+      {
+        "user": "l1t1",
+        "created_at": "2020-10-28T00:18:25Z",
+        "body": "run ```sudo -u clickhouse``` seems work now\r\n\r\n```\r\n[root@localhost ~]# sudo -u clickhouse  clickhouse-server --config-file=/etc/clickhouse-server/config.xml\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nProcessing configuration file '/etc/clickhouse-server/config.xml'.\r\nInclude not found: clickhouse_remote_servers\r\nInclude not found: clickhouse_compression\r\nLogging trace to /var/log/clickhouse-server/clickhouse-server.log\r\nLogging errors to /var/log/clickhouse-server/clickhouse-server.err.log\r\nLogging trace to console\r\n2020.10.28 07:47:14.897570 [ 25888 ] {} <Information> SentryWriter: Sending crash reports is disabled\r\n2020.10.28 07:47:14.902881 [ 25888 ] {} <Information> Pipe: Cannot get pipe capacity, errno: 22, strerror: Invalid argument. Very old Linux kernels have no support for this fcntl.\r\n2020.10.28 07:47:14.954047 [ 25888 ] {} <Information> : Starting ClickHouse 20.10.2.20 with revision 54441, no build id, PID 25888\r\n2020.10.28 07:47:14.954201 [ 25888 ] {} <Information> Application: starting up\r\n2020.10.28 07:47:14.961761 [ 25888 ] {} <Trace> Application: Will do mlock to prevent executable memory from being paged out. It may take a few seconds.\r\n2020.10.28 07:47:14.993816 [ 25888 ] {} <Trace> Application: The memory map of clickhouse executable has been mlock'ed, total 164.02 MiB\r\n2020.10.28 07:47:14.993954 [ 25888 ] {} <Debug> Application: rlimit on number of file descriptors is 262144\r\n2020.10.28 07:47:14.993971 [ 25888 ] {} <Debug> Application: Initializing DateLUT.\r\n2020.10.28 07:47:14.993983 [ 25888 ] {} <Trace> Application: Initialized DateLUT with time zone 'Asia/Shanghai'.\r\n2020.10.28 07:47:14.994009 [ 25888 ] {} <Debug> Application: Setting up /var/lib/clickhouse/tmp/ to store temporary data in it\r\n2020.10.28 07:47:14.995115 [ 25888 ] {} <Debug> Application: Configuration parameter 'interserver_http_host' doesn't exist or exists and empty. Will use 'localhost' as replica host.\r\n2020.10.28 07:47:14.996173 [ 25888 ] {} <Debug> ConfigReloader: Loading config '/etc/clickhouse-server/users.xml'\r\nProcessing configuration file '/etc/clickhouse-server/users.xml'.\r\nInclude not found: networks\r\nSaved preprocessed configuration to '/var/lib/clickhouse/preprocessed_configs/users.xml'.\r\n2020.10.28 07:47:14.996946 [ 25888 ] {} <Debug> ConfigReloader: Loaded config '/etc/clickhouse-server/users.xml', performing update on configuration\r\n2020.10.28 07:47:14.997673 [ 25888 ] {} <Debug> ConfigReloader: Loaded config '/etc/clickhouse-server/users.xml', performed update on configuration\r\n2020.10.28 07:47:14.998025 [ 25888 ] {} <Warning> Access(local directory): File /var/lib/clickhouse/access/users.list doesn't exist\r\n2020.10.28 07:47:14.998053 [ 25888 ] {} <Warning> Access(local directory): Recovering lists in directory /var/lib/clickhouse/access/\r\n2020.10.28 07:47:14.998340 [ 25888 ] {} <Information> Application: Setting max_server_memory_usage was set to 56.62 GiB (62.91 GiB available * 0.90 max_server_memory_usage_to_ram_ratio)\r\n2020.10.28 07:47:14.998379 [ 25888 ] {} <Information> Application: Loading metadata from /var/lib/clickhouse/\r\n2020.10.28 07:47:15.005439 [ 25888 ] {} <Information> DatabaseOrdinary (system): Total 1 tables and 0 dictionaries.\r\n2020.10.28 07:47:15.012366 [ 25893 ] {} <Information> BackgroundProcessingPool: Create BackgroundProcessingPool with 16 threads\r\n2020.10.28 07:47:15.013364 [ 25893 ] {} <Debug> system.trace_log: Loading data parts\r\n2020.10.28 07:47:15.059491 [ 25893 ] {} <Debug> system.trace_log: Loaded data parts (5 items)\r\n2020.10.28 07:47:15.059872 [ 25888 ] {} <Information> DatabaseOrdinary (system): Starting up tables.\r\n2020.10.28 07:47:15.063505 [ 25888 ] {} <Information> DatabaseOrdinary (datasets): Total 1 tables and 0 dictionaries.\r\n2020.10.28 07:47:15.064279 [ 25893 ] {} <Debug> datasets.ontime: Loading data parts\r\n2020.10.28 07:47:15.800211 [ 25893 ] {} <Debug> datasets.ontime: Loaded data parts (373 items)\r\n2020.10.28 07:47:15.802813 [ 25888 ] {} <Information> DatabaseOrdinary (datasets): Starting up tables.\r\n2020.10.28 07:47:15.828392 [ 25888 ] {} <Information> DatabaseOrdinary (default): Total 8 tables and 0 dictionaries.\r\n```\r\nand open another terminal\r\n```\r\n[root@localhost ~]# clickhouse-client -m\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nClickHouse client version 20.10.2.20 (official build).\r\nConnecting to localhost:9000 as user default.\r\nConnected to ClickHouse server version 20.10.2 revision 54441.\r\n\r\nlocalhost :) show databases;\r\n\r\nSHOW DATABASES\r\n\r\n\u250c\u2500name\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\r\n\u2502 _temporary_and_external_tables \u2502\r\n\u2502 datasets                       \u2502\r\n\u2502 default                        \u2502\r\n\u2502 system                         \u2502\r\n\u2502 tpch                           \u2502\r\n\u2502 tutorial                       \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n\r\n6 rows in set. Elapsed: 0.003 sec. \r\n```"
+      },
+      {
+        "user": "l1t1",
+        "created_at": "2020-10-28T00:24:12Z",
+        "body": "but service clickhouse-server start  or sudo service clickhouse-server start still fail\r\n```\r\n[root@localhost ~]# sudo -u clickhouse service clickhouse-server start\r\n/etc/init.d/clickhouse-server: line 387: /var/lock/clickhouse-server: Permission denied\r\n[root@localhost ~]# sudo service clickhouse-server start\r\nStart clickhouse-server service: <jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nPath to data directory in /etc/clickhouse-server/config.xml: /var/lib/clickhouse/\r\nChanging owner of [/var/log/clickhouse-server/*] to [clickhouse:clickhouse]\r\nChanging owner of [/var/log/clickhouse-server] to [root:clickhouse]\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\n\r\nUNKNOWN\r\n[root@localhost ~]# \r\n[root@localhost ~]# clickhouse-client -m\r\n<jemalloc>: perCPU arena getcpu() not available. Setting narenas to 256.\r\nClickHouse client version 20.10.2.20 (official build).\r\nConnecting to localhost:9000 as user default.\r\nCode: 210. DB::NetException: Connection refused (localhost:9000)\r\n\r\n```"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-10-28T14:41:50Z",
+        "body": "the real issue is \r\n```\r\n/etc/init.d/clickhouse-server: line 387: /var/lock/clickhouse-server: Permission denied\r\n```\r\n\r\nthe issue is not related to `<jemalloc>: perCPU `\r\n\r\n"
+      },
+      {
+        "user": "l1t1",
+        "created_at": "2020-10-28T23:55:03Z",
+        "body": "how to solve the problem?\r\n```\r\n$ cat /etc/init.d/clickhouse-server |sed -n '381,390p'\r\n(\r\n    if $FLOCK -n 9; then\r\n        main \"$@\"\r\n    else\r\n        echo \"Init script is already running\" && exit 1\r\n    fi\r\n) 9> $LOCKFILE\r\n```"
+      },
+      {
+        "user": "filimonov",
+        "created_at": "2020-11-25T10:14:14Z",
+        "body": "> same error if i run clickhouse-server --config-file=/etc/clickhouse-server/config.xml\r\n\r\nIt's completely different... \r\n```\r\n2020.10.28 07:44:48.085210 [ 25804 ] {} <Error> Application: DB::Exception: Effective user of the process (root) does not match the owner of the data (clickhouse). Run under 'sudo -u clickhouse'.\r\n```\r\n\r\n> sudo -u clickhouse service clickhouse-server start\r\n\r\nIf you run clickhouse as  a service, you should run it as root. i.e.:\r\n```\r\n> sudo service clickhouse-server start\r\n```\r\n\r\nThe process will be executed from clickhouse user anyway. \r\n\r\nAlso please consider updating your OS/ linux. \r\n\r\n`perCPU arena getcpu() not available` actually means your linux kernel is quite old. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "A working method to properly start the ClickHouse server after upgrade",
+      "Understanding of permission-related errors preventing server startup",
+      "Clarification on the proper way to run ClickHouse as a service",
+      "Explanation of the jemalloc-related message in the logs",
+      "Guidance appropriate for their older Linux kernel version"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:34:28"
+    }
+  },
+  {
+    "number": 16220,
+    "title": "Query from distributed tables with sharded data return separate result for each shard",
+    "created_at": "2020-10-21T10:58:43Z",
+    "closed_at": "2020-11-08T12:56:09Z",
+    "labels": [
+      "question",
+      "st-need-info",
+      "st-need-repro"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/16220",
+    "body": "**Describe the bug**\r\nSelect aggregates from disributed table produce unexpected results.\r\n**How to reproduce**\r\n* Which ClickHouse server version to use\r\nTested on \r\n1) \r\n```\r\n+----------------+----------------------------------------+\r\n|name            |value                                   |\r\n+----------------+----------------------------------------+\r\n|VERSION_FULL    |ClickHouse 20.3.11.97                   |\r\n|VERSION_DESCRIBE|v20.3.11.97-stable                      |\r\n|VERSION_INTEGER |20003011                                |\r\n|VERSION_GITHASH |952efc395509c10081e8c1b836ebb5c2e0f898fa|\r\n|VERSION_REVISION|54433                                   |\r\n+----------------+----------------------------------------+\r\n\r\n```\r\n\r\n2)\r\n```\r\n+----------------+----------------------------------------+\r\n|name            |value                                   |\r\n+----------------+----------------------------------------+\r\n|VERSION_FULL    |ClickHouse 20.7.2.30                    |\r\n|VERSION_DESCRIBE|v20.7.2.30-stable                       |\r\n|VERSION_INTEGER |20007002                                |\r\n|VERSION_GITHASH |e0529c753f9dd4fc27e38f2f25a14d50beedda65|\r\n|VERSION_REVISION|54437                                   |\r\n+----------------+----------------------------------------+\r\n```\r\n* Non-default settings, if any\r\nprefer_localhost_replica 0\r\n* `CREATE TABLE` statements for all tables involved\r\n```\r\ncreate table test\r\n(\r\n    date Date,\r\n    key  String\r\n) engine MergeTree() partition by date order by key;\r\ncreate table test_dist as test engine Distributed('cubes', default, test, date);\r\n```\r\n* Sample data for all these tables, use [clickhouse-obfuscator]\r\nOn shard 1: \r\n```\r\ninsert into test values ('2020-01-01', '1');\r\ninsert into test values ('2020-01-01', '2');\r\n```\r\nOn shard 2\r\n```\r\ninsert into test values ('2020-01-01', '1', 1);\r\ninsert into test values ('2020-01-01', '2', 1);\r\ninsert into test values ('2020-01-03', '3', 1);\r\n```\r\n* Queries to run that lead to unexpected result\r\n```\r\nselect toMonday(date) mnt, uniq(key)\r\nfrom test_dist\r\nwhere mnt = '2019-12-30'\r\ngroup by mnt;\r\n```\r\n\r\nResult:\r\n```\r\n+----------+---------+\r\n|mnt       |uniq(key)|\r\n+----------+---------+\r\n|2019-12-30|2        |\r\n|2019-12-30|3        |\r\n+----------+---------+\r\n\r\n```\r\n\r\n**Expected behavior**\r\nA clear and concise description of what you expected to happen.\r\nExpected single row to return with 3 uniq(key)\r\n```\r\n+----------+---------+\r\n|mnt       |uniq(key)|\r\n+----------+---------+\r\n|2019-12-30|3        |\r\n+----------+---------+\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/16220/comments",
+    "author": "dmgburg",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2020-10-21T13:39:56Z",
+        "body": "Can you  show cluster `cubes` description?\r\n\r\nAnd `select *, _shard_num from test_dist`"
+      },
+      {
+        "user": "SaltTan",
+        "created_at": "2020-10-21T22:03:42Z",
+        "body": "Reminds me of #13331"
+      },
+      {
+        "user": "dmgburg",
+        "created_at": "2020-10-26T14:43:14Z",
+        "body": "@den-crane \r\n Clusters layout\r\n```\r\n <remote_servers>\r\n        <cubes>\r\n            <shard>\r\n                <internal_replication>true</internal_replication>\r\n                <replica>\r\n                    <host>server</host>\r\n                    <port>9000</port>\r\n                </replica>\r\n                <replica>\r\n                    <host>server2</host>\r\n                    <port>9000</port>\r\n                </replica>\r\n            </shard>\r\n        </cubes>\r\n    </remote_servers>\r\n```\r\n\r\nselect *, _shard_num from test_dist;\r\n\r\n```\r\n+----------+---+----------+\r\n|date      |key|_shard_num|\r\n+----------+---+----------+\r\n|2020-01-01|2  |1         |\r\n|2020-01-01|1  |1         |\r\n|2020-01-03|3  |1         |\r\n|2020-01-01|2  |1         |\r\n|2020-01-01|1  |1         |\r\n+----------+---+----------+\r\n\r\n```\r\n"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2020-10-26T15:00:28Z",
+        "body": "@dmgburg you have confused SHARD vs REPLICA\r\n\r\nYou  config for 2 shards  must be \r\n```\r\nshard \r\n   replica\r\nshard\r\n   replica\r\n```\r\n\r\n```\r\n<remote_servers>\r\n       <cubes>\r\n           <shard>\r\n               <internal_replication>true</internal_replication>\r\n               <replica>\r\n                   <host>server</host>\r\n                   <port>9000</port>\r\n               </replica>\r\n           </shard>            \r\n           <shard>             \r\n               <replica>\r\n                   <host>server2</host>\r\n                   <port>9000</port>\r\n               </replica>\r\n           </shard>\r\n       </cubes>\r\n   </remote_servers>\r\n\r\n```\r\n\r\n---\r\n\r\nIf each of 2 shards have 3 replicas config have to be\r\n```\r\nshard \r\n   replica\r\n   replica\r\n   replica\r\nshard\r\n   replica\r\n   replica\r\n   replica\r\n```"
+      },
+      {
+        "user": "dmgburg",
+        "created_at": "2020-11-08T12:56:09Z",
+        "body": "\u0414\u0430, \u0432\u0441\u0435 \u0442\u0430\u043a. \u0421 \u0438\u0441\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u043c\u0438 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u043c\u0438 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043e\u0436\u0438\u0434\u0430\u0435\u043c\u043e. \u0421\u043f\u0430\u0441\u0438\u0431\u043e!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Correct configuration of shards and replicas in the ClickHouse distributed setup",
+      "Proper aggregation of results across all shards in distributed queries",
+      "Clear explanation of the difference between shards and replicas in ClickHouse architecture"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:34:51"
+    }
+  },
+  {
+    "number": 14872,
+    "title": "Create a UDF in ClickHouse 20.8.1.1",
+    "created_at": "2020-09-16T07:51:56Z",
+    "closed_at": "2020-09-16T10:16:56Z",
+    "labels": [
+      "question",
+      "st-community-taken",
+      "comp-functions",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/14872",
+    "body": "I have create file under the Function file.And it  compiles in libclickhouse_functions.a.After I update the Clickhouse and run it.it's throw the error DB::Exception: Unknown function sayHello.Is there any else I need to do it,f or running my UDF?\r\n",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/14872/comments",
+    "author": "roycyz",
+    "comments": [
+      {
+        "user": "sundy-li",
+        "created_at": "2020-09-16T08:24:37Z",
+        "body": "@roycyz  did you register the function? see `registerFunctions.cpp`"
+      },
+      {
+        "user": "roycyz",
+        "created_at": "2020-09-16T08:43:42Z",
+        "body": "> @roycyz did you register the function? see `registerFunctions.cpp`\r\nthanks for replaying,It worked."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Instructions on how to properly register a custom UDF in ClickHouse",
+      "Identification of the missing step in the UDF creation process",
+      "A solution that resolves the 'Unknown function' error message"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:36:35"
+    }
+  },
+  {
+    "number": 11062,
+    "title": "DB::Exception: Cannot get value from Function.",
+    "created_at": "2020-05-20T06:18:31Z",
+    "closed_at": "2020-05-20T07:28:36Z",
+    "labels": [
+      "question",
+      "st-fixed",
+      "obsolete-version"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/11062",
+    "body": "Hello, are you okay with COVID-19?\r\n\r\nI am using ClickHouse very well, but I got an exception.\r\n\r\nIn the below, I wrote queries to run that lead to unexpected result.\r\n\r\nThank you.\r\n\r\n**Exception**\r\n```\r\nCode: 48. DB::Exception: Received from localhost:19000. DB::Exception: Cannot get value from Function.\r\n```\r\n\r\n**Server Version**\r\n```20.3.5.21```\r\n\r\n**Qeuries for Reproduction**\r\n```SQL\r\nCREATE TABLE test_ga\r\n(\r\n    `d` Date,\r\n    `id` UInt64,\r\n    `duration` UInt64,\r\n    `gender` String\r\n)\r\nENGINE = MergeTree()\r\nPARTITION BY d\r\nORDER BY id;\r\n\r\nINSERT INTO test_ga SELECT\r\n    number % 100,\r\n    number,\r\n    number * 1000,\r\n    if((number % 2) = 0, 'm', 'f')\r\nFROM system.numbers\r\nLIMIT 11111110;\r\n```\r\n\r\n```SQL\r\nWITH\r\n    groupArrayIf(duration / 1000, (duration > 0) AND (duration < ((1000 * 3600) * 6))) AS avg_duration_group_array,\r\n    round(medianExactIf(duration, duration > 0) / 1000) AS median_duration,\r\n    round(arrayReduce('sum', arrayFilter(x -> (x < (arrayReduce('avg', avg_duration_group_array) + (2 * arrayReduce('stddevPop', avg_duration_group_array)))), avg_duration_group_array)) / 60) AS avg_duration\r\nSELECT\r\n    median_duration,\r\n    avg_duration\r\nFROM test_ga\r\nGROUP BY gender\r\nORDER BY median_duration DESC\r\nLIMIT 100;\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/11062/comments",
+    "author": "achimbab",
+    "comments": [
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2020-05-20T07:21:11Z",
+        "body": "@achimbab We're alright.\r\n\r\n> 20.3.5.21\r\n\r\nWe have already released four bugfixes after this version, could you please check 20.3.9?"
+      },
+      {
+        "user": "alexey-milovidov",
+        "created_at": "2020-05-20T07:27:51Z",
+        "body": "I have checked master version and the issue does not reproduce."
+      },
+      {
+        "user": "achimbab",
+        "created_at": "2020-05-20T08:39:35Z",
+        "body": "@alexey-milovidov \r\nThank you very much.!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation that the issue is fixed in a newer version of ClickHouse",
+      "Acknowledgment of the reported exception and its validity",
+      "A clear path forward to resolve the exception"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:39:03"
+    }
+  },
+  {
+    "number": 9915,
+    "title": "toStartHour doesn't work in MV?",
+    "created_at": "2020-03-28T23:16:42Z",
+    "closed_at": "2020-03-28T23:36:45Z",
+    "labels": [
+      "question",
+      "question-answered"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/9915",
+    "body": "**Describe the bug**\r\n`toStartOfHour`  in a MV returns 0.\r\n\r\n**How to reproduce**\r\n* Which ClickHouse server version to use: `20.3.4.10 (official build)` in Ubuntu bionic\r\n* Which interface to use, if matters: `clickhouse-client -m -n`\r\n* Non-default settings, if any: none \r\n* `CREATE TABLE` statements for all tables involved\r\n```\r\nCREATE TABLE test.a (\r\n  t DateTime\r\n)\r\nENGINE=Memory();\r\nCREATE TABLE test.b\r\n(\r\n  t DateTime\r\n)\r\nENGINE=Memory();\r\nCREATE MATERIALIZED VIEW test.a2b TO test.b AS\r\nSELECT\r\n    toStartOfHour(t)\r\nFROM test.a;\r\n```\r\n* Sample data for all these tables, use [clickhouse-obfuscator]\r\n```\r\nINSERT INTO test.a (t) VALUES ('2020-03-28 11:22:33');\r\n```\r\n* Queries to run that lead to unexpected result\r\n```\r\nSELECT * FROM test.b;\r\n```\r\n**Expected behavior**\r\nI expected one row from table `b`\r\n```\r\n2020-03-28 11:00:00\r\n```\r\nThe actual result is table `b` is empty.\r\n\r\n**Error message and/or stacktrace**\r\nNo errors in the log.\r\n\r\n**Additional context**\r\nOne row is inserted if a column is added.  The value for column `t` is still wrong.\r\n\r\n```\r\nCREATE TABLE test.a (\r\n  t DateTime,\r\n  name String\r\n)\r\nENGINE=Memory();\r\nCREATE TABLE test.b\r\n(\r\n  t DateTime,\r\n  name String\r\n)\r\nENGINE=Memory();\r\nCREATE MATERIALIZED VIEW test.a2b TO test.b AS\r\nSELECT\r\n    toStartOfHour(t),\r\n    name\r\nFROM test.a;\r\nINSERT INTO test.a (t, name) VALUES ('2020-03-28 11:22:33', 'myname');\r\nSELECT * FROM test.b;\r\n```\r\nThe output is\r\n```\r\n0000-00-00 00:00:00\tmyname\r\n```\r\n\r\nThe same SELECT returns correct values if I run it manually in the client.\r\n\r\n```\r\nSELECT\r\n    toStartOfHour(t),\r\n    name\r\nFROM test.a\r\n\r\n\u250c\u2500\u2500\u2500\u2500toStartOfHour(t)\u2500\u252c\u2500name\u2500\u2500\u2500\u2510\r\n\u2502 2020-03-28 11:00:00 \u2502 myname \u2502\r\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\r\n```",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/9915/comments",
+    "author": "knoguchi",
+    "comments": [
+      {
+        "user": "den-crane",
+        "created_at": "2020-03-28T23:34:40Z",
+        "body": "Column names must be the same in a MV select and the target (TO) table \r\n\r\nCREATE MATERIALIZED VIEW test.a2b TO test.b AS\r\nSELECT\r\n    toStartOfHour(t) **as t**\r\nFROM test.a;\r\n\r\nMV uses column names when it does insert into the target table."
+      },
+      {
+        "user": "knoguchi",
+        "created_at": "2020-03-28T23:36:16Z",
+        "body": "ouch.  I overlooked it.  Thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the materialized view isn't working as expected",
+      "Information about the correct syntax for column naming in materialized views",
+      "A clear indication of what was missing in their materialized view definition"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:39:51"
+    }
+  },
+  {
+    "number": 6595,
+    "title": "Parallel select with group executes one query at the time",
+    "created_at": "2019-08-21T12:48:18Z",
+    "closed_at": "2020-04-02T08:18:59Z",
+    "labels": [
+      "question",
+      "performance"
+    ],
+    "url": "https://github.com/ClickHouse/ClickHouse/issues/6595",
+    "body": "**Env:**\r\n`ClickHouse server version 19.13.1.11 (official build)` inside docker with default config.\r\n\r\n**Problem:**\r\nwe are testing ClickHouse for our workload which includes many queries like this at the same time:\r\n```\r\nSELECT\r\n       idxid,\r\n       count(*) total,\r\n       toInt8(avg(age)) age,\r\n       countIf(liveness, equals(liveness, 2)) y1,\r\n       countIf(liveness, equals(liveness, 1)) y2,\r\n       countIf(liveness, equals(liveness, 3)) y3,\r\n       countIf(result, equals(result, 5)) x1,\r\n       countIf(result, equals(result, 3)) x2,\r\n       countIf(result, equals(result, 7)) x3,\r\n       countIf(result, equals(result, 4)) x4\r\nFROM xxx.YYY\r\nWHERE\r\n      idxid == '...'\r\nGROUP BY idxid;\r\n```\r\nTable creation:\r\n```\r\nCREATE TABLE xxx.YYY (\r\n    id UInt64,\r\n    group_id UInt64,\r\n    idxid UUID,\r\n    created DateTime,\r\n    age UInt8,\r\n    sex UInt8,\r\n    ...\r\n)\r\nENGINE = MergeTree()\r\nPARTITION BY (toYYYYMM(created), group_id)\r\nORDER BY (group_id, idxid);\r\n```\r\nEverything is fine with single request at the time:\r\n```\r\nroot@893d4cfd0397:/# clickhouse-benchmark -i 1 < query.txt\r\nLoaded 1 queries.\r\n\r\nQueries executed: 1.\r\n\r\nQPS: 0.844, RPS: 15200054.808, MiB/s: 289.899, result RPS: 0.844, result MiB/s: 0.000.\r\n0.000% 1.077 sec.\r\n10.000% 1.077 sec.\r\n20.000% 1.077 sec.\r\n30.000% 1.077 sec.\r\n40.000% 1.077 sec.\r\n50.000% 1.077 sec.\r\n60.000% 1.077 sec.\r\n70.000% 1.077 sec.\r\n80.000% 1.077 sec.\r\n90.000% 1.077 sec.\r\n95.000% 1.077 sec.\r\n99.000% 1.077 sec.\r\n99.900% 1.077 sec.\r\n99.990% 1.077 sec.\r\n```\r\nThings become strange, when we are sending multiple requests at the same time^\r\n```\r\noot@893d4cfd0397:/# clickhouse-benchmark -c 10 -i 10 < query.txt\r\nLoaded 1 queries.\r\n\r\nQueries executed: 10.\r\n\r\nQPS: 0.969, RPS: 17444320.466, MiB/s: 332.702, result RPS: 0.969, result MiB/s: 0.000.\r\n0.000% 9.813 sec.\r\n10.000% 9.850 sec.\r\n20.000% 9.953 sec.\r\n30.000% 9.983 sec.\r\n40.000% 9.990 sec.\r\n50.000% 10.023 sec.\r\n60.000% 10.063 sec.\r\n70.000% 10.085 sec.\r\n80.000% 10.118 sec.\r\n90.000% 10.172 sec.\r\n95.000% 10.190 sec.\r\n99.000% 10.205 sec.\r\n99.900% 10.208 sec.\r\n99.990% 10.208 sec.\r\n```\r\nLooks like there is some kind of a lock, which does not allow to execute multiple `select`s on the same data in parallel. Is there a workaround or some settings we can change to allow parallel execution of queries? Thanks! ",
+    "comments_url": "https://api.github.com/repos/ClickHouse/ClickHouse/issues/6595/comments",
+    "author": "gasabr",
+    "comments": [
+      {
+        "user": "4ertus2",
+        "created_at": "2019-08-21T13:58:31Z",
+        "body": "Nothing strange so far. What's the CPU utilisation?\r\nIn example, you run 1 query, it uses 100% for 1 second and finishes. Then you run 10 queries simultaneously, they run for 10 seconds and finish. What percentiles would we have? Any.\r\n\r\nIf the queries have locks they would run one by one and would have 1 sec in 99%. If the queries have no locks they would run all together and get 1/10 CPU cores, so 99% would be 10 seconds. If CPU utilisation is 100% your result says there's no lock."
+      },
+      {
+        "user": "gasabr",
+        "created_at": "2019-08-21T14:10:26Z",
+        "body": "Thank you for such a fast response, got it now! If that is expected behavior, could you, please, explain, why does this query consumes so much resources? Or is there probably a way to rewrite it to be simpler?"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2019-08-21T14:25:33Z",
+        "body": "Please show a line with statistics from clickhouse-client\r\n\r\n>PARTITION BY (toYYYYMM(created), group_id) ORDER BY (group_id, idxid);\r\n>WHERE  idxid == '...'  GROUP BY idxid;\r\n\r\nHow many `group_id` do you have? CH scans many partitions in this case.\r\n\r\ntry PARTITION BY (toYYYYMM(created)) ORDER BY (idxid, group_id)\r\nOr create MV aggregating / summing and predcalculate countIf / avg"
+      },
+      {
+        "user": "gasabr",
+        "created_at": "2019-08-21T14:53:53Z",
+        "body": "There are 2 `group_id`s and something about 8 distinct `idxid`s, totaling in 23M records. In the real world scenario there would be 10k+ groups with, each containing thousands of unique `idxid`s resulting in 40M+ records.\r\n\r\nQuery:\r\n```\r\nSELECT\r\n       count(*) total,\r\n       source_id,\r\n       countIf(liveness, equals(liveness, 2)) failed,\r\n       countIf(liveness, equals(liveness, 1)) passed,\r\n       countIf(liveness, equals(liveness, 3)) undetermined,\r\n       countIf(result, equals(result, 5)) ha,\r\n       countIf(result, equals(result, 3)) exact,\r\n       countIf(result, equals(result, 7)) reinit,\r\n       countIf(result, equals(result, 4)) junk,\r\n       countIf(result, equals(result, 1)) nm,\r\n       countIf(result, equals(result, 6)) det,\r\n       countIf(result, equals(result, 2)) new\r\nFROM xxx.YYY\r\nPREWHERE\r\n     group_id = 4\r\nGROUP BY source_id;\r\n```\r\n\r\n\r\nStats:\r\n```\r\n{\r\n \"meta\":\r\n [\r\n  {\r\n   \"name\": \"total\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"source_id\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"failed\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"passed\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"undetermined\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"ha\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"exact\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"reinit\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"junk\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"nm\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"det\",\r\n   \"type\": \"UInt64\"\r\n  },\r\n  {\r\n   \"name\": \"new\",\r\n   \"type\": \"UInt64\"\r\n  }\r\n ],\r\n\r\n \"data\":\r\n [\r\n  {\r\n   \"total\": \"2608572\",\r\n   \"source_id\": \"18\",\r\n   \"failed\": \"873146\",\r\n   \"passed\": \"867346\",\r\n   \"undetermined\": \"868080\",\r\n   \"ha\": \"652570\",\r\n   \"exact\": \"646689\",\r\n   \"reinit\": \"654954\",\r\n   \"junk\": \"654343\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"16\"\r\n  },\r\n  {\r\n   \"total\": \"2609920\",\r\n   \"source_id\": \"19\",\r\n   \"failed\": \"872834\",\r\n   \"passed\": \"867243\",\r\n   \"undetermined\": \"869843\",\r\n   \"ha\": \"653269\",\r\n   \"exact\": \"653006\",\r\n   \"reinit\": \"654979\",\r\n   \"junk\": \"648658\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"8\"\r\n  },\r\n  {\r\n   \"total\": \"1960083\",\r\n   \"source_id\": \"15\",\r\n   \"failed\": \"652852\",\r\n   \"passed\": \"653097\",\r\n   \"undetermined\": \"654134\",\r\n   \"ha\": \"650984\",\r\n   \"exact\": \"656394\",\r\n   \"reinit\": \"0\",\r\n   \"junk\": \"652705\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"0\"\r\n  },\r\n  {\r\n   \"total\": \"647203\",\r\n   \"source_id\": \"100\",\r\n   \"failed\": \"213401\",\r\n   \"passed\": \"216020\",\r\n   \"undetermined\": \"217782\",\r\n   \"ha\": \"0\",\r\n   \"exact\": \"0\",\r\n   \"reinit\": \"647203\",\r\n   \"junk\": \"0\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"0\"\r\n  },\r\n  {\r\n   \"total\": \"2601528\",\r\n   \"source_id\": \"16\",\r\n   \"failed\": \"867641\",\r\n   \"passed\": \"868106\",\r\n   \"undetermined\": \"865781\",\r\n   \"ha\": \"650954\",\r\n   \"exact\": \"646508\",\r\n   \"reinit\": \"651383\",\r\n   \"junk\": \"652683\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"0\"\r\n  },\r\n  {\r\n   \"total\": \"2611590\",\r\n   \"source_id\": \"17\",\r\n   \"failed\": \"868265\",\r\n   \"passed\": \"875894\",\r\n   \"undetermined\": \"867431\",\r\n   \"ha\": \"653158\",\r\n   \"exact\": \"655061\",\r\n   \"reinit\": \"654699\",\r\n   \"junk\": \"648672\",\r\n   \"nm\": \"0\",\r\n   \"det\": \"0\",\r\n   \"new\": \"0\"\r\n  }\r\n ],\r\n\r\n \"rows\": 6,\r\n\r\n \"statistics\":\r\n {\r\n  \"elapsed\": 0.711031,\r\n  \"rows_read\": 13042056,\r\n  \"bytes_read\": 234725408\r\n }\r\n}\r\n```"
+      },
+      {
+        "user": "den-crane",
+        "created_at": "2019-08-21T15:26:51Z",
+        "body": "it's another query.\r\n\r\n>PREWHERE    group_id = 4 GROUP BY source_id;\r\nVS\r\n>WHERE idxid == '...' GROUP BY idxid;\r\n\r\nstatistics is useless\r\n"
+      },
+      {
+        "user": "gasabr",
+        "created_at": "2019-08-22T10:36:46Z",
+        "body": "Sorry, misunderstood you the first time, here are stats:\r\n```\r\nPARTITION BY toYYYYMM(created) ORDER BY (group_id, idxid);\r\n\"statistics\":\r\n {\r\n  \"elapsed\": 0.3618612,\r\n  \"rows_read\": 5603328,\r\n  \"bytes_read\": 111997196\r\n }\r\n```\r\nyour suggested changes:\r\n```\r\nPARTITION BY (toYYYYMM(created)) ORDER BY (idxid, group_id)\r\n\"statistics\":\r\n {\r\n  \"elapsed\": 0.3582819,\r\n  \"rows_read\": 5616552,\r\n  \"bytes_read\": 112331040\r\n }\r\nPARTITION BY (toYYYYMM(created), group_id) ORDER BY (idxid, group_id)\r\n\"statistics\":\r\n {\r\n  \"elapsed\": 0.3999076,\r\n  \"rows_read\": 5600168,\r\n  \"bytes_read\": 111946636\r\n }\r\n```"
+      },
+      {
+        "user": "stale[bot]",
+        "created_at": "2019-10-20T13:25:08Z",
+        "body": "This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions.\n"
+      },
+      {
+        "user": "blinkov",
+        "created_at": "2020-04-01T16:54:01Z",
+        "body": "@gasabr, do you have any further questions?"
+      },
+      {
+        "user": "gasabr",
+        "created_at": "2020-04-02T08:18:59Z",
+        "body": "No, everything was solved, sorry, I forgot to close the issue."
+      },
+      {
+        "user": "jovelcardoso",
+        "created_at": "2022-09-14T07:20:52Z",
+        "body": "@gasabr I have the same issues while running select queries simultaneous. Can you please tell me what you have done to solve this issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Understanding of why parallel queries appear to execute sequentially",
+      "Explanation of resource consumption patterns for these types of queries",
+      "Guidance on query optimization for better parallel performance",
+      "Confirmation that the observed behavior is expected"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:28:13"
+    }
+  }
+]

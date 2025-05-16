@@ -1,0 +1,185 @@
+[
+  {
+    "number": 111,
+    "title": "having trouble running CSP version",
+    "created_at": "2025-03-25T19:53:50Z",
+    "closed_at": "2025-03-27T09:28:03Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/111",
+    "body": "Hi! We retrained the model with the CSP settings, using MP-20 to start. It seems to have finished training successfully. But we can't figure out how to run the generate commands, though. We tried this:\n`mattergen-generate $RESULTS_PATH --model_path=$MODEL_PATH --sampling-config-name=csp --target_compositions=[{\"Na\": 1, \"Cl\": 1}] --batch_size=16 --num_batches ` \nwith `$MODEL_PATH` set to `outputs/singlerun/2025-03-19/12-11-18`\n\nthe checkpoint files are in there, but what I get is:\n```\n(errors)\n...\nFile \"/home/fas/MATTERGEN/mattergen/mattergen/scripts/generate.py\", line 55, in main\n    pretrained_name is None or model_path is None\n```\nI tried using the path to the checkpoint file itself, which didn't help. Any tips?",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/111/comments",
+    "author": "asedova",
+    "comments": [
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-03-26T08:45:38Z",
+        "body": "Hi @asedova,\n\nIt appears that for some reason both `pretrained_name` and `model_path` are non-`None` in your run. Can you add a print statement right before the assertion error so we can see what's going wrong? It also looks like you're not providing a number for `--num_batches` in your CLI command."
+      },
+      {
+        "user": "asedova",
+        "created_at": "2025-03-26T13:32:20Z",
+        "body": "Sorry,`num_batches` was set to 1, it just got cut off above in the copy-paste.\n\nHere is the full error:\n```\nmattergen-generate $RESULTS_PATH --model_path=$MODEL_PATH --target_compositions=[{\"Na\": 1, \"Cl\": 1}] --batch_size=16 --num_batches 1\nMODELS_PROJECT_ROOT: /home/fas/MATTERGEN/mattergen/mattergen\nTraceback (most recent call last):\n  File \"/home/fas/MATTERGEN/.venv/bin/mattergen-generate\", line 10, in <module>\n    sys.exit(_main())\n  File \"/home/fas/MATTERGEN/mattergen/mattergen/scripts/generate.py\", line 102, in _main\n    fire.Fire(main)\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 135, in Fire\n    component_trace = _Fire(component, args, parsed_flag_args, context, name)\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 468, in _Fire\n    component, remaining_args = _CallAndUpdateTrace(\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 684, in _CallAndUpdateTrace\n    component = fn(*varargs, **kwargs)\n  File \"/home/fas/MATTERGEN/mattergen/mattergen/scripts/generate.py\", line 55, in main\n    pretrained_name is None or model_path is None\nAssertionError: Only one of pretrained_name or model_path can be provided.\n(.venv) 1 fas@milan2:~/MATTERGEN/mattergen$ export MODEL_PATH=../Mark-mattergen/mattergen/outputs/singlerun/2025-03-19/12-11-18/checkpoints/epoch=899-step=48600.ckpt\n(.venv) fas@milan2:~/MATTERGEN/mattergen$ mattergen-generate $RESULTS_PATH --model_path=$MODEL_PATH --target_compositions=[{\"Na\": 1, \"Cl\": 1}] --batch_size=16 --num_batches 1\nMODELS_PROJECT_ROOT: /home/fas/MATTERGEN/mattergen/mattergen\nTraceback (most recent call last):\n  File \"/home/fas/MATTERGEN/.venv/bin/mattergen-generate\", line 10, in <module>\n    sys.exit(_main())\n  File \"/home/fas/MATTERGEN/mattergen/mattergen/scripts/generate.py\", line 102, in _main\n    fire.Fire(main)\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 135, in Fire\n    component_trace = _Fire(component, args, parsed_flag_args, context, name)\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 468, in _Fire\n    component, remaining_args = _CallAndUpdateTrace(\n  File \"/home/fas/MATTERGEN/.venv/lib/python3.10/site-packages/fire/core.py\", line 684, in _CallAndUpdateTrace\n    component = fn(*varargs, **kwargs)\n  File \"/home/fas/MATTERGEN/mattergen/mattergen/scripts/generate.py\", line 55, in main\n    pretrained_name is None or model_path is None\nAssertionError: Only one of pretrained_name or model_path can be provided.\n```\n\nI'll work on that print statement in a bit and report back."
+      },
+      {
+        "user": "asedova",
+        "created_at": "2025-03-26T15:04:01Z",
+        "body": "Hey, here is the result after the print statement. The `model_path` variable is nonempty and correct:\n```\n(.venv) fas@milan2:~/MATTERGEN/mattergen$ mattergen-generate $RESULTS_PATH --model_path=$MODEL_PATH --target_compositions=[{\"Na\": 1, \"Cl\": 1}] --batch_size=16 --num_batches 1\nMODELS_PROJECT_ROOT: /home/fas/MATTERGEN/mattergen/mattergen\npretrained_name: (1,), model_path: ../Mark-mattergen/mattergen/outputs/singlerun/2025-03-19/12-11-18/\n...\n```\nI get the same final error. What is strange, is that `pretrained_name` is also NOT EMPTY! Also, in the assert, should it be an XOR?\n\n"
+      },
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-03-26T16:32:47Z",
+        "body": "Hi @asedova, can you also show the result of printing `target_compositions` in the code?"
+      },
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-03-26T16:54:44Z",
+        "body": "Ok, I think I figured it out. Can you try adding single quotes around the dictionary in the condition? I.e., `--target_compositions=['{\"Na\": 1, \"Cl\": 1}']`. Also, you have to pass `--sampling-config-name=csp` in order to use CSP sampling. Once you confirm this works I'll update the instructions in the README."
+      },
+      {
+        "user": "asedova",
+        "created_at": "2025-03-26T19:03:49Z",
+        "body": "Ok, that seems to have helped the previous error! By the way I did try adding the `--sampling-config-name=csp` flag yesterday also, and got that same error above. \n\nI now get an error about the model not being trained for csp... looks like after all our debugging of the training we left off the csp flag, so I will have to retrain it again and get back to you about next steps!"
+      }
+    ]
+  },
+  {
+    "number": 88,
+    "title": "How to generate stuctures efficiently...?",
+    "created_at": "2025-03-05T12:58:38Z",
+    "closed_at": "2025-03-07T10:59:44Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/88",
+    "body": "Hi @ClaudioZeni \nWhen I am trying to generate more structure by increasing number of batch it is throughing out of memory (OOM) in between, and the code is saving generated structures after processing all batch so this leads to waste of gpu time without any structures. How to generate suppose 50k structures efficently? If I run the same script with less number of batchs then each time its replacing the previously generated structures. \nCould you please suggest how to handle the generation more efficiently?",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/88/comments",
+    "author": "chiku-parida",
+    "comments": [
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-03-07T10:59:44Z",
+        "body": "Hi @chiku-parida,\n\nhave you tried passing `--record-trajectories=False` to the generation command? This will reduce the amount of processing after each batch as it does not store the full trajectories. If you want to go with the route of running the same script with fewer batches, I recommend you provide a different `--output-path` to each individual run to avoid overwriting the results."
+      },
+      {
+        "user": "chiku-parida",
+        "created_at": "2025-03-07T11:43:07Z",
+        "body": "Thanks @danielzuegner \nIf I generate 50 k with 10 independent runs generating 5k structures in each run then the model might generate similar structures, right?"
+      },
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-03-07T13:44:41Z",
+        "body": "Hi @chiku-parida,\n\nstructures are always generated independently, no matter how you slice the generation."
+      }
+    ]
+  },
+  {
+    "number": 51,
+    "title": "Enquiry",
+    "created_at": "2025-02-07T05:19:24Z",
+    "closed_at": "2025-02-08T14:47:03Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/51",
+    "body": "Dear manager\n    When i want to run the code in my laptop,i encounter a problem.\nThe command in your  Train MatterGen yourself chapter      csv-to-dataset  ,does it need any packages,\nwhich package should i install to run it? python 3.12  and python 3.10 ,can not recognize this command ,\n    looking forward to your reply!\nThank you !",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/51/comments",
+    "author": "nelence2k",
+    "comments": [
+      {
+        "user": "401-Nick",
+        "created_at": "2025-02-08T08:39:17Z",
+        "body": "Did you use this? \n```\npip install uv\nuv venv .venv --python 3.10 \nsource .venv/bin/activate\nuv pip install -e .\n```"
+      },
+      {
+        "user": "nelence2k",
+        "created_at": "2025-02-08T14:46:55Z",
+        "body": "ok, i found the problem. My net work sometimes is very bad.Thank you my friend."
+      }
+    ]
+  },
+  {
+    "number": 50,
+    "title": "Error on torch distributor on cpu device",
+    "created_at": "2025-02-05T19:31:01Z",
+    "closed_at": "2025-02-06T18:07:03Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/50",
+    "body": "I am training the mattergen to generate structures using the mp_20 dataset. The csv_to_dataset step worked without issues. However I had issues with the running the line: python scripts/run.py data_module=mp_20 ~trainer.logger\nI changed the \"accelerator: 'cpu'\" in mattergen/conf/trainer/default.yaml file because I was running on a cpu node with 48 cores and was using all the 48 cores. This is what I got as output:\n  ret = run_job(\nGPU available: False, used: False\nTPU available: False, using: 0 TPU cores\nIPU available: False, using: 0 IPUs\nHPU available: False, using: 0 HPUs\n\nat the end this is what I saw:\n\"torch.distributed.DistStoreError: Timed out after 1801 seconds waiting for clients. 1/48 clients joined.\"\n\ndo you know the source of this error?\ndo I need to change anything else in \"trainer\" \"conf\" .yaml file or any other .yaml file in \"conf\"?\n",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/50/comments",
+    "author": "Mofahdi",
+    "comments": [
+      {
+        "user": "danielzuegner",
+        "created_at": "2025-02-06T07:20:50Z",
+        "body": "Hi @Mofahdi,\n\ncan you also remove the `strategy` dict from `conf/trainer/default.yml` (or alternatively add `~trainer.strategy` to your command)?\n\nLet me know if that helped."
+      },
+      {
+        "user": "Mofahdi",
+        "created_at": "2025-02-06T18:06:59Z",
+        "body": "Thanks so much! the package runs fine now!\nJust want to let you know and other users who encounter the same issue that both methods work: 1- commenting the \"strategy dict\" lines from conf/trainer/default.yml or 2- add \"~trainer.strategy\" to the command"
+      },
+      {
+        "user": "nelence2k",
+        "created_at": "2025-02-07T05:30:41Z",
+        "body": "@Mofahdi  How to make  the csv-to-dataset  command work ? Do I need to install some packages? "
+      },
+      {
+        "user": "Mofahdi",
+        "created_at": "2025-02-07T05:40:31Z",
+        "body": "@nelence2k no, after you run the git ... command then the unzip .... command. you have to run `python scripts/csv_to_dataset.py --csv-folder datasets/alex_mp_20/ --dataset-name alex_mp_20 --cache-folder datasets/cache\n` \nI noticed that the developers changed the README file"
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "Evaluations on individual compounds",
+    "created_at": "2025-02-02T14:55:05Z",
+    "closed_at": "2025-02-03T09:42:54Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/43",
+    "body": "Is it possible to run evaluations on individual compounds (cif files)?\n\nI'm working on a ex: (15 .cif files in zip file => 1 .cif file in 15 zip files => evaluate.py for each .zip) but it feels very inefficient especially with a long startup time for each eval.\n\nPossibly exploring using MatterSim to directly generate from the CIF but curious if there's any possible insight or plans into this",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/43/comments",
+    "author": "401-Nick",
+    "comments": [
+      {
+        "user": "ClaudioZeni",
+        "created_at": "2025-02-03T09:42:07Z",
+        "body": "Hi Nick, thanks for reaching out.\n\nFrom reading your script it seems to me that what you are really interested in is not the metric evaluation, but an energy computation using MatterSim.\n\nIf this is the case, I would advise directly using the MatterSim functions to compute the properties of interest on a batch of structures, and then saving them individually. For example, assuming you have a list of `Structure` objects inside `structures`:\n\n``` python\n\nfrom mattersim.datasets.utils.build import build_dataloader\nfrom mattersim.forcefield.potential import Potential\nfrom pymatgen.io.ase import AseAtomsAdaptor\nimport json\n\n\npotential = Potential.from_checkpoint(\n    device=\"cuda\", load_training_state=False\n)\natoms = [AseAtomsAdaptor.get_atoms(s) for s in structures]\ndataloader = build_dataloader(\n    atoms, batch_size=len(atoms), only_inference=True\n)\nenergy_batch, forces_batch, stress_batch = potential.predict_properties(\n    dataloader, include_forces=True, include_stresses=True\n)\n\nfor i in range(len(structures)):\n    structure_with_metadata = {}\n    structure_with_metadata['structure'] = structures[i].as_dict()\n    structure_with_metadata['energy'] = energy_batch[i]\n    structure_with_metadata['forces'] = forces_batch[i].tolist()\n    structure_with_metadata['stress'] = stress_batch[i].tolist()\n    with open(f'structures_with_metadata_{i}.json', 'w') as f:\n        json.dump(structure_with_metadata, f, indent=4)\n```"
+      },
+      {
+        "user": "401-Nick",
+        "created_at": "2025-02-03T10:39:58Z",
+        "body": "I had only searched in the readme and official docs and didn't see that but I found it in the user_guide. Thank you, I appreciate it! Literally about 1000x faster.\n\n```\nimport os\nimport glob\nimport shutil\nimport zipfile\nimport tempfile\nimport torch\nimport json\nimport numpy as np\n\nfrom ase import io\nfrom ase.units import GPa\nfrom mattersim.forcefield.potential import Potential\nfrom mattersim.datasets.utils.build import build_dataloader\nfrom CifFile import ReadCif\n\n\nclass NumpyEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, np.integer):\n            return int(obj)\n        elif isinstance(obj, np.floating):\n            return float(obj)\n        elif isinstance(obj, np.ndarray):\n            return obj.tolist()\n        return super().default(obj)\n\n\ndevice = \"cuda\" if torch.cuda.is_available() else \"cpu\"\nprint(f\"Running MatterSim on device: {device}\")\n\nzip_file_path = \"results/generated_crystals_cif.zip\"\njson_file_path = \"results/report.json\"\n\ntemp_dir = tempfile.mkdtemp()\n\nwith zipfile.ZipFile(zip_file_path, \"r\") as zip_ref:\n    zip_ref.extractall(temp_dir)\n\nextracted_tmp_dir = os.path.join(temp_dir, \"tmp\")\nif not os.path.exists(extracted_tmp_dir):\n    shutil.rmtree(temp_dir)\n    raise SystemExit(\"Error: 'tmp/' directory not found inside the ZIP file. Exiting.\")\n\ncif_files = glob.glob(os.path.join(extracted_tmp_dir, \"*.cif\"))\nif not cif_files:\n    shutil.rmtree(temp_dir)\n    raise SystemExit(\"No CIF files found in 'tmp/'! Exiting.\")\n\nreport_data = []\natoms_list = []\nvalid_report_indexes = []\n\nfor cif_file in cif_files:\n    file_report = {\n        \"cif_file\": cif_file,\n        \"cif_metadata\": {},\n        \"atom_sites\": [],\n        \"matter_sim_results\": {},\n    }\n    try:\n        cif_content = ReadCif(cif_file)\n        block = cif_content[list(cif_content.keys())[0]]\n    except Exception as e:\n        file_report[\"error\"] = f\"Failed to parse CIF data from {cif_file}: {e}\"\n        report_data.append(file_report)\n        continue\n\n    fields_to_extract = [\n        \"_chemical_formula_structural\",\n        \"_chemical_formula_sum\",\n        \"_cell_length_a\",\n        \"_cell_length_b\",\n        \"_cell_length_c\",\n        \"_cell_angle_alpha\",\n        \"_cell_angle_beta\",\n        \"_cell_angle_gamma\",\n        \"_space_group_name_H-M_alt\",\n        \"_space_group_IT_number\",\n    ]\n    for field in fields_to_extract:\n        file_report[\"cif_metadata\"][field] = block.get(field, \"N/A\")\n\n    symops_data = []\n    try:\n        symops_loop = block.GetLoop(\"_space_group_symop_operation_xyz\")\n        if symops_loop:\n            for row in symops_loop:\n                symops_data.append(row)\n    except Exception:\n        pass\n    file_report[\"cif_metadata\"][\"space_group_symops\"] = symops_data\n\n    atom_sites_list = []\n    atom_loop_key = None\n    for loop_key, columns in block.loops.items():\n        if any(\"_atom_site_\" in col for col in columns):\n            atom_loop_key = loop_key\n            break\n\n    if atom_loop_key is not None:\n        columns = block.loops[atom_loop_key]\n        row_count = len(block[columns[0]])\n        for i in range(row_count):\n            row_data = {col: block[col][i] for col in columns}\n            atom_sites_list.append(row_data)\n    file_report[\"atom_sites\"] = atom_sites_list\n\n    try:\n        atoms = io.read(cif_file)\n        atoms_list.append(atoms)\n        valid_report_indexes.append(len(report_data))\n    except Exception as e:\n        file_report[\"matter_sim_results\"] = {\n            \"error\": f\"Failed to read ASE atoms from {cif_file}: {e}\"\n        }\n\n    report_data.append(file_report)\n\nif atoms_list:\n    try:\n        print(\"Loading MatterSim potential from checkpoint...\")\n        potential = Potential.from_checkpoint(device=device)\n        print(\"Building dataloader for MatterSim predictions...\")\n        dataloader = build_dataloader(atoms_list, only_inference=True)\n        print(\"Running MatterSim predictions in batch mode...\")\n        energies, forces_list, stresses_list = potential.predict_properties(\n            dataloader, include_forces=True, include_stresses=True\n        )\n        for idx, atom_obj in enumerate(atoms_list):\n            report_idx = valid_report_indexes[idx]\n            n_atoms = len(atom_obj)\n            energy = energies[idx]\n            energy_per_atom = energy / n_atoms if n_atoms > 0 else None\n            forces = forces_list[idx]\n            forces_first_atom = forces[0] if len(forces) > 0 else None\n            stress = stresses_list[idx]\n            try:\n                stress_00 = stress[0][0]\n            except Exception:\n                stress_00 = None\n\n            report_data[report_idx][\"matter_sim_results\"] = {\n                \"energy_eV\": energy,\n                \"energy_per_atom_eV\": energy_per_atom,\n                \"forces_first_atom_eVA\": forces_first_atom,\n                \"stress_00_eVA3\": stress_00,\n                \"stress_00_GPa\": stress_00 / GPa if stress_00 is not None else None,\n                \"forces_eVA\": forces,\n                \"stress_tensor\": stress,\n            }\n        print(\"MatterSim predictions successfully added to the report.\")\n    except Exception as e:\n        print(f\"Error during MatterSim batch prediction: {e}\")\n        for idx in valid_report_indexes:\n            report_data[idx][\"matter_sim_results\"] = {\"error\": f\"Batch prediction failed: {e}\"}\nelse:\n    print(\"No valid ASE Atoms objects were read; skipping MatterSim predictions.\")\n\nshutil.rmtree(temp_dir)\nprint(\"Cleaned up temporary files.\")\n\nwith open(json_file_path, \"w\") as jf:\n    json.dump(report_data, jf, cls=NumpyEncoder, indent=2)\nprint(f\"Report written to {json_file_path}\")\n```"
+      }
+    ]
+  },
+  {
+    "number": 41,
+    "title": "RuntimeError: Unknown layout",
+    "created_at": "2025-01-31T22:40:03Z",
+    "closed_at": "2025-02-04T09:13:05Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/mattergen/issues/41",
+    "body": "Hello and congratulations on the Nature publication!\n\nI am attempting to follow the README for getting started with mattergen and keep receiving a Runtime Error. \n\nMy steps to reproduce:\n\n`export MODEL_NAME=checkpoints/mattergen_base`\n`export RESULTS_PATH=results/`\n`python generate.py $RESULTS_PATH $MODEL_NAME --batch_size=4 --num_batches 1`\n\nAs an aside the 'mattergen-generate' command was not recognized, which is why I called python and generate.py\n\nThe error traceback:\n\n`INFO:mattergen.common.utils.eval_utils:Loading model from checkpoint: /home/krkaufma/PycharmProjects/mattergen_proj/checkpoints/mattergen_base/checkpoints/last.ckpt\n/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/utils/data_classes.py:95: UserWarning: \nThe version_base parameter is not specified.\nPlease specify a compatability version level, or None.\nWill assume defaults for version 1.1\n  with initialize_config_dir(str(self.model_path)):\n  0%|                                                                                                                                                                                     | 0/1000 [00:00<?, ?it/s]\nGenerating samples:   0%|                                                                                                                                                                    | 0/2 [00:00<?, ?it/s]\nTraceback (most recent call last):\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/generate.py\", line 84, in <module>\n    fire.Fire(main)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/fire/core.py\", line 135, in Fire\n    component_trace = _Fire(component, args, parsed_flag_args, context, name)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/fire/core.py\", line 468, in _Fire\n    component, remaining_args = _CallAndUpdateTrace(\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/fire/core.py\", line 684, in _CallAndUpdateTrace\n    component = fn(*varargs, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/generate.py\", line 79, in main\n    generator.generate(output_dir=Path(output_path))\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/generator.py\", line 370, in generate\n    generated_structures = draw_samples_from_sampler(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/generator.py\", line 58, in draw_samples_from_sampler\n    sample, mean, intermediate_samples = sampler.sample_with_record(conditioning_data, mask)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/utils/_contextlib.py\", line 115, in decorate_context\n    return func(*args, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/pc_sampler.py\", line 130, in sample_with_record\n    return self._sample_maybe_record(conditioning_data, mask=mask, record=True)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/utils/_contextlib.py\", line 115, in decorate_context\n    return func(*args, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/pc_sampler.py\", line 157, in _sample_maybe_record\n    return self._denoise(batch=batch, mask=mask, record=record)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/utils/_contextlib.py\", line 115, in decorate_context\n    return func(*args, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/pc_sampler.py\", line 187, in _denoise\n    score = self._score_fn(batch, t)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/classifier_free_guidance.py\", line 71, in _score_fn\n    return get_unconditional_score()\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/classifier_free_guidance.py\", line 59, in get_unconditional_score\n    return super(GuidedPredictorCorrector, self)._score_fn(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/sampling/pc_sampler.py\", line 94, in _score_fn\n    return self._diffusion_module.score_fn(x, t)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/diffusion/diffusion_module.py\", line 129, in score_fn\n    model_out: T = self.model(x, t)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1511, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1520, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/denoiser.py\", line 248, in forward\n    output = self.gemnet(\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1511, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1520, in _call_impl\n    return forward_call(*args, **kwargs)\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/gemnet/gemnet.py\", line 665, in forward\n    ) = self.generate_interaction_graph(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/gemnet/gemnet.py\", line 535, in generate_interaction_graph\n    edge_index, to_jimages, num_bonds = radius_graph_pbc(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/utils/data_utils.py\", line 263, in radius_graph_pbc\n    edge_index, unit_cell, num_neighbors_image, _, _ = radius_graph_pbc_ocp(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/utils/ocp_graph_utils.py\", line 229, in radius_graph_pbc\n    mask_num_neighbors, num_neighbors_image = get_max_neighbors_mask(\n  File \"/home/krkaufma/PycharmProjects/mattergen_proj/mattergen/common/utils/ocp_graph_utils.py\", line 280, in get_max_neighbors_mask\n    num_neighbors = segment_coo(ones.to(pyg_device), index.to(pyg_device), dim_size=num_atoms).to(\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch_scatter/segment_coo.py\", line 124, in segment_coo\n    return segment_sum_coo(src, index, out, dim_size)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch_scatter/segment_coo.py\", line 9, in segment_sum_coo\n    return torch.ops.torch_scatter.segment_sum_coo(src, index, out, dim_size)\n  File \"/home/krkaufma/anaconda3/envs/mattergen25/lib/python3.10/site-packages/torch/_ops.py\", line 755, in __call__\n    return self._op(*args, **(kwargs or {}))\nRuntimeError: Unknown layout\n`\nI have already tried modifying gcc, nvcc, and $PATH to no avail.\n\nThank you in advance for your assistance.",
+    "comments_url": "https://api.github.com/repos/microsoft/mattergen/issues/41/comments",
+    "author": "krkaufma",
+    "comments": [
+      {
+        "user": "ClaudioZeni",
+        "created_at": "2025-02-03T13:08:00Z",
+        "body": "Hi and thanks for reaching out.\n\nCould you try pulling the latest commits, re-installing the environment and re-run the script?\nAlso, which architecture are you on?"
+      },
+      {
+        "user": "krkaufma",
+        "created_at": "2025-02-03T22:22:09Z",
+        "body": "Hi @ClaudioZeni and thanks for the reply. I pulled the latest version, re-installed the environment, and re-ran the script and everything worked. I am on Ubuntu 18.04 with x86_64 architecture. Let me know if you need further information about my architecture. \n\nIf you don't mind me asking this question here, do the mattersim relaxed structures and predicted propert(ies) get written anywhere in the file system? Is there an argument to have this done when calling the evaluation?"
+      },
+      {
+        "user": "ClaudioZeni",
+        "created_at": "2025-02-04T09:12:28Z",
+        "body": "Hi, glad everything works now.\n\nAs for the relaxation, currently `evaluate.py` does not store any information regarding the relaxed structures.\nIf you are interested in these info, you can simply run the relaxation script and then save the properties you are interested in:\n\n``` python\n\nfrom mattergen.evaluation.utils.relaxation import relax_structures\n\nrelaxed_structures, total_energies = relax_structures(structures)\n```"
+      },
+      {
+        "user": "ClaudioZeni",
+        "created_at": "2025-02-04T09:13:05Z",
+        "body": "Closing as issue appears to be resolved"
+      }
+    ]
+  }
+]

@@ -1,0 +1,1185 @@
+[
+  {
+    "number": 23650,
+    "title": "Gateio futures does not work with CCXT Pro",
+    "created_at": "2024-09-05T22:51:29Z",
+    "closed_at": "2024-09-08T15:10:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/23650",
+    "body": "### Operating System\n\nWindows 11\n\n### Programming Languages\n\nPHP\n\n### CCXT Version\n\n4.3.96\n\n### Description\n\nHello! When I use 'defaultType' => 'swap' in the constructor parameters and then use the create_order_ws method, I get an open position on spot market instead of futures. Is this a bug? Thank you.\n\n### Code\n\n```\r\n$config = [\r\n    'apiKey' => $this->key,\r\n    'secret' => $this->secret,\r\n    'options' => [\r\n        'defaultType' => 'swap' // for perpetual futures\r\n    ],\r\n];\r\n$this->gateWs = new \\ccxt\\pro\\gateio($config);\r\n\r\n/* some other code*/\r\n\r\n$data = yield $this->gateWs->create_order_ws(\r\n    'XRP/USDT',\r\n    'market',\r\n    'buy',\r\n    10,\r\n    $this->tickers['XRP']\r\n); // This opens an order on the spot market, not futures\r\n\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/23650/comments",
+    "author": "Jekamajor",
+    "comments": [
+      {
+        "user": "sc0Vu",
+        "created_at": "2024-09-05T23:04:00Z",
+        "body": "@Jekamajor The symbol represents spot market. The market id would be XRP/USDT:USDT for swap. Could you try this market?"
+      },
+      {
+        "user": "Jekamajor",
+        "created_at": "2024-09-06T08:50:43Z",
+        "body": "> @Jekamajor The symbol represents spot market. The market id would be XRP/USDT:USDT for swap. Could you try this market?\r\n\r\nYes, thanks, with XRP/USDT:USDT  the request goes to futures, but now I'm getting this exception message after calling the create_order_ws method \r\n\r\n`{\"header\":{\"response_time\":\"1725612393633\",\"status\":\"400\",\"channel\":\"futures.order_place\",\"event\":\"api\",\"client_id\":\"11.22.33.44-0xc13d915541\"},\"data\":{\"errs\":{\"label\":\"INVALID_REQUEST\",\"message\":\"Mismatch type string with value number \\\"at index 58: mismatched type with value\\\\n\\\\n\\\\t:\\\\\\\"usdt\\\\\\\",\\\\\\\"price\\\\\\\":0,\\\\\\\"tif\\\\\\\":\\\\\\\"ioc\\\\\\\",\\\\\\\"t\\\\n\\\\t................^...............\\\\n\\\"\"}},\"request_id\":\"10\"}`"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2024-09-06T10:46:29Z",
+        "body": "@Jekamajor Can you show us the message sent to the exchange please?"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2024-09-06T11:10:55Z",
+        "body": "@Jekamajor managed to reproduce the issue, working on a fix right now"
+      },
+      {
+        "user": "Jekamajor",
+        "created_at": "2024-09-06T11:31:05Z",
+        "body": "> @Jekamajor Can you show us the message sent to the exchange please?\r\n\r\nIf I understood you correctly, here is the log after enabling verbose mode after calling create_order_ws method\r\n\r\n```2024-09-06T13:25:09+02:00 sending {\"id\":\"authenticated\",\"time\":1725621907,\"channel\":\"futures.login\",\"event\":\"api\",\"payload\":{\"req_id\":\"authenticated\",\"timestamp\":\"1725621907\",\"api_key\":\"xxx\",\"signature\":\"yyy\",\"req_param\":[]}}\r\n2024-09-06T13:25:09+02:00 on_message {\"header\":{\"response_time\":\"1725621911059\",\"status\":\"200\",\"channel\":\"futures.login\",\"event\":\"api\",\"client_id\":\"11.22.33.44-0xc2ebc55e00\"},\"data\":{\"result\":{\"uid\":\"7385430\",\"api_key\":\"xxx\"}},\"request_id\":\"authenticated\"}\r\n2024-09-06T13:25:09+02:00 sending {\"id\":\"8\",\"time\":1725621909,\"channel\":\"futures.order_place\",\"event\":\"api\",\"payload\":{\"req_id\":\"8\",\"timestamp\":\"1725621909\",\"api_key\":\"xxx\",\"signature\":\"yyy\",\"req_param\":{\"contract\":\"XRP_USDT\",\"size\":10,\"settle\":\"usdt\",\"price\":0,\"tif\":\"ioc\",\"text\":\"t-8aa266b5785551c5\",\"textIsRequired\":true}}}\r\n2024-09-06T13:25:10+02:00 on_message {\"header\":{\"response_time\":\"1725621911413\",\"status\":\"200\",\"channel\":\"futures.order_place\",\"event\":\"api\",\"client_id\":\"11.22.33.44-0xc2ebc55e00\",\"conn_id\":\"56932c...83\",\"trace_id\":\"9b4ad1d0...a010d03cbbcf6cc\"},\"data\":{\"result\":{\"req_id\":\"8\",\"api_key\":\"xxx\",\"timestamp\":\"1725621909\",\"signature\":\"yyy\",\"trace_id\":\"9b4ad1d0...f6cc\",\"text\":\"\",\"req_header\":{\"trace_id\":\"9b4ad1d...bcf6cc\"},\"req_param\":{\"size\":10,\"settle\":\"usdt\",\"price\":0,\"tif\":\"ioc\",\"text\":\"t-8aa266b5785551c5\",\"textIsRequired\":true,\"contract\":\"XRP_USDT\"}}},\"request_id\":\"8\",\"ack\":true}\r\n2024-09-06T13:25:10+02:00 on_message {\"header\":{\"response_time\":\"1725621911413\",\"status\":\"400\",\"channel\":\"futures.order_place\",\"event\":\"api\",\"client_id\":\"11.22.33.44-0xc2ebc55e00\"},\"data\":{\"errs\":{\"label\":\"INVALID_REQUEST\",\"message\":\"Mismatch type string with value number \\\"at index 35: mismatched type with value\\\\n\\\\n\\\\t:\\\\\\\"usdt\\\\\\\",\\\\\\\"price\\\\\\\":0,\\\\\\\"tif\\\\\\\":\\\\\\\"ioc\\\\\\\",\\\\\\\"t\\\\n\\\\t................^...............\\\\n\\\"\"}},\"request_id\":\"8\"}```"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2024-09-06T11:34:01Z",
+        "body": "@Jekamajor Thanks, the issue will be fixed in the linked PR."
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2024-09-08T13:22:47Z",
+        "body": "@Jekamajor Can you please update your ccxt version and try again? It should be working now"
+      },
+      {
+        "user": "Jekamajor",
+        "created_at": "2024-09-08T14:59:34Z",
+        "body": "@carlosmiei Yes, now the market order works. Thank you!!! "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Ability to place orders on the futures market instead of spot market when using CCXT Pro with Gateio",
+      "Correct symbol format for futures trading on Gateio",
+      "Proper functioning of the create_order_ws method for futures trading",
+      "Resolution of error messages when placing futures orders"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:28:25"
+    }
+  },
+  {
+    "number": 23323,
+    "title": "kucoin Invalid KC-API-TIMESTAMP",
+    "created_at": "2024-08-04T13:19:26Z",
+    "closed_at": "2024-08-04T19:53:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/23323",
+    "body": "### Operating System\r\n\r\n10\r\n\r\n### Programming Languages\r\n\r\nPHP\r\n\r\n### CCXT Version\r\n\r\n4.3.73\r\n\r\n### Description\r\n\r\nSince today an error started to appear when requesting a balance from KuCoin exchange:\r\nccxt\\InvalidNonce\r\nkucoin Invalid KC-API-TIMESTAMP\r\n\r\nThe method `$exchange->load_time_difference();` does not help\r\n\r\n### Code\r\n\r\n```PHP\r\n$exchangeClass = \"\\\\ccxt\\\\kucoin\";\r\n$exchange      = new $exchangeClass([\r\n  'apiKey'   => $account['api_key'],\r\n  'secret'   => $account['api_secret'],\r\n  'password' => $account['api_password'],\r\n]);\r\n\r\n$timeDifference = $exchange->load_time_difference();\r\n// print_r($timeDifference); // returns: 5528\r\n\r\n$balance = $exchange->fetchBalance([\r\n  'type' => 'trade',\r\n]);\r\nprint_r($balance);\r\n// ccxt\\InvalidNonce\r\n// kucoin Invalid KC-API-TIMESTAMP\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/23323/comments",
+    "author": "Elferboy",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2024-08-04T16:03:48Z",
+        "body": "Hello @Elferboy,\r\nNothing has changed on the CCXT side and I just tested and it worked.\r\n\r\nCan you please check if your clock is synced with UTC? If not I would try to sync it before making the request.\r\n\r\n```\r\n ph kucoin fetchBalance                                   \r\nPHP v8.3.7\r\nCCXT version :4.3.73\r\nkucoin->fetchBalance()\r\nArray\r\n(\r\n    [info] => Array\r\n        (\r\n            [code] => 200000\r\n            [data] => Array\r\n                (\r\n                    [0] => Array\r\n                        (\r\n                            [id] => 64feeec4cd03f30007aa5a8f\r\n                            [currency] => LTC\r\n                            [type] => trade\r\n                            [balance] => 0.211021\r\n                            [available] => 0.211021\r\n                            [holds] => 0\r\n                        )\r\n\r\n                    [1] => Array\r\n                        (\r\n                            [id] => 668635c2ff2dfe000796f545\r\n                            [currency] => ADA\r\n                            [type] => trade\r\n                            [balance] => 20.47\r\n                            [available] => 20.47\r\n                            [holds] => 0\r\n                        )\r\n\r\n                    [2] => Array\r\n                        (\r\n                            [id] => 66\r\n```\r\n"
+      },
+      {
+        "user": "Elferboy",
+        "created_at": "2024-08-04T19:53:51Z",
+        "body": "Thank you! I synchronized the time with the \"time.windows.com\" server and it started working fine. Too bad that the `load_time_difference()` method does not work for kucoin to equalize the difference.\r\nNow the `load_time_difference()` method shows 1205 microseconds difference."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the 'Invalid KC-API-TIMESTAMP' error when making KuCoin API requests",
+      "Guidance on system clock synchronization as it relates to exchange API requests"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:28:53"
+    }
+  },
+  {
+    "number": 19666,
+    "title": "Bitmex fetch positions doesn't show information anymore",
+    "created_at": "2023-10-25T13:07:11Z",
+    "closed_at": "2023-10-25T14:02:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/19666",
+    "body": "### Operating System\n\nWindows 10\n\n### Programming Languages\n\nPython\n\n### CCXT Version\n\n4.1.20\n\n### Description\n\nHello,\r\n\r\nsuddenly, probably after ccxt update I get no Information from \r\n\r\nBitmex.fetch.positions anymore. \r\n\r\nOutput is --> []  None\r\n\r\nWas there any change on ccxt for Bitmex or is it a bug? \r\n\r\nMy account was liquidated because of this problem. Luckily it was just play money :-)... \r\n\r\n\n\n### Code\n\n```\r\nbitmex = ccxt.bitmex({'enableRateLimit': True,\r\n                       'apiKey': bitmexconfig.api_key,\r\n                       'secret': bitmexconfig.api_secret,})\r\n\r\n\r\nsymbol = 'XBTUSD'\r\nparams={\"type\":\"swap\",\"code\":\"XBT\"}\r\n\r\nbitmex_pos = bitmex.fetch_positions([symbol], params)\r\nprint(bitmex_pos)\r\n\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/19666/comments",
+    "author": "Nitrix321",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-10-25T13:39:50Z",
+        "body": "Hello @Nitrix321,\r\n\r\nRecently we just improved the filtering because if you called `fetch_positions([A,B,C])` it would return all the positions regardless of the symbols provided. The filtering might not be working correctly with exchange-specific ids and I will fix it ASAP but in the meantime, you can either not provide any symbol or provide the unified one (BTC/USD:BTC)\r\n\r\nExample:\r\n```Python\r\npos = bitmex.fetch_positions(params = params)\r\n# or\r\npos = bitmex.fetch_positions(['BTC/USD:BTC'] ,params = params)\r\n```\r\n"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-10-25T13:46:00Z",
+        "body": "@Nitrix321 Sorry I think what I said is wrong, exchange-specific symbols are also working,  but due to the filtering it will only return positions from the symbols in the symbols array, so I would suggest calling `fetch_positions` without any argument. "
+      },
+      {
+        "user": "Nitrix321",
+        "created_at": "2023-10-25T14:02:36Z",
+        "body": "hi @carlosmiei thanks, its working now without any argument as you said. I already tried without symbol or only symbol and no param but without any argument I was not thinking about that...  "
+      }
+    ],
+    "satisfaction_conditions": [
+      "A working solution to retrieve Bitmex position data after the recent CCXT update",
+      "Clear explanation of why the previous approach stopped working",
+      "Practical code example showing the correct way to call fetch_positions",
+      "Information about alternative approaches to retrieve position data"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:31:02"
+    }
+  },
+  {
+    "number": 19177,
+    "title": "symbol BTC/FDUSD leverage not working",
+    "created_at": "2023-09-11T09:13:01Z",
+    "closed_at": "2023-09-12T06:10:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/19177",
+    "body": "### Operating System\r\n\r\nWindows11\r\n\r\n### Programming Languages\r\n\r\nPython\r\n\r\n### CCXT Version\r\n\r\n4.0.78\r\n\r\n### Description\r\n\r\nHi, \r\n\r\nWe are working on binance BTC/FDUSD symbol trading with leverage. \r\nThis symbol is working totally fine without leveraging (e.g. binance.fetch_ticker, binance.create_market_buy_order), while when calling binance.markets[ 'BTC/FDUSD' ], the return leverage limit is None.\r\n\r\nWe've checked that the return of leverage with binance.markets[ 'BTC/USDT' ] is working while binance.markets[ 'BTC/FDUSD' ] and binance.markets[ 'FDUSD/BTC' ] are not (returns None), also binance.fapiPrivate_post_leverage is not working with 'FDUSD' symbols.\r\n\r\nWe've also confirmed with binance support that 'FDUSD' symbols endpoints are fine on binance side, so we suppose the issue is on the ccxt tool, thanks.\r\n\r\n### Code\r\n\r\n```\r\nsymbol = 'BTC/FDUSD'\r\nself.binance = ccxt.binance({ })\r\n\r\nresult = float(self.binance.fetch_ticker(symbol)['bid']) # Works\r\norder = self.binance.create_market_buy_order(symbol, amount) # Works\r\norder = self.binance.create_market_sell_order(symbol, amount) # Works\r\n\r\nself.binance.load_markets()\r\nmarket = self.binance.markets[ symbol ]  # returns None in leverage limit\r\nself.binance.fapiPrivate_post_leverage(symbol) # Not working\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/19177/comments",
+    "author": "cO-Oe",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-09-11T10:57:19Z",
+        "body": "Hello @cO-Oe,\r\n\r\nThe main issue is that you're calling a derivatives endpoint (fapiPrivate_post_leverage) using a spot symbol. "
+      },
+      {
+        "user": "cO-Oe",
+        "created_at": "2023-09-12T06:10:38Z",
+        "body": "Hi @carlosmiei, \r\n\r\nAppreciated! We've switched to margin trading for spot symbols and worked as what we would liked to, thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification on the correct API endpoints to use for leveraged trading with the specific symbol",
+      "Explanation of why the leverage functionality wasn't working with the BTC/FDUSD symbol",
+      "Direction toward the appropriate trading method for leveraged trading with spot symbols"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:32:02"
+    }
+  },
+  {
+    "number": 18857,
+    "title": "Bybit stop limit orders cannot be canceled",
+    "created_at": "2023-08-11T09:05:59Z",
+    "closed_at": "2023-08-11T14:12:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/18857",
+    "body": "### Operating System\n\nWindows\n\n### Programming Languages\n\nJavaScript\n\n### CCXT Version\n\n4.0.57\n\n### Description\n\nWhen placing stop loss orders, using the CCXT unified method, on Bybit spot market (using a Unified Bybit account), it is not possible to cancel those orders. As an example, this is what I did:\r\n\r\n`await exchange.createOrder('BTC/USDT', 'limit', 'sell', 0.001, 28500, { stopLossPrice: 29000 });`\r\n\r\nWhen using `exchange.cancelAllOrders('BTC/USDT')`, the order is not canceled. No exception is thrown, but I still see the open order on the exchange.\r\n\r\nWhen using `exchange.cancelOrder(<id>, 'BTC/USDT')`, using the id that is returned when creating the order, does not work either. In that case I get the following exception:\r\n\r\nOrderNotFound: bybit {\"retCode\":170213,\"retMsg\":\"Order does not exist.\",\"result\":{},\"retExtInfo\":{},\"time\":1691743905604}\r\n    at bybit.throwExactlyMatchedException (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\base\\Exchange.js:3087:19)\r\n    at bybit.handleErrors (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\bybit.js:9161:18)\r\n    at C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\base\\Exchange.js:766:51\r\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)\r\n    at async bybit.fetch2 (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\base\\Exchange.js:2666:16)\r\n    at async bybit.request (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\base\\Exchange.js:2669:16)\r\n    at async bybit.cancelUnifiedAccountOrder (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\bybit.js:4690:26)\r\n    at async bybit.cancelOrder (C:\\code\\crypto-coding-course\\code\\cc-bot\\node_modules\\ccxt\\dist\\cjs\\src\\bybit.js:4874:20)\r\n\r\n\r\nAm I doing something wrong, or is this a bug?\n\n### Code\n\n```\r\n\u2002\u2002\r\n\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/18857/comments",
+    "author": "hodlerhacks",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-08-11T13:36:07Z",
+        "body": "Hello @hodlerhacks,\r\nHave you tried to provide `stop:true` inside `params`? \r\n\r\nExample:\r\n```Python\r\nexchange.cancelAllOrders('BTC/USDT', {'stop': true})\r\n```\r\n"
+      },
+      {
+        "user": "hodlerhacks",
+        "created_at": "2023-08-11T13:48:25Z",
+        "body": "Oh wow, that solves it indeed, thanks! :-)\r\n\r\nI couldn't find this in the documentation. What exactly does this parameter do? When should I use it? Is it Bybit-specific and/or can I safely use that with other exchanges as well? (I'm developing an application that works with many different exchanges, and I'm trying to keep the code as generic as possible, hence the question.)"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-08-11T13:57:32Z",
+        "body": "> I couldn't find this in the documentation. What exactly does this parameter do? When should I use it? Is it Bybit-specific and/or can I safely use that with other exchanges as well? (I'm developing an application that works with many different exchanges, and I'm trying to keep the code as generic as possible, hence the question.)\r\n\r\n@hodlerhacks Some exchanges have different endpoints to handle stop/trigger orders, so the `stop` parameter tells ccxt to use that endpoint instead, and yes it is unified across exchanges so you should be able to use it with other exchanges as well.\r\n\r\nAdditionally, we will try to improve our documentation, thanks for letting us know. \r\n\r\n"
+      },
+      {
+        "user": "hodlerhacks",
+        "created_at": "2023-08-11T13:59:43Z",
+        "body": "Thanks for clarifying and your quick response, appreciate it!"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-08-11T14:12:04Z",
+        "body": "@hodlerhacks no problem, feel free to reach out any time."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that enables cancellation of stop limit orders on Bybit",
+      "An explanation of why the solution works",
+      "Information about cross-exchange compatibility of the solution",
+      "Documentation context for the solution"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:32:28"
+    }
+  },
+  {
+    "number": 17822,
+    "title": "watch_ohlcv always returns a single value",
+    "created_at": "2023-05-07T06:51:04Z",
+    "closed_at": "2023-05-07T21:59:12Z",
+    "labels": [
+      "bug",
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/17822",
+    "body": "### Operating System\n\nEndeavourOS\n\n### Programming Languages\n\npython\n\n### CCXT Version\n\nCCXT Pro 3.0.79\n\n### Description\n\nI've been trying to run the `binance-watch-ohlcv.py` example and expected it to return more candles, however, it only seems to return one, no matter the limits I set. As I've understood, this method should return more candles, depending on the limit parameter that is set.\n\n### Code\n\n```\r\n\u2002\u2002\r\n\r\nimport ccxt.pro\r\nfrom asyncio import run\r\n\r\nprint('CCXT Pro version', ccxt.pro.__version__)\r\n\r\n\r\ndef table(values):\r\n    first = values[0]\r\n    keys = list(first.keys()) if isinstance(first, dict) else range(0, len(first))\r\n    widths = [max([len(str(v[k])) for v in values]) for k in keys]\r\n    string = ' | '.join(['{:<' + str(w) + '}' for w in widths])\r\n    return \"\\n\".join([string.format(*[str(v[k]) for k in keys]) for v in values])\r\n\r\n\r\nasync def main():\r\n    exchange = ccxt.pro.binance({\r\n        'options': {\r\n            'OHLCVLimit': 1000, # how many candles to store in memory by default\r\n        },\r\n    })\r\n    symbol = 'ETH/USDT'  # or BNB/USDT, etc...\r\n    timeframe = '1m'  # 5m, 1h, 1d\r\n    limit = 10  # how many candles to return max\r\n    method = 'watchOHLCV'\r\n    if (method in exchange.has) and exchange.has[method]:\r\n        max_iterations = 100000  # how many times to repeat the loop before exiting\r\n        for i in range(0, max_iterations):\r\n            try:\r\n                ohlcvs = await exchange.watch_ohlcv(symbol, timeframe, None, limit)\r\n                now = exchange.milliseconds()\r\n                print('\\n===============================================================================')\r\n                print('Loop iteration:', i, 'current time:', exchange.iso8601(now), symbol, timeframe)\r\n                print('-------------------------------------------------------------------------------')\r\n                print(table([[exchange.iso8601(o[0])] + o[1:] for o in ohlcvs]))\r\n            except Exception as e:\r\n                print(type(e).__name__, str(e))\r\n                break\r\n        await exchange.close()\r\n    else:\r\n        print(exchange.id, method, 'is not supported or not implemented yet')\r\n\r\n\r\nrun(main())\r\n```\r\nOutput looks like this\r\n```\r\nCCXT Pro version 3.0.79\r\n\r\n===============================================================================\r\nLoop iteration: 0 current time: 2023-05-07T06:42:00.151Z ETH/USDT 1m\r\n-------------------------------------------------------------------------------\r\n2023-05-07T06:41:00.000Z | 1902.53 | 1902.59 | 1902.52 | 1902.59 | 30.4667\r\n\r\n===============================================================================\r\nLoop iteration: 1 current time: 2023-05-07T06:42:03.130Z ETH/USDT 1m\r\n-------------------------------------------------------------------------------\r\n2023-05-07T06:42:00.000Z | 1902.58 | 1902.59 | 1902.58 | 1902.59 | 17.8681\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/17822/comments",
+    "author": "AndreiMihalea",
+    "comments": [
+      {
+        "user": "pcriadoperez",
+        "created_at": "2023-05-07T20:16:55Z",
+        "body": "Hi @AndreiMihalea , by default the watch methods only return the updates it receives from the exchange, that's why you only receive one message at a time.\r\nWe do however cache all the messages, so if you wish to see them you can set the option. `exchange.newUpdates = false` so it returns the full cache.\r\nAlso if you want the historic ohlcv you can use `fetchOHLCV`\r\n\r\nLet me know if you have any questions, if not feel free to close the issue."
+      },
+      {
+        "user": "AndreiMihalea",
+        "created_at": "2023-05-07T21:59:04Z",
+        "body": "Thank you for the reply, @pcriadoperez. It indeed works with the `fetchOHLCV` method."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why watch_ohlcv returns only one candle at a time",
+      "Alternative approaches to retrieve multiple OHLCV candles",
+      "Clarification on the difference between real-time updates and historical data retrieval in CCXT Pro"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:33:29"
+    }
+  },
+  {
+    "number": 17769,
+    "title": "Bybit watch_ticker() does not return values",
+    "created_at": "2023-05-03T17:29:26Z",
+    "closed_at": "2023-11-22T19:49:44Z",
+    "labels": [
+      "enhancement",
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/17769",
+    "body": "### Operating System\n\nlinux\n\n### Programming Languages\n\npython\n\n### CCXT Version\n\n3.0.90\n\n### Description\n\nHi,\r\n\r\nBybit watch_ticker() seems broken for spot. Works fine for perpetual swaps. \n\n### Code\n\n```\r\nimport asyncio\r\nimport ccxt.pro as ccxt\r\n\r\nbybit = ccxt.bybit()\r\nasyncio.run(bybit.watch_ticker(\"BTC/USDT\"))  # this hangs forever\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/17769/comments",
+    "author": "mrpouley",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-05-03T17:36:53Z",
+        "body": "Hello @mrpouley,\r\nYou need to set `defaultType = spot` because bybit has conflicting ids. "
+      },
+      {
+        "user": "mrpouley",
+        "created_at": "2023-05-03T18:01:11Z",
+        "body": "It works, thanks.\r\nSo it's not possible to call watch_ticker() on both spot and futures using the same exchange object, am i correct?"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-05-04T10:44:28Z",
+        "body": "> It works, thanks. So it's not possible to call watch_ticker() on both spot and futures using the same exchange object, am i correct?\r\n\r\n@mrpouley As of now it is not possible, but we will try to fix this issue in the future"
+      },
+      {
+        "user": "philipperemy",
+        "created_at": "2023-11-22T12:29:40Z",
+        "body": "It would be good if this issue could be addressed. Not being able to use bybit spot with ccxt pro is not ideal."
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-11-22T12:55:47Z",
+        "body": "@philipperemy @mrpouley After the v5 migration, this should work, you should be able to do\r\n```Python\r\nawait bybit.watch_ticker('BTC/USDT')\r\nawait bybit.watch_ticker('BTC/USDT:USDT')\r\n```\r\nwith no issues as long as you have an updated version of ccxt"
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2023-11-22T19:49:40Z",
+        "body": "yep, ccxt 3.0 is very old..."
+      },
+      {
+        "user": "philipperemy",
+        "created_at": "2023-11-23T00:03:37Z",
+        "body": "@carlosmiei so it works but the `bid` and the `ask` are equal to `None` when it comes to spot instruments."
+      },
+      {
+        "user": "philipperemy",
+        "created_at": "2023-11-23T00:04:50Z",
+        "body": "Latest ccxt (ccxt-4.1.61)\r\n*code*\r\n```python\r\nimport asyncio\r\n\r\nimport ccxt.pro\r\n\r\nbybit = ccxt.pro.bybit()\r\nprint(asyncio.run(bybit.watch_ticker('BTC/USDT')))\r\n```\r\n\r\n*result*\r\n```\r\n{'symbol': 'BTC/USDT', 'timestamp': 1700697865426, 'datetime': '2023-11-23T00:04:25.426Z', 'high': None, 'low': 35822.01, 'bid': None, 'bidVolume': None, 'ask': None, 'askVolume': None, 'vwap': 36870.1403687674, 'open': 35829.61, 'close': 37445.77, 'last': 37445.77, 'previousClose': None, 'change': 1616.16, 'percentage': 4.51, 'average': 36637.69, 'baseVolume': 11610.147233, 'quoteVolume': 428067758.18276644, 'info': {'symbol': 'BTCUSDT', 'lastPrice': '37445.77', 'highPrice24h': '37864.94', 'lowPrice24h': '35822.01', 'prevPrice24h': '35829.61', 'volume24h': '11610.147233', 'turnover24h': '428067758.18276642', 'price24hPcnt': '0.0451', 'usdIndexPrice': '37451.710000000001'}}\r\n```\r\n\r\nAdding `{'options': {'defaultType': 'spot'}}` does nothing to it."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clear documentation or guidance on proper configuration for different market types"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:33:41"
+    }
+  },
+  {
+    "number": 17479,
+    "title": "Fetch oldest candles on BitGet, no response",
+    "created_at": "2023-04-04T21:23:55Z",
+    "closed_at": "2023-04-06T06:21:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/17479",
+    "body": "### Operating System\n\nlinux\n\n### Programming Languages\n\nJS\n\n### CCXT Version\n\n3.0.52\n\n### Description\n\nHi @carlosmiei,\r\n\r\nI'm trying to retrieve the oldest candles for a symbol on BitGet.\r\nI use a large time frame to estimate the first market time.\r\nBut no candle is returned.\r\nSee example.\r\nWork fine on Binance and ByBit.\n\n### Code\n\n```\r\n\u2002\u2002    const exchange = new ccxt['bitget']()\r\n\r\n    // big time frame\r\n    let ohlcvRawList = await exchange.fetchOHLCV('ETH/USDT:USDT', '1w')\r\n\r\n    let firstMonthCandle = ohlcvRawList[0]\r\n    const timeStart = firstMonthCandle[0]\r\n\r\n    const timeStartTenMonthAfter = timeStart + 60 * 60 * 24 * 30 * 10 * 1000\r\n\r\n    console.log('first month candle', firstMonthCandle)\r\n    ohlcvRawList = await exchange.fetchOHLCV('ETH/USDT:USDT', '1h', timeStart)\r\n    console.log(ohlcvRawList.length) // 0\r\n\r\n    // try 10 months after\r\n    ohlcvRawList = await exchange.fetchOHLCV('ETH/USDT:USDT', '1h', timeStartTenMonthAfter)\r\n    console.log(ohlcvRawList.length) // 0\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/17479/comments",
+    "author": "dawadam",
+    "comments": [
+      {
+        "user": "sc0Vu",
+        "created_at": "2023-04-05T02:30:43Z",
+        "body": "Hi @dawadam \r\n\r\nAfter test, it seems you can fetch data within 30 days for 1h (the documentations said for `1m` candles)"
+      },
+      {
+        "user": "dawadam",
+        "created_at": "2023-04-05T16:58:01Z",
+        "body": "Ok, not a bug, juste exchange sucks."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification about the data availability limitations for BitGet exchange's historical candles",
+      "Confirmation whether the issue is a bug or an exchange limitation",
+      "Information about the time range constraints when fetching OHLCV data from BitGet"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:34:21"
+    }
+  },
+  {
+    "number": 17170,
+    "title": "watch_ohlcv function not working for Bybit exchange",
+    "created_at": "2023-03-14T15:40:00Z",
+    "closed_at": "2023-03-14T19:25:33Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/17170",
+    "body": "### Operating System\n\nWindows 11\n\n### Programming Languages\n\npython\n\n### CCXT Version\n\n2.8.89\n\n### Description\n\nI am trying to connect with Bybit using the watch_ohlcv function to stream live data, but it returns an array with no values. The same code works fine for Binance Exchange.\r\n\r\nOutput ---\r\n\r\n[[None, None, None, None, None, None]]\r\n[[None, None, None, None, None, None]]\r\n[[None, None, None, None, None, None]]\r\n[[None, None, None, None, None, None]]\r\n[[None, None, None, None, None, None]]\n\n### Code\n\n```\r\nimport asyncio\r\nimport ccxt.pro\r\n\r\n\r\nmarket = \"future\"\r\napi_key = \"api_key\"\r\napi_sec = \"api_secret\"\r\n\r\nexchange = ccxt.pro.bybit({\r\n    'enableRateLimit': True,\r\n    'options': {\r\n        'defaultType': market,\r\n        'adjustForTimeDifference': True\r\n    },\r\n    \"apiKey\" : api_key,\r\n    \"secret\" : api_sec\r\n})\r\n\r\n\r\n\r\nasync def fetch_kline():\r\n\r\n    while True:\r\n\r\n        live_feed = await exchange.watch_ohlcv(\"ETH/USDT\", \"1m\")\r\n\r\n        print(live_feed)\r\n\r\n\r\n\r\nasyncio.run(fetch_kline())\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/17170/comments",
+    "author": "sumitgautam0101",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-03-14T15:41:49Z",
+        "body": "Hello @sumitgautam0101,\r\nDo you mind updating your ccxt version? I think this issue was fixed in the meantime."
+      },
+      {
+        "user": "sumitgautam0101",
+        "created_at": "2023-03-14T19:13:35Z",
+        "body": "Thank You, it works now !! "
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-03-14T19:25:33Z",
+        "body": "@sumitgautam0101 nice, will close this issue then. Let us know if anything!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that enables the watch_ohlcv function to return valid OHLCV data for Bybit exchange",
+      "An up-to-date version of the CCXT library that resolves compatibility issues with Bybit",
+      "Parity of functionality between different exchanges in the CCXT library"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:34:34"
+    }
+  },
+  {
+    "number": 16898,
+    "title": "Kucoinfutures fetch open orders shows no data anymore",
+    "created_at": "2023-02-19T15:55:05Z",
+    "closed_at": "2023-02-20T13:10:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/16898",
+    "body": "### \u061c\n\nOS: Windows 10\r\nProgramming Language version: Python\r\nCCXT version: 2.8.16\r\n\r\n\r\nHello, \r\n\r\nsince a few days kucoinfutures doesn't show any data if I try to fetch open orders when STOP ORDER is placed. Issue occurs at linear and inverse contracts.   If a limit order above price is placed it works. \r\nAlso here I didn't change anything, it has worked fine for months now, but suddenly it doesn't work anymore. \r\n\r\n\r\nkucoin = ccxt.kucoinfutures({'enableRateLimit': True,\r\n                       'apiKey': kucoinconfig.api_key,\r\n                       'secret': kucoinconfig.api_secret,\r\n                       'password' : 'xxxxxxxxxxx',})\r\n\r\nsymbol = 'ETH/USDT:USDT'\r\npos_size = 1\r\n\r\norders = kucoin.fetch_open_orders(symbol)\r\n        print(orders)\r\n\r\nOutput is this --> []\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/16898/comments",
+    "author": "Nitrix321",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-02-20T09:58:19Z",
+        "body": "Hello @Nitrix321,\r\n\r\nIf you want to fetch open `stop` orders you should provide `stop:True` inside `params`.\r\nExample:\r\n```\r\nparams = {\r\n   'stop': True\r\n}\r\nstop_open_orders = kucoin.fetch_open_orders(symbol, params=params)\r\n```\r\n\r\n"
+      },
+      {
+        "user": "Nitrix321",
+        "created_at": "2023-02-20T13:10:32Z",
+        "body": "Hi @carlosmiei,\r\nyou are right, now it's working. I could have sworn it worked all along. \r\nBut ok, now it is.\r\n\r\nThank you again :-)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A method to properly fetch stop orders from KuCoin Futures API",
+      "A solution that requires minimal code changes to their existing implementation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:35:00"
+    }
+  },
+  {
+    "number": 16650,
+    "title": "python async speed slower",
+    "created_at": "2023-01-27T07:36:29Z",
+    "closed_at": "2023-01-27T18:00:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/16650",
+    "body": "### Operating System\n\nubuntu\n\n### Programming Languages\n\npython\n\n### CCXT Version\n\n2.6.94\n\n### Description\n\nWhile I was trying to migrate my code to async I noticed that my execution was slower.\r\n\r\nI wrote a small code to compare the async vs sync speed. \r\n\r\nAverage execution time of both is written below in seconds in one of my test runs. On average async takes rougly 2x longer . Similar results when tested in other methods such as \"fetch_tickers\".\r\n\r\nasync mean: 1.1664345026016236\r\nsync mean: 0.5469205617904663\n\n### Code\n\n```\r\nimport asyncio\r\nimport time\r\n\r\nimport ccxt.async_support as ccxta  \r\nimport ccxt\r\nimport os\r\nfrom dotenv import load_dotenv\r\nload_dotenv()\r\n\r\nbinance_keys = {\r\n        \"apikey\" : os.getenv(\"BINANCE_APIKEY\"),\r\n        \"secret\" : os.getenv(\"BINANCE_SECRET\")\r\n    }\r\n\r\nasync def get_balance_async(exchange):\r\n    balance = await exchange.fetch_balance()\r\n    await exchange.close()\r\n    return balance\r\n\r\nexchange_async = ccxta.binance({\r\n        'apiKey': binance_keys[\"apikey\"],\r\n        'secret': binance_keys[\"secret\"],\r\n    })\r\n\r\nexchange_sync = ccxt.binance({\r\n        'apiKey': binance_keys[\"apikey\"],\r\n        'secret': binance_keys[\"secret\"],\r\n    })\r\n\r\ntime_sync = []\r\ntime_async = []\r\n\r\nloop = asyncio.get_event_loop()\r\nfor i in range(10):\r\n\r\n    start = time.time()\r\n    loop.run_until_complete(get_balance_async(exchange_async))\r\n    time_async.append(time.time() - start)\r\n    time.sleep(0.2)\r\n\r\n    start = time.time()\r\n    balance = exchange_sync.fetch_balance()\r\n    time_sync.append(time.time() - start)\r\n    time.sleep(0.2)\r\n\r\nprint(\"Async data: \", time_async)\r\nprint(\"Sync data: \", time_sync)\r\nprint(f\"async mean: {sum(time_async)/len(time_async)}\")\r\nprint(f\"sync mean: {sum(time_sync)/len(time_sync)}\")\r\n\u2002\u2002\r\n\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/16650/comments",
+    "author": "akasimo",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2023-01-27T11:23:45Z",
+        "body": "Hello @akasimo,\r\nThe difference is not related to the sync vs async approach, but the default RateLimiter ccxt async has in place. You can disable it if you want by providing this option: `enableRateLimit: False`. "
+      },
+      {
+        "user": "akasimo",
+        "created_at": "2023-01-27T18:00:26Z",
+        "body": "perfect, thanks!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation for why async operations are slower than sync operations in the CCXT library",
+      "A solution to improve the performance of async operations in CCXT",
+      "Information about default behaviors or settings in CCXT's async implementation that affect performance"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:35:14"
+    }
+  },
+  {
+    "number": 16193,
+    "title": "CCXT Ascendex Stopped Working (fetch_markets())",
+    "created_at": "2022-12-24T18:04:51Z",
+    "closed_at": "2022-12-25T01:43:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/16193",
+    "body": "Hi all.\r\n\r\nHave been using CCXT for Ascendex successfully for months.  Recently it stopped working.\r\nIt's failing in 'load_markets'.  Base currency & quote currency for some trading pair I don't even care about are both Null, this leads to a Type error during concatenation.    I would guess some bad/null data coming from the exchange, or that Null's are not being filtered/handled properly in CCXT Ascendex.\r\n\r\n- OS:  AWS EC2 (Windows)\r\n- Programming Language version:  Python 3.9 ( 3.9.5 I think)\r\n- CCXT version:  latest, 2.2.89\r\n\r\nYOUR_CODE_TO_REPRODUCE_THE_ISSUE_WITHOUT_YOUR_KEYS\r\n\r\nascendex.py, line 573, 'fetch_markets()'\r\n\r\nERROR LINE>>>symbol = base + '/' + quote \r\n \r\nFails with Type error, because base & quote are both = None.\r\nThe symbol is XMR5S/USDT, which I am not even interested in.\r\n\r\n----\r\nThe calling code is standard set up:\r\n```\r\nself.exchange_class = getattr(mod, exchange_id)\u2028\u2028\r\nself.ccxt = self.exchange_class({\u2028    'apiKey': config['apiKey'],\u2028    'secret': config['secret'],\u2028    'uid': config['uid'],\u2028    'password': config['password'],\u2028    'options': {\u2028        'defaultType': 'spot',\u2028    },\u2028    'enableRateLimit': True,\u2028})\u2028 \r\nself.ccxt.set_sandbox_mode(\u2028config['is_sandbox']\u2028)\u2028\r\n\u2028self.ccxt.load_markets()\r\n\r\n```\r\n\r\nYOUR_OUTPUT_ERROR_EXCEPTION_IN_TEXT_NO_SCREENSHOTS\r\n```\r\nNot very useful is it doesn't cast light on WHY they are None value.\r\n\"unsupported operand type(s) for +: 'NoneType' and 'str'\"\r\n```\r\n\r\nPlease advise, thank you\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/16193/comments",
+    "author": "SpenTappy",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-12-24T18:10:39Z",
+        "body": "Hello @SpenTappy,\r\nYes, we detected this issue recently, but it should already be fixed. Can you try updating to the latest version?\r\n\r\nThanks!"
+      },
+      {
+        "user": "SpenTappy",
+        "created_at": "2022-12-24T19:15:43Z",
+        "body": "Thanks so much for quick response.  Turns out my 'latest' version wasn't as latest as I thought it was..\r\nConfirmed this is running well in `ccxt     2.4.55`\r\nHappy holidays."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Identification of the root cause of the TypeError in fetch_markets() function",
+      "A solution that resolves the null handling issue in the Ascendex implementation",
+      "Confirmation that the issue is known and being addressed by the library maintainers",
+      "Guidance on obtaining the correct version that contains the fix"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:35:40"
+    }
+  },
+  {
+    "number": 15160,
+    "title": "Fetching balance state on Bybit returns an empty list",
+    "created_at": "2022-10-01T11:52:12Z",
+    "closed_at": "2022-10-01T14:04:20Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/15160",
+    "body": "- OS: Windows 10 (WSL2 Ubuntu 20.04)\r\n- Programming Language version: Node.js 18\r\n- CCXT version: 1.92.89\r\n\r\nFetching a balance returns all 0. It does not work both on mainnet and testnet.\r\n\r\nBalance amount for all symbols is returned as 0. API key and secret is a correct one.\r\nSwitching from bybit to binance exchange successfully returns a correct amount of balance, but not on bybit.\r\n\r\nMy actual balance on testnet is: 112,294.98 USD (\u22485.82435910 BTC)\r\n\r\n```\r\nconst ccxt = require('ccxt')\r\n\r\n(async () => {\r\n  const exchange = new ccxt.bybit({\r\n    apiKey: 'xxx',\r\n    secret: 'xxx'\r\n  })\r\n  \r\n  const balance = await exchange.fetchBalance()\r\n  console.log(balance)\r\n})()\r\n```\r\n\r\n```\r\n{\r\n  info: {\r\n    ret_code: '0',\r\n    ret_msg: 'OK',\r\n    result: {\r\n      USDT: [Object],\r\n      DOT: [Object],\r\n      LTC: [Object],\r\n      BIT: [Object],\r\n      MANA: [Object],\r\n      BTC: [Object],\r\n      ETH: [Object],\r\n      EOS: [Object],\r\n      XRP: [Object],\r\n      SOL: [Object],\r\n      ADA: [Object]\r\n    },\r\n    ext_code: '',\r\n    ext_info: '',\r\n    time_now: '1664624408.371975',\r\n    rate_limit_status: '117',\r\n    rate_limit_reset_ms: '1664624408367',\r\n    rate_limit: '120'\r\n  },\r\n  USDT: { free: 0, used: 0, total: 0 },\r\n  DOT: { free: 0, used: 0, total: 0 },\r\n  LTC: { free: 0, used: 0, total: 0 },\r\n  BIT: { free: 0, used: 0, total: 0 },\r\n  MANA: { free: 0, used: 0, total: 0 },\r\n  BTC: { free: 0, used: 0, total: 0 },\r\n  ETH: { free: 0, used: 0, total: 0 },\r\n  EOS: { free: 0, used: 0, total: 0 },\r\n  XRP: { free: 0, used: 0, total: 0 },\r\n  SOL: { free: 0, used: 0, total: 0 },\r\n  ADA: { free: 0, used: 0, total: 0 },\r\n  free: {\r\n    USDT: 0,\r\n    DOT: 0,\r\n    LTC: 0,\r\n    BIT: 0,\r\n    MANA: 0,\r\n    BTC: 0,\r\n    ETH: 0,\r\n    EOS: 0,\r\n    XRP: 0,\r\n    SOL: 0,\r\n    ADA: 0\r\n  },\r\n  used: {\r\n    USDT: 0,\r\n    DOT: 0,\r\n    LTC: 0,\r\n    BIT: 0,\r\n    MANA: 0,\r\n    BTC: 0,\r\n    ETH: 0,\r\n    EOS: 0,\r\n    XRP: 0,\r\n    SOL: 0,\r\n    ADA: 0\r\n  },\r\n  total: {\r\n    USDT: 0,\r\n    DOT: 0,\r\n    LTC: 0,\r\n    BIT: 0,\r\n    MANA: 0,\r\n    BTC: 0,\r\n    ETH: 0,\r\n    EOS: 0,\r\n    XRP: 0,\r\n    SOL: 0,\r\n    ADA: 0\r\n  }\r\n}\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/15160/comments",
+    "author": "danieltorscho",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-10-01T13:06:06Z",
+        "body": "Hello @danieltorscho,\r\nBybit is one of the only exchanges loading derivative features (markets, balances, etc) by default. I suspect that your funds are under the spot wallet, so I'd suggest instantiating bybit like this:\r\n\r\n```Python\r\nexchange = ccxt.bybit({\r\n    'apiKey': 'YOUR_API_KEY',\r\n    'secret': 'YOUR_SECRET_KEY',\r\n    'options': {\r\n       'defaultType': 'spot', # very important set spot as default type\r\n    }\r\n})\r\nbalances = await exchange.fetch_balance()\r\n```\r\n```\r\n\r\n\r\n"
+      },
+      {
+        "user": "danieltorscho",
+        "created_at": "2022-10-01T14:04:20Z",
+        "body": ">     'options': {\r\n>        'defaultType': 'spot', # very important set spot as default type\r\n>     }\r\n\r\n@carlosmiei thank you, it works now !"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A configuration solution that correctly retrieves non-zero balance values from Bybit",
+      "Guidance on properly configuring the wallet type in the Bybit exchange connection",
+      "An explanation of why the default configuration wasn't working with Bybit specifically"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:37:16"
+    }
+  },
+  {
+    "number": 14608,
+    "title": "FTX websockets stream on perpetual very slow ",
+    "created_at": "2022-08-06T17:01:12Z",
+    "closed_at": "2022-08-07T13:15:30Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/14608",
+    "body": "- OS: Windows\r\n- Programming Language version: Python 3.9.13\r\n- CCXT version: ccxtpro 1.2.10\r\n\r\nThe data recieved from ftx perp pairs is once every 2 seconds(roughly). Which is extremely slow comparing it to the regular BTC/USD pair on FTX which averaged out to 0.053 seconds over a 20 min sample (which in my experience is still on the slow side). I was wondering why it is taking roughly 2 seconds per tick and if i could do anything to make this a lot quicker. Let me know, appreciate your time.\r\n\r\n```\r\nimport ccxtpro\r\nfrom asyncio import run\r\n\r\nasync def main():\r\n    FTX = ccxtpro.ftx({'newUpdates': True})\r\n    while x == True:\r\n        start = time.time()\r\n        orderbook = await FTX.watch_order_book('BTC-PERP') #also used BTC/USD:USD same effect\r\n        print(FTX.iso8601(FTX.milliseconds()), 'BTC/USD:USD', orderbook['bids'][0], orderbook['asks'][0])\r\n        await FTX.close()\r\n\r\nrun(main())\r\n```\r\n\r\n```\r\n2022-08-06T16:59:55.505Z BTC/USD:USD [23157.0, 8.5341] [23158.0, 5.0993]\r\n2022-08-06T16:59:57.518Z BTC/USD:USD [23157.0, 4.196] [23158.0, 15.8474]\r\n2022-08-06T16:59:59.539Z BTC/USD:USD [23157.0, 2.615] [23158.0, 11.1582]\r\n2022-08-06T17:00:01.573Z BTC/USD:USD [23157.0, 0.099] [23158.0, 18.0891]\r\n2022-08-06T17:00:03.598Z BTC/USD:USD [23151.0, 8.7448] [23152.0, 34.0551]\r\n2022-08-06T17:00:05.668Z BTC/USD:USD [23145.0, 0.6389] [23146.0, 18.9104]\r\n2022-08-06T17:00:07.693Z BTC/USD:USD [23142.0, 6.9215] [23143.0, 32.0178]\r\n2022-08-06T17:00:09.728Z BTC/USD:USD [23138.0, 19.8388] [23139.0, 0.2147]\r\n2022-08-06T17:00:11.772Z BTC/USD:USD [23138.0, 22.1469] [23139.0, 0.4077]\r\n2022-08-06T17:00:13.754Z BTC/USD:USD [23142.0, 2.4671] [23143.0, 23.4715]\r\n2022-08-06T17:00:15.797Z BTC/USD:USD [23142.0, 3.4958] [23143.0, 20.8941]\r\n2022-08-06T17:00:17.827Z BTC/USD:USD [23138.0, 3.3549] [23139.0, 30.4348]\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/14608/comments",
+    "author": "zerconn",
+    "comments": [
+      {
+        "user": "pcriadoperez",
+        "created_at": "2022-08-07T02:05:06Z",
+        "body": "Hi @zerconn , The issue is you are clossing the connection, so it takes a second or two to reconnect again.\r\nIf you remove the line `await FTX.close()`  you should get updates about every 30 ms\r\n\r\nHere was the code I used: \r\n```python\r\nimport ccxtpro\r\nfrom asyncio import run\r\nimport time\r\n\r\nasync def main():\r\n    FTX = ccxtpro.ftx({'newUpdates': True})\r\n    while True:\r\n        start = time.time()\r\n        orderbook = await FTX.watch_order_book('BTC-PERP') #also used BTC/USD:USD same effect\r\n        print(FTX.iso8601(FTX.milliseconds()), 'BTC/USD:USD', orderbook['bids'][0], orderbook['asks'][0])\r\n        #await FTX.close()\r\n\r\nrun(main())\r\n```\r\nHere was my output:\r\n```\r\n2022-08-07T02:02:55.328Z BTC/USD:USD [22929.0, 22.6859] [22930.0, 3.2098]\r\n2022-08-07T02:02:55.352Z BTC/USD:USD [22929.0, 22.6859] [22930.0, 3.2098]\r\n2022-08-07T02:02:55.381Z BTC/USD:USD [22929.0, 22.0459] [22930.0, 4.2098]\r\n2022-08-07T02:02:55.403Z BTC/USD:USD [22929.0, 21.7259] [22930.0, 4.5298]\r\n2022-08-07T02:02:55.430Z BTC/USD:USD [22929.0, 21.5259] [22930.0, 4.9298]\r\n2022-08-07T02:02:55.454Z BTC/USD:USD [22929.0, 21.5259] [22930.0, 4.9298]\r\n2022-08-07T02:02:55.486Z BTC/USD:USD [22929.0, 21.5259] [22930.0, 4.9298]\r\n```\r\n\r\nI hope that solves the issues!"
+      },
+      {
+        "user": "zerconn",
+        "created_at": "2022-08-07T13:15:30Z",
+        "body": "Thank you!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that significantly improves the websocket update frequency for FTX perpetual pairs",
+      "An explanation of why the websocket connection was performing slowly",
+      "A working code example that demonstrates the proper way to maintain websocket connections"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:37:46"
+    }
+  },
+  {
+    "number": 14584,
+    "title": "Phemex `fetch_positions` does not support phemex official symbol",
+    "created_at": "2022-08-03T15:05:36Z",
+    "closed_at": "2022-08-04T08:11:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/14584",
+    "body": "Phemex `fetch_positions` does not support phemex official symbol\r\n\r\n## versions\r\n* OS: Debian 11\r\n* Programming Language version: python 3.8.12\r\n* CCXT version: 1.91.68\r\n\r\n## code to reproduce\r\n\r\n### setup\r\n```\r\nimport ccxt\r\n\r\nccxt_exchange = ccxt.phemex({\r\n    'apiKey': ...,\r\n    'secret': ...,\r\n})\r\n```\r\n\r\n### fetch_positions does not support uXXXUSD format\r\n```\r\nccxt_exchange.fetch_positions(symbols=['uBTCUSD']) # => returns `[]`\r\nccxt_exchange.fetch_positions(symbols=['BTC/USD:USD']) # => returns position structured response\r\n```\r\n\r\n### fetch_positions does not support neither inverse formats\r\n```\r\nccxt_exchange.fetch_positions(symbols=['BTCUSD']) # => returns `[]`\r\nccxt_exchange.fetch_positions(symbols=['BTC/USD:BTC']) # => returns `[]`\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/14584/comments",
+    "author": "takami-ml",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-08-03T16:53:27Z",
+        "body": "Hello @takami-ml \r\n\r\n> ccxt_exchange.fetch_positions(symbols=['uBTCUSD']) # => returns `[]`\r\n> ccxt_exchange.fetch_positions(symbols=['BTC/USD:USD']) # => returns position structured response\r\n\r\nCan you double-check this? I've just tested and worked fine with both formats, unified and exchange-specific.\r\n\r\n\r\n> fetch_positions does not support neither inverse formats\r\n> ccxt_exchange.fetch_positions(symbols=['BTCUSD']) # => returns `[]`\r\n> ccxt_exchange.fetch_positions(symbols=['BTC/USD:BTC']) # => returns `[]`\r\n\r\nBy default will try to load \"linear contracts\" to fetch inverse contracts (BTC settled in this case), please provide the settle currency as `code` inside params.\r\n\r\nSomething like this:\r\n```Python\r\nccxt_exchange.fetch_positions(symbols=['BTC/USD:BTC'], {'code':'BTC'})\r\n```\r\n\r\n\r\n"
+      },
+      {
+        "user": "takami-ml",
+        "created_at": "2022-08-03T23:39:58Z",
+        "body": "@carlosmiei \r\n\r\nThank you for the information.\r\n\r\n> Can you double-check this? I've just tested and worked fine with both formats, unified and exchange-specific.\r\n\r\nI'm sorry,  this one was my mistake. (I just had an inverse position, not linear.)\r\nI confirmed it worked as expected.\r\n\r\n> By default will try to load \"linear contracts\" to fetch inverse contracts (BTC settled in this case), please provide the settle currency as code inside params.\r\n\r\nWhen I set `code` to BTC, it worked.\r\nI did not understand the `defaultSubType` option and `code` params. Thanks for the information.\r\n\r\nIn conclusion, in both cases, there was no problem. I am very sorry to have used your time!\r\n"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-08-04T08:11:13Z",
+        "body": "@takami-ml no problem at all, I'll close this issue then, let us know if anything! \ud83d\ude42 "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of how to properly fetch inverse contract positions in Phemex",
+      "Clarification on symbol format compatibility with the fetch_positions method",
+      "Information about parameter options that affect contract type selection"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:37:55"
+    }
+  },
+  {
+    "number": 14512,
+    "title": "okx default type does not change",
+    "created_at": "2022-07-28T11:52:05Z",
+    "closed_at": "2022-07-28T14:24:17Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/14512",
+    "body": "i'm using the latest version of ccxt\r\nin okx, when i change defaultType to swap or any other kinds it does not change and when i call an order it still shows spot mode price and ..... .\r\nand when I wanna create a swap order it shows error which i don't have when i use binance and change defaultType to future.\r\n\r\n\r\nokex = ccxt.okx({\r\n    'apiKey': config.API_KEY,\r\n    'secret': config.API_SECRET,\r\n    'password' : config.API_PASS,\r\n    'options':{\r\n        'defaultType' : 'swap'\r\n        },\r\n\r\n})\r\nokex.set_sandbox_mode(True)\r\n\r\n\r\nleve = okex.set_leverage(10 , 'ETH-USDT' ,  params = {'mgnMode' : 'isolated'} , )\r\norder1 = okex.create_market_buy_order('ETH-USDT' , 6 )\r\nprint(order1)\r\n\r\n\r\n\r\nbut when i use this code i can get swap price but i can't open an order with swap symbol :\r\n\r\nokex = ccxt.okx({\r\n    'apiKey': config.API_KEY,\r\n    'secret': config.API_SECRET,\r\n    'password' : config.API_PASS,\r\n})\r\n\r\nticker = okex.fetch_ticker('ETH-USDT-SWAP')\r\nprint(ticker)\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/14512/comments",
+    "author": "ar3sla",
+    "comments": [
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-07-28T12:02:02Z",
+        "body": "Hello @ar3sla you're mixing up spot and swap market ids.\r\n\r\nIf you want to place an order for the linear ETH/USDT swap you should be using `ETH-USDT-SWAP` as an argument for `createMarketBuyOrder` instead of `ETH-USDT`, the latter represents the spot symbol. \r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "ar3sla",
+        "created_at": "2022-07-28T12:23:42Z",
+        "body": "hi @carlosmiei, thanks for your answer\r\nbut when i change it to ETH-USDT-SWAP with this code:\r\nokex = ccxt.okx({\r\n    'apiKey': config.API_KEY,\r\n    'secret': config.API_SECRET,\r\n    'password' : config.API_PASS,\r\n    'options':{\r\n        'defaultType' : 'swap'\r\n        },\r\n\r\n})\r\nokex.set_sandbox_mode(True)\r\n\r\nparams1 = {\r\n    \"instId\":\"ETH-USDT-SWAP\",\r\n    \"tdMode\":\"isolated\",\r\n    \"side\":\"buy\",\r\n    'posSide':\"SWAP\",\r\n    \"ordType\":\"market\",\r\n    \"sz\":\"6\"\r\n}\r\norder1 = okex.create_market_buy_order('ETH-USDT-SWAP' , 6 , params=params1)\r\nprint(order1)\r\n\r\nit shows me this error :\r\nccxt.base.errors.BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"e847386590ce4dBC2ffbe9c12cb175e0\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter posSide  error \",\"tag\":\"\"}],\"msg\":\"Operation failed.\"}\r\n\r\n\r\n\r\nand if i use ETH-USDT in this code :\r\nokex = ccxt.okx({\r\n    'apiKey': config.API_KEY,\r\n    'secret': config.API_SECRET,\r\n    'password' : config.API_PASS,\r\n\r\n\r\n})\r\nokex.set_sandbox_mode(True)\r\n\r\n\r\norder1 = okex.create_market_buy_order('ETH-USDT' , 6 )\r\nprint(order1)\r\n\r\nit shows me this error :\r\n\r\nccxt.base.errors.InsufficientFunds: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"e847386590ce4dBCb25a7bde230285b0\",\"ordId\":\"\",\"sCode\":\"51008\",\"sMsg\":\"Order placement failed due to insufficient balance \",\"tag\":\"\"}],\"msg\":\"Operation failed.\"}"
+      },
+      {
+        "user": "carlosmiei",
+        "created_at": "2022-07-28T13:06:15Z",
+        "body": "Hello @ar3sla,\r\n\r\n> order1 = okex.create_market_buy_order('ETH-USDT' , 6 )\r\n> print(order1)\r\n\r\nthis is not what you want, as said earlier 'ETH-USDT' is a spot symbol, so you're saying \"I want to buy 6 ETH with USDT\"\r\n\r\n> order1 = okex.create_market_buy_order('ETH-USDT-SWAP' , 6 , params=params1)\r\n> print(order1)\r\n\r\nYou're almost there, you're just missing the `postSide` parameter required by OKX.\r\n\r\nSomething like this:\r\n```Python\r\n\r\nparams1 = {\r\n    \"marginMode\":\"isolated\", # or cross\r\n    \"posSide\":\"long\", # long or short depending on your intent\r\n}\r\nsymbol = \"ETH-USDT-SWAP\"\r\namount = 6 # number of contracts\r\norder1 = okex.create_market_buy_order(symbol , amount , params=params1)\r\nprint(order1)\r\n```\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+      },
+      {
+        "user": "ar3sla",
+        "created_at": "2022-07-28T13:40:22Z",
+        "body": "thanks a lot @carlosmiei\r\nthe posside solved my problem.\r\nI'm really thankful"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Correct guidance on how to place orders in the swap market using OKX exchange",
+      "Explanation of the difference between spot and swap market symbols in OKX",
+      "Information about required parameters specific to OKX swap trading",
+      "Working example code for creating swap market orders on OKX"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:38:06"
+    }
+  },
+  {
+    "number": 9880,
+    "title": "Python ratelimiter broken",
+    "created_at": "2021-08-26T09:34:50Z",
+    "closed_at": "2021-08-26T09:48:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/9880",
+    "body": "The python rateLimiter is broken in the newest version.\r\nI tested this on python 3.7 and 3.8 (Debian and CentOS)\r\n\r\nThe following snippet should return, but it is stuck after the first loop.\r\n\r\n```\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await exchange1.throttle(exchange1.rateLimit)\r\n        await exchange2.throttle(exchange2.rateLimit)\r\n        print(\"Round done\")\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/9880/comments",
+    "author": "brandsimon",
+    "comments": [
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T09:40:38Z",
+        "body": "The snippet works for binance, so I changed the rateLimit to 50 (binance has 50, hitbtc 1500).\r\nThis works, but instead of waiting 50ms, it waits 5 seconds."
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2021-08-26T09:43:50Z",
+        "body": "@brandsimon the usage is wrong it should be:\r\n\r\n```\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await exchange1.throttle(1)\r\n        await exchange2.throttle(1)\r\n        print(\"Round done\")\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```"
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2021-08-26T09:44:24Z",
+        "body": "the argument exchange.rateLimit is deprecated now we have dynamic costs for calls in binance.js"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T09:44:25Z",
+        "body": "@brandsimon the new version of `throttle()` accepts the call `cost` instead of `rateLimit`."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T09:48:10Z",
+        "body": "```Python\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await asyncio.gather(*[\r\n            exchange1.throttle(1),\r\n            exchange2.throttle(1),\r\n        ])\r\n        print(\"Round done\")\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```\r\nThis snippet prints a line every 1.5 sec, according to hitbtc's rate limit setting."
+      },
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T10:06:44Z",
+        "body": "@kroitor @frosty00 \r\nThank you very much, this solves my issue.\r\nSo the CCXT `rateLimit` and `enableRateLimit` behavior stays the same, it is just the throttle API which changed?"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T10:07:35Z",
+        "body": "@brandsimon yes, moreover, enableRateLimit is true by default now."
+      },
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T10:12:01Z",
+        "body": "Great, thank you :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how to correctly use the throttle method in the current version",
+      "Clarification on API changes between versions",
+      "Working code example that demonstrates proper throttling with multiple exchange instances",
+      "Information about default configuration settings in the current version"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:40:08"
+    }
+  },
+  {
+    "number": 9880,
+    "title": "Python ratelimiter broken",
+    "created_at": "2021-08-26T09:34:50Z",
+    "closed_at": "2021-08-26T09:48:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/9880",
+    "body": "The python rateLimiter is broken in the newest version.\r\nI tested this on python 3.7 and 3.8 (Debian and CentOS)\r\n\r\nThe following snippet should return, but it is stuck after the first loop.\r\n\r\n```\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await exchange1.throttle(exchange1.rateLimit)\r\n        await exchange2.throttle(exchange2.rateLimit)\r\n        print(\"Round done\")\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/9880/comments",
+    "author": "brandsimon",
+    "comments": [
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T09:40:38Z",
+        "body": "The snippet works for binance, so I changed the rateLimit to 50 (binance has 50, hitbtc 1500).\r\nThis works, but instead of waiting 50ms, it waits 5 seconds."
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2021-08-26T09:43:50Z",
+        "body": "@brandsimon the usage is wrong it should be:\r\n\r\n```\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await exchange1.throttle(1)\r\n        await exchange2.throttle(1)\r\n        print(\"Round done\")\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```"
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2021-08-26T09:44:24Z",
+        "body": "the argument exchange.rateLimit is deprecated now we have dynamic costs for calls in binance.js"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T09:44:25Z",
+        "body": "@brandsimon the new version of `throttle()` accepts the call `cost` instead of `rateLimit`."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T09:48:10Z",
+        "body": "```Python\r\nimport asyncio\r\nimport ccxt.async_support\r\n\r\nasync def main():\r\n    exchange1 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    exchange2 = ccxt.async_support.hitbtc({\"enableRateLimit\": True})\r\n    for i in range(0, 20):\r\n        await asyncio.gather(*[\r\n            exchange1.throttle(1),\r\n            exchange2.throttle(1),\r\n        ])\r\n        print(\"Round done\")\r\n\r\nif __name__ == \"__main__\":\r\n    asyncio.run(main())\r\n```\r\nThis snippet prints a line every 1.5 sec, according to hitbtc's rate limit setting."
+      },
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T10:06:44Z",
+        "body": "@kroitor @frosty00 \r\nThank you very much, this solves my issue.\r\nSo the CCXT `rateLimit` and `enableRateLimit` behavior stays the same, it is just the throttle API which changed?"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-08-26T10:07:35Z",
+        "body": "@brandsimon yes, moreover, enableRateLimit is true by default now."
+      },
+      {
+        "user": "brandsimon",
+        "created_at": "2021-08-26T10:12:01Z",
+        "body": "Great, thank you :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how to correctly use the throttle method in the current version",
+      "Clarification on API changes between versions",
+      "Working code example that demonstrates proper throttling with multiple exchange instances",
+      "Information about default configuration settings in the current version"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:22:57"
+    }
+  },
+  {
+    "number": 8921,
+    "title": "Coinbasepro watch_orders() fails with TypeError: 'Unicode-objects must be encoded before hashing'",
+    "created_at": "2021-04-10T05:03:12Z",
+    "closed_at": "2021-04-10T08:26:42Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/8921",
+    "body": "I'm having this problem only with coinbasepro and only in watch_orders(). It works with ftx, and both watch_orderbook and watch_orders work with coinbasepro. My keys and passphrase are stored as strings, and they are being converted to bytes at some point before reaching hmac()\r\n\r\n \r\n- OS: macOS Catalina\r\n- Programming Language version: Python 3.8.6\r\n- CCXT version :ccxt==1.45.74, ccxtpro==0.6.33\r\n-\r\n\r\n```\r\ndef listen(self, callback=(lambda x: None)):\r\n        loop = asyncio.get_event_loop()\r\n        loop.create_task(self.watch_orderbook(callback))\r\n        loop.create_task(self.watch_orders(callback))\r\n        loop.create_task(self.slowly_watch_balance())\r\n\r\n```\r\nI also modified the hmac method for some debugging output, which indicates the string and request are bytes\r\n```\r\n@staticmethod\r\n    def hmac(request, secret, algorithm=hashlib.sha256, digest='hex'):\r\n        print('SECRET IS ' + str(secret))\r\n        print('REQUEST IS ' + str(request))\r\n        print('ALGORITHM IS ' + str(algorithm))\r\n        h = hmac.new(secret, request, algorithm)\r\n        binary = h.digest()\r\n        if digest == 'hex':\r\n            return Exchange.binary_to_base16(binary)\r\n        elif digest == 'base64':\r\n            return Exchange.binary_to_base64(binary)\r\n        return binary\r\n```\r\n\r\n```\r\nSECRET IS b'\\xd3\\xe1!...omitted...x9a'\r\nREQUEST IS b'16...omitted...86GET/accounts'\r\nALGORITHM IS <built-in function openssl_sha256>\r\n```\r\n\r\nThe traceback for the error is:\r\n```\r\nTraceback (most recent call last):\r\n  File \"/Users/nnsk/Desktop/scrypto/addthistowrappers.py\", line 130, in watch_orders\r\n    self.orders = await self.client.watch_orders(symbol=self.symbol, limit=200)\r\n  File \"/usr/local/lib/python3.8/site-packages/ccxtpro/coinbasepro.py\", line 101, in watch_orders\r\n    authentication = self.authenticate()\r\n  File \"/usr/local/lib/python3.8/site-packages/ccxtpro/coinbasepro.py\", line 46, in authenticate\r\n    signature = self.hmac(payload, self.base64_to_binary(self.secret), hashlib.sha256, 'base64')\r\n  File \"/usr/local/lib/python3.8/site-packages/ccxt/base/exchange.py\", line 1112, in hmac\r\n    h = hmac.new(secret, request, algorithm)\r\n  File \"/usr/local/Cellar/python@3.8/3.8.6/Frameworks/Python.framework/Versions/3.8/lib/python3.8/hmac.py\", line 153, in new\r\n    return HMAC(key, msg, digestmod)\r\n  File \"/usr/local/Cellar/python@3.8/3.8.6/Frameworks/Python.framework/Versions/3.8/lib/python3.8/hmac.py\", line 88, in __init__\r\n    self.update(msg)\r\n  File \"/usr/local/Cellar/python@3.8/3.8.6/Frameworks/Python.framework/Versions/3.8/lib/python3.8/hmac.py\", line 96, in update\r\n    self.inner.update(msg)\r\nTypeError: Unicode-objects must be encoded before hashing\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/8921/comments",
+    "author": "nanaknihal",
+    "comments": [
+      {
+        "user": "frosty00",
+        "created_at": "2021-04-10T06:43:24Z",
+        "body": "you need to update to the latest version of ccxtpro, this error has already been fixed"
+      },
+      {
+        "user": "frosty00",
+        "created_at": "2021-04-10T06:44:08Z",
+        "body": "my current version is `0.6.47`"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-04-10T08:26:42Z",
+        "body": "@nanaknihal please, let us know if you have the same issue with the most recent version of CCXT + CCXT Pro. Feel free to reopen it or just ask further questions if any."
+      },
+      {
+        "user": "nanaknihal",
+        "created_at": "2021-04-10T20:47:50Z",
+        "body": "Thanks, it worked after updating"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2021-04-10T20:49:34Z",
+        "body": "@nanaknihal thx for reporting back!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the TypeError when using watch_orders() with Coinbasepro",
+      "Information about version compatibility issues",
+      "A straightforward fix that doesn't require code modifications"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:23:58"
+    }
+  },
+  {
+    "number": 8492,
+    "title": "pip install ccxt failed => error: command 'arm-linux-gnueabihf-gcc' failed with exit status 1",
+    "created_at": "2021-02-20T21:55:11Z",
+    "closed_at": "2021-02-20T22:20:10Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/8492",
+    "body": "I tried to install ccxt on Ubuntu 20.10 (GNU/Linux 5.8.0-1013-raspi armv7l) and go this error:\r\n\r\n```\r\nERROR: Command errored out with exit status 1:\r\n     command: /usr/bin/python3 -c 'import sys, setuptools, tokenize; sys.argv[0] = '\"'\"'/tmp/pip-install-wptrvtsv/pycares/setup.py'\"'\"'; __file__='\"'\"'/tmp/pip-install-wptrvtsv/pycares/setup.py'\"'\"';f=getattr(tokenize, '\"'\"'open'\"'\"', open)(__file__);code=f.read().replace('\"'\"'\\r\\n'\"'\"', '\"'\"'\\n'\"'\"');f.close();exec(compile(code, __file__, '\"'\"'exec'\"'\"'))' egg_info --egg-base /tmp/pip-pip-egg-info-6eg7h048\r\n         cwd: /tmp/pip-install-wptrvtsv/pycares/\r\n    Complete output (73 lines):\r\n      ERROR: Command errored out with exit status 1:\r\n       command: /usr/bin/python3 -u -c 'import sys, setuptools, tokenize; sys.argv[0] = '\"'\"'/tmp/pip-wheel-9vn7c6c_/cffi/setup.py'\"'\"'; __file__='\"'\"'/tmp/pip-wheel-9vn7c6c_/cffi/setup.py'\"'\"';f=getattr(tokenize, '\"'\"'open'\"'\"', open)(__file__);code=f.read().replace('\"'\"'\\r\\n'\"'\"', '\"'\"'\\n'\"'\"');f.close();exec(compile(code, __file__, '\"'\"'exec'\"'\"'))' bdist_wheel -d /tmp/pip-wheel-iv1tnu4e\r\n           cwd: /tmp/pip-wheel-9vn7c6c_/cffi/\r\n      Complete output (36 lines):\r\n      running bdist_wheel\r\n      running build\r\n      running build_py\r\n      creating build\r\n      creating build/lib.linux-armv7l-3.8\r\n      creating build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/backend_ctypes.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/recompiler.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/cparser.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/ffiplatform.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/model.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/vengine_gen.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/error.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/verifier.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/lock.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/api.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/cffi_opcode.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/__init__.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/setuptools_ext.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/vengine_cpy.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/commontypes.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/pkgconfig.py -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/_cffi_include.h -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/parse_c_type.h -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/_embedding.h -> build/lib.linux-armv7l-3.8/cffi\r\n      copying cffi/_cffi_errors.h -> build/lib.linux-armv7l-3.8/cffi\r\n      running build_ext\r\n      building '_cffi_backend' extension\r\n      creating build/temp.linux-armv7l-3.8\r\n      creating build/temp.linux-armv7l-3.8/c\r\n      arm-linux-gnueabihf-gcc -pthread -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O2 -Wall -g -fstack-protector-strong -Wformat -Werror=format-security -g -fwrapv -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC -DUSE__THREAD -DHAVE_SYNC_SYNCHRONIZE -I/usr/include/ffi -I/usr/include/libffi -I/usr/include/python3.8 -c c/_cffi_backend.c -o build/temp.linux-armv7l-3.8/c/_cffi_backend.o\r\n      c/_cffi_backend.c:15:10: fatal error: ffi.h: No such file or directory\r\n         15 | #include <ffi.h>\r\n            |          ^~~~~~~\r\n      compilation terminated.\r\n      error: command 'arm-linux-gnueabihf-gcc' failed with exit status 1\r\n      ----------------------------------------\r\n      ERROR: Failed building wheel for cffi\r\n    ERROR: Failed to build one or more wheels\r\n    Traceback (most recent call last):\r\n      File \"/usr/lib/python3/dist-packages/setuptools/installer.py\", line 128, in fetch_build_egg\r\n        subprocess.check_call(cmd)\r\n      File \"/usr/lib/python3.8/subprocess.py\", line 364, in check_call\r\n        raise CalledProcessError(retcode, cmd)\r\n    subprocess.CalledProcessError: Command '['/usr/bin/python3', '-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps', '-w', '/tmp/tmpja9grf0o', '--quiet', 'cffi>=1.5.0']' returned non-zero exit status 1.\r\n    \r\n    The above exception was the direct cause of the following exception:\r\n    \r\n    Traceback (most recent call last):\r\n      File \"<string>\", line 1, in <module>\r\n      File \"/tmp/pip-install-wptrvtsv/pycares/setup.py\", line 15, in <module>\r\n        setup(name             = 'pycares',\r\n      File \"/usr/lib/python3/dist-packages/setuptools/__init__.py\", line 162, in setup\r\n        _install_setup_requires(attrs)\r\n      File \"/usr/lib/python3/dist-packages/setuptools/__init__.py\", line 157, in _install_setup_requires\r\n        dist.fetch_build_eggs(dist.setup_requires)\r\n      File \"/usr/lib/python3/dist-packages/setuptools/dist.py\", line 699, in fetch_build_eggs\r\n        resolved_dists = pkg_resources.working_set.resolve(\r\n      File \"/usr/lib/python3/dist-packages/pkg_resources/__init__.py\", line 779, in resolve\r\n        dist = best[req.key] = env.best_match(\r\n      File \"/usr/lib/python3/dist-packages/pkg_resources/__init__.py\", line 1064, in best_match\r\n        return self.obtain(req, installer)\r\n      File \"/usr/lib/python3/dist-packages/pkg_resources/__init__.py\", line 1076, in obtain\r\n        return installer(requirement)\r\n      File \"/usr/lib/python3/dist-packages/setuptools/dist.py\", line 758, in fetch_build_egg\r\n        return fetch_build_egg(self, req)\r\n      File \"/usr/lib/python3/dist-packages/setuptools/installer.py\", line 130, in fetch_build_egg\r\n        raise DistutilsError(str(e)) from e\r\n    distutils.errors.DistutilsError: Command '['/usr/bin/python3', '-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps', '-w', '/tmp/tmpja9grf0o', '--quiet', 'cffi>=1.5.0']' returned non-zero exit status 1.\r\n    ----------------------------------------\r\nERROR: Command errored out with exit status 1: python setup.py egg_info Check the logs for full command output.\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/8492/comments",
+    "author": "theMoe",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2021-02-20T21:58:45Z",
+        "body": "Try `apt install libffi-dev` or `sudo apt install libffi-dev` and then retry to install ccxt."
+      },
+      {
+        "user": "theMoe",
+        "created_at": "2021-02-20T22:10:11Z",
+        "body": "Thank you very much! It works now."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the missing dependency causing the compilation error",
+      "Instructions that can be executed without requiring technical expertise beyond basic command line usage",
+      "A complete solution that allows successful installation of the ccxt package"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:24:28"
+    }
+  },
+  {
+    "number": 6995,
+    "title": "Binance watchOrders / watchBalance not returning a value immediately",
+    "created_at": "2020-05-22T16:57:56Z",
+    "closed_at": "2020-05-22T17:00:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/6995",
+    "body": "I try to use `watchOrders()` and `watchBalance()` but both with node.js and in the browser, after connecting to the websocket for private methods, there does not seem to be any communication. When I change below method from `watchBalance()` to `fetchBalance()` it does work fine.\r\n\r\n- OS: macOS 10.15.4\r\n- Programming Language version: NodeJS v12.16.3\r\n- CCXT version: pro 0.2.13\r\n\r\n```JavaScript\r\n'use strict';\r\n\r\nconst ccxtpro = require('.');\r\n\r\n(async () => {\r\n\r\n    const exchange = new ccxtpro.binance({ enableRateLimit: true })\r\n\r\n    exchange.apiKey = 'x';\r\n    exchange.secret = 'x';\r\n\r\n\r\n    (async () => {\r\n\r\n        while (true) {\r\n            try {\r\n                const balance = await exchange.watchBalance()\r\n                console.log(balance)\r\n            } catch (e) {\r\n                console.log(e)\r\n            }\r\n        }\r\n\r\n    })()\r\n})()\r\n\r\n```\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/6995/comments",
+    "author": "dsbaars",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2020-05-22T17:00:54Z",
+        "body": "> there does not seem to be any communication.\r\n\r\nThe `watch*` methods only return a value when an update from the exchange comes in. When your balance changes \u2013\u00a0you will see a `watchBalance` response. This is how WebSocket feeds work \u2013\u00a0you get the updates in real-time, not the most recent historical state.\r\n\r\nTry launching a `watchBalance()` loop and change your balance by placing an order or by depositing/withdrawing/transferring (to trigger a change of your balance) \u2013\u00a0you will see the update returned from `watchBalance()`.\r\n\r\nLet us know if that does not answer your question."
+      },
+      {
+        "user": "dsbaars",
+        "created_at": "2020-05-22T17:45:18Z",
+        "body": "Thanks, this explains a lot although this behaviour is different from the other exchanges I used with WebSockets.\r\nAfter subscribing with Kraken for example the first message is the current state, after that you will get updates. I think this is the same with BitMEX as well. \r\nI'll try to solve this by doing a single fetch call first."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2020-05-22T17:47:53Z",
+        "body": "@dsbaars yep, Binance does not send-in a snapshot of balance upon connecting, while some other exchanges like Kraken, BitMEX do. Let me know if you have further issues or difficulties with it. Thx!"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2020-05-22T17:50:02Z",
+        "body": "P.S. We will look into adding the balance snapshot to Binance, however, last time we've checked \u2013\u00a0there was no possibility to synchronize the RESTful balance response with the WS updates, because their RESTful endpoint for balance does not return a nonce/seq value that could be used for synchronization. So, it's up to the user to synchronize it, depending on the user's current state."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how watchBalance() and similar WebSocket methods work in Binance",
+      "Clarification on the differences in WebSocket behavior between exchanges",
+      "A practical workaround for getting initial balance data",
+      "Transparency about the technical limitations of the current implementation"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:26:14"
+    }
+  },
+  {
+    "number": 6674,
+    "title": "Unable to resolve module './js/btcchina.js'",
+    "created_at": "2020-03-25T11:36:28Z",
+    "closed_at": "2020-03-25T11:51:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/6674",
+    "body": "- OS: Debian 10 android apk 29\r\n- Programming Language version: react-native 0.61.5\r\n- CCXT version: 1.24.96\r\n\r\n```\r\nSimply put var ccxt = require('ccxt'); into any module\r\n```\r\n\r\n```\r\n[Wed Mar 25 2020 11:31:13.196]  BUNDLE  ./index.js \r\n\r\nerror: Error: Unable to resolve module `./js/btcchina.js` from `node_modules/ccxt/ccxt.js`: \r\n\r\nNone of these files exist:\r\n  * node_modules/ccxt/js/btcchina.js(.native|.android.js|.native.js|.js|.android.json|.native.json|.json|.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx)\r\n  * node_modules/ccxt/js/btcchina.js/index(.native|.android.js|.native.js|.js|.android.json|.native.json|.json|.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx)\r\n    at ModuleResolver.resolveDependency (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/node-haste/DependencyGraph/ModuleResolution.js:163:15)\r\n    at ResolutionRequest.resolveDependency (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/node-haste/DependencyGraph/ResolutionRequest.js:52:18)\r\n    at DependencyGraph.resolveDependency (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/node-haste/DependencyGraph.js:287:16)\r\n    at Object.resolve (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/lib/transformHelpers.js:267:42)\r\n    at dependencies.map.result (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/DeltaBundler/traverseDependencies.js:434:31)\r\n    at Array.map (<anonymous>)\r\n    at resolveDependencies (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/DeltaBundler/traverseDependencies.js:431:18)\r\n    at /home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/DeltaBundler/traverseDependencies.js:275:33\r\n    at Generator.next (<anonymous>)\r\n    at asyncGeneratorStep (/home/marcel/ReactNative/FusionCommerce/node_modules/@react-native-community/cli/node_modules/metro/src/DeltaBundler/traverseDependencies.js:87:24)\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/6674/comments",
+    "author": "marcelcure",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2020-03-25T11:52:41Z",
+        "body": "@marcelcure Let me know if you still have the same issue with version 1.24.97, it will arrive in 15 minutes. It will be great if you report back whether it helped or not. Also, you might want to rebuild your framework bundles to make sure that your version is up to date. Looking forward to hearing back from you! Thanks!"
+      },
+      {
+        "user": "marcelcure",
+        "created_at": "2020-03-25T13:37:08Z",
+        "body": "I updated to 1.24.97 and to begin with I had the exact same error, so I deleted node_modules and rebuilt and now it is working perfectly. Thank you. Good job - very fast."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2020-03-25T13:41:20Z",
+        "body": "@marcelcure thanks for your feedback! Appreciate it!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that resolves the module resolution error for './js/btcchina.js'",
+      "An updated version of the CCXT library that addresses compatibility issues with React Native",
+      "Clear instructions for implementing the fix, including any necessary rebuilding steps",
+      "A timely response and resolution to the reported issue"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:26:53"
+    }
+  },
+  {
+    "number": 6546,
+    "title": "Limited L2 orderbook does not produce consistent amount of results - CCXT PRO",
+    "created_at": "2020-03-01T14:39:07Z",
+    "closed_at": "2020-03-01T14:59:12Z",
+    "labels": [
+      "question",
+      "ws"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/6546",
+    "body": "- OS: Win10\r\n- Programming Language version: Python 3.8\r\n- CCXT version: 0.0.47\r\n- Exchange: Binance, WS\r\n\r\n```\r\nimport ccxtpro\r\nimport asyncio\r\n\r\nasync def main():\r\n    exchange = ccxtpro.binance({'enableRateLimit': True})\r\n    while True:\r\n        orderbook = await exchange.watch_order_book('ETH/BTC', 10) #INCONSISTENT, see below\r\n        print(len(orderbook['asks']), len(orderbook['bids']))\r\n\r\nasyncio.get_event_loop().run_until_complete(main())\r\n\r\n```\r\n\r\nResults:\r\n\r\n```\r\n10 10\r\n10 10\r\n10 9\r\n9 10\r\n10 10\r\n10 10\r\n10 10\r\n10 9\r\n10 10\r\n```\r\n\r\nand:\r\n```\r\n        orderbook = await exchange.watch_order_book('ETH/BTC', 1)\r\n        print(orderbook['asks'][0]), (orderbook['bids'][0])\r\n```\r\nProduces (after some correct results):\r\n```\r\n    print(orderbook['asks'][0]), (orderbook['bids'][0])\r\nIndexError: list index out of range\r\n```",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/6546/comments",
+    "author": "1key",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2020-03-01T14:49:38Z",
+        "body": "Technically, this is not fully a bug. What happens is that when you limit the orders in real-time mode by supplying the `limit` argument CCXT will only store up to `limit` orders. In some cases an order may be deleted from the book (when matched), so the exchange sends a zero delta and it is removed from the orderbook leaving just the 9 orders of 10 (until another one fills the gap). The responsibility of CCXT Pro in this case is to return immediately after receiving a \"delete\" command from the exchange (or any of \"delete\", \"update\", \"insert\" deltas).\r\n\r\nSo, from here, you have two options:\r\n\r\n- either expect the number of bids/asks to be less than or equal to `limit` in the result \r\n- or don't send `limit` (CCXT will keep the entire orderbook in memory) and just use python's array slicing like `[0:5]`\r\n\r\nAlso, Binance does support limited WS feeds for 5, 10 or 20 bidasks, however, when `limit` is sent to the exchange \u2013 it will rate-limit the feed by 100ms or 1000ms which is not good for real-time apps, therefore the `limit` is not sent to Binance in particular at this time, and all the limiting is done on the client-side in memory.\r\n\r\nWe will add this to the documentation shortly to avoid confusion.\r\n\r\nLet me know if that does not answer the question."
+      },
+      {
+        "user": "1key",
+        "created_at": "2020-03-01T14:56:23Z",
+        "body": "Clear and fast answer!\r\nWill work around it then."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2020-03-01T14:59:12Z",
+        "body": "@1key we will look into adding an option that would still store the entire orderbook and would always serve a number of bidasks as close as possible to `limit` , but in the general case an exchange orderbook may have less than any number of bid/asks (just like with fetchOrderBook over REST). So if the exchange is inactive, there may be very few or even zero orders on either side of the book. \r\n\r\nFeel free to reopen this if anything or just ask further questions if you have more. Thanks for the feedback!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A clear explanation of why the orderbook sometimes returns fewer results than the requested limit",
+      "Practical workarounds or alternatives to handle the inconsistent number of results",
+      "Transparency about the current implementation's behavior and limitations"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:27:05"
+    }
+  },
+  {
+    "number": 5516,
+    "title": "Unable to fecth deposit address huobipro?",
+    "created_at": "2019-07-15T11:49:11Z",
+    "closed_at": "2019-07-15T12:55:52Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/5516",
+    "body": "- OS: Any\r\n- Programming Language version: python3.6\r\n- CCXT version: 1.18.817\r\n- Exchange: huobipro\r\n- Method: fetchDepositAddress\r\n\r\n```bash\r\nTraceback (most recent call last):\r\n  File \"<input>\", line 1, in <module>\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/huobipro.py\", line 823, in fetch_deposit_address\r\n    response = getattr(self, method)(self.extend(request, params))\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/base/exchange.py\", line 423, in inner\r\n    return entry(_self, **inner_kwargs)\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/base/exchange.py\", line 452, in request\r\n    return self.fetch2(path, api, method, params, headers, body)\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/base/exchange.py\", line 448, in fetch2\r\n    return self.fetch(request['url'], request['method'], request['headers'], request['body'])\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/base/exchange.py\", line 551, in fetch\r\n    self.handle_errors(response.status_code, response.reason, url, method, headers, http_response, json_response)\r\n  File \"/home/saurav/projects/computeex_django/env/lib/python3.6/site-packages/ccxt/huobipro.py\", line 948, in handle_errors\r\n    raise ExchangeError(feedback)\r\nccxt.base.errors.ExchangeError: huobipro {\"status\":\"error\",\"err-code\":\"login-required\",\"err-msg\":\"The account is not logged in, please log in and try again.\",\"data\":null}\r\n```\r\nMethods working:\r\nhuobipro.loadAccounts() \r\nhuobipro.fetchBalance()\r\n\r\n\r\n\r\nhuobipro.fetchDepositAddress(\"XRP\") is giving login-required error.",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/5516/comments",
+    "author": "SauravKanchan",
+    "comments": [
+      {
+        "user": "frosty00",
+        "created_at": "2019-07-15T12:14:32Z",
+        "body": "Please update CCXT, huobipro's `fetchDepositAddress` has been depreciated and they do not provide an API endpoint. The old code used an endpoint that was accessible from the browser but it now requires a session cookie (i.e. to be logged in)."
+      },
+      {
+        "user": "SauravKanchan",
+        "created_at": "2019-07-15T12:55:52Z",
+        "body": "Ok\r\nThanks for info"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the fetchDepositAddress method is not working",
+      "Information about the current status of the API endpoint",
+      "A recommended course of action"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:27:52"
+    }
+  },
+  {
+    "number": 3759,
+    "title": "Exmo partial fill is considered as full fill.",
+    "created_at": "2018-08-29T06:33:55Z",
+    "closed_at": "2018-08-29T11:00:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/3759",
+    "body": "When calling fetch order on Exmo on a partially filled order, CCXT seems to be tricked. It thinks the order is fully filled.\r\n\r\nOrder was a limit on 0.5 BTC.\r\n\r\n```\r\n{'id': '1139757129', 'datetime': '2018-08-24T17:13:24.000Z', 'timestamp': 1535130804000, 'lastTradeTimestamp': None, 'status': 'closed', 'symbol': 'BTC/USD', 'type': 'limit', 'side': 'sell', 'price': 6630.999999737207, 'cost': 252.32738738, 'amount': 0.03805269, 'filled': 0.03805269, 'remaining': 0.0, 'trades': [{'id': '67768715', 'info': {'trade_id': 67768715, 'date': 1535130804, 'type': 'sell', 'pair': 'BTC_USD', 'order_id': 1139757129, 'quantity': '0.03805269', 'price': '6630.99999999', 'amount': '252.32738738'}, 'timestamp': 1535130804000, 'datetime': '2018-08-24T17:13:24.000Z', 'symbol': 'BTC/USD', 'order': '1139757129', 'type': None, 'side': 'sell', 'price': 6630.99999999, 'amount': 0.03805269, 'cost': 252.32738738}], 'fee': {'cost': 0.0, 'currency': 'USD'}, 'info': {'type': 'sell', 'in_currency': 'USD', 'in_amount': '252.32738738', 'out_currency': 'BTC', 'out_amount': '0.03805269', 'trades': [{'trade_id': 67768715, 'date': 1535130804, 'type': 'sell', 'pair': 'BTC_USD', 'order_id': 1139757129, 'quantity': '0.03805269', 'price': '6630.99999999', 'amount': '252.32738738'}]}}\r\n```\r\n\r\nResponse for fetch order on exmo seems to be a long list rather than a single order. So it might actually explain why.\r\n\r\n\r\n\r\n- OS: Linux\r\n- CCXT version: 1.17.174 (very recent one given the fact that no code was updated for the past 2 months on EXMO).\r\n- Exchange: exmo\r\n- Method: fetch_order\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/3759/comments",
+    "author": "philipperemy",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2018-08-29T10:41:02Z",
+        "body": "@philipperemy it looks like an order with one filling trade to me:\r\n\r\n```\r\n{'amount': 0.03805269,   # \u2190------------------------------- ordered amount\r\n 'cost': 252.32738738,\r\n 'datetime': '2018-08-24T17:13:24.000Z',\r\n 'fee': {'cost': 0.0, 'currency': 'USD'},\r\n 'filled': 0.03805269,   # \u2190------------------------------- filled amount\r\n 'id': '1139757129',\r\n 'info': {'in_amount': '252.32738738',\r\n          'in_currency': 'USD',\r\n          'out_amount': '0.03805269',\r\n          'out_currency': 'BTC',\r\n          'trades': [{'amount': '252.32738738',\r\n                      'date': 1535130804,\r\n                      'order_id': 1139757129,\r\n                      'pair': 'BTC_USD',\r\n                      'price': '6630.99999999',\r\n                      'quantity': '0.03805269',\r\n                      'trade_id': 67768715,\r\n                      'type': 'sell'}],\r\n          'type': 'sell'},\r\n 'lastTradeTimestamp': None,\r\n 'price': 6630.999999737207,\r\n 'remaining': 0.0,\r\n 'side': 'sell',\r\n 'status': 'closed',\r\n 'symbol': 'BTC/USD',\r\n 'timestamp': 1535130804000,\r\n 'trades': [{'amount': 0.03805269, # \u2190------------------------------- filled amount\r\n             'cost': 252.32738738,\r\n             'datetime': '2018-08-24T17:13:24.000Z',\r\n             'id': '67768715',\r\n             'info': {'amount': '252.32738738',\r\n                      'date': 1535130804,\r\n                      'order_id': 1139757129,\r\n                      'pair': 'BTC_USD',\r\n                      'price': '6630.99999999',\r\n                      'quantity': '0.03805269',\r\n                      'trade_id': 67768715,\r\n                      'type': 'sell'},\r\n             'order': '1139757129',\r\n             'price': 6630.99999999,\r\n             'side': 'sell',\r\n             'symbol': 'BTC/USD',\r\n             'timestamp': 1535130804000,\r\n             'type': None}],\r\n 'type': 'limit'}\r\n>>>\r\n```\r\n\r\n\u2191 The ordered amount is completely filled with that trade. How do you tell it's still open?"
+      },
+      {
+        "user": "philipperemy",
+        "created_at": "2018-08-29T11:00:57Z",
+        "body": "@kroitor Hum, ok then it's my mistake. Thanks :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Clarification about whether the order is actually fully filled or partially filled",
+      "Explanation of how to interpret the order data structure from the exchange",
+      "Verification of whether there is a bug in CCXT's handling of Exmo orders"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:29:36"
+    }
+  },
+  {
+    "number": 3573,
+    "title": "Bitmex fetch_ohlcv return only old data from 2015",
+    "created_at": "2018-08-06T12:11:33Z",
+    "closed_at": "2018-08-06T12:23:09Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/3573",
+    "body": "- OS: Mac OS\r\n- Programming Language version: php 7.2\r\n- CCXT version: 1.14.62\r\n- Exchange: Bitmex\r\n- Method: fetch_ohlcv\r\n\r\n\r\nHi! I try get OHLC data from Bitmex with since = null and get always old data, between September 25, 2015, September 29, 2015. If I try use since, I don't receive any data or segment between September 25, 2015, September 29, 2015\r\n\r\n`require_once \"vendor/autoload.php\";`\r\n`$exchange  = new \\ccxt\\bitmex  (array ('apiKey' => 'xxx','secret'=>'yyy'));`\r\n`$limit = 100;`\r\n`$since = $exchange->milliseconds()-$limit*60*1000;`\r\n`$symbol = 'BTC/USD';`\r\n`$timeframe = '1h';`\r\n`$params = array('partial'=> False);`\r\n`$ohlcv = $exchange->fetch_ohlcv('BTC/USD', '1h', $since);`\r\n`print_r($ohlcv);`\r\n\r\nEmpty date!\r\n\r\nif calculate $since like\r\n`$since = microtime()-1000*60*60*24;`\r\nreceive segment between September 25, 2015, September 29, 2015 \r\n\r\n`{`\r\n`     0: {`\r\n`          0: \"2015-09-25T13:00:00.000Z\",`\r\n`          1: \"239.99\",`\r\n`          2: \"239.99\",`\r\n`          3: \"237.36\",`\r\n`          4: \"237.45\",`\r\n`          5: \"11501\"`\r\n`     },`\r\n`     1: {`\r\n`          0: \"2015-09-25T14:00:00.000Z\",`\r\n`          1: \"237.45\",`\r\n`          2: \"237.05\",`\r\n`          3: \"236.08\",`\r\n`          4: \"236.08\",`\r\n`          5: \"22625\"`\r\n`     },`\r\n`     2: {`\r\n`          0: \"2015-09-25T15:00:00.000Z\",`\r\n`          1: \"236.08\",`\r\n`          2: \"236.52\",`\r\n`          3: \"236.1\",`\r\n`          4: \"236.34\",`\r\n`          5: \"17434\"`\r\n`     },`\r\n`     3: {`\r\n`          0: \"2015-09-25T16:00:00.000Z\",`\r\n`          1: \"236.34\",`\r\n`          2: \"236.13\",`\r\n`          3: \"235.44\",`\r\n`          4: \"235.71\",`\r\n`          5: \"26900\"`\r\n`     }`\r\n`...`\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/3573/comments",
+    "author": "lliypuk",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2018-08-06T12:23:09Z",
+        "body": "You're not calculating your $since value correctly. It has to be in **milliseconds** in UTC.\r\n\r\n```PHP\r\n$since = $exchange->milliseconds()-$limit*60*1000;  // why only 60 seconds (60000 milliseconds) here?\r\n```\r\n\r\n\u2191 You're fetching 1h candles starting from 60 seconds (1 minute) ago? One hour has not passed yet since last 60 seconds, so it will reply with zero hourly-candles (an empty array).\r\n\r\nThis is not a correct way of calculating the since argument, either, because it will use microseconds instead of milliseconds:\r\n\r\n```PHP\r\n$since = microtime()-1000*60*60*24;  // why microtime here?\r\n```\r\n\r\nCorrect ways of setting the since are shown below:\r\n\r\n```PHP\r\nmbp:ccxt igorkroitor$ php -a\r\nInteractive shell\r\nphp > include_once ('./ccxt.php')\r\nphp > ;\r\nphp > date_default_timezone_set ('UTC');\r\nphp > $id = '\\\\ccxt\\\\bitmex';\r\nphp > $exchange = new $id ();\r\nphp > $limit = 100;\r\nphp > $hour_duration_in_milliseconds = 60 * 60 * 1000; // not 60 * 1000, but 60 * 60 * 1000 !\r\nphp > $since = $exchange->milliseconds () - $limit * $hour_duration_in_milliseconds;\r\nphp > $ohlcvs = $exchange->fetch_ohlcv ('BTC/USD', '1h', $since);\r\nphp > echo $exchange->iso8601($ohlcvs[0][0]) . \"\\n\"; // print first candle timestamp as a string\r\n2018-08-02T09:00:00.000Z\r\n```\r\n\r\n\u2191 100 hours ago, exactly.\r\n\r\nIf you omit the `$since` argument, it will output 100 candles from the beginning of their trading that was in 2015...\r\n\r\n```PHP\r\nphp > $ohlcvs = $exchange->fetch_ohlcv ('BTC/USD', '1h');\r\nphp > echo $exchange->iso8601($ohlcvs[0][0]) . \"\\n\"; // print first candle timestamp as a string\r\n2015-09-25T12:00:00.000Z\r\nphp >\r\n```\r\n\r\nIn other words, you should pay more attention to you basic milliseconds-arithmetics.\r\n\r\nHope this answers your question. Let us know if not."
+      },
+      {
+        "user": "lliypuk",
+        "created_at": "2018-08-06T13:03:20Z",
+        "body": "Thanks for your answer, you are right, I took mistake with calculate milliseconds in hour. Now I use this code: \r\n`$exchange = new \\ccxt\\bitmex (array ('apiKey' => 'xxx','secret'=>'yyy'));`\r\n` $limit = 100;`\r\n` $hour_duration_in_milliseconds = 60 * 60 * 1000; `\r\n` $since = $exchange->milliseconds () - $limit * $hour_duration_in_milliseconds;`\r\n` $ohlcvs = $exchange->fetch_ohlcv ('BTC/USD', '1h', $since);`\r\n `var_dump($ohlcvs);`\r\n\r\nand it is always empty too. I don't understand what do wrong"
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2018-08-06T13:10:24Z",
+        "body": "@lliypuk try this:\r\n\r\n```PHP\r\nmbp:ccxt igorkroitor$ php -a\r\nInteractive shell\r\n\r\nphp > date_default_timezone_set ('UTC');  // \u2190-------------- required, as documented in the Manual!\r\nphp > include_once ('./ccxt.php');\r\nphp > $id = '\\\\ccxt\\\\bitmex';\r\nphp > $exchange = new $id ();\r\nphp > $since = $exchange->milliseconds() - 100 * 60 * 60 * 1000; // 100 hours\r\nphp > $ohlcvs = $exchange->fetch_ohlcv('BTC/USD', '1h', $since);\r\nphp > echo $exchange->iso8601($ohlcvs[0][0]) . \"\\n\"; // print first candle timestamp as a string\r\n2018-08-02T10:00:00.000Z\r\nphp >\r\n```\r\n\r\n\u2191 Do you get a different result with that code?"
+      },
+      {
+        "user": "lliypuk",
+        "created_at": "2018-08-06T14:06:48Z",
+        "body": "It is really strange, but yes. This is my code:\r\n\r\n`date_default_timezone_set ('UTC'); `\r\n`include_once ('/vendor/ccxt/ccxt.php');`\r\n`$id = '\\\\ccxt\\\\bitmex';`\r\n`$exchange = new $id ();`\r\n`$since = $exchange->milliseconds() - 100 * 60 * 60 * 1000;`\r\n`$ohlcvs = $exchange->fetch_ohlcv('BTC/USD', '1h', $since);`\r\n`var_dump($ohlcvs);`\r\n`echo $exchange->iso8601($ohlcvs[0][0]) . \"\\n\";`\r\n\r\nand var_dump is `array(0) { }`\r\n... Any ideas? "
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2018-08-06T14:11:45Z",
+        "body": "@lliypuk ok then, let's try updating to the most recent version of CCXT first. Is it still empty with 1.17.83?"
+      },
+      {
+        "user": "lliypuk",
+        "created_at": "2018-08-06T14:15:54Z",
+        "body": "Oh, sorry, before created issues, I try change class bitmex for experiment and forgot about it. Now, I changed it back and  fetch_ohlcv work good! Sorry, for spend your time and thanks for your help!"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Correct explanation of how to properly calculate the 'since' parameter in milliseconds for the fetch_ohlcv method",
+      "Working code example that successfully retrieves recent OHLCV data from Bitmex",
+      "Explanation of timezone configuration requirements for the API",
+      "Troubleshooting guidance to identify configuration issues with the Bitmex API integration"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:29:58"
+    }
+  },
+  {
+    "number": 2896,
+    "title": "huobipro withdraw return api-signature-not-valid error",
+    "created_at": "2018-05-19T18:43:10Z",
+    "closed_at": "2018-05-20T04:03:55Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/2896",
+    "body": "- OS: Win10\r\n- Programming Language version: Python 3.5.4\r\n- CCXT version: 1.14.25\r\n- Exchange: huobipro\r\n- Method: withdraw\r\n\r\nWhen I tested huobipro withdraw, I got 'signature not valid' response as below:\r\n\r\n> ccxt.base.errors.ExchangeError: huobipro {\"err-msg\":\"Signature not valid: \\u6821\\u9a8c\\u5931\\u8d25\",\"status\":\"error\",\"data\":null,\"err-code\":\"api-signature-not-valid\"}\r\n\r\nMeanwhile, huobipro fetch_balance worked fine. So I think it is not a key pair issue. And I also tested withdraw same target address by other market, it also worked fine. So the address should be good.\r\n\r\nAttach my testing code below, hope it will help:\r\n\r\n    f_m = \"huobipro\"\r\n    t_m = \"okex\" \r\n    currency = \"ZEC\"\r\n\r\n    exchange = getattr(ccxt, f_m)({'apiKey': apiconfig['key'], 'secret': apiconfig['secret'], 'nonce': ccxt.Exchange.milliseconds})\r\n    addresses = get_market_addresses(t_m) #get addresses map\r\n    exchange.load_markets()\r\n    response = exchange.fetch_balance()\r\n    print(response) #fetch balance, worked\r\n    response = exchange.withdraw(currency, 1, addresses[currency]['address'], 'Test withdraw', {})\r\n    print(response) #withdraw, failed\r\n\r\nAttach traceback:\r\n\r\n> Traceback (most recent call last):\r\n  File \"testing2.py\", line 36, in <module>\r\n    withdraw_test()\r\n  File \"testing2.py\", line 33, in withdraw_test\r\n    response = exchange.withdraw(currency, 1, addresses[currency]['address'], 'Test withdraw', {})\r\n  File \"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python35\\lib\\site-packages\\ccxt\\huobipro.py\", line 661, in withdraw\r\n    response = self.privatePostDwWithdrawApiCreate(self.extend(request, params))\r\n  File \"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python35\\lib\\site-packages\\ccxt\\base\\exchange.py\", line 306, in request\r\n    return self.fetch2(path, api, method, params, headers, body)\r\n  File \"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python35\\lib\\site-packages\\ccxt\\base\\exchange.py\", line 303, in fetch2\r\n    return self.fetch(request['url'], request['method'], request['headers'], request['body'])\r\n  File \"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python35\\lib\\site-packages\\ccxt\\base\\exchange.py\", line 383, in fetch\r\n    self.handle_errors(response.status_code, response.reason, url, method, None, self.last_http_response)\r\n  File \"C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python35\\lib\\site-packages\\ccxt\\huobipro.py\", line 727, in handle_errors\r\n    raise ExchangeError(feedback)\r\nccxt.base.errors.ExchangeError: huobipro {\"err-msg\":\"Signature not valid: \\u6821\\u9a8c\\u5931\\u8d25\",\"data\":null,\"err-code\":\"api-signature-not-valid\",\"status\":\"error\"}\r\n",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/2896/comments",
+    "author": "radarxc",
+    "comments": [
+      {
+        "user": "radarxc",
+        "created_at": "2018-05-20T01:48:11Z",
+        "body": "I find when I change withdraw's 'tag' parameter as None, this issue is fixed. I am not sure what happen, but it works fine on other market with tag parameter."
+      },
+      {
+        "user": "kroitor",
+        "created_at": "2018-05-20T04:03:55Z",
+        "body": "@radarxc you're not using the withdraw method properly. The `tag` is not an arbitrary user string, it is a wallet identifier which should only be set if you're withdrawing a currency that requires the tag for addressing. Let us know if it does not answer your question."
+      },
+      {
+        "user": "radarxc",
+        "created_at": "2018-05-20T04:09:40Z",
+        "body": "@kroitor \r\ngot you. Thank you very much. I should read document more carefully."
+      }
+    ],
+    "satisfaction_conditions": [
+      "Explanation of the correct usage of parameters in the withdraw method",
+      "Clarification on why the API signature error was occurring",
+      "Guidance on proper API parameter usage that aligns with the exchange's requirements"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:30:46"
+    }
+  },
+  {
+    "number": 893,
+    "title": "bitstamp createOrder type limit throws \"under 5$ Order\" exception",
+    "created_at": "2017-12-18T21:39:45Z",
+    "closed_at": "2017-12-18T22:09:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ccxt/ccxt/issues/893",
+    "body": "createLimitBuyOrder is also broken on bitstamp.\r\n\r\n- exchange.createOrder ('BTC/USD', 'limit', 'buy', '0.001', '20.00') -> doesn't work\r\n- exchange.createOrder ('BTC/USD', 'market', 'buy', '0.001') -> works fine\r\n\r\ni don't know how to fix it myself, sorry.",
+    "comments_url": "https://api.github.com/repos/ccxt/ccxt/issues/893/comments",
+    "author": "jom1337",
+    "comments": [
+      {
+        "user": "kroitor",
+        "created_at": "2017-12-18T21:50:30Z",
+        "body": "Let's see... you're buying BTC 0.001 for a price of $20 per BTC, that is:\r\n\r\n`$20 * 0.001 = $0.020` \r\n\r\nwhich is obviously less that $5. Pure arithmetics...\r\n\r\nYour BTC/USD order should be worth more than $5 in total. \r\n\r\n> i don't know how to fix it myself, sorry.\r\n\r\nOne solution I would propose is to not submit orders that are too small, because most exchanges will forbid *dust trade* (orders of very tiny amounts)."
+      },
+      {
+        "user": "jom1337",
+        "created_at": "2017-12-18T22:09:03Z",
+        "body": "oh, i totally misunderstood this function.\r\nthanks a lot."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the limit order is failing",
+      "Information about exchange-specific trading requirements or limitations",
+      "Guidance on how to avoid the error condition"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:33:51"
+    }
+  }
+]

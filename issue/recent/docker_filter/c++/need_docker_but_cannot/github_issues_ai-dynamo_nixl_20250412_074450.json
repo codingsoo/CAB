@@ -1,0 +1,37 @@
+[
+  {
+    "number": 77,
+    "title": "Poor performance at registering tensors",
+    "created_at": "2025-03-20T21:31:24Z",
+    "closed_at": "2025-03-21T05:30:35Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/ai-dynamo/nixl/issues/77",
+    "body": "Hello!\n\nI have been trying to use NIXL as a way to do a sync of my model's parameters across two different NCCL process groups running on two different machines, interconnected via 8 400gbs infiniband NICs. The typical HGX 8xH100 setup.\n\nI found that NIXL is taking a very long time in registering the tensors to memory; effectively prohibitively slow.\n\nHere is a simple repro with the 125M GPT-2 model:\n```\nimport torch\nimport time\nfrom nixl._api import nixl_agent, nixlBind\nfrom transformers import GPT2Config, GPT2LMHeadModel\n\ndevice = \"cuda\"\n\ndef run_weight_sync_test():\n    config = GPT2Config()\n    with torch.device(\"meta\"):\n        model = GPT2LMHeadModel(config)\n    torch.manual_seed(0)\n\n    model.to_empty(device=device)\n    with torch.no_grad():\n        model.init_weights()\n    \n    agent = nixl_agent(\"test\", None)\n    for i in range(8):\n        agent.nixl_mems[\"cuda:\" + str(i)] = nixlBind.VRAM_SEG\n\n    # print parameter count\n    print(f\"Parameter count: {sum(p.numel() for p in model.parameters()):,}\")\n    \n    tensors = [p for p in model.parameters()]\n    start = time.perf_counter()\n    for i, tensor in enumerate(tensors):\n        reg_desc = agent.get_reg_descs(tensor)\n        print(f\"Registering memory for tensor {i}\")\n        assert agent.register_memory(reg_desc) is not None\n    end = time.perf_counter()\n    print(f\"Time taken: {end - start:.2f} seconds\")\n\nif __name__ == '__main__':\n    torch.cuda.set_device(0)\n    run_weight_sync_test()\n```\n\nOn my machine it takes 50.47 seconds to register the tensors. In production, I use a model much much larger than 100M, which can take almost an hour to register the tensors.\n\nI'm using CUDA 12.6 and a build of UCX 1.18.0, configured with the following flags:\n```\n./configure \\\n        --prefix=<ucx install path> \\\n        --enable-shared \\\n        --disable-static \\\n        --disable-doxygen-doc \\\n        --enable-optimizations \\\n        --enable-cma \\\n        --enable-devel-headers \\\n        --with-go=no \\\n        --with-verbs \\\n        --with-dm \\\n        --with-cuda=\"/usr/local/cuda-12.6/\" \\\n        --enable-mt \\\n        --with-mlx5-dv\nmake -j \nmake -j install-strip\nldconfig\n```\n\nI also run UCX with the `UCX_TLS=^cuda_ipc` env var, mimicking the Dynamo setup.\n\nThank you!\n",
+    "comments_url": "https://api.github.com/repos/ai-dynamo/nixl/issues/77/comments",
+    "author": "cassanof",
+    "comments": [
+      {
+        "user": "kahalon",
+        "created_at": "2025-03-21T05:15:05Z",
+        "body": "Hi,\nThank you for trying out NIXL!\n\nWhen registering descriptors with the agent you can pass them as a _**list**_ of (1) tuples or (2) torch tensors. You can also pass NIXL descriptors if you call `get_reg_descs` beforehand.\n\nThe problem is that you are passing a single tensor which was sliced to many elements. We will add more documentation for clarification and add support for handling a single tensor efficiently.\n\nBy changing the code to:\n```\nagent.register_memory([tensor])\n```\nthe overall registration time drops from ~24 seconds to ~2.5ms. `register_memory` will take care of `reg_descs` for you.\n\nIf you want to cut the registration time even further, you can actually pass the entire tensor list without iterating over it in python.\n```\nreg_descs = agent.register_memory(tensors)\nassert reg_descs is not None\nagent.deregister_memory(reg_descs)\n```\nThis drops the overall registration time to ~1ms.\n\nIf that is not fast enough, for each contiguous memory region  you can provide a base address, length and device ID as a tuple for a single registration. Note that with UCX (or any RDMA backend) every registration involves a system call, pinning the pages and mapping them to the kernel's DMA subsystem."
+      },
+      {
+        "user": "cassanof",
+        "created_at": "2025-03-21T05:30:35Z",
+        "body": "Ohhhh, I see what's going on. \nThank you so much for clarifying. This library is great! Happy to be an early adopter."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why tensor registration is slow in the user's code",
+      "A more efficient approach to register tensors with NIXL",
+      "Clear code examples demonstrating the correct usage pattern",
+      "Information about NIXL's API design and intended usage patterns"
+    ],
+    "_classification": {
+      "category": "Requires build environment but hard to be dockerized",
+      "timestamp": "2025-04-14 00:59:39"
+    }
+  }
+]

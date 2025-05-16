@@ -1,0 +1,352 @@
+[
+  {
+    "number": 1641,
+    "title": "ImapClient CountChange USE",
+    "created_at": "2023-09-11T09:07:53Z",
+    "closed_at": "2023-09-11T15:45:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/1641",
+    "body": " - .NET Framework: .Net Framework 4.0\r\n - MailKit Version: 1.22.0.0\r\n\r\nHello\uff01\r\n1\u3001I use the ImapClient.Inbox.CountChange event, and after binding it, sometimes it triggers the CountChange event when I receive emails in my inbox, but most of the time, it doesn't (most of the time it doesn't trigger)\uff0c\"MessagesArrived\" is the same, sometimes it triggers, but most of the time it doesn't trigger.\r\n\r\n2\u3001When I use client.GetFolder(SpecialFolder.Sent), it can find the folder, but after binding the CountChange, it has never successfully triggered.\r\n\r\n3\u3001How can I resolve the above issues? Due to some reasons, I cannot upgrade the .Net Framework version and Mailkit version in my environment.\r\n\r\nMy c# code\uff1a\r\n\r\n```\r\n public Form1()\r\n        {\r\n            InitializeComponent();\r\n            var cts = new CancellationTokenSource();            \r\n            Watch(cts.Token);        \r\n        }\r\n\r\npublic static void Watch(CancellationToken cancellationToken)\r\n        {\r\n            using (var client = ClientCreateAndConnect(cancellationToken))\r\n            {\r\n                while (!cancellationToken.IsCancellationRequested)\r\n                {\r\n                    using (var done = new CancellationTokenSource())\r\n                    {\r\n                        using (var timer = new System.Timers.Timer(9 * 60 * 1000))\r\n                        {\r\n                            timer.Elapsed += (sender, e) => done.Cancel();\r\n                            timer.AutoReset = false;\r\n                            timer.Enabled = true;\r\n                            try\r\n                            {\r\n                                client.Idle(done.Token, cancellationToken);                 \r\n                            }\r\n                            catch (OperationCanceledException)\r\n                            {\r\n                                break;\r\n                            }\r\n                        }\r\n                    }\r\n                }\r\n\r\n            }\r\n        }\r\n\r\n\r\nprivate static ImapClient ClientCreateAndConnect(CancellationToken token)\r\n        {\r\n            var client = new ImapClient();\r\n            client.Connect(\"xxx.xx.com\", 993, true, token);\r\n            client.ServerCertificateValidationCallback = (s, c, h, e) => true;\r\n            client.Authenticate(\"xx@xx.com\", \"xx\", token); \r\n\r\n            var folder = client.Inbox;\r\n            folder.Open(MailKit.FolderAccess.ReadOnly, token);\r\n            folder.CountChange+= client_CountChanged;\r\n\r\n            var folder2 = client.GetFolder(SpecialFolder.Sent);\r\n            folder2.Open(MailKit.FolderAccess.ReadWrite, token);\r\n            folder2.CountChange+= client_CountChanged;\r\n           \r\n            return client;\r\n        }\r\n\r\npublic static void client_CountChanged(object sender, EventArgs e)\r\n        {\r\n            xxxx\uff1b\r\n        }\r\n```\r\n\r\nDear  jstedfast , is there anything wrong with my code? Is there a way to resolve it? Thank you very much!",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/1641/comments",
+    "author": "aaa19940608",
+    "comments": [
+      {
+        "user": "aaa19940608",
+        "created_at": "2023-09-11T10:13:49Z",
+        "body": "After logging in, I entered IDLE mode, then sent an email and deleted emails from the outbox, but none of these actions triggered the corresponding events. Below is the log after the operations were completed, but there has been no further log output since entering IDLE mode.\r\n\r\n```\r\nConnected to imaps://xxx.xx.com:993/\r\nS: * OK [CAPABILITY IMAP4 IMAP4rev1 ID AUTH=PLAIN AUTH=LOGIN AUTH=XOAUTH2 NAMESPACE] xx XMIMAP4Server ready\r\nC: A00000000 AUTHENTICATE PLAIN\r\nS: + \r\nC: ADU5Mjk2MjU4NkBxcS5jb20AdmFkeXV3YXBmc21pYmJjaQ==\r\nS: A00000000 OK Success login ok\r\nC: A00000001 CAPABILITY\r\nS: * CAPABILITY IMAP4 IMAP4rev1 XLIST MOVE IDLE XAPPLEPUSHSERVICE NAMESPACE CHILDREN ID UIDPLUS COMPRESS=DEFLATE\r\nS: A00000001 OK CAPABILITY Completed\r\nC: A00000002 NAMESPACE\r\nS: * NAMESPACE ((\"\" \"/\")) NIL NIL\r\nS: A00000002 OK NAMESPACE Success\r\nC: A00000003 LIST \"\" \"INBOX\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\nS: A00000003 OK LIST completed\r\nC: A00000004 XLIST \"\" \"*\"\r\nS: * XLIST (\\NoSelect \\HasChildren) \"/\" \"&xx-\"\r\nS: * XLIST (\\HasNoChildren \\Inbox) \"/\" \"INBOX\"\r\nS: * XLIST (\\HasNoChildren \\Sent) \"/\" \"Sent Messages\"\r\nS: * XLIST (\\HasNoChildren \\Drafts) \"/\" \"Drafts\"\r\nS: * XLIST (\\HasNoChildren \\Trash) \"/\" \"Deleted Messages\"\r\nS: * XLIST (\\HasNoChildren \\Junk) \"/\" \"Junk\"\r\nS: A00000004 OK XLIST completed\r\nC: A00000005 LIST \"\" \"*\"\r\nS: * LIST (\\NoSelect \\HasChildren) \"/\" \"&UXZO1mWHTvZZOQ-\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"Sent Messages\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"Drafts\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"Deleted Messages\"\r\nS: * LIST (\\HasNoChildren) \"/\" \"Junk\"\r\nS: A00000005 OK LIST completed\r\nC: A00000006 SELECT &UXZO1mWHTvZZOQ-\r\nS: * 0 EXISTS\r\nS: * 0 RECENT\r\nS: A00000006 OK [READ-ONLY] SELECT complete\r\nC: A00000007 SELECT INBOX\r\nS: * 2810 EXISTS\r\nS: * 0 RECENT\r\nS: * OK [UNSEEN 377]\r\nS: * OK [UIDVALIDITY 1433844951] UID validity status\r\nS: * OK [UIDNEXT 4510] Predicted next UID\r\nS: * FLAGS (\\Answered \\Flagged \\Deleted \\Draft \\Seen)\r\nS: * OK [PERMANENTFLAGS (\\* \\Answered \\Flagged \\Deleted \\Draft \\Seen)] Permanent flags\r\nS: A00000007 OK [READ-WRITE] SELECT complete\r\nC: A00000008 SELECT \"Sent Messages\"\r\nS: * 324 EXISTS\r\nS: * 0 RECENT\r\nS: * OK [UIDVALIDITY 1433844951] UID validity status\r\nS: * OK [UIDNEXT 423] Predicted next UID\r\nS: * FLAGS (\\Answered \\Flagged \\Deleted \\Draft \\Seen)\r\nS: * OK [PERMANENTFLAGS (\\* \\Answered \\Flagged \\Deleted \\Draft \\Seen)] Permanent flags\r\nS: A00000008 OK [READ-WRITE] SELECT complete\r\nC: A00000009 IDLE\r\nS: + idling\r\n```\r\n"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2023-09-11T15:45:00Z",
+        "body": "MailKit depends on the server sending an `# EXISTS` event which MailKit then translates into a C# CountChanged event on the folder.\r\n"
+      },
+      {
+        "user": "aaa19940608",
+        "created_at": "2023-09-12T01:13:55Z",
+        "body": "Are you suggesting that it's an issue with the email server being unstable rather than a problem with my code? Is that correct?"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2023-09-12T01:31:27Z",
+        "body": "Yes"
+      },
+      {
+        "user": "aaa19940608",
+        "created_at": "2023-09-12T01:32:31Z",
+        "body": "Thank You\uff01   "
+      }
+    ],
+    "satisfaction_conditions": [
+      "Confirmation of whether the issue is with the code or with the server",
+      "Explanation of how the event triggering mechanism works",
+      "Clarification about the root cause of the inconsistent event triggering"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:25:52"
+    }
+  },
+  {
+    "number": 1441,
+    "title": "Mailkit cannot read autogenerated mails from mailbox",
+    "created_at": "2022-09-27T14:05:15Z",
+    "closed_at": "2022-09-28T13:00:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/1441",
+    "body": "**Describe the bug**\r\nHi, \r\nI hope I'm not bothering you with my question. I ran into a weird bug. I develop an application that extracts information from the client's mailbox. My problem is that once an autogenerated mail arrives in the mailbox, if the Server crashes, Mailkit will not read the mail, it is empty. But if the email comes from a different email address (I tried from my personal and school email address), it reads the email fine.  \r\n\r\n**Platform (please complete the following information):**\r\n - OS: Windows\r\n - .NET Framework: [.NET 4.0, WPF]\r\n - MailKit Version: 3.3.0\r\n\r\n\r\n\r\n```csharp\r\n using (var client = new ImapClient())\r\n                {\r\n                    using (var cancel = new System.Threading.CancellationTokenSource())\r\n                    {\r\n\r\n                        client.Connect(emailParser.ServerName, emailParser.Port, emailParser.IsSSLuse,\r\n                            cancel.Token);\r\n\r\n                        client.Authenticate(emailParser.Username, emailParser.Password, cancel.Token);\r\n\r\n                        var inbox = client.Inbox;\r\n                        inbox.Open(FolderAccess.ReadOnly, cancel.Token);\r\n\r\n                        for (int i = 0; i < inbox.Count; i++)\r\n                        {\r\n                            var message = inbox.GetMessage(i, cancel.Token); \r\n                            MessageBox.Show(message.TextBody);                                                                                \r\n                            \r\n                                }\r\n\r\n                            }\r\n\r\n                        }\r\n\r\n                        client.Disconnect(true, cancel.Token);\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/1441/comments",
+    "author": "DomV-cloud",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2022-09-27T14:11:27Z",
+        "body": "I'll need more information:\r\n\r\n* What is the exception you get?\r\n* Change your code to use `using (var client = new ImapClient (new ProtocolLogger (\"imap.log\")))` and then share the log (feel free to anonymize the data)"
+      },
+      {
+        "user": "DomV-cloud",
+        "created_at": "2022-09-28T07:15:21Z",
+        "body": "Hi,\r\n\r\nException:NullPointerException\r\n\r\nProtocolLogger:\r\n```\r\nConnected to imaps://imap.seznam.cz:993/\r\nS: * OK Seznam IMAP server ready\r\nC: A00000000 CAPABILITY\r\nS: * CAPABILITY XLIST IMAP4rev1 STARTTLS CHILDREN SORT I18NLEVEL=1 UIDPLUS ID\r\nS: A00000000 OK CAPABILITY completed\r\nC: A00000001 LOGIN ******** ********\r\nS: A00000001 OK LOGIN Authentication succeeded\r\nC: A00000002 CAPABILITY\r\nS: * CAPABILITY XLIST IMAP4rev1 STARTTLS CHILDREN SORT I18NLEVEL=1 UIDPLUS ID\r\nS: A00000002 OK CAPABILITY completed\r\nC: A00000003 LIST \"\" \"\"\r\nS: * LIST (\\Noselect) NIL \"\"\r\nS: A00000003 OK LIST complete\r\nC: A00000004 LIST \"\" \"INBOX\"\r\nS: * LIST (\\HasNoChildren) NIL \"INBOX\"\r\nS: A00000004 OK LIST complete\r\nC: A00000005 XLIST \"\" \"*\"\r\nS: * XLIST (\\HasNoChildren) NIL \"INBOX\"\r\nS: * XLIST (\\HasNoChildren \\Sent) NIL \"sent\"\r\nS: * XLIST (\\HasNoChildren \\Drafts) NIL \"drafts\"\r\nS: * XLIST (\\HasNoChildren) NIL \"newsletters\"\r\nS: * XLIST (\\HasNoChildren \\Archive) NIL \"archive\"\r\nS: * XLIST (\\HasNoChildren \\Spam) NIL \"spam\"\r\nS: * XLIST (\\HasNoChildren \\Trash) NIL \"trash\"\r\nS: A00000005 OK XLIST complete\r\nC: A00000006 EXAMINE INBOX\r\nS: * 1 EXISTS\r\nS: * 0 RECENT\r\nS: * FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft \\Recent)\r\nS: * OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)] Can bee changed permanently\r\nS: * OK [UIDVALIDITY 1] UIDs validity number\r\nS: * OK [UIDNEXT 1174] Predicted next UID\r\nS: * OK [UNSEEN 1] The first unseen message MSN.\r\nS: A00000006 OK [READ-ONLY] EXAMINE completed\r\nTotal messages: 1\r\nRecent messages: 0\r\nC: A00000007 FETCH 1 (BODY.PEEK[])\r\nS: * 1 FETCH (BODY[] {1515}\r\nS: Received: from a43-89.smtp-out.amazonses.com (a43-89.smtp-out.amazonses.com [54.240.43.89])\r\nS:      by email-smtpd9.ko.seznam.cz (Seznam SMTPD 1.3.137) with ESMTP;\r\nS:      Wed, 28 Sep 2022 07:13:26 +0200 (CEST)\r\nS: DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;\r\nS:      s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw; d=amazonses.com; t=1664342004;\r\nS:      h=MIME-Version:From:To:Date:Subject:Content-Type:Content-Transfer-Encoding:Message-ID:Feedback-ID;\r\nS:      bh=Tf3522dYaPsTT9jF2cD86TCuEtQz5qF452+xNRMN+NQ=;\r\nS:      b=I5Ct+FxJVSh8Ycnnc1iZoMjyRRmvD2v/qPcazMWhdixHlZX+fF/mboARjx3fS0SU\r\nS:      2j2N20NQOYC5FRjV5mbRXgHZiKCU78szIcmkL7LBVNM0Zpj0OwK3+JCTBWn46oynDMZ\r\nS:      RO7cDdJWOrdjBWxjC47y7V6orSaH8X5DpbrHJccM=\r\nS: MIME-Version: 1.0\r\nS: From: \"Smart One s.r.o. Monitoring\" <support@smart1.hostedrmm.com>\r\nS: To: reportssmo@seznam.cz\r\nS: X-Priority: 1\r\nS: Priority: urgent\r\nS: Importance: high\r\nS: Date: Wed, 28 Sep 2022 05:13:24 +0000\r\nS: Subject: Dostupnost serveru!\r\nS: Content-Type: text/html; charset=utf-8\r\nS: Content-Transfer-Encoding: base64\r\nS: Message-ID: <0100018382839396-333e4874-3fe3-4ef8-a494-3337fc7cd7ed-000000@email.amazonses.com>\r\nS: Feedback-ID: 1.us-east-1.ryKZb8SVjogJP0qpNnSWHxlkLJ4dmTjOGGDhWsI1zhM=:AmazonSES\r\nS: X-SES-Outgoing: 2022.09.28-54.240.43.89\r\nS:\r\nS: U1JWLVRFU1QtU21hcnQgT25lIFNVQ0NFU1Mgb24gU21hcnQgT25lIHMuci5vLlxTUlYt\r\nS: VEVTVCBhdCBNYWluIGZvciAgcmVzdWx0IFBJTkcgT0sgMTkyLjE2OC4xLjggLSBQYWNr\r\nS: ZXQgbG9zcyA9IDAlLCBSVEEgPSAwbXMgLi4gU2VydmVyIGplIE9ubGluZTxCUj48QlI+\r\nS: UmVwbHkgdG8gdGhpcyBlbWFpbCB0byBjcmVhdGUgYSBuZXcgdGlja2V0LjxCUj4gQ2xp\r\nS: ZW50SUQ6MSBDb21wdXRlcklEOjg5MQ==\r\nS:\r\nS: )\r\nS: A00000007 OK FETCH completed\r\n\r\nC: A00000008 LOGOUT\r\nS: * BYE Thanks for your visit, have a nice day.\r\nS: A00000008 OK LOGOUT Completed.\r\n```"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2022-09-28T13:00:22Z",
+        "body": "Oh, the problem is that the message doesn't have a `TextBody`, it only has an `HtmlBody`.\r\n\r\nThis line is the problem:\r\n```csharp\r\nMessageBox.Show(message.TextBody);\r\n```\r\n\r\nYou should change that to:\r\n\r\n```csharp\r\nMessageBox.Show(message.TextBody ?? message.HtmlBody ?? string.Empty);\r\n```"
+      },
+      {
+        "user": "DomV-cloud",
+        "created_at": "2022-09-28T13:16:52Z",
+        "body": "Hi,\r\nThank you so much, it works."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that handles emails with missing TextBody property",
+      "An explanation of why certain emails were causing the application to crash",
+      "A simple code modification that prevents the null reference exception"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:26:47"
+    }
+  },
+  {
+    "number": 626,
+    "title": "Failure sending multiple simultaneous emails",
+    "created_at": "2018-01-12T18:16:25Z",
+    "closed_at": "2018-01-12T18:51:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/626",
+    "body": "After upgrading our solution from MailKit 1.x version to 2.0.1 version, we have started to experience errors whenever we attempt to send e-mails on multiple threads at the same time.\r\n\r\nWe receive one of the two following errors:\r\n\r\n> Error reading a response from the SMTP server. => Cannot access a disposed object.\r\n> Object name: 'SslStream'.\r\n\r\n> Error reading a response from the SMTP server. =>  The BeginRead method cannot be called when another read operation is pending.\r\n\r\nIs there any reference on how to properly use new asynchronous APIs?\r\n\r\nThis is code sample from our app:\r\n\r\n    public class MailerProcess\r\n    {\r\n        public static void Run()\r\n        {\r\n             using (SmtpClient client = new SmtpClient())\r\n             {\r\n                   string host = AppSettingsWrapper.Host;\r\n                   string port = AppSettingsWrapper.Port.ToString();\r\n\r\n                   client.Connect(AppSettingsWrapper.Host, AppSettingsWrapper.Port, SecureSocketOptions.Auto);\r\n                   client.Authenticate(AppSettingsWrapper.UserName, AppSettingsWrapper.Password);\r\n                   client.Timeout = AppSettingsWrapper.Timeout;\r\n\r\n \t           List<Task> taskList = new List<Task>();\r\n \r\n                   foreach (MailerJob job in batch)\r\n                   {\r\n                        taskList.Add(SendAsync(client, fm, job.Email));\r\n                   }\r\n\r\n                   Task.WhenAll(taskList).Wait();\r\n\r\n                   if(client.IsConnected)\r\n                   {\r\n                        client.Disconnect(true);\r\n                   }\r\n              }\r\n        }\r\n\r\n        private static async Task SendAsync(SmtpClient client, IFileManager fm, Email email)\r\n        {\r\n            try\r\n            {\r\n                MimeMessage message = new MimeMessage();\r\n\r\n                MailboxAddress from = new MailboxAddress(email.Content.FromDisplayName, email.Content.FromAddress);\r\n                MailboxAddress to = new MailboxAddress(email.Content.ToDisplayName, email.Content.ToAddress);\r\n                message.From.Add(from);\r\n                message.To.Add(to);\r\n\r\n                message.Subject = email.Content.Subject;\r\n\r\n                BodyBuilder bodyBuilder = new BodyBuilder();\r\n                if (email.Content.IsHtmlContent)\r\n                {\r\n                    bodyBuilder.HtmlBody = email.Content.Body;\r\n                }\r\n                else\r\n                {\r\n                    bodyBuilder.TextBody = email.Content.Body;\r\n                }\r\n\r\n                message.Body = bodyBuilder.ToMessageBody();\r\n\r\n                if (client.IsConnected)\r\n                {\r\n                    await client.SendAsync(message);\r\n                }\r\n                return;\r\n            }\r\n            catch (SmtpCommandException se)\r\n            {\r\n                email.StatusMessage = se.Message;\r\n                email.StatusCode = (int)se.StatusCode;\r\n            }\r\n            catch (Exception e)\r\n            {\r\n                email.StatusMessage = e.RecursiveMessage();\r\n            }\r\n        }\r\n    }\r\n\r\nRun method is invoked from .NET Core 2.0 console application.\r\n",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/626/comments",
+    "author": "atuzovic",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2018-01-12T18:51:00Z",
+        "body": "What you want to do is use:\r\n\r\n```csharp\r\nlock (client.SyncRoot) {\r\n     await client.SendAsync (message);\r\n}\r\n```\r\n\r\nHope that helps."
+      },
+      {
+        "user": "atuzovic",
+        "created_at": "2018-01-12T19:06:34Z",
+        "body": "@jstedfast - Thanks for the quick reply.\r\n\r\nIsn't this preventing code from executing in parallel?"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2018-01-12T19:40:49Z",
+        "body": "Yes, that's exactly the point of it :)\r\n\r\nYou can't send multiple messages over the same socket in parallel."
+      },
+      {
+        "user": "atuzovic",
+        "created_at": "2018-01-12T21:13:05Z",
+        "body": "@jstedfast Ok, thanks. :)\r\n\r\nSo how can we use multiple sockets? Create new instance of SmtpClient on every thread?"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2018-01-12T21:27:05Z",
+        "body": "Correct."
+      },
+      {
+        "user": "NickSpag",
+        "created_at": "2018-01-15T21:22:40Z",
+        "body": "Looks like calling await in a lock is illegal? I'm running in to this while trying to optimize a Xamarin.Mac client's full inbox sync. \r\n\r\nI have parallel Tasks (think Task.WhenAll/Any) that do the full processing of a message, and I'm having a hard time determining if the best route is using a shared Semaphore or something like it for the core GetStreamAsync call of each individual message request, or if I should create a handful of ImapClients that each handle a batch of requests synchronously, or a combination of the two. Is the overhead of connecting/authenticating an ImapClient connection worth something like that? \r\n\r\nApologies if this should be its own issue in stackoverflow or some other channel. Thank you for the library!\r\n\r\nedit: I've played around a bit with doing a first pass that gets the text summary, for the purposes of the summary in an inbox list. so far creating the message from a summary envelope and making one GetStreamAsync call, the core of which is throttled by a single-thread SemaphoreSlim, is pretty quick. We'll see if that holds going forward. Planning on a second pass of the messages in the background that would download/cleanse the html part for local persistence and to help with display. "
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how to properly handle multiple simultaneous email sending operations with MailKit 2.0.1",
+      "Clarification on whether parallel email sending is possible with a single SMTP client instance",
+      "Information on alternative approaches to achieve parallel email sending",
+      "Guidance that addresses the specific errors encountered with the SMTP server"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:31:50"
+    }
+  },
+  {
+    "number": 528,
+    "title": ".net core bad cyrillic symbols",
+    "created_at": "2017-06-23T13:36:05Z",
+    "closed_at": "2017-06-23T13:42:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/528",
+    "body": "Hi!\r\nI am trying to retrieve messages with Pop3Client. In .net core console application there is a problem with cyrillic symbols in MimeMessage objects. Results of last 10 message subjects in console (with Console.OutputEncoding = Encoding.Unicode;):\r\n\r\n> Subject: \u00f0\u00d2\u00cf\u00d3\u00d8\u00c2\u00c1!\r\n> Subject: \u00ef\u00d4\u00d0\u00d2\u00c1\u00d7\u00cb\u00c1: \u00eb\u00cf\u00ce\u00c3\u00c5\u00d0\u00c3\u00c9\u00d1 E3.Hub 2.0.pptx\r\n> Subject: FW: E3.Series \u00d7 Wiki. \u00e6\u00cf\u00d2\u00d5\u00cd E3.Series.\r\n> Subject: \u00f0\u00c5\u00d2\u00c5\u00c8\u00cf\u00c4\u00ce\u00c9\u00cb OTG c USB \u00ce\u00c1 micro USB\r\n> Subject: \u00f0\u00c5\u00de\u00c1\u00cc\u00d8\u00ce\u00c1\u00d1 \u00c4\u00c1\u00d4\u00c1\r\n> Subject: E3.Series \u00d7 Wiki. \u00e6\u00cf\u00d2\u00d5\u00cd E3.Series.\r\n> Subject: [Zuken E3 GmbH] ZDE551435 Answer to [Panel Sheets (errors)]\r\n> Subject: \u0410\u043d\u043e\u043d\u0441 DotNext 2017 Moscow\r\n> Subject: RE: E3.series \u0444\u0430\u0439\u043b \u043b\u0438\u0446\u0435\u043d\u0437\u0438\u0438 \u0434\u043e 19 \u0438\u044e\u043d\u044f\r\n> Subject: \u00ef\u00d4\u00d0\u00d5\u00d3\u00cb\r\n\r\nThe same code result data in .net framework 4.5.2 console app:\r\n\r\n> Subject: \u041f\u0440\u043e\u0441\u044c\u0431\u0430!\r\n> Subject: \u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430: \u041a\u043e\u043d\u0446\u0435\u043f\u0446\u0438\u044f E3.Hub 2.0.pptx\r\n> Subject: FW: E3.Series \u0432 Wiki. \u0424\u043e\u0440\u0443\u043c E3.Series.\r\n> Subject: \u041f\u0435\u0440\u0435\u0445\u043e\u0434\u043d\u0438\u043a OTG c USB \u043d\u0430 micro USB\r\n> Subject: \u041f\u0435\u0447\u0430\u043b\u044c\u043d\u0430\u044f \u0434\u0430\u0442\u0430\r\n> Subject: E3.Series \u0432 Wiki. \u0424\u043e\u0440\u0443\u043c E3.Series.\r\n> Subject: [Zuken E3 GmbH] ZDE551435 Answer to [Panel Sheets (errors)]\r\n> Subject: \u0410\u043d\u043e\u043d\u0441 DotNext 2017 Moscow\r\n> Subject: RE: E3.series \u0444\u0430\u0439\u043b \u043b\u0438\u0446\u0435\u043d\u0437\u0438\u0438 \u0434\u043e 19 \u0438\u044e\u043d\u044f\r\n> Subject: \u041e\u0442\u043f\u0443\u0441\u043a\r\n\r\n\r\nMethod code is the same:\r\n\r\n```csharp\r\nusing (var client = new Pop3Client(new ProtocolLogger(\"pop3.log\")))\r\n            {\r\n                client.ServerCertificateValidationCallback = (s, c, h, e) => true;\r\n\r\n                client.Connect(\"webhost.pointcad.ru\", 0, true);\r\n                client.AuthenticationMechanisms.Remove(\"XOAUTH2\");\r\n\r\n                client.Authenticate(\"somedomain/somelogin\", \"somepassword\");\r\n\r\n                for (int i = 0; i < 10; i++) \r\n                {\r\n                    var message = client.GetMessage(client.Count - i - 1);\r\n                    \r\n                    Console.WriteLine(\"Subject: {0}\", message.Subject);\r\n                }\r\n                client.Disconnect(true);\r\n            }\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/528/comments",
+    "author": "bloodyroll",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2017-06-23T13:42:52Z",
+        "body": "This suggests the problem is that your .net core installation does not include the proper text encodings. There's nothing MimeKit can do about that.\r\n\r\nTo test my theory, write a simple test program that tries to get a cyrilic encoding such as koi8-r:\r\n\r\n```csharp\r\nvar encoding = System.Text.Encoding.GetEncoding (\"koi8-r\");\r\n```\r\n\r\nMy bet is that you'll get an exception."
+      },
+      {
+        "user": "bloodyroll",
+        "created_at": "2017-06-24T09:14:07Z",
+        "body": "thank you for help. Need to install System.Text.Encoding.CodePages package and add:\r\n```csharp\r\nEncoding.RegisterProvider(CodePagesEncodingProvider.Instance);"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2017-06-24T11:24:18Z",
+        "body": "Thanks for the update, that will likely be helpful to others that run into this issue on .NET Core :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why Cyrillic characters display incorrectly in .NET Core but correctly in .NET Framework",
+      "A solution to properly display Cyrillic characters in .NET Core applications",
+      "Information about handling non-standard text encodings in .NET Core"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:32:25"
+    }
+  },
+  {
+    "number": 518,
+    "title": "Imap client.connect not giving exception when using bad port number",
+    "created_at": "2017-06-07T14:23:27Z",
+    "closed_at": "2017-06-07T15:00:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/518",
+    "body": "\r\nHello,\r\n\r\nWhen I use this to connect to an IMAP server using SSL and port 993, it works fine.\r\n`try\r\n               {\r\n                    Mailbox mailbox = db.Mailboxes.Find(mbid);\r\n                    int mailboxcount = db.Mailboxes.Count();\r\n                    using (var client = new ImapClient())\r\n                    {\r\n                         client.ServerCertificateValidationCallback = (s, c, h, e) => true;\r\n                         client.Connect(mailbox.Host, mailbox.ServerPortNumber, mailbox.UseSsl);\r\n                         client.AuthenticationMechanisms.Remove(\"XOAUTH2\");\r\n                         client.Authenticate(mailbox.User, mailbox.Password);\r\n                         var inbox = client.Inbox;\r\n                         inbox.Open(FolderAccess.ReadOnly);\r\n`\r\n\r\nIf I change the port number to something like 994, it never gets to the **client.AuthenticationMechanisms.Remove(\"XOAUTH2\");** statement.  It does not execute any of the exception catches.  It just exits the method completely.\r\n\r\nI used the Visual Studio 2017 debugger and it makes it to the **client.Connect(mailbox.Host, mailbox.ServerPortNumber, mailbox.UseSsl);** line, but when I continue execution, it never gives any kind of error message.\r\n\r\nI tried it in IE 11 and Mozilla Firefox.\r\n\r\nIs there a way to catch an exception message for this error?\r\n\r\nThanks,\r\nTony",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/518/comments",
+    "author": "Carneno",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2017-06-07T15:00:01Z",
+        "body": "Why would you try to connect to port 994?\r\n\r\nAnd yes, it will eventually throw an exception. Same as Socket.Connect() will. It just takes several minutes because of the standard TCP timeout."
+      },
+      {
+        "user": "Carneno",
+        "created_at": "2017-06-07T15:15:03Z",
+        "body": "Jeffrey,\r\n\r\nThanks for your help.\r\n\r\nI myself would not try to connect to port 994, because I know that the correct port to use is 993, but what if one of my clients puts in the wrong port number by mistake when setting up their mailbox?\r\n\r\nI want to be able to inform them of what the problem is.\r\n\r\nIn my testing I did not wait for the timeout to occur.  I just tested it again and waited for the timeout and it did give an error message.\r\n\r\nThanks,\r\nTony"
+      }
+    ],
+    "satisfaction_conditions": [
+      "Information about the expected timeout behavior when connecting to an invalid IMAP port",
+      "Confirmation that exceptions will eventually be thrown for connection failures",
+      "A way to provide meaningful error messages to clients who misconfigure their mailbox settings"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:32:36"
+    }
+  },
+  {
+    "number": 493,
+    "title": "Cancelling Search or GetMessage causes client to disconnect",
+    "created_at": "2017-04-18T19:38:14Z",
+    "closed_at": "2017-04-18T21:43:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/493",
+    "body": "I don't know if it's a bug or just me not grasping the usage of the CancellationToken correctly, since I couldn't find an explanation about it. I'm trying to make a simple mail client, so to show messages in a folder using the `ImapService` I do the following:\r\n\r\n\r\n    static CancellationTokenSource _messagesTaskCts;\r\n    IMailFolder _sourceFolder;\r\n\r\n    async Task<ObservableCollection<MailMessage>> GetMessages()\r\n    {\r\n        try { _messagesTaskCts?.Cancel(); }\r\n        catch (ObjectDisposedException) { /* The implicated task already finished */ }\r\n        \r\n        using (_messagesTaskCts = new CancellationTokenSource())\r\n        {\r\n            var cToken = _messagesTaskCts.Token;\r\n            var messages = new ObservableCollection<MailMessage>();\r\n\r\n            await _sourceFolder.OpenAsync(FolderAccess.ReadOnly).ConfigureAwait(false);\r\n            var uids = (await _sourceFolder.SearchAsync(SearchQuery.All, cToken));\r\n\r\n            foreach (var uid in uids)\r\n            {\r\n                var msg = await _sourceFolder.GetMessageAsync(uid, cToken);\r\n                messages.Add(new MailMessage(msg));\r\n            }\r\n\r\n            return messages;\r\n        }\r\n    }\r\n\r\n\r\nHowever, if one folder is currently trying to retrieve its messages and I want to start retrieving messages from another folder (i.e. cancel current task and start new) I end up getting a `ServiceNotConnectedException.cs` telling me that the client has been disconnected.\r\n\r\nI expected that cancelling the token source would simply terminate the operation (be it `_sourceFolder.SearchAsync` or `_sourceFolder.GetMessageAsync`), but maybe that's not how I'm supposed to use the token?\r\n\r\nUsing MailKit v1.14.2 from NuGet",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/493/comments",
+    "author": "Xerillio",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2017-04-18T20:21:36Z",
+        "body": "The way that cancellation works is that if a command is already in progress, it has to drop the connection (there's no other way).\r\n\r\nThe convention for doing cancellation should probably look a bit like this from your perspective:\r\n\r\n```csharp\r\ntry {\r\n    client.DoSomethingAsync (..., cancellationToken);\r\n} catch (OperationCanceledException) {\r\n    if (!client.IsConnected) {\r\n        Reconnect ();\r\n    }\r\n}\r\n```\r\n\r\nI should note that the `ImapEngine` always checks cancelation state *before* issuing the command as well, so it's possible that the connection is not dropped if the command hasn't been sent yet, so you should always check `client.IsConnected`."
+      },
+      {
+        "user": "Xerillio",
+        "created_at": "2017-04-18T21:10:53Z",
+        "body": "Thanks for the quick response, that makes sense now. It also forces me to think about how to handle retrying any task that is using the client when it loses connection."
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2017-04-18T21:43:01Z",
+        "body": "Glad that cleared things up :)"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of how cancellation works with the IMAP client",
+      "Guidance on proper error handling when using cancellation tokens",
+      "Clarification on the expected behavior of the client when operations are cancelled",
+      "Information that helps with connection management strategy"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:32:52"
+    }
+  },
+  {
+    "number": 316,
+    "title": "Attachments are corrupt",
+    "created_at": "2016-03-30T16:45:44Z",
+    "closed_at": "2016-03-30T18:18:42Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/316",
+    "body": "Hi, First of all thanks for the project. it's really really helpful. I love it.\n\nI have a question about attachments. I have seen all of your replies so trust me I have spent a full day on this problem but still can't get my head around. The way I have setup is that I download emails but not attachments, instead just save their names and disposition. Then when customer open the email, he can see the list of attachments and just click on them to download, however they are downloading as corrupted. Here is the download code.\n\n``` csharp\n        public MemoryStream GetAttachement(string fileName, string messageId)\n        {\n            HeaderSearchQuery searchCondition = SearchQuery.HeaderContains(\"Message-Id\", messageId);\n            Client.Inbox.Open(FolderAccess.ReadOnly);\n            IList<UniqueId> uids = Client.Inbox.Search(searchCondition);\n\n            foreach (UniqueId uniqueId in uids)\n            {\n                MimeMessage message = Client.Inbox.GetMessage(uniqueId);\n                if (message.Attachments.Count() > 0)\n                {\n                    var attachement = message.Attachments.Where(x => x.ContentDisposition.FileName.Equals(fileName, StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();\n                    if (attachement != null)\n                    {\n                        var stream = new MemoryStream();\n                        attachement.WriteTo(stream);\n                        attachement.WriteTo(System.Web.HttpContext.Current.Server.MapPath(\"~/\") + fileName);\n                        return stream;\n                    }\n                }\n                //check for inline attachements\n                var inlineattachement = message.BodyParts.Where(x => x.ContentType.MediaType.Equals(\"image\", StringComparison.InvariantCultureIgnoreCase) && x.ContentType.Name.Equals(fileName, StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();\n                if (inlineattachement != null)\n                {\n                    var stream = new MemoryStream();\n                    inlineattachement.WriteTo(stream);\n                    inlineattachement.WriteTo(System.Web.HttpContext.Current.Server.MapPath(\"~/\") + fileName);\n                    return stream;\n                }\n            }\n\n            return null;\n        }\n```\n\nAs a test, I am writing to both stream and saving to file but nothing is working. I have the latest version, so any help will be greatly appreciated.\nThanks in advance.\n",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/316/comments",
+    "author": "atiqi36",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2016-03-30T18:18:42Z",
+        "body": "You are writing out the MIME container of the attachment and not the decoded attachment data.\n\nWhat you need to do is this:\n\n``` csharp\nvar stream = new MemoryStream();\nif (attachment is MessagePart) {\n    var rfc822 = (MessagePart) attachment;\n    rfc822.Message.WriteTo (stream);\n    rfc822.Message.WriteTo (System.Web.HttpContext.Current.Server.MapPath(\"~/\") + fileName);\n} else {\n    var part = (MimePart) attachment;\n    part.ContentObject.DecodeTo (stream);\n    part.ContentObject.DecodeTo (System.Web.HttpContext.Current.Server.MapPath(\"~/\") + fileName);\n}\nreturn stream;\n```\n\n(Note: For the inlineattachment logic, you don't need to check for `MessagePart` because that can't happen, image parts can only ever be `MimePart`s)\n"
+      },
+      {
+        "user": "atiqi36",
+        "created_at": "2016-03-30T19:35:07Z",
+        "body": "Hi, thanks for quick reply but this is not working either. Exactly same problem. Any thoughts?\n"
+      },
+      {
+        "user": "atiqi36",
+        "created_at": "2016-03-30T19:43:01Z",
+        "body": "It's working, my fault this time ;) Thanks for the help.\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that correctly extracts and decodes attachment content rather than the MIME container",
+      "Code that handles different attachment types appropriately (MessagePart vs MimePart)",
+      "A solution that preserves the integrity of downloaded attachments",
+      "Guidance that works with the user's existing attachment-on-demand approach"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:34:12"
+    }
+  },
+  {
+    "number": 133,
+    "title": "Size of fetched mails affected by order - ReverseArrival",
+    "created_at": "2014-12-13T19:02:02Z",
+    "closed_at": "2014-12-14T18:37:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jstedfast/MailKit/issues/133",
+    "body": "I'm trying to fetch all email messages sorted by Arrival date, reversed (using imap client)\n\nIn first case, I received 4 MailKit.UniqueId (Ids are unique), but after using .Fetch result (messages) contained only 2 messages.\n\n```\n        var inboxFolder = client.Inbox;\n        inboxFolder.Open(MailKit.FolderAccess.ReadOnly);\n        var searchQuery = MailKit.Search.SearchQuery.NotDeleted;\n        var orderBy = new [] { MailKit.Search.OrderBy.ReverseArrival };\n\n        var uniqueIds = inboxFolder.Search(searchQuery, orderBy);\n        if (uniqueIds.Count > 0)\n        {\n\n            var messages = inboxFolder\n                .Fetch(uniqueIds, MessageSummaryItems.Full | MessageSummaryItems.BodyStructure | MessageSummaryItems.References | MessageSummaryItems.UniqueId)\n                .ToList();\n        }\n```\n\nIn the second case, I did the same but without using orderBy. UniqueIds contained same values, but Fetch() returned only 2 messages.\n\n```\n        var inboxFolder = client.Inbox;\n        inboxFolder.Open(MailKit.FolderAccess.ReadOnly);\n        var searchQuery = MailKit.Search.SearchQuery.NotDeleted;\n\n        var uniqueIds = inboxFolder.Search(searchQuery);\n        if (uniqueIds.Count > 0)\n        {\n\n            var messages = inboxFolder\n                .Fetch(uniqueIds, MessageSummaryItems.Full | MessageSummaryItems.BodyStructure | MessageSummaryItems.References | MessageSummaryItems.UniqueId)\n                .ToList();\n        }\n```\n\nIs that really possible or is there something I overlooked?\n",
+    "comments_url": "https://api.github.com/repos/jstedfast/MailKit/issues/133/comments",
+    "author": "eCorke",
+    "comments": [
+      {
+        "user": "jstedfast",
+        "created_at": "2014-12-13T23:27:56Z",
+        "body": "it might be a bug in the way that MailKit is serializing `uniqueIds` in the IMAP command being sent to the server.\n\nCould you get a protocol log by passing `new ProtocolLogger (\"imap.log\")` as an argument to the ImapClient .ctor?\n\ne.g.:\n\n``` csharp\nvar client = new ImapClient (new ProtocolLogger (\"imap.log\"))\n```\n"
+      },
+      {
+        "user": "eCorke",
+        "created_at": "2014-12-14T14:46:08Z",
+        "body": "Data described in first test are currently unavaiable, so I tried to find same problem somewhere else. \nSearch returned 51 emails, but Fetch only 1.\n\n(private data were *********_CENSORED**_*******)\n\n```\nConnected to imap://**********CENSORED**********\nS: * OK IMAPrev1\nC: A00000000 CAPABILITY\nS: * CAPABILITY IMAP4 IMAP4rev1 CHILDREN IDLE QUOTA SORT ACL NAMESPACE RIGHTS=texk\nS: A00000000 OK CAPABILITY completed\nC: A00000001 LOGIN **********CENSORED********** \"**********CENSORED**********\"\nS: A00000001 OK LOGIN completed\nC: A00000002 CAPABILITY\nS: * CAPABILITY IMAP4 IMAP4rev1 CHILDREN IDLE QUOTA SORT ACL NAMESPACE RIGHTS=texk\nS: A00000002 OK CAPABILITY completed\nC: A00000003 NAMESPACE\nS: * NAMESPACE ((\"\" \".\")) NIL ((\"#Public\" \".\"))\nS: A00000003 OK namespace command complete\nC: A00000004 LIST \"\" \"INBOX\"\nS: * LIST (\\HasChildren) \".\" \"INBOX\"\nS: A00000004 OK LIST completed\nC: A00000006 EXAMINE **********CENSORED**********\nS: * 51 EXISTS\nS: * 0 RECENT\nS: * FLAGS (\\Deleted \\Seen \\Draft \\Answered \\Flagged)\nS: * OK [UIDVALIDITY 1406135590] current uidvalidity\nS: * OK [UNSEEN 4] unseen messages\nS: * OK [UIDNEXT 54] next uid\nS: * OK [PERMANENTFLAGS ()] limited\nS: A00000006 OK [READ-ONLY] EXAMINE completed\nC: A00000007 CHECK\nS: A00000007 OK CHECK completed\nC: A00000008 UID SORT (REVERSE ARRIVAL) US-ASCII UNDELETED\nS: * SORT 53 52 51 50 49 48 47 46 45 44 43 42 41 40 39 38 37 36 35 34 33 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 8 12 11 10 9 7 6 5 4 3\nS: A00000008 OK UID completed\nC: A00000009 UID FETCH 53:13,8,12:9,7:3 (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (REFERENCES)])\nS: * 6 FETCH (UID 8 RFC822.SIZE 5262 FLAGS **********CENSORED**********\nS: \nS: )\nS: A00000009 OK UID completed\n```\n"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2014-12-14T15:25:13Z",
+        "body": "The serialized uniqueIds (\"53:13,8,12:9,7:3\") is correct, however, it is possible that your IMAP server is buggy and does not like the reverse-ordered ranges.\n\nTry sorting the returned uniqueIds before calling Fetch() and see if that gets you the expected results. If not, I'm not sure what the problem is... the command that MailKit is sending is correct.\n"
+      },
+      {
+        "user": "eCorke",
+        "created_at": "2014-12-15T07:38:34Z",
+        "body": "Ok, that's all I needed.\nI solved problem client side data sorting, it really doesn't matter in this case fetched data aren't that big. It was just little strange behaviour.\nThanks again. Have a nice day.\n"
+      },
+      {
+        "user": "jstedfast",
+        "created_at": "2014-12-15T12:59:24Z",
+        "body": "no problem, glad that worked out for you\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation for why fewer emails are being fetched than expected when using ReverseArrival sorting",
+      "A workable alternative approach to handle the email sorting issue",
+      "Confirmation whether the issue was in their code or elsewhere"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-14 00:35:07"
+    }
+  }
+]

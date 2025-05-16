@@ -1,0 +1,1431 @@
+[
+  {
+    "number": 9179,
+    "title": "Parsing the Same Log in Different Ways",
+    "created_at": "2024-08-09T10:19:32Z",
+    "closed_at": "2024-11-13T02:02:47Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/9179",
+    "body": "Hi\r\nCan I parse the same log in different ways, such as using one method to take the entire log and another method to split it based on regex patterns?\r\nNote: My output destination is same",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/9179/comments",
+    "author": "skreddykoppula",
+    "comments": [
+      {
+        "user": "patrick-stephens",
+        "created_at": "2024-08-09T10:40:39Z",
+        "body": "Do you mean two different parsers for the same log?\r\nIf so, yes although you would have to use the parser filter rather than configuring it in `tail` directly.\r\n\r\nYou can also use the `parser` filter to apply further parsers on top of existing records to extract new keys and you can keep the original record as well.\r\n\r\nIt's not exactly clear what you're after but I think the answer is yes. It may help to provide example input and output you want.\r\n\r\nHowever I'll also say this is not a bug or feature request so may be better to discuss in Slack."
+      },
+      {
+        "user": "skreddykoppula",
+        "created_at": "2024-08-09T11:14:06Z",
+        "body": "[INPUT]\r\n          Name              tail\r\n          Tag               kube.*\r\n          Path              /var/log/containers/*.log, /var/log/nginx/access.log, /var/log/nginx/error.log\r\n          Parser            cri\r\n          DB                /var/log/flb_kube.db\r\n          Mem_Buf_Limit     5MB\r\n          Skip_Long_Lines   off\r\n          Refresh_Interval  20\r\n          Buffer_Chunk_Size 1M\r\n          Buffer_Max_Size   1M\r\n          Ignore_Older      1D\r\n          Rotate_Wait       60\r\n\r\n[PARSER]\r\n         Name cri\r\n         Format regex\r\n         Regex ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<user>[^ ]*) - - \\[(?<requestTime>[^\\]]+)\\] \"(?<method>\\S+)(?: +(?<path>[^\\\"]*?)(?: +\\S*)?)?\" (?<statuscode>[^ ]*) (?<timeInms    >[^ ]*) ms (?<contentLength>[^ ]*) (?<businessHeader>[^\"]+) \"(?<referer>[^\\\"]*)\" \"(?<agent>[^\\\"]*)\"$\r\n         Time_Key    time\r\n         Time_Format %Y-%m-%dT%H:%M:%S.%L%z\r\n         \r\n         \r\n   I used this code to parse my Kubernetes logs what I need is I also want to store entire log as 1 field\r\n   \r\n   I never find any documentation to do that"
+      },
+      {
+        "user": "patrick-stephens",
+        "created_at": "2024-08-09T12:55:32Z",
+        "body": "So don't parse it in tail and you'll get it all in one key.\r\nThen you can use the `parser` filter to apply a parser on top to make another set of keys.\r\n\r\nHowever, you're also using a custom CRI parser which is not recommended - it does not cope with various edge cases or multiline split by the kubelet."
+      },
+      {
+        "user": "patrick-stephens",
+        "created_at": "2024-08-09T12:56:10Z",
+        "body": "You can also have a separate LUA filter after parsing that combines what you want into a new field too. I would probably do it that way as it means you can do proper CRI parsing and then have a lot of control over which specific fields to combine and how/in what order for the other key."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-11-08T02:02:25Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-11-13T02:02:46Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 9067,
+    "title": "Server/Hostname should print on payload using filter eventhough in payload value is not present",
+    "created_at": "2024-07-10T06:34:49Z",
+    "closed_at": "2024-10-14T02:04:41Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/9067",
+    "body": "Hi Folks,\r\n\r\nI'm new to Fluenbit, Recently we've configured and tested the fluentbit & S3 functionality for sending logs to S3 buckets.\r\n\r\nI'm sending apps logs via fluentbit to S3 and its successful, But for some payloads the hostname was not present and i need hostname tag/value to be present in payload (data sent to S3).\r\n\r\nIs there any way which i can determine from which server logs are originating in Fluent Bit and then add this server information to the payload ?\r\n\r\nBR\r\nPranav",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/9067/comments",
+    "author": "pranavsankar07",
+    "comments": [
+      {
+        "user": "patrick-stephens",
+        "created_at": "2024-07-10T09:53:57Z",
+        "body": "What inputs are you using?\r\nYou can always just add an extra tag into your records anyway with the hostname in it."
+      },
+      {
+        "user": "pranavsankar07",
+        "created_at": "2024-07-10T13:52:45Z",
+        "body": "Below input i'm using, @patrick-stephens Can you help me how can i extract/add the hostname which sends the logs even though its not in payload.\r\n\r\n[INPUT]\r\n    name tail\r\n    Tag  nginx-log\r\n    path /var/log/*.log\r\n    read_from_head true\r\n    parser nginx\r\n    Mem_Buf_Limit     5MB\r\n    Skip_Long_Lines   On\r\n    Refresh_Interval  10"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-10-09T02:02:52Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2024-10-14T02:04:41Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 6438,
+    "title": "How to get source ip input using syslog？",
+    "created_at": "2022-11-22T12:14:26Z",
+    "closed_at": "2023-02-26T02:10:45Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/6438",
+    "body": "I am using syslog input that listening 0.0.0.0:514  with udp\r\nHow can I get the source IP address of the client device from the received logs?\nVector and Logstash both can added client hostIp after parsing syslog but flb can't see it.",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/6438/comments",
+    "author": "littlejoyo",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-02-21T02:06:30Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-02-26T02:10:44Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 6389,
+    "title": "How to create Index with YYYY.MM.dd with output config using fluent-bit ?",
+    "created_at": "2022-11-11T11:49:52Z",
+    "closed_at": "2023-02-15T02:06:33Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/6389",
+    "body": "Hello Team,\r\n\r\nI am using the fluent-bit version 1.4.6 and using below config to create index with YYYY.MM.dd format.\r\nbut it is not formatting index as YYYY.MM.dd with below config.\r\n\r\n```\r\n[SERVICE]\r\n    Flush         1\r\n    Log_Level     info\r\n    Daemon        off\r\n    HTTP_Server   On\r\n    HTTP_Listen   0.0.0.0\r\n    HTTP_Port     2020\r\n[INPUT]\r\n    Name              tail\r\n    Path              /var/lib/docker/containers/*/*.log\r\n    DB                /var/log/flb.db\r\n    Mem_Buf_Limit     5MB\r\n    Skip_Long_Lines   On\r\n    Refresh_Interval  10\r\n[FILTER]\r\n    Name     throttle\r\n    Match    *\r\n    Rate     500\r\n    Window   300\r\n    Interval 1m\r\n[OUTPUT]\r\n    Name            es\r\n    Host            elasticsearch-elk-lb.aws-dev.company.com\r\n    Port            9200\r\n    Logstash_Format Off\r\n    Index\t    test-%{+YYYY.MM.dd}\r\n    Type            flb_type\r\n    Time_Key        @timestamp\r\n    Retry_Limit     False\r\n```\r\n    \r\n  How can use Index value so that index should create like **test-2022-11-10** ?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/6389/comments",
+    "author": "Jayesh-upvision",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-02-09T16:13:42Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2023-02-15T02:06:32Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 5674,
+    "title": "Support kubernetes Filter for Syslog Input",
+    "created_at": "2022-07-05T08:24:01Z",
+    "closed_at": "2022-07-06T12:01:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/5674",
+    "body": "Hello,\r\n\r\nI've set my fluent-bit input to receive logs from syslog as shown bellow:\r\n```\r\n\r\n[INPUT]\r\n  Name              syslog\r\n  Tag               kube.syslog.*\r\n  Parser            syslog-rfc5424\r\n  Listen            0.0.0.0\r\n  Port              5140\r\n  Mode              tcp\r\n```\r\nLogs are retrieved as expected and sent to the configured output. \r\nAfterwards, I needed to enrich them with k8s filter. The  Filter which I configured this way always throws errors stating that `incoming record tag is shorter than kube_tag_prefix value`\r\n```\r\n[FILTER]\r\n  Name kubernetes\r\n  Match kube.syslog.*\r\n  Merge_Log On\r\n  Keep_Log Off\r\n  Kube_Tag_Prefix  kube.syslog.\r\n  K8S-Logging.Parser On\r\n  K8S-Logging.Exclude On\r\n  Labels Off\r\n  Annotations Off\r\n```\r\n\r\nSo my question is: Is the kubernetes Filter supposed to be compatible with a syslog input? If so, what configuration should be passed to the filter in this case?\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/5674/comments",
+    "author": "Mouad-B",
+    "comments": [
+      {
+        "user": "patrick-stephens",
+        "created_at": "2022-07-06T12:01:12Z",
+        "body": "No, it uses filename info to retrieve the pod name, etc to then query the K8S API for more data.\n\nOther inputs would need to follow the specific tag format you get by default from tail of Kubernetes logs. Run that with stdout to see."
+      }
+    ]
+  },
+  {
+    "number": 5545,
+    "title": "Could the in_kafka be used in production?",
+    "created_at": "2022-06-08T03:11:10Z",
+    "closed_at": "2022-06-08T10:58:06Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/5545",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\nI want to consume Kafka data  using fluent_bit in production\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/5545/comments",
+    "author": "vinson-zhang",
+    "comments": [
+      {
+        "user": "patrick-stephens",
+        "created_at": "2022-06-08T10:58:06Z",
+        "body": "It is currently experimental and subject to change so is disabled by default, no official packages or containers will have it enabled so you would have to build it yourself (and maintain this build plus investigate any issues with building). This is also the reason it is not documented on the official site currently I believe, to prevent any accidental usage or implied support.\r\n\r\nIf you need to use it then of course always test before deployment to production. I will not be offering any guarantees for your production environment and I don't think an OSS project could, particularly with the current state of this feature.\r\n\r\nSaying that, testing and providing feedback would be useful as well as any contributions to improve the OSS solution. We would like to get it out there as soon as possible so your help would be invaluable for both the OSS community and yourselves if you need the feature.\r\n\r\nBe aware though of the caveats on change with any future release."
+      },
+      {
+        "user": "vinson-zhang",
+        "created_at": "2022-06-21T11:08:20Z",
+        "body": "Thank you for your answer！"
+      }
+    ]
+  },
+  {
+    "number": 3542,
+    "title": "Should each INPUT entry use a different DB file?",
+    "created_at": "2021-05-24T20:25:41Z",
+    "closed_at": "2021-06-30T01:49:55Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/3542",
+    "body": "I searched all around, and I couldn't seem to find an answer for this.\r\nIf I have 8+ tail inputs should each one use a different DB file?\r\n\r\nBonus question, if I change the name of a DB file does that INPUT entry reset and that tail input start all over again?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/3542/comments",
+    "author": "NeckBeardPrince",
+    "comments": [
+      {
+        "user": "rmacian",
+        "created_at": "2021-05-25T14:46:46Z",
+        "body": "I had the same doubt but I created a db per input"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-06-25T01:49:33Z",
+        "body": "This issue is stale because it has been open 30 days with no activity. Remove stale label or comment or this will be closed in 5 days."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-06-30T01:49:54Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 3196,
+    "title": "syslog UDP mode for streaming data",
+    "created_at": "2021-03-09T16:30:35Z",
+    "closed_at": "2021-04-17T02:22:18Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/3196",
+    "body": "Hi Everyone, \r\nI'm very new to fluent-bit and am trying to check if fluentbit can help replace a very costly tool in place (not allowed to mention the tool due to NDA).  \r\nThe requriement is to collect log messages on a particular port using UDP protocol. The source fires messages at the rate of around 100,000 events/messages per second and each message is around 800 bytes. So I'm on a journey of POC(s) evaluating tools for the same. \r\nThe main requirement here is that the underlying process should be lightweight and be able to forward the UDP messages collected continuously to a kafka topic without losing much data. \r\n\r\nBelow is what I've done so far: \r\nThe log message has a certain format not conforming to the syslog-rfc5424 format. So I played around the parsers.conf to allow for any format. I'll paste what I did with the parser below. Then I created conf file with input as syslog and output as kafka. \r\n\r\nFirst I fired a batch of 100000 events on the UDP IP and port in 3 seconds and the setup captured and transferred all the records without any issues, which was much better than the other tools I've tested so far. \r\n\r\nThen I tried a continuous feed of messages on the UDP IP and port with 55K messages per second and stopped at 10,000,000 records. Here the setup started slowing down and lost almost 55% of the messages i.e. it only captured around 4.4 million records out of the 10 million. I also tried writing this on the terminal removing the kafka part and it had the same issue. \r\n\r\nSo this where I need help. How do I setup the conf in such a way that it doesn't lose messages or suffers very minimal loss irrespective of the downsteam (output) with the right buffering and memory setting?  \r\n\r\nBelow is the parser change: \r\n[PARSER]\r\n    Name        syslog-rfc5424\r\n    Format      regex\r\n    Regex       ^(?<message>.*)$\r\n    Time_Key    time\r\n    Time_Format %Y-%m-%dT%H:%M:%S.%L%z\r\n    Time_Keep   On\r\n\r\n\r\n\r\nBelow is the setup conf file: \r\n\r\n[SERVICE]\r\n    Flush        1\r\n    Daemon       Off\r\n    Parsers_File parsers.conf\r\n    storage.path /home/kafka/fl_fs\r\n    storage.sync normal\r\n    storage.max_chunks_up 128\r\n    storage.backlog.mem_limit 100M\r\n\r\n[INPUT]\r\n    Name      syslog\r\n    Listen    0.0.0.0\r\n    Port      6021\r\n    Mode      udp\r\n    Tag       syslog.udp\r\n    Buffer_Chunk_Size 6500\r\n    Mem_Buf_Limit     850M\r\n\r\n[OUTPUT]\r\n    Name      kafka\r\n    Match     *\r\n    Brokers   127.0.0.1:9092\r\n    Topics    fb_kafka_topic1\r\n\r\n\r\n\r\n\r\nEnvironment: \r\nVersion used: fluent-bit-1.7.1\r\nEnvironment name and version : Linux \r\nArchitecture:          x86_64\r\nCPU op-mode(s):        32-bit, 64-bit\r\nByte Order:            Little Endian\r\nCPU(s):                8\r\nOn-line CPU(s) list:   0-7\r\nThread(s) per core:    1\r\nCore(s) per socket:    1\r\nSocket(s):             8\r\nNUMA node(s):          1\r\nVendor ID:             GenuineIntel\r\nCPU family:            6\r\nModel:                 45\r\nModel name:            Intel(R) Xeon(R) CPU E5-4657L v2 @ 2.40GHz\r\nStepping:              2\r\nCPU MHz:               2400.000\r\nBogoMIPS:              4800.00\r\nHypervisor vendor:     VMware\r\nVirtualization type:   full\r\nL1d cache:             32K\r\nL1i cache:             32K\r\nL2 cache:              256K\r\nL3 cache:              30720K\r\nNUMA node0 CPU(s):     0-7\r\nFlags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc eagerfpu pni pclmulqdq ssse3 cx16 pcid sse4_1 sse4_2 x2apic popcnt aes xsave avx hypervisor lahf_lm ibrs ibpb stibp arat spec_ctrl intel_stibp arch_capabilities\r\n\r\n* Operating System and version: Linux Centos 7\r\nRAM : 64GB\r\n\r\nAny help or pointer will be appreciated much in this regard. \r\nByee\r\nShakir",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/3196/comments",
+    "author": "shakirksh",
+    "comments": [
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-04-11T02:29:14Z",
+        "body": "This issue is stale because it has been open 30 days with no activity. Remove stale label or comment or this will be closed in 5 days."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2021-04-17T02:22:18Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      },
+      {
+        "user": "selmison",
+        "created_at": "2024-05-17T12:22:44Z",
+        "body": "@shakirksh Which tool did you use to fire so many events? Iperf?"
+      }
+    ]
+  },
+  {
+    "number": 2851,
+    "title": " fluent-bit_1.6.8.bb: FLB_IN_SYSTEMD input plugin not included",
+    "created_at": "2020-12-10T15:15:23Z",
+    "closed_at": "2021-01-29T20:47:35Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2851",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nBuild option FLB_IN_SYSTEMD=On is not taken into account when building via fluent-bit_1.6.8.bb yocto bitbake. Also tried global option `FLB_ALL=Yes` without success.\r\n\r\nSteps to Reproduce:\r\n- Add `EXTRA_OECMAKE += \"-DFLB_IN_SYSTEMD=On \"` to bitbake recipe and build `bitbake fluent-bit`\r\n\r\nErrors:\r\n- `fluent-bit --help` does not display input option `systemd` and Build Flags are not shown\r\n- `fluent-bit -i systemd -o stdout` displays `Error: Invalid input type. Aborting`",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2851/comments",
+    "author": "Styne13",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-12-10T15:28:21Z",
+        "body": "I think in addition to enable the plugin you have to include the dev dependency in your image, so Fluent Bit build system can check for systemd headers"
+      },
+      {
+        "user": "Styne13",
+        "created_at": "2020-12-10T15:44:05Z",
+        "body": "Thank you for your quick reply @edsiper\r\n\r\nDoes `dev` mean device or development here?\r\nCan you give an advise how to add it to the recipe?\r\nIs it something like `DEPENDS += `"
+      },
+      {
+        "user": "whygoyal",
+        "created_at": "2020-12-15T18:57:36Z",
+        "body": "@Styne13 We also ran into the same issue. Adding the `systemd` as depends and CMake flag `DFLB_IN_SYSTEMD` in the recipe seems to fix it. \r\n\r\n```\r\nDEPENDS += \"systemd\"\r\nEXTRA_OECMAKE += \"-DFLB_IN_SYSTEMD=On \"\r\n```"
+      },
+      {
+        "user": "Styne13",
+        "created_at": "2021-01-07T08:41:20Z",
+        "body": "@ygoyal18: Thanks for your reply. 👍 Will check if this works."
+      },
+      {
+        "user": "DK999",
+        "created_at": "2021-01-29T12:59:37Z",
+        "body": "> \r\n> \r\n> @Styne13 We also ran into the same issue. Adding the `systemd` as depends and CMake flag `DFLB_IN_SYSTEMD` in the recipe seems to fix it.\r\n> \r\n> ```\r\n> DEPENDS += \"systemd\"\r\n> EXTRA_OECMAKE += \"-DFLB_IN_SYSTEMD=On \"\r\n> ```\r\n\r\nWorks fine, fixed the issue for me too."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2021-01-29T20:47:19Z",
+        "body": "thanks for the comments.\r\n\r\nFYI: v1.7.0 will come with Systemd support enabled (6e63092d)"
+      }
+    ]
+  },
+  {
+    "number": 2564,
+    "title": "td-agent-bit extremely high IO% on DB.Sync Full|Normal",
+    "created_at": "2020-09-18T13:26:28Z",
+    "closed_at": "2021-02-19T07:20:44Z",
+    "labels": [
+      "enhancement",
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2564",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\ntd-agent-bit process utilizing up to 30% of IO on the virtual machine. writing 2-3Mb/sec.\r\nIf only set `DB.Sync Off` issue is gone. However, that can cause other issues if system crash.\r\n\r\nSetup: td-agent-bit version 1.5.2 on Centos 7. Using tail input type and streaming to fluentd server\r\n\r\n**To Reproduce**\r\n- During high rate of new log lines fluentbit IOPS utilization skyrocketing up to 30%. writing 2-3Mb/sec\r\n- looking at the `strace -e trace=write -p $(pgrep td-agent-bit) -y` most of the writes goes to sqlite DB\r\n\r\n**Expected behavior**\r\ntd-agent-bit do not utilize 30% of IOPS\r\n\r\n**Your Environment**\r\n* Version used: 1.5.2\r\n* Configuration:\r\nsample INPUT block\r\n```\r\n[INPUT] \r\n    Name                tail    \r\n    Path                /projects/file.log\r\n    Tag                 stream.host.example.process.log\r\n    Refresh_Interval    60\r\n    Buffer_Max_Size     5MB\r\n    Buffer_Chunk_Size   1MB\r\n    DB                  /var/log/flb-db/tail-example-process.db\r\n    DB.Sync             Full\r\n```\r\n\r\n* Operating System and version:  Centos 7\r\n* Filters and plugins: tail\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2564/comments",
+    "author": "ndemeshchenko",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-09-18T16:04:49Z",
+        "body": "data integrity with persistence has a cost: frequent I/O. \r\n\r\nIf you want 100% data integrity in the database file that's the cost, but you can try a medium level of synchronization which is ```normal```, it should be less frequent than ```full``` and might help. Please test and let me know how it goes"
+      },
+      {
+        "user": "ndemeshchenko",
+        "created_at": "2020-09-21T08:37:27Z",
+        "body": "Sure, that make sense. However, changing db.sync option to normal made **almost** no difference for IO utilization, at the current load, I see 1-1.5% difference in IO"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2020-10-05T23:39:09Z",
+        "body": "@ndemeshchenko \r\n\r\nI've pushed some updates to GIT Master to improve the database I/O overhead. would you please take a look and give it a try ?\r\n\r\nnote: db.sync now defaults to ```normal```, it makes a big difference."
+      },
+      {
+        "user": "agup006",
+        "created_at": "2021-02-19T07:20:44Z",
+        "body": "hey folks, it looks like this has been fixed and now is available in 1.7.0 - I'm going to close for now. Please re-open if we feel this is not resolved "
+      }
+    ]
+  },
+  {
+    "number": 2332,
+    "title": "fluent-bit 1.4.6 does not build on high-sierra",
+    "created_at": "2020-07-05T17:03:48Z",
+    "closed_at": "2020-07-13T20:32:20Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2332",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n\r\nfluent-bit 1.4.6 failed to build on high-sierra (relates Homebrew/homebrew-core#56302)\r\n\r\n**To Reproduce**\r\n- Rubular link if applicable:\r\n- Example log message if applicable:\r\n```\r\n/usr/local/Homebrew/Library/Homebrew/shims/mac/super/clang  -Wall -D__FILENAME__='\"$(subst /tmp/fluent-bit-20200703-31345-1pdolhg/fluent-bit-1.4.6/,,$(abspath $<))\"' -DNDEBUG -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk -mmacosx-version-min=10.13 -dynamiclib -Wl,-headerpad_max_install_names  -o ../lib/libfluent-bit.dylib -install_name /tmp/fluent-bit-20200703-31345-1pdolhg/fluent-bit-1.4.6/lib/libfluent-bit.dylib CMakeFiles/fluent-bit-shared.dir/flb_mp.c.o CMakeFiles/fluent-bit-shared.dir/flb_kv.c.o CMakeFiles/fluent-bit-shared.dir/flb_api.c.o CMakeFiles/fluent-bit-shared.dir/flb_lib.c.o CMakeFiles/fluent-bit-shared.dir/flb_log.c.o CMakeFiles/fluent-bit-shared.dir/flb_env.c.o CMakeFiles/fluent-bit-shared.dir/flb_uri.c.o CMakeFiles/fluent-bit-shared.dir/flb_hash.c.o CMakeFiles/fluent-bit-shared.dir/flb_pack.c.o CMakeFiles/fluent-bit-shared.dir/flb_pack_gelf.c.o CMakeFiles/fluent-bit-shared.dir/flb_sds.c.o CMakeFiles/fluent-bit-shared.dir/flb_pipe.c.o CMakeFiles/fluent-bit-shared.dir/flb_meta.c.o CMakeFiles/fluent-bit-shared.dir/flb_kernel.c.o CMakeFiles/fluent-bit-shared.dir/flb_input.c.o CMakeFiles/fluent-bit-shared.dir/flb_input_chunk.c.o CMakeFiles/fluent-bit-shared.dir/flb_filter.c.o CMakeFiles/fluent-bit-shared.dir/flb_output.c.o CMakeFiles/fluent-bit-shared.dir/flb_config.c.o CMakeFiles/fluent-bit-shared.dir/flb_config_map.c.o CMakeFiles/fluent-bit-shared.dir/flb_network.c.o CMakeFiles/fluent-bit-shared.dir/flb_utils.c.o CMakeFiles/fluent-bit-shared.dir/flb_slist.c.o CMakeFiles/fluent-bit-shared.dir/flb_engine.c.o CMakeFiles/fluent-bit-shared.dir/flb_engine_dispatch.c.o CMakeFiles/fluent-bit-shared.dir/flb_task.c.o CMakeFiles/fluent-bit-shared.dir/flb_unescape.c.o CMakeFiles/fluent-bit-shared.dir/flb_scheduler.c.o CMakeFiles/fluent-bit-shared.dir/flb_io.c.o CMakeFiles/fluent-bit-shared.dir/flb_storage.c.o CMakeFiles/fluent-bit-shared.dir/flb_upstream.c.o CMakeFiles/fluent-bit-shared.dir/flb_upstream_ha.c.o CMakeFiles/fluent-bit-shared.dir/flb_upstream_node.c.o CMakeFiles/fluent-bit-shared.dir/flb_router.c.o CMakeFiles/fluent-bit-shared.dir/flb_worker.c.o CMakeFiles/fluent-bit-shared.dir/flb_thread.c.o CMakeFiles/fluent-bit-shared.dir/flb_time.c.o CMakeFiles/fluent-bit-shared.dir/flb_sosreport.c.o CMakeFiles/fluent-bit-shared.dir/flb_sha512.c.o CMakeFiles/fluent-bit-shared.dir/flb_plugin.c.o CMakeFiles/fluent-bit-shared.dir/flb_gzip.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser_regex.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser_json.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser_decoder.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser_ltsv.c.o CMakeFiles/fluent-bit-shared.dir/flb_parser_logfmt.c.o CMakeFiles/fluent-bit-shared.dir/flb_io_tls.c.o CMakeFiles/fluent-bit-shared.dir/flb_oauth2.c.o CMakeFiles/fluent-bit-shared.dir/flb_http_client.c.o CMakeFiles/fluent-bit-shared.dir/flb_plugin_proxy.c.o CMakeFiles/fluent-bit-shared.dir/flb_signv4.c.o CMakeFiles/fluent-bit-shared.dir/flb_luajit.c.o CMakeFiles/fluent-bit-shared.dir/flb_regex.c.o CMakeFiles/fluent-bit-shared.dir/flb_sqldb.c.o CMakeFiles/fluent-bit-shared.dir/flb_record_accessor.c.o CMakeFiles/fluent-bit-shared.dir/flb_ra_key.c.o  -lm ../library/libmk_core.a ../library/libjsmn.a ../library/libmsgpackc.a ../library/libmpack-static.a ../library/libchunkio-static.a ../library/libminiz.a ../library/libflb-plugin-in_emitter.a ../library/libflb-plugin-in_tail.a ../library/libflb-plugin-in_dummy.a ../library/libflb-plugin-in_head.a ../library/libflb-plugin-in_health.a ../library/libflb-plugin-in_collectd.a ../library/libflb-plugin-in_statsd.a ../library/libflb-plugin-in_storage_backlog.a ../library/libflb-plugin-in_stream_processor.a ../library/libflb-plugin-in_serial.a ../library/libflb-plugin-in_stdin.a ../library/libflb-plugin-in_syslog.a ../library/libflb-plugin-in_exec.a ../library/libflb-plugin-in_tcp.a ../library/libflb-plugin-in_mqtt.a ../library/libflb-plugin-in_lib.a ../library/libflb-plugin-in_forward.a ../library/libflb-plugin-in_random.a ../library/libflb-plugin-out_azure.a ../library/libflb-plugin-out_bigquery.a ../library/libflb-plugin-out_counter.a ../library/libflb-plugin-out_datadog.a ../library/libflb-plugin-out_es.a ../library/libflb-plugin-out_exit.a ../library/libflb-plugin-out_file.a ../library/libflb-plugin-out_forward.a ../library/libflb-plugin-out_http.a ../library/libflb-plugin-out_influxdb.a ../library/libflb-plugin-out_kafka_rest.a ../library/libflb-plugin-out_nats.a ../library/libflb-plugin-out_null.a ../library/libflb-plugin-out_plot.a ../library/libflb-plugin-out_slack.a ../library/libflb-plugin-out_splunk.a ../library/libflb-plugin-out_stackdriver.a ../library/libflb-plugin-out_stdout.a ../library/libflb-plugin-out_tcp.a ../library/libflb-plugin-out_td.a ../library/libflb-plugin-out_lib.a ../library/libflb-plugin-out_flowcounter.a ../library/libflb-plugin-out_gelf.a ../library/libflb-plugin-filter_aws.a ../library/libflb-plugin-filter_expect.a ../library/libflb-plugin-filter_record_modifier.a ../library/libflb-plugin-filter_rewrite_tag.a ../library/libflb-plugin-filter_throttle.a ../library/libflb-plugin-filter_grep.a ../library/libflb-plugin-filter_kubernetes.a ../library/libflb-plugin-filter_parser.a ../library/libflb-plugin-filter_nest.a ../library/libflb-plugin-filter_modify.a ../library/libflb-plugin-filter_lua.a ../library/libflb-plugin-filter_stdout.a ../library/libflb-plugin-proxy-go.a ../library/libmbedtls.a ../library/libco.a ../library/librbtree.a ../lib/libonigmo.a ../lib/libluajit.a ../library/libsqlite3.a ../library/libtutf8e.a ../library/libflb-ra-parser.a ../library/libflb-sp.a -lpthread ../library/libfluent-bit.a ../library/libflb-plugin-in_emitter.a ../library/libflb-plugin-in_tail.a ../library/libflb-plugin-in_dummy.a ../library/libflb-plugin-in_head.a ../library/libflb-plugin-in_health.a ../library/libflb-plugin-in_collectd.a ../library/libflb-plugin-in_statsd.a ../library/libflb-plugin-in_storage_backlog.a ../library/libflb-plugin-in_stream_processor.a ../library/libflb-plugin-in_serial.a ../library/libflb-plugin-in_stdin.a ../library/libflb-plugin-in_syslog.a ../library/libflb-plugin-in_exec.a ../library/libflb-plugin-in_tcp.a ../library/libflb-plugin-in_mqtt.a ../library/libflb-plugin-in_lib.a ../library/libflb-plugin-in_forward.a ../library/libflb-plugin-in_random.a ../library/libflb-plugin-out_azure.a ../library/libflb-plugin-out_bigquery.a ../library/libflb-plugin-out_counter.a ../library/libflb-plugin-out_datadog.a ../library/libflb-plugin-out_es.a ../library/libflb-plugin-out_exit.a ../library/libflb-plugin-out_file.a ../library/libflb-plugin-out_forward.a ../library/libflb-plugin-out_http.a ../library/libflb-plugin-out_influxdb.a ../library/libflb-plugin-out_kafka_rest.a ../library/libflb-plugin-out_nats.a ../library/libflb-plugin-out_null.a ../library/libflb-plugin-out_plot.a ../library/libflb-plugin-out_slack.a ../library/libflb-plugin-out_splunk.a ../library/libflb-plugin-out_stackdriver.a ../library/libflb-plugin-out_stdout.a ../library/libflb-plugin-out_tcp.a ../library/libflb-plugin-out_td.a ../library/libflb-plugin-out_lib.a ../library/libflb-plugin-out_flowcounter.a ../library/libflb-plugin-out_gelf.a ../library/libflb-plugin-filter_aws.a ../library/libflb-plugin-filter_expect.a ../library/libflb-plugin-filter_record_modifier.a ../library/libflb-plugin-filter_rewrite_tag.a ../library/libflb-plugin-filter_throttle.a ../library/libflb-plugin-filter_grep.a ../library/libflb-plugin-filter_kubernetes.a ../library/libflb-plugin-filter_parser.a ../library/libflb-plugin-filter_nest.a ../library/libflb-plugin-filter_modify.a ../library/libflb-plugin-filter_lua.a ../library/libflb-plugin-filter_stdout.a ../library/libfluent-bit.a -lm ../library/libmk_core.a ../library/libjsmn.a ../library/libmsgpackc.a ../library/libmpack-static.a ../library/libchunkio-static.a ../library/libcio-crc32.a ../library/libminiz.a ../library/libflb-plugin-proxy-go.a ../library/libmbedtls.a ../library/libmbedx509.a ../library/libmbedcrypto.a ../library/libco.a ../lib/libonigmo.a ../lib/libluajit.a ../library/libsqlite3.a ../library/libtutf8e.a ../library/libflb-ra-parser.a ../library/libflb-sp.a ../library/librbtree.a ../library/libflb-sp-parser.a \r\n[ 98%] Built target fluent-bit-shared\r\nmake: *** [all] Error 2\r\n```\r\n- Steps to reproduce the problem:\r\n\r\n**Expected behavior**\r\n\r\nbuild pass on high-sierra\r\n\r\n**Screenshots**\r\n<!--- If applicable, add screenshots to help explain your problem. -->\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: 1.4.6\r\n* Configuration: gcc 10\r\n* Environment name and version (e.g. Kubernetes? What version?): N/A\r\n* Server type and version: N/A\r\n* Operating System and version: MacOS 10.13\r\n* Filters and plugins:\r\n\r\n**Additional context**\r\n<!--- How has this issue affected you? What are you trying to accomplish? -->\r\n<!--- Providing context helps us come up with a solution that is most useful in the real world -->\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2332/comments",
+    "author": "chenrui333",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-07-06T15:18:58Z",
+        "body": "FYI: we pushed some fixes for v1.5 which is being released between july 10-13"
+      },
+      {
+        "user": "chenrui333",
+        "created_at": "2020-07-06T18:16:56Z",
+        "body": "Thanks, I will revert the patch once releasing 1.5.0 update."
+      }
+    ]
+  },
+  {
+    "number": 2222,
+    "title": "fluent/fluent-bit:1.3.11 has no sh?",
+    "created_at": "2020-06-02T17:04:47Z",
+    "closed_at": "2020-06-02T17:10:00Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2222",
+    "body": "Does fluent/fluent-bit:1.3.11 not has sh?\r\n\r\n```\r\n[devadmin@vdi-mk4-cnt fluentbit]$ kubectl exec -ti fluent-bit-7kn7p -n logging -- sh -c fluent-bit\r\nOCI runtime exec failed: exec failed: container_linux.go:349: starting container process caused \"exec: \\\"sh\\\": executable file not found in $PATH\": unknown\r\n```",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2222/comments",
+    "author": "tirelibirefe",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-06-02T17:09:48Z",
+        "body": "Use the '-debug' version:\r\n\r\n```\r\n$ docker run -ti fluent/fluent-bit:1.3.11-debug sh\r\n```\r\n"
+      }
+    ]
+  },
+  {
+    "number": 2171,
+    "title": "out_http creates too many connections for sending backlog",
+    "created_at": "2020-05-11T14:01:39Z",
+    "closed_at": "2020-07-13T20:33:38Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2171",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nI'm experiencing overload of my system when fluent-bit tries to send a backlog of logs at once through out_http with TLS enabled, creating tens of new http/tls connections simultaneously.\r\n\r\nExamples when this can happen:\r\n- The system was offline, logs were stored on disk. If after reboot (of system or fluent-bit) the system is online, then fluent-bit tries to send a lot of the stored data at once.\r\n- Sending systemd logs via fluent-bit, from the beginning of journal. When starting fluent-bit there is lots of backlog to send.\r\n\r\n**Describe the solution you'd like**\r\nCould there be (or is there already?) a parameter to limit the number of simultaneous http connections?\r\n\r\n**Describe alternatives you've considered**\r\nI didn't succeed in limiting the amount of simultaneous outgoing connections with throttling. Or may be I didn't know how to do it properly.",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2171/comments",
+    "author": "r0naldt",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-05-19T18:54:07Z",
+        "body": "In your main [SERVICE] section you can add the following parameter:\r\n\r\n```\r\nstorage.backlog.mem_limit 10M\r\n```\r\n\r\nthat one will limit to process backlog data in rounds of 10M, that might reduce the number of outgoing connections required"
+      }
+    ]
+  },
+  {
+    "number": 2118,
+    "title": "Append consume timestamp to a log",
+    "created_at": "2020-04-20T06:40:17Z",
+    "closed_at": "2020-09-16T17:21:17Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/2118",
+    "body": "Hi,\r\nI am working on replacing logstash shipper with fluentbit.\r\nMy basic architecture is \"logs producer\" -> fluentbit -> kafka -> \"logs shipper\" -> ES.\r\nI would like to add a timestamp for each log when it reads by fluentbit. to be able measure the shipment process.\r\nThe producer sends a timestamp but this is the actual log timestamp and i want to know if there is some lag between producing logs and consuming logs by fluentbit.\r\n\r\nThere is a way to do that ? tried to find online some timestamp appender with no luck.\r\nMaybe something like this : \r\n```\r\n[FILTER]\r\n    Name record_modifier\r\n    Match *\r\n    Record consume_log_timestamp ${date}\r\n```",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/2118/comments",
+    "author": "dorroddorrod",
+    "comments": [
+      {
+        "user": "nokute78",
+        "created_at": "2020-05-03T22:37:51Z",
+        "body": "@dorroddorrod How about using filter_lua ?\r\nLua support os.time() and os.date() functions.\r\n\r\na.conf:\r\n```\r\n[INPUT]\r\n    Name dummy\r\n    dummy {\"test\":\"data\"}\r\n\r\n[FILTER]\r\n    Name lua\r\n    Match *\r\n    script append_time.lua\r\n    call append\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nappend_time.lua:\r\n```lua\r\nfunction append(tag, timestamp, record)\r\n    new_record = record\r\n    new_record[\"filterd_time\"] = os.time()\r\n    new_record[\"filterd_date\"] = os.date()\r\n    return 1, timestamp, new_record\r\nend\r\n```\r\n\r\noutput is\r\n```\r\n[0] dummy.0: [1588545307.793903350, {\"filterd_date\"=>\"Mon May  4 07:35:07 2020\", \"test\"=>\"data\", \"filterd_time\"=>1588545307.000000}]\r\n[1] dummy.0: [1588545308.793119430, {\"filterd_date\"=>\"Mon May  4 07:35:08 2020\", \"test\"=>\"data\", \"filterd_time\"=>1588545308.000000}]\r\n[2] dummy.0: [1588545309.793337106, {\"filterd_date\"=>\"Mon May  4 07:35:09 2020\", \"test\"=>\"data\", \"filterd_time\"=>1588545309.000000}]\r\n[3] dummy.0: [1588545310.793852806, {\"filterd_date\"=>\"Mon May  4 07:35:10 2020\", \"test\"=>\"data\", \"filterd_time\"=>1588545310.000000}]\r\n```"
+      },
+      {
+        "user": "q2dg",
+        "created_at": "2022-01-17T18:19:46Z",
+        "body": "This solution works, but this funcionality is too basic and necessary for being so convoluted. It should be sugared"
+      }
+    ]
+  },
+  {
+    "number": 1977,
+    "title": "td-agent-bit cannot be started when daemon is set to on",
+    "created_at": "2020-02-26T04:20:09Z",
+    "closed_at": "2020-02-27T19:49:59Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1977",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n<!--- A clear and concise description of what the bug is. -->\r\n\r\nThe td-agent-bit cannot be started when daemon is enabled.\r\n\r\n**To Reproduce**\r\n- Steps to reproduce the problem:\r\nThe configure of `td-agent-bit.conf` as follows:\r\n```\r\n[SERVICE]\r\n    Flush     5\r\n    Daemon    on\r\n    Log_Level debug\r\n    Log_File /apprun/fluent-bit/fluent-bit.log\r\n\r\n[INPUT]\r\n    Name cpu\r\n    Tag test\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n    Format json\r\n```\r\nThen start td-agent-bit use systemctl:\r\n```\r\nsystemctl start td-agent-bit\r\n```\r\nFinally, check the service status by `systemctl status td-agent-bit`, and see the following log information:\r\n```\r\n# systemctl status td-agent-bit\r\n● td-agent-bit.service - TD Agent Bit\r\n   Loaded: loaded (/usr/lib/systemd/system/td-agent-bit.service; enabled; vendor preset: disabled)\r\n   Active: failed (Result: start-limit) since Wed 2020-02-26 12:00:26 CST; 1ms ago\r\n  Process: 1309 ExecStart=/opt/td-agent-bit/bin/td-agent-bit -c /etc/td-agent-bit/td-agent-bit.conf (code=exited, status=0/SUCCESS)\r\n Main PID: 1309 (code=exited, status=0/SUCCESS)\r\n\r\nFeb 26 12:00:26 dev02 systemd[1]: td-agent-bit.service holdoff time over, scheduling restart.\r\nFeb 26 12:00:26 dev02 systemd[1]: start request repeated too quickly for td-agent-bit.service\r\nFeb 26 12:00:26 dev02 systemd[1]: Failed to start TD Agent Bit.\r\nFeb 26 12:00:26 dev02 systemd[1]: Unit td-agent-bit.service entered failed state.\r\nFeb 26 12:00:26 dev02 systemd[1]: td-agent-bit.service failed.\r\n```\r\n\r\nWhen the option `Daemon on` is set to `Daemon off`, td-agent-bit start successfully.\r\n\r\n**Expected behavior**\r\n<!--- A clear and concise description of what you expected to happen. -->\r\n\r\nIf the option `Daemon` is set to `off`, it can alse be started successfully.\r\n\r\n**Screenshots**\r\n<!--- If applicable, add screenshots to help explain your problem. -->\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used:  Fluent Bit v1.3.8 (td-agent-bit)\r\n* Configuration:\r\n* Environment name and version (e.g. Kubernetes? What version?):\r\n* Server type and version: \r\n* Operating System and version: Linux dev02 3.10.0-693.5.2.el7.x86_64 #1 SMP Fri Oct 20 20:32:50 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux\r\n* Filters and plugins:\r\n\r\n**Additional context**\r\n<!--- How has this issue affected you? What are you trying to accomplish? -->\r\n<!--- Providing context helps us come up with a solution that is most useful in the real world -->\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1977/comments",
+    "author": "ncepuwanghui",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2020-02-26T04:25:50Z",
+        "body": "the Systemd unit needs Fluent Bit runs as a normal process, not in daemon mode. "
+      }
+    ]
+  },
+  {
+    "number": 1514,
+    "title": "Ubuntu 19.04 packages?",
+    "created_at": "2019-08-14T23:06:11Z",
+    "closed_at": "2019-08-23T22:10:13Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1514",
+    "body": "Hi, are there plans to create an Ubuntu 19.04 package or users stick with the 18.04 ones?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1514/comments",
+    "author": "kiwiz",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-08-23T22:10:04Z",
+        "body": "Ubuntu packages are only available for LTS version at the moment"
+      }
+    ]
+  },
+  {
+    "number": 1401,
+    "title": "Allow regular expression match in `Systemd_Filter`",
+    "created_at": "2019-06-25T00:03:11Z",
+    "closed_at": "2019-07-03T18:10:25Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1401",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\n\r\nI am often writing something like this in my fluent bit configuration:\r\n\r\n```\r\nSystemd_Filter _SYSTEMD_UNIT=x-app.service\r\nSystemd_Filter _SYSTEMD_UNIT=x-worker.service\r\nSystemd_Filter _SYSTEMD_UNIT=x-monitoring.service\r\n..\r\n```\r\n\r\n**Describe the solution you'd like**\r\nIt would be nice to be able to say:\r\n\r\n```\r\nSystemd_Filter _SYSTEMD_UNIT=x-*.service\r\n```\r\n\r\n**Describe alternatives you've considered**\r\n\r\nNA\r\n\r\n**Additional context**\r\n\r\nMay be `fluent-bit` calls out directly to the journalctl libraries which is why this restriction exists. ",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1401/comments",
+    "author": "amitsaha",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-07-03T18:10:00Z",
+        "body": "Implementing that regex approach will provide a performance penalty. Fluent Bit uses systemd libraries to talk to Journal and get the records, that API provides such interfaces to ask only for specific units or other criteria. Providing a regex for \"everything\", means that Fluent Bit will need to ask for \"ALL\" journal data and apply a simple regex for each one. That's not desired, it's better to write more config lines."
+      }
+    ]
+  },
+  {
+    "number": 1266,
+    "title": "Null output does not drop events",
+    "created_at": "2019-04-09T19:27:55Z",
+    "closed_at": "2019-04-10T03:37:23Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1266",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n\r\nCatch-all `null` output does not seem to drop events.\r\n\r\n**To Reproduce**\r\n\r\nUsing a simple configuration with a `tail` input:\r\n\r\n```\r\n[SERVICE]\r\n    Flush 5\r\n    Daemon False\r\n    Log_Level debug\r\n\r\n[INPUT]\r\n    Name tail\r\n\r\n    Path /tmp/test/*.log\r\n\r\n    Path_Key source\r\n    Tag event\r\n\r\n[OUTPUT]\r\n    Name null\r\n    Match *\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nAppending a line to e.g. `/tmp/test/foo.log` results in it appearing in stdout.\r\n\r\n**Expected behavior**\r\n\r\nEverything should be dropped.\r\n\r\n**Your Environment**\r\n\r\n* Version used: 1.0.6\r\n* Operating System and version: CentOS 7",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1266/comments",
+    "author": "jstaffans",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-04-09T19:51:19Z",
+        "body": "Yes, you are seeing logs in the standard output interface because you have an output matching rule to stdout that matches everything. null output plugins do nothing. \r\n\r\nIf you want to discard records consider using a filter. Also, output tag/matching rules work for all of them, not the first match."
+      },
+      {
+        "user": "jstaffans",
+        "created_at": "2019-04-10T03:37:23Z",
+        "body": "Thanks for the explanation!"
+      }
+    ]
+  },
+  {
+    "number": 1210,
+    "title": "What is the reason why \"dyntag\" APIs were deprecated in the current fluent-bit version?",
+    "created_at": "2019-03-19T08:47:53Z",
+    "closed_at": "2019-04-03T23:04:23Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1210",
+    "body": "Hi. Since we had needed \"dyntag\" functionality to fulfill our platform's requirement,  our team used fluent-bit 0.13 in our platform. \r\n\r\nafter we finish the discussion about migration of fluent-bit, we decided to update fluent-bit version from 0.13 to 1.0.4. \r\n\r\nunder the investigation of fluent-bit 1.0.4 source code, i saw all of the dyntag APIs deprecated. but i cant find any clues why \"dyntag APIs were deprecated.\r\n\r\nbased on my code review, i conclude the current fluent-bit can not support dynamic tag functionality, isn't it?\r\n\r\nif right, what is the reason why \"dyntag\" APIs were deprecated in the current fluent-bit version?\r\n\r\nif not, will you have any plan to support dynamic tag functionality at the future version up?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1210/comments",
+    "author": "aniketoss",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-03-27T17:10:24Z",
+        "body": "@aniketoss \r\n\r\na bit of story, dynamic tags were introduced when we had simple/fixed tags in place, so we extended functionality using dynamic tags. Then as the core increase, the Tagging mechanism have to be changed because we had similar functions for static tags and dynamic tags.\r\n\r\nOnce the new Storage system was placed, the caller that ingest data (input plugin on this case) just set the desired Tag, if no Tag is defined the plugin instance name is used. So for short: we have the same flexibility than before but with a clean API. Migration is just to remove the old_flag and use new API to ingest records as before.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 1076,
+    "title": "fluent-bit stops output at 10M",
+    "created_at": "2019-02-02T08:43:20Z",
+    "closed_at": "2020-05-11T19:58:53Z",
+    "labels": [
+      "question",
+      "timeout"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/1076",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nI'm using standard flow, i.e.. input from a file (2.5G in size), filter with a working regex, output to a file. This to test before sending messages into ElasticSearch.\r\nWhatever I choose for output (file, stdout) it stops at 10M and throws :\r\n\r\ncmp => name_cmp=/path_to_file/myfile.log name=/path_to_file/myfile.log real=/path_to_file/myfile.log\r\n\r\n**To Reproduce**\r\n[INPUT]\r\n    Name              tail\r\n    Tag               fg_omega.*\r\n    Path              /path_to_file/*.log\r\n    Mem_Buf_Limit     2G\r\n    Buffer_Chunk_Size 1G\r\n    Buffer_Max_Size   2G\r\n    Refresh_Interval  10\r\n    DB                /path_to_file/fluent-bit.db\r\n[FILTER]\r\n    Name            grep\r\n    Match           *\r\n    Regex           log /.{1,}Start request.{1,}NetEntGameInclusion.action.{1,}/\r\n[OUTPUT]\r\n    Name            file\r\n    Match           *\r\n    Path            /Users/ericvs/Downloads/myfile_export.log\r\n\r\n- Steps to reproduce the problem:\r\nFluent Bit v0.14.9 running on Mac\r\n\r\n**Expected behavior**\r\nI would expect to have all the log entries that get filtered written into the myfile_export.log file\r\n\r\n**Your Environment**\r\n* Version used: Fluent Bit v0.14.9\r\n* Configuration: See above\r\n* Environment name and version (e.g. Kubernetes? What version?): MacOS (testing before putting into Kubernetes)\r\n* Server type and version: MacOS\r\n* Operating System and version: MacOS\r\n* Filters and plugins: grep\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/1076/comments",
+    "author": "EricVS",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-02-05T18:29:00Z",
+        "body": "are you able to reproduce the problem with Fluent Bit v1.0.4 ?"
+      }
+    ]
+  },
+  {
+    "number": 997,
+    "title": "fluent-bit couldn't tail file in docker/pod ",
+    "created_at": "2018-12-26T08:17:52Z",
+    "closed_at": "2019-01-21T21:39:18Z",
+    "labels": [
+      "question",
+      "fixed",
+      "timeout"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/997",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nfluent-bit couldn't keep tail-ing file in docker/pod \r\n\r\nI meet a very weird issue, I just want to tail file log.\r\n\r\nEvery time I run fluent-bit at the first time in  a docker, it works fine. But after that, it can't keep tailing the file contents anymore, event I keep appending many data into that log file!\r\n\r\n**To Reproduce**\r\n- run fluent-bit in a docker/Pod (it works ok under normal Linux host)\r\n- `fluent-bit -i tail -p path=/tmp/foo.log -o stdout -vvv`\r\n- keep appending the log via `echo 'hello' >>/tmp/foo.log`\r\n- Steps to reproduce the problem:\r\n\r\n**Expected behavior**\r\nWe should see the output on the screen.\r\n\r\nAt the startup ,it print out the tail of the file, but after that, it won't output any text data, though I keep appending many many text data(of course, they are line-by-line, not a single line text) to that log file!\r\n\r\nThis happend in Docker, and it works fine in a normal Linux host.\r\n\r\nDid anyone meet the same issue as mine?\r\n**Screenshots**\r\n<!--- If applicable, add screenshots to help explain your problem. -->\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: 1.0.1\r\n* Configuration:\r\n* Environment name and version (e.g. Kubernetes? What version?): run it in Docker\r\n* Server type and version:\r\n* Operating System and version:\r\n* Filters and plugins:\r\n\r\n**Additional context**\r\n<!--- How has this issue affected you? What are you trying to accomplish? -->\r\n<!--- Providing context helps us come up with a solution that is most useful in the real world -->\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/997/comments",
+    "author": "yangsongx",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-01-07T23:27:09Z",
+        "body": "would you please retry with:  docker run -it --log-opt mode=non-blocking .... ?, likely Docker is buffering Fluent Bit output."
+      },
+      {
+        "user": "dkarthi",
+        "created_at": "2019-06-27T23:03:15Z",
+        "body": "The suggested fix \"docker run -it --log-opt mode=non-blocking\" not working for me .."
+      }
+    ]
+  },
+  {
+    "number": 974,
+    "title": "kmsg plugin doesn't work",
+    "created_at": "2018-12-18T14:00:35Z",
+    "closed_at": "2018-12-19T17:18:31Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/974",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nKmsg Plugin doesn't work. I am using fluent/fluent-bit Docker image.\r\nThis command \r\n`fluent-bit -i kmsg -t kernel -o stdout -m '*'`\r\noutputs:\r\nFluent-Bit v0.14.9\r\nCopyright (C) Treasure Data\r\n\r\n[2018/12/18 14:00:23] [ info] [engine] started (pid=18619)\r\n[2018/12/18 14:00:23] [error] [plugins/in_kmsg/in_kmsg.c:287 errno=2] No such file or directory\r\n[2018/12/18 14:00:23] [error] Failed initialize input kmsg.0\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/974/comments",
+    "author": "bbkgh",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-12-19T17:18:15Z",
+        "body": "In a container, not all system resources are exposed, you have to do it manually, e.g:\r\n\r\n```\r\n$ docker run -ti --device=/dev/kmsg fluent/fluent-bit /fluent-bit/bin/fluent-bit -i kmsg -o stdout -f 1\r\n```\r\n\r\nthe above command will expose /dev/kmsg device (which is used by kmsg plugin) and run fluent bit "
+      }
+    ]
+  },
+  {
+    "number": 964,
+    "title": "[File Output] support JSON format",
+    "created_at": "2018-12-15T09:37:39Z",
+    "closed_at": "2018-12-15T19:13:40Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/964",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\nCannot configure `File` output with `JSON` format (`fluentd` can do it via `formatter_json`).\r\n\r\n**Describe the solution you'd like**\r\nAdd support for `JSON` format to `File` output\r\n\r\n**Describe alternatives you've considered**\r\nSwitch to `fluentd`\r\n\r\n**Additional context**\r\n<!--- How has this issue affected you? What are you trying to accomplish? -->\r\n<!--- Providing context helps us come up with a solution that is most useful in the real world -->\r\n<!--- Add any other context or screenshots about the feature request here. -->\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/964/comments",
+    "author": "erks",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-12-15T19:13:40Z",
+        "body": "Json output is supported by 'Format plain' option. Give it a try. "
+      },
+      {
+        "user": "erks",
+        "created_at": "2018-12-15T22:29:57Z",
+        "body": "@edsiper thanks a lot, although, it doesn't seem to be documented."
+      }
+    ]
+  },
+  {
+    "number": 879,
+    "title": "kafka output plugin issue",
+    "created_at": "2018-11-01T13:50:13Z",
+    "closed_at": "2022-01-27T02:14:40Z",
+    "labels": [
+      "question",
+      "waiting-for-user",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/879",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n<!--- A clear and concise description of what the bug is. -->\r\n\r\n**To Reproduce**\r\n- Rubular link if applicable:\r\n- Example log message if applicable:\r\n```\r\n{\"log\":\"YOUR LOG MESSAGE HERE\",\"stream\":\"stdout\",\"time\":\"2018-06-11T14:37:30.681701731Z\"}\r\n```\r\n- Steps to reproduce the problem:\r\n\r\n**Expected behavior**\r\n<!--- A clear and concise description of what you expected to happen. -->\r\n\r\n**Screenshots**\r\n<!--- If applicable, add screenshots to help explain your problem. -->\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: fluentbit 0.13\r\n* Configuration: \r\n* Environment name and version (e.g. Kubernetes? What version?): kubernetes docker\r\n* Server type and version:\r\n* Operating System and version:\r\n* Filters and plugins:\r\n\r\n**Additional context**\r\nI have used the fluentbit 0.13 and nodejs to create a base image. In my own application dockerfile, i used that base image for \"FROM\" command, i create a shell script as the ENTRYPOINT for that dockerfile like this:\r\n/fluent-bit/bin/fluent-bit -i exec -p 'command=npm run server' -o kafka -p brokers=**** -p topics=****\r\nThe problem is that:\r\nAfter the application successfully deployed, application can run without any problems which means the \"npm run server\" script work properly but i can't see any loggers from our kafka.\r\nBut i try to go inside that running docker container and trigger fluentbit command manually then i can see the loggers go to kafka.\r\nCan someone help give some advices on what the potential reason could be for this case?   ",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/879/comments",
+    "author": "stand-for-hope",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-11-01T14:51:48Z",
+        "body": "hi, \r\n\r\nplease provide the following:\r\n\r\n- attach your dockerfile to this github issue\r\n- if you do -o stdout instead of -o kafka do you see anything in docker logs ?\r\n- please try with latest fluent/fluent-bit:0.14.6 image"
+      },
+      {
+        "user": "stand-for-hope",
+        "created_at": "2018-11-02T03:11:14Z",
+        "body": "> hi,\r\n> \r\n> please provide the following:\r\n> \r\n> * attach your dockerfile to this github issue\r\n> * if you do -o stdout instead of -o kafka do you see anything in docker logs ?\r\n> * please try with latest fluent/fluent-bit:0.14.6 image\r\n\r\nHi Edsiper,\r\nThanks for your quick reply. \r\nFor #2 item, i have tried to use stdout, i can see logs on console\r\nFor #3 item, i try to use 0.14.6 to build base image\r\nThis is the sample error message i have from kubernetes:\r\n$ kubectl logs {podname}\r\n[2018/11/02 02:54:09] [ info] [engine] started (pid=1)\r\n[2018/11/02 02:54:09] [debug] [in_exec] interval_sec=1 interval_nsec=0\r\n[2018/11/02 02:54:09] [ info] [out_kafka] brokers='***************************' topics='*******************'\r\n[2018/11/02 02:54:09] [debug] [router] match rule exec.0:kafka.0\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 130\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 289\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 451\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 619\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 661\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 717\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 1436\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 2156\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 2921\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 3088\r\nFluent-Bit v0.13.8\r\nCopyright (C) Treasure Data\r\n\r\n[0] cathy-kafka: [1541127251.610221105, {\"exec\"=>\"[Nest] 13   - 2018-11-2 02:54:11   [NestFactory] Starting Nest application...\"}]\r\n[0] cathy-kafka: [1541127251.673910264, {\"exec\"=>\"[Nest] 13   - 2018-11-2 02:54:11   [InstanceLoader] AppModule dependencies initialized +63ms\"}]\r\n[0] cathy-kafka: [1541127251.674051651, {\"exec\"=>\"[Nest] 13   - 2018-11-2 02:54:11   [InstanceLoader] TypeOrmModule dependencies initialized +1ms\"}]\r\n[0] cathy-kafka: [1541127251.674149722, {\"exec\"=>\"[Nest] 13   - 2018-11-2 02:54:11   [InstanceLoader] AccessControlModule dependencies initialized +0ms\"}]\r\n[0] cathy-kafka: [1541127251.757934422, {\"exec\"=>\"query: START TRANSACTION\"}]\r\n[0] cathy-kafka: [1541127251.772324745, {\"exec\"=>\"query: SELECT DATABASE() AS `db_name`\"}]\r\n[0] cathy-kafka: [1541127251.787789127, {\"exec\"=>\"query: SELECT * FROM `******`\"}]\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 4077\r\n[2018/11/02 02:54:11] [debug] [input exec.0] [mem buf] size = 5292\r\n\r\n\r\nDockerfile:\r\nFROM {base image contains both fluentbit and nodejs}\r\n\r\nWORKDIR /dev-business-server\r\n\r\nCOPY package*.json ./\r\nRUN npm install --production\r\n\r\nCOPY src/ /dev-business-server/src\r\nCOPY tsconfig.json /dev-business-server/tsconfig.json\r\nRUN npm run build\r\n\r\nCOPY fluentbit.kafka.conf /dev-business-server\r\nCOPY fluent-bit-parsers.conf /dev-business-server\r\nEXPOSE 7000\r\nCMD [ \"/fluent-bit/bin/fluent-bit\", \"-c\", \"fluentbit.kafka.conf\"]\r\n\r\n\r\nFluentbit.kafka.conf\r\n[FILTER]\r\n    Name  stdout\r\n    Match cathy-*\r\n[SERVICE]\r\n    Flush        5\r\n    Daemon       Off\r\n    Log_Level    error\r\n    Parsers_File fluent-bit-parsers.conf\r\n[INPUT]\r\n    Name          exec\r\n    Tag           cathy-kafka\r\n    Command       node dist/main.js\r\n    Interval_Sec  1\r\n    Interval_NSec 0\r\n[OUTPUT]\r\n    Name        kafka\r\n    Match       *\r\n    Brokers     {domain}:{port}\r\n    Topics     \t{topicName}\r\n    Retry_Limit    2\r\n    rdkafka.log.connection.close  false\r\n    rdkafka.queue.buffering.max.ms  1000\r\n    rdkafka.queue.buffering.max.messages  10000\r\n    **rdkafka.batch.num.messages  2000**\r\n    rdkafka.compression.codec  none\r\n    rdkafka.request.required.acks  1\r\n\r\n\r\nAnother wired thing is that, if i change to use \"i -cpu \" and keep the rest out put config same, then i can see logs in our kafka server. So from my observation, maybe i miss some necessary configuration for \"exec\" input plugin? \r\nCan you please help point to the right direction? "
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-11-02T16:05:27Z",
+        "body": "In order to speed up the review of this issue please do:\r\n\r\n- __attach__ (not copy paste) your Docker file to this ticket.\r\n- attach your Fluent Bit configuration file\r\n\r\nAlso make sure that your configuration file have the order of sections as: SERVICE, INPUT, FILTER, OUTPUT"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-11-06T16:39:40Z",
+        "body": "ping"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-22T01:48:39Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-27T02:14:39Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 853,
+    "title": "Filter to append tag to record (or at least accessing tag through record_modifier)",
+    "created_at": "2018-10-17T14:59:13Z",
+    "closed_at": "2018-11-27T14:38:50Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/853",
+    "body": "**Is your feature request related to a problem? Please describe.**\r\nHey guys, I am using fluent-bit to stream logs from my docker-swarm (using the fluentd logging-driver). I know, I could use fluentd instead of fluent-bit but I wanted to try out the lightweight option, especially since it is then sending logs to another fluentd instance).\r\nRight now everything is working perfectly fine, except I cannot find a way to append the image name to my records. I did put the image as a tag, which I see when I print my records, but I cannot find a way to dump the tag value into the record in fluentbit.\r\n\r\nMy pipeline is somewhat like this:\r\nforward_input > Filter (json parser) > http_output > Fluentd\r\n\r\n**Describe the solution you'd like**\r\nIt would be great if we could access the tag value within record_modifier and add it to the record. I saw that elasticsearch and kafka output both had an option to dump the tag in the record.\r\n\r\n**Describe alternatives you've considered**\r\nThere is a LUA script doing the same thing within the fluent-bit repo, though I have to admit having to use a LUA script for something so simple if a bit hard to swallow to me.\r\n\r\n**Additional context**\r\nIt is highly possible that this is already possible, but I could not find a solution.",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/853/comments",
+    "author": "Sikwan",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-11-07T22:00:20Z",
+        "body": "There is no generic way at the moment to include the tag as part of the record in the input side. Workarounds:\r\n\r\n- use a Lua script\r\n- If you are using in_tail, set the _path_key_ option which will include the file name being monitored. If the file name contains the image name that could help."
+      }
+    ]
+  },
+  {
+    "number": 802,
+    "title": "filter_parser: wrong timestamp parsing",
+    "created_at": "2018-09-27T12:20:40Z",
+    "closed_at": "2018-09-30T09:17:17Z",
+    "labels": [
+      "bug",
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/802",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nI use fluent-bit for parsing logs from eventrouter which is allocated in Kubernetes cluster v1.8.13. \r\n\r\n**To Reproduce**\r\n- Input logs looks like this\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"UPDATED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/maintenance/events/fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"uid\\\":\\\"c0814efc-c0c1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"34652239\\\",\\\"creationTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"fluent-bit-nrkd5\\\",\\\"uid\\\":\\\"7485af76-c0ba-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"34626284\\\",\\\"fieldPath\\\":\\\"spec.containers{fluent-bit}\\\"},\\\"reason\\\":\\\"BackOff\\\",\\\"message\\\":\\\"Back-off restarting failed container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-1\\\"},\\\"firstTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-25T14:01:42Z\\\",\\\"count\\\":108,\\\"type\\\":\\\"Warning\\\"},\\\"old_event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/maintenance/events/fluent-bit-nrkd5.1557a59f93ed30bd\\\",\\\"uid\\\":\\\"c0814efc-c0c1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"34649881\\\",\\\"creationTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"fluent-bit-nrkd5\\\",\\\"uid\\\":\\\"7485af76-c0ba-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"34626284\\\",\\\"fieldPath\\\":\\\"spec.containers{fluent-bit}\\\"},\\\"reason\\\":\\\"BackOff\\\",\\\"message\\\":\\\"Back-off restarting failed container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-1\\\"},\\\"firstTimestamp\\\":\\\"2018-09-25T12:51:42Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-25T13:50:09Z\\\",\\\"count\\\":98,\\\"type\\\":\\\"Warning\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-25T14:01:42.888266344Z\"}\r\n```\r\n- Fluent bit config\r\n```\r\n[SERVICE]\r\n    Flush             1\r\n    Log_Level         info\r\n    Daemon            off\r\n    Parsers_File      parsers.conf\r\n\r\n[INPUT]\r\n    Name              exec \r\n    Tag               dummy.*\r\n    Command           cat /fluent-bit/etc/test.log\r\n    Interval_Sec      5\r\n    Parser            json_with_decoder\r\n\r\n[FILTER]\r\n    Name              parser\r\n    Match             dummy.*\r\n    Key_name          log\r\n    Parser            simple_json_with_time\r\n\r\n[FILTER]\r\n    Name              stdout\r\n    Match             *\r\n\r\n[OUTPUT]\r\n    Name              null\r\n    Match             *\r\n\r\n```\r\nParsers\r\n```\r\n[PARSER]\r\n    Name              simple_json_with_time\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S %z\r\n    Decode_Field_As   json       log\r\n[PARSER]\r\n    Name              json_with_decoder\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S %z\r\n    Time_Keep         On\r\n    Decode_Field_As   escaped    log              \r\n```\r\n- Output\r\n```\r\n[0] dummy.*: [1475.705376256, {\"verb\"=>\"UPDATED\", \"event\"=>{\"metadata\"=>{\"name\"=>\"fluent-bit-mw775.15576d223f61d4fc\", \"namespace\"=>\"maintenance\", \"selfLink\"=>\"/api/v1/namespaces/maintenance/events/fluent-bit-mw775.15576d223f61d4fc\", \"uid\"=>\"c189410a-c0c1-11e8-836d-000d3a0c1b95\", \"resourceVersion\"=>\"34652236\", \"creationTimestamp\"=>\"2018-09-25T12:51:44Z\"}, \"involvedObject\"=>{\"kind\"=>\"Pod\", \"namespace\"=>\"maintenance\", \"name\"=>\"fluent-bit-mw775\", \"uid\"=>\"07927047-6f03-11e8-98ad-000d3a0c13e0\", \"apiVersion\"=>\"v1\", \"resourceVersion\"=>\"34453649\"}, \"reason\"=>\"FailedSync\", \"message\"=>\"Error syncing pod\", \"source\"=>{\"component\"=>\"kubelet\", \"host\"=>\"k8s-agentpool-18576138-11\"}, \"firstTimestamp\"=>\"2018-09-24T19:36:31Z\", \"lastTimestamp\"=>\"2018-09-25T14:01:41Z\", \"count\"=>93, \"type\"=>\"Warning\"}, \"old_event\"=>{\"metadata\"=>{\"name\"=>\"fluent-[2018/09/25 18:17:14] [ warn] [parser:json_with_decoder] Invalid time format %Y-%m-%dT%H:%M:%S %z for '2018-09-25T14:01:42.888266344Z'.\r\n```\r\n**Expected behavior**\r\nTrue time parsing\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: fluent/fluent-bit:0.14.3\r\n* Docker version: 18.06.1-ce\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/802/comments",
+    "author": "bat9r",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-27T20:14:50Z",
+        "body": "when running the test case I get the following warning:\r\n\r\n```\r\n[2018/09/27 22:09:25] [ warn] [parser:json_with_decoder] Invalid time format %Y-%m-%dT%H:%M:%SZ for '2018-09-25T14:01:42.888266344Z'.\r\n```\r\n\r\nso the time format is not the proper one for the data, I fixed the problem using the following minor change (.%LZ):\r\n\r\n```\r\n[PARSER]\r\n    Name              json_with_decoder\r\n    Format            json\r\n    Time_Key          time\r\n    Time_Format       %Y-%m-%dT%H:%M:%S.%LZ\r\n    Time_Keep         On\r\n    Decode_Field_As   escaped    log \r\n```"
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-09-28T07:50:10Z",
+        "body": "@edsiper Thank you a lot for your answer\r\nThis config is working, but nearby in 50% cases and this is really weird..\r\nExample:\r\n- Working recognition time, but working log parsing\r\n\r\nInput ->\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"ADDED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\\\",\\\"namespace\\\":\\\"qa\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\\\",\\\"uid\\\":\\\"2a879e36-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"35418299\\\",\\\"creationTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"qa\\\",\\\"name\\\":\\\"testdctv180927155952-jessica-watcher-1538120160-blvlz\\\",\\\"uid\\\":\\\"29926a8a-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"35418287\\\",\\\"fieldPath\\\":\\\"spec.containers{jessica-watcher}\\\"},\\\"reason\\\":\\\"Pulled\\\",\\\"message\\\":\\\"Successfully pulled image \\\\\\\"docker.granduke.net/jessica_for_test:1.1.124\\\\\\\"\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-14\\\"},\\\"firstTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-28T07:36:09Z\\\",\\\"count\\\":1,\\\"type\\\":\\\"Normal\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-28T07:36:09.137808957Z\"}\r\n```\r\nOutput ->\r\n```\r\n[0] event.var.log.containers.eventrouter-68bb595fd7-cght4_maintenance_kube-eventrouter-223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e.log: [1538120169.137808957, {\"log\"=&gt;\"{\"verb\":\"ADDED\",\"event\":{\"metadata\":{\"name\":\"testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\",\"namespace\":\"qa\",\"selfLink\":\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-watcher-1538120160-blvlz.15588024fe2f8226\",\"uid\":\"2a879e36-c2f1-11e8-b37c-000d3a0c13e0\",\"resourceVersion\":\"35418299\",\"creationTimestamp\":\"2018-09-28T07:36:09Z\"},\"involvedObject\":{\"kind\":\"Pod\",\"namespace\":\"qa\",\"name\":\"testdctv180927155952-jessica-watcher-1538120160-blvlz\",\"uid\":\"29926a8a-c2f1-11e8-b37c-000d3a0c13e0\",\"apiVersion\":\"v1\",\"resourceVersion\":\"35418287\",\"fieldPath\":\"spec.containers{jessica-watcher}\"},\"reason\":\"Pulled\",\"message\":\"Successfully pulled image \"docker.granduke.net/jessica_for_test:1.1.124\"\",\"source\":{\"component\":\"kubelet\",\"host\":\"k8s-agentpool-18576138-14\"},\"firstTimestamp\":\"2018-09-28T07:36:09Z\",\"lastTimestamp\":\"2018-09-28T07:36:09Z\",\"count\":1,\"type\":\"Normal\"}}\r\n\", \"stream\"=&gt;\"stdout\", \"time\"=&gt;\"2018-09-28T07:36:09.137808957Z\", \"kubernetes\"=&gt;{\"pod_name\"=&gt;\"eventrouter-68bb595fd7-cght4\", \"namespace_name\"=&gt;\"maintenance\", \"pod_id\"=&gt;\"b182c307-c02e-11e8-b37c-000d3a0c13e0\", \"labels\"=&gt;{\"app\"=&gt;\"eventrouter\", \"pod-template-hash\"=&gt;\"2466151983\", \"tier\"=&gt;\"control-plane-addons\"}, \"annotations\"=&gt;{\"kubernetes.io/created-by\"=&gt;\"{\\\"kind\\\":\\\"SerializedReference\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"reference\\\":{\\\"kind\\\":\\\"ReplicaSet\\\",\\\"namespace\\\":\\\"maintenance\\\",\\\"name\\\":\\\"eventrouter-68bb595fd7\\\",\\\"uid\\\":\\\"2a08e70d-bb7f-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"extensions\\\",\\\"resourceVersion\\\":\\\"34156076\\\"}}\\n\"}, \"host\"=&gt;\"k8s-agentpool-18576138-1\", \"container_name\"=&gt;\"kube-eventrouter\", \"docker_id\"=&gt;\"223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e\"}}]\r\n```\r\n-  Working recognition time, but working log parsing\r\n\r\nInput ->\r\n```\r\n{\"log\":\"{\\\"verb\\\":\\\"ADDED\\\",\\\"event\\\":{\\\"metadata\\\":{\\\"name\\\":\\\"testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\\\",\\\"namespace\\\":\\\"qa\\\",\\\"selfLink\\\":\\\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\\\",\\\"uid\\\":\\\"2b16d0c3-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"resourceVersion\\\":\\\"35418309\\\",\\\"creationTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\"},\\\"involvedObject\\\":{\\\"kind\\\":\\\"Pod\\\",\\\"namespace\\\":\\\"qa\\\",\\\"name\\\":\\\"testdctv180927155952-jessica-feeder-1538120160-vmczk\\\",\\\"uid\\\":\\\"29893adc-c2f1-11e8-b37c-000d3a0c13e0\\\",\\\"apiVersion\\\":\\\"v1\\\",\\\"resourceVersion\\\":\\\"35418280\\\",\\\"fieldPath\\\":\\\"spec.containers{jessica-feeder}\\\"},\\\"reason\\\":\\\"Created\\\",\\\"message\\\":\\\"Created container\\\",\\\"source\\\":{\\\"component\\\":\\\"kubelet\\\",\\\"host\\\":\\\"k8s-agentpool-18576138-0\\\"},\\\"firstTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\",\\\"lastTimestamp\\\":\\\"2018-09-28T07:36:10Z\\\",\\\"count\\\":1,\\\"type\\\":\\\"Normal\\\"}}\\n\",\"stream\":\"stdout\",\"time\":\"2018-09-28T07:36:10.082098405Z\"}\r\n```\r\nOutput ->\r\n```\r\n[0] event.var.log.containers.eventrouter-68bb595fd7-cght4_maintenance_kube-eventrouter-223867ef8eb7354933e84b25de098a52d0d2f237c6bde8462530e056369aa65e.log: [0.3565362256, {\"verb\"=&gt;\"ADDED\", \"event\"=&gt;{\"metadata\"=&gt;{\"name\"=&gt;\"testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\", \"namespace\"=&gt;\"qa\", \"selfLink\"=&gt;\"/api/v1/namespaces/qa/events/testdctv180927155952-jessica-feeder-1538120160-vmczk.15588025364eb1d5\", \"uid\"=&gt;\"2b16d0c3-c2f1-11e8-b37c-000d3a0c13e0\", \"resourceVersion\"=&gt;\"35418309\", \"creationTimestamp\"=&gt;\"2018-09-28T07:36:10Z\"}, \"involvedObject\"=&gt;{\"kind\"=&gt;\"Pod\", \"namespace\"=&gt;\"qa\", \"name\"=&gt;\"testdctv180927155952-jessica-feeder-1538120160-vmczk\", \"uid\"=&gt;\"29893adc-c2f1-11e8-b37c-000d3a0c13e0\", \"apiVersion\"=&gt;\"v1\", \"resourceVersion\"=&gt;\"35418280\", \"fieldPath\"=&gt;\"spec.containers{jessica-feeder}\"}, \"reason\"=&gt;\"Created\", \"message\"=&gt;\"Created container\", \"source\"=&gt;{\"component\"=&gt;\"kubelet\", \"host\"=&gt;\"k8s-agentpool-18576138-0\"}, \"firstTimestamp\"=&gt;\"2018-09-28T07:36:10Z\", \"lastTimestamp\"=&gt;\"2018-09-28T07:36:10Z\", \"count\"=&gt;1, \"type\"=&gt;\"Normal\"}}]\r\n```"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-28T08:36:21Z",
+        "body": "thanks, there was a problem in filter_parser, the unitialized timestamp value might generate issues if the time parser fails, fixed by e7332512"
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-09-28T10:19:00Z",
+        "body": "Thanks for your fast reply.\r\nWhen I will have free time, I will try to build and start it in Kubernetes, integrate with elasticsearch/kibana and write post here how it works."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-30T09:17:17Z",
+        "body": "thanks. Closing this issue for now."
+      },
+      {
+        "user": "bat9r",
+        "created_at": "2018-10-03T13:49:12Z",
+        "body": "@edsiper All is works, thank you very much :)"
+      }
+    ]
+  },
+  {
+    "number": 783,
+    "title": "Runtime tests not enabled in CI",
+    "created_at": "2018-09-20T21:15:30Z",
+    "closed_at": "2018-09-24T22:17:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/783",
+    "body": "I notice that only the internal tests are enabled in travisci.\r\nsome of the runtime tests fail.\r\nI've fixed a couple. But before I complete this and send a PR re-enabling, I thought I would ask, is there a reason?\r\n\r\nAlso, the rt-out-td can't pass I think, it relies on some info (td.conf) that is not in the repo. If i fix this, should i change FLB_ALL to not enable td? or should I change the test to 'pass' if that file is not present? Or ?\r\n\r\nany comments?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/783/comments",
+    "author": "donbowman",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-20T21:20:39Z",
+        "body": "@donbowman \r\n\r\nthe thing is that most of runtime tests requires external services but since they are not there in a CI mode they will give false positives. "
+      },
+      {
+        "user": "donbowman",
+        "created_at": "2018-09-20T21:21:32Z",
+        "body": "if i was to make it run the ones that don't need external, would that be ok?\r\ne.g. the kubernetes one doesn't need external.\r\n\r\nwhich ones other than the td one requires external service?"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-20T21:24:23Z",
+        "body": "if they can run locally it should be fine, so it will need to add specific flb-rt-command to be executed. I think the following should be excluded (for now):\r\n\r\n- elasticsearch\r\n- td\r\n- forward\r\n"
+      },
+      {
+        "user": "donbowman",
+        "created_at": "2018-09-20T21:25:39Z",
+        "body": "ok, and i guess the best way is to just add the specific tests to the .travisci file, rather than call 'make test'?\r\n\r\nbecause we still want it to build tests even if they can't run.\r\n\r\nalternatively, i can add e.g. an environment variable 'CI' and if set, the tests that can't work can just bail internally in their main.\r\n"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-20T21:28:15Z",
+        "body": "yes, avoid make test for now, so you do direct calls to the binary tests."
+      },
+      {
+        "user": "donbowman",
+        "created_at": "2018-09-20T22:07:22Z",
+        "body": "some of these other ones seem not to have ever run? e.g. rt-modify and rt-nest are the same cut+paste code, and don't set the set_output callback."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-20T22:17:30Z",
+        "body": "@donbowman if some test is incomplete or not functional, we will let the maintainers of that specific code to address the issues."
+      }
+    ]
+  },
+  {
+    "number": 738,
+    "title": "Pushing Data to Remote Kafka",
+    "created_at": "2018-09-04T10:24:27Z",
+    "closed_at": "2018-10-31T03:10:58Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/738",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n<!--- A clear and concise description of what the bug is. -->\r\n1) Is Kafka Output plugin is discontinued \r\nWhen i tried \r\n\r\n> ./fluent-bit -i cpu -o kafka -p brokers=10.84.118.83:9092 -p topics=logkafka\r\n\r\n**Error: Invalid output target. Aborting**\r\n\r\n2) I wanted to know if we can push data to Remote Kafka Server or not (What i mean is fluent bit is  deployed in Cluster A and i wanted to push data To Remote Server B )\r\n3) If not kafka out plugin then , is rest-kafka plogin will work?\r\n\r\n\r\n**To Reproduce**\r\n- Rubular link if applicable:\r\n- Example log message if applicable:\r\n```\r\n{\"log\":\"YOUR LOG MESSAGE HERE\",\"stream\":\"stdout\",\"time\":\"2018-06-11T14:37:30.681701731Z\"}\r\n```\r\n- Steps to reproduce the problem:\r\n\r\n**Expected behavior**\r\n<!--- A clear and concise description of what you expected to happen. -->\r\n\r\n**Screenshots**\r\n<!--- If applicable, add screenshots to help explain your problem. -->\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used:\r\n* Configuration:\r\n* Environment name and version (e.g. Kubernetes? What version?):\r\n* Server type and version:\r\n* Operating System and version:\r\n* Filters and plugins:\r\n\r\n**Additional context**\r\n<!--- How has this issue affected you? What are you trying to accomplish? -->\r\n<!--- Providing context helps us come up with a solution that is most useful in the real world -->\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/738/comments",
+    "author": "prashantvicky",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-25T18:29:36Z",
+        "body": "If you don't have Kafka output plugin available means it was not enabled/included at build time (if you built Fluent Bit from scratch).\r\n\r\nAll td-agent-bit packages (ubuntu/debian/centos) have Kafka support. When building from scratch append the option -DFLB_OUT_KAFKA=On to your cmake arguments."
+      }
+    ]
+  },
+  {
+    "number": 728,
+    "title": "Fluent-bit can't collect log normally when the number of log files is too large.",
+    "created_at": "2018-08-27T13:15:41Z",
+    "closed_at": "2022-01-27T02:14:28Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/728",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\nI collect kvm vm boot logs using fluent-bit. After creating and deleting vm automated test for a long time in the environment, the number of log files is too large, this causes fluent-bit can't collect log normally.\r\n\r\n**Screenshots**\r\n```\r\n[root@node-1 ~]# ls -l /var/log/libvirt/qemu/ | wc -l\r\n60875\r\n[root@node-1 ~]# ulimit -a\r\ncore file size          (blocks, -c) unlimited\r\ndata seg size           (kbytes, -d) unlimited\r\nscheduling priority             (-e) 0\r\nfile size               (blocks, -f) unlimited\r\npending signals                 (-i) 127700\r\nmax locked memory       (kbytes, -l) 64\r\nmax memory size         (kbytes, -m) unlimited\r\nopen files                      (-n) 102400\r\npipe size            (512 bytes, -p) 8\r\nPOSIX message queues     (bytes, -q) 819200\r\nreal-time priority              (-r) 0\r\nstack size              (kbytes, -s) 8192\r\ncpu time               (seconds, -t) unlimited\r\nmax user processes              (-u) 102400\r\nvirtual memory          (kbytes, -v) unlimited\r\nfile locks                      (-x) unlimited\r\n```\r\n\r\n**Your Environment**\r\n* Version used:\r\n  - fluent-bit: 0.12.14\r\n* Configuration:\r\n```\r\n[INPUT]\r\n    Buffer_Max_Size 2MB\r\n    DB /var/log/flb_host.db\r\n    DB.Sync OFF\r\n    Mem_Buf_Limit 5MB\r\n    Name tail\r\n    Path /var/log/libvirt/qemu/*.log\r\n    Tag ${HOSTNAME}.host.*\r\n\r\n[OUTPUT]\r\n    Host ${FLUENTD_HOST}\r\n    Match *\r\n    Name forward\r\n    Port ${FLUENTD_PORT}\r\n```\r\n* Environment name and version (e.g. Kubernetes? What version?):\r\n  - Kubernetes v1.9.8\r\n* Operating System and version:\r\n  - CentOS 7.4.1708\r\n* Filters and plugins:\r\n  - Input Plugin: Tail\r\n  - Output Plugin: Forward\r\n\r\nStrangely, there is no any relevant abnormal log output. I have temporarily cancelled the collection of vm boot logs. What should I do next? Sorry to bother you.\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/728/comments",
+    "author": "hoperays",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-03T19:02:45Z",
+        "body": "how many log files do you have there and what's the average size of those files ?"
+      },
+      {
+        "user": "hoperays",
+        "created_at": "2018-09-04T06:01:57Z",
+        "body": "@edsiper This is one of the nodes:\r\n```\r\n[root@node-1 ~]# ls -l /var/log/libvirt/qemu/ | wc -l\r\n60875\r\n[root@node-1 ~]# ls -lh /var/log/libvirt/qemu/\r\n......\r\n-rw------- 1 root root 2.5K 8月  27 13:57 instance-00000003.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-0000000d.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-00000016.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-00000019.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-0000001c.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-00000022.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-0000002e.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-00000031.log\r\n-rw------- 1 root root 2.5K 8月  27 13:58 instance-00000037.log\r\n......\r\n```"
+      },
+      {
+        "user": "userguy",
+        "created_at": "2019-03-28T13:25:32Z",
+        "body": "Any update on this ???"
+      },
+      {
+        "user": "jstaffans",
+        "created_at": "2019-05-29T10:22:16Z",
+        "body": "@edsiper, is there some documentation on how file handles are managed by Fluent Bit? Are handles released at some point, even if the log file is still there? "
+      },
+      {
+        "user": "userguy",
+        "created_at": "2019-06-10T09:59:14Z",
+        "body": "In My case the kafka client give this error and does not resume after retry limit the logs sending is paused . \r\nI think i have to explore other tools to send data to kafka "
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-22T01:48:26Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-27T02:14:27Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      }
+    ]
+  },
+  {
+    "number": 724,
+    "title": "Integrating Fluent-bit into existing CMake project",
+    "created_at": "2018-08-23T20:40:31Z",
+    "closed_at": "2022-01-27T02:14:27Z",
+    "labels": [
+      "question",
+      "Stale"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/724",
+    "body": "Hello, I am getting the following error when trying to add fluent-bit directory to my existing CMake build:\r\n\r\n```\r\nCMake Error at cots/fluentbit/fluent-bit/lib/monkey/mk_core/CMakeLists.txt:117 (configure_file):\r\n configure_file attempted to configure a file:\r\n /usr/cots/fluentbit/fluent-bit/lib/monkey/mk_core/../include/monkey/mk_core/mk_core_info.h\r\n into a source directory.\r\n\r\n-- Configuring incomplete, errors occurred!\r\n```\r\n\r\nThe `/usr/cots/` path is located on my Docker Alpine image used for my container build. I simply add the line `add_subdirectory (cots)` to my top-level CMakeLists.txt. Is this not enough for CMake to build it properly? Thank you!",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/724/comments",
+    "author": "UkrainianProgrammer",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-09-03T19:03:59Z",
+        "body": "it can be integrated, would you please provide me a simple structure of directories and CMakeLists.txt that you are using to reproduce the problem ?\r\n\r\nnote: Alpine linux is not supported by Fluent Bit (musl and other compatibility issues)"
+      },
+      {
+        "user": "UkrainianProgrammer",
+        "created_at": "2018-09-03T22:58:51Z",
+        "body": "Thanks for helping on this one, @edsiper. Here is my CMakeLists.txt:\r\n```\r\ncmake_minimum_required (VERSION 3.0.0)\r\n\r\ninclude (ExternalProject)\r\nexternalproject_add (fluent-bit\r\n  PREFIX            ${CMAKE_CURRENT_BINARY_DIR}/fluent-bit\r\n  URL               \"${CMAKE_CURRENT_SOURCE_DIR}/fluent-bit\"\r\n  BUILD_IN_SOURCE   1\r\n  BUILD_ALWAYS      1\r\n  BUILD_COMMAND     make\r\n  INSTALL_COMMAND   make install\r\n)\r\n```\r\nThe folder structure is as follows: `code/cots/fluentbit/fluent-bit`. The CMakeLists.txt from above resides in fluent-bit folder and I keep calling `add_subdirectory()` as I go up in each folder's CMakeLists.txt. The code above works but my question is: can we integrate Fluent-bit without using `externalproject_add()`? Thanks again."
+      },
+      {
+        "user": "robweiss",
+        "created_at": "2019-06-19T18:02:07Z",
+        "body": "Has any progress been made on this?"
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-22T01:48:25Z",
+        "body": "This issue is stale because it has been open 90 days with no activity. Remove stale label or comment or this will be closed in 5 days. Maintainers can add the `exempt-stale` label."
+      },
+      {
+        "user": "github-actions[bot]",
+        "created_at": "2022-01-27T02:14:26Z",
+        "body": "This issue was closed because it has been stalled for 5 days with no activity."
+      },
+      {
+        "user": "Minipada",
+        "created_at": "2022-07-17T18:23:05Z",
+        "body": "Still nothing on this?"
+      }
+    ]
+  },
+  {
+    "number": 714,
+    "title": "Warning for TimeFormat even though it is correct",
+    "created_at": "2018-08-16T09:55:55Z",
+    "closed_at": "2018-08-24T12:02:51Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/714",
+    "body": "the log for fluent-bit is full of warning about invalid time format , but checking the date received and format it seems it is correct .\r\n\r\nI could not tell why it is doing so \r\n\r\n```\r\n    [PARSER]\r\n        Name        springboot\r\n        Format      regex\r\n        Regex       /^(?<date>[0-9]+-[0-9]+-[0-9]+\\s+[0-9]+:[0-9]+:[0-9]+.[0-9]+)\\s+\\[(?<user_name>.*)\\]\\s+(?<log_level>[Aa]lert|ALERT|[Tt]race|TRACE|[Dd]ebug|DEBUG|[Nn]otice|NOTICE|[Ii]nfo|INFO|[Ww]arn?(?:ing)?|WARN?(?:ING)?|[Ee]rr?(?:or)?|ERR?(?:OR)?|[Cc]rit?(?:ical)?|CRIT?(?:ICAL)?|[Ff]atal|FATAL|[Ss]evere|SEVERE|EMERG(?:ENCY)?|[Ee]merg(?:ency)?)\\s+(?<pid>[0-9]+)\\s+---\\s+\\[(?<thread>.*)\\]\\s+(?<class_name>.*)\\s+:\\s+(?<message>.*)$/\r\n        Time_Key    date\r\n        Time_Format %Y-%m-%d %H:%M:%S.$L\r\n```\r\n\r\n```\r\n[2018/08/11 15:02:30] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:30.975'.\r\n[2018/08/11 15:02:33] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:33.367'.\r\n[2018/08/11 15:02:34] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:34.535'.\r\n[2018/08/11 15:02:36] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:36.598'.\r\n[2018/08/11 15:02:37] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:37.900'.\r\n[2018/08/11 15:02:39] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:39.347'.\r\n[2018/08/11 15:02:41] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:41.120'.\r\n[2018/08/11 15:02:42] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:42.420'.\r\n[2018/08/11 15:02:42] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:42.617'.\r\n[2018/08/11 15:02:45] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:45.014'.\r\n[2018/08/11 15:02:46] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:46.981'.\r\n[2018/08/11 15:02:47] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-11 15:02:47.722'.\r\n```",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/714/comments",
+    "author": "shahbour",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-08-17T01:53:58Z",
+        "body": "would you please supply a full example of a log line for the case in question ?"
+      },
+      {
+        "user": "shahbour",
+        "created_at": "2018-08-17T07:04:51Z",
+        "body": "Here is a sample of my logs\r\n\r\n```\r\n2018-08-17 06:44:58.865 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:45:21.298 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:46:59.576 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:47:21.699 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:49:00.256 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:49:22.049 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:51:00.932 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:51:23.370 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:53:01.693 [               ]  INFO 1 --- [ask-scheduler-1] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n2018-08-17 06:53:24.678 [               ]  INFO 1 --- [ask-scheduler-8] c.t.config.CustomImapMailReceiver        : attempting to receive mail from folder [INBOX]\r\n```\r\n\r\nthis is the output of fluentbit\r\n\r\n```\r\n[2018/08/17 06:49:01] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n[2018/08/17 06:49:01] [debug] [dyntag tail.0] 0x7fd0c26ac360 destroy (tag=kube.var.log.containers.email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log, bytes=967)\r\n[2018/08/17 06:49:22] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n[2018/08/17 06:49:22] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-17 06:49:22.049'.\r\n[2018/08/17 06:49:22] [debug] [input tail.0] [mem buf] size = 967\r\n[2018/08/17 06:49:22] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log read=232 lines=1\r\n[2018/08/17 06:49:22] [debug] [task] created task=0x7fd0c265b540 id=0 OK\r\n[2018/08/17 06:49:23] [debug] [out_es] HTTP Status=200\r\n[2018/08/17 06:49:23] [debug] [out_es Elasticsearch response\r\n{\"took\":9,\"errors\":false,\"items\":[{\"index\":{\"_index\":\"logstash-2018.08.17\",\"_type\":\"flb_type\",\"_id\":\"UJilRmUB3KhquhqBTbU6\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":736,\"_primary_term\":1,\"status\":201}}]}\r\n[2018/08/17 06:49:23] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n[2018/08/17 06:49:23] [debug] [dyntag tail.0] 0x7fd0c26ac360 destroy (tag=kube.var.log.containers.email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log, bytes=967)\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n[2018/08/17 06:51:00] [ warn] [parser:springboot] Invalid time format %Y-%m-%d %H:%M:%S.$L for '2018-08-17 06:51:00.932'.\r\n[2018/08/17 06:51:00] [debug] [input tail.0] [mem buf] size = 967\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log read=232 lines=1\r\n[2018/08/17 06:51:00] [debug] [task] created task=0x7fd0c265b540 id=0 OK\r\n[2018/08/17 06:51:01] [debug] [out_es] HTTP Status=200\r\n[2018/08/17 06:51:01] [debug] [out_es Elasticsearch response\r\n{\"took\":6,\"errors\":false,\"items\":[{\"index\":{\"_index\":\"logstash-2018.08.17\",\"_type\":\"flb_type\",\"_id\":\"0ZimRmUB3KhquhqBzLcL\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":801,\"_primary_term\":1,\"status\":201}}]}\r\n[2018/08/17 06:51:01] [debug] [task] destroy task=0x7fd0c265b540 (task_id=0)\r\n```\r\n\r\nAs you can see it did complain about `2018-08-17 06:51:00.932` while the other did work, as if it is randomly or on something that I can't catch, it is possible to make fluent-bit log all the message when it is complaining about parsing time instead of just the datetime part\r\n\r\nThe only thing i notice is that it directly come after \r\n```\r\n[2018/08/17 06:51:00] [debug] [in_tail] file=/var/log/containers/email-fetcher-sell-7d978c4c4c-57w5q_default_email-fetcher-sell-4e8181c2be47c04dc4fba19b481350154a3d5dd8a991c84fa03e8dcad8d53245.log event\r\n```\r\n\r\nChecking Kibana and ES I see the message above already in database and I am able to view it "
+      },
+      {
+        "user": "nokute78",
+        "created_at": "2018-08-20T11:29:04Z",
+        "body": "Would you try this?\r\n$L -> %L\r\n\r\n```diff\r\n--- old.conf\t2018-08-20 20:27:39.328020968 +0900\r\n+++ new.conf\t2018-08-20 20:27:34.599518399 +0900\r\n@@ -3,4 +3,4 @@\r\n         Format      regex\r\n         Regex       /^(?<date>[0-9]+-[0-9]+-[0-9]+\\s+[0-9]+:[0-9]+:[0-9]+.[0-9]+)\\s+\\[(?<user_name>.*)\\]\\s+(?<log_level>[Aa]lert|ALERT|[Tt]race|TRACE|[Dd]ebug|DEBUG|[Nn]otice|NOTICE|[Ii]nfo|INFO|[Ww]arn?(?:ing)?|WARN?(?:ING)?|[Ee]rr?(?:or)?|ERR?(?:OR)?|[Cc]rit?(?:ical)?|CRIT?(?:ICAL)?|[Ff]atal|FATAL|[Ss]evere|SEVERE|EMERG(?:ENCY)?|[Ee]merg(?:ency)?)\\s+(?<pid>[0-9]+)\\s+---\\s+\\[(?<thread>.*)\\]\\s+(?<class_name>.*)\\s+:\\s+(?<message>.*)$/\r\n         Time_Key    date\r\n-        Time_Format %Y-%m-%d %H:%M:%S.$L\r\n+        Time_Format %Y-%m-%d %H:%M:%S.%L\r\n\r\n```"
+      },
+      {
+        "user": "ProFfeSsoRr",
+        "created_at": "2018-08-20T13:50:11Z",
+        "body": "Same problem for crio parser:\r\nTime_Format %Y-%m-%dT%H:%M:%S.%N%:z in config.\r\nTrying \"date +%Y-%m-%dT%H:%M:%S.%N%:z\" in my shell and see time as is in my logs."
+      },
+      {
+        "user": "shahbour",
+        "created_at": "2018-08-20T14:37:19Z",
+        "body": "Ok, I just changed the configuration to %, I don't recall from where I got the $.\r\n\r\nWill give it some time before confirming if it worked "
+      },
+      {
+        "user": "shahbour",
+        "created_at": "2018-08-24T12:02:51Z",
+        "body": "Seems it is working perfectly now, Sorry for that mistake but I don't know from where I did this copy paste."
+      }
+    ]
+  },
+  {
+    "number": 696,
+    "title": "Option \"Parser\" is not ignored when \"Multiline\" is ON",
+    "created_at": "2018-07-29T07:01:37Z",
+    "closed_at": "2018-08-21T11:29:13Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/696",
+    "body": "## Bug Report\r\n\r\n**Describe the bug**\r\n\r\n**config.conf**\r\n```ini\r\n[SERVICE]\r\n    Parsers_File    parsers.conf\r\n\r\n[INPUT]\r\n    Name              tail\r\n    Path              ./demo.log\r\n    Parser            demo\r\n    Multiline         On\r\n    Parser_Firstline  demo\r\n    Parser_1          demo_1\r\n\r\n[OUTPUT]\r\n    Name   stdout\r\n    Match  *\r\n```\r\n\r\n**parsers.conf**\r\n\r\n```ini\r\n[PARSER]\r\n    Name        demo\r\n    Format      regex\r\n    Regex       ^\\d+\\s(?<level>\\w{3})\\s(?<time>\\w{3}\\s\\d+\\s\\d+:\\d+:\\d+\\.\\d+)\\s(?<message>.*)\r\n    Time_Key    time\r\n    Time_Format %b %d %H:%M:%S.%L\r\n    Time_Keep   On\r\n\r\n[PARSER]\r\n    Name        demo_1\r\n    Format      regex\r\n    Regex       ^\\s+.*\r\n```\r\n\r\n**demo.log**\r\n```log\r\n1442 INF Jul 28 17:30:01.035659 AAAAAAA\r\n1444 NOT Jul 28 17:30:01.263385 BBBBBBB\r\n\tMULTILINE\r\n1445 NOT Jul 28 17:30:01.263741 CCCCCCC\r\n\tMULTILINE\r\n1446 NOT Jul 28 17:30:01.786663 DDDDDDD\r\n\tMULTILINE\r\n1447 NOT Jul 28 17:30:02.199434 EEEEEEE\r\n1448 NOT Jul 28 17:30:02.628430 FFFFFFF\r\n1449 NOT Jul 28 17:30:03.020809 GGGGGGG\r\n1450 NOT Jul 28 17:30:03.423898 HHHHHHH\r\n1452 NOT Jul 28 17:30:05.307595 IIIIIII\r\n1451 NOT Jul 28 17:30:03.795889 JJJJJJJ\r\n```\r\n\r\n**To Reproduce**\r\n- run `fluent-bit -c config.conf`\r\n\r\n```\r\nFluent-Bit v0.13.5\r\nCopyright (C) Treasure Data\r\n\r\n[2018/07/29 06:57:03] [ info] [engine] started (pid=251)\r\n[2018/07/29 06:57:03] [ warn] [in_tail] the 'Parser demo' config is omitted in Multiline mode\r\n\"}] tail.0: [1532799001.035659000, {\"level\"=>\"INF\", \"time\"=>\"Jul 28 17:30:01.035659\", \"message\"=>\"AAAAAAA\r\n\"}] tail.0: [1532799001.263384999, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.263385\", \"message\"=>\"BBBBBBB\r\n\"}] tail.0: [1532847423.102942400, {\"log\"=>\"    MULTILINE\r\n\"}] tail.0: [1532799001.263741000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.263741\", \"message\"=>\"CCCCCCC\r\n\"}] tail.0: [1532847423.102952400, {\"log\"=>\"    MULTILINE\r\n\"}] tail.0: [1532799001.786663000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.786663\", \"message\"=>\"DDDDDDD\r\n\"}] tail.0: [1532847423.102960600, {\"log\"=>\"    MULTILINE\r\n\"}] tail.0: [1532799002.199434000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:02.199434\", \"message\"=>\"EEEEEEE\r\n\"}] tail.0: [1532799002.628430000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:02.628430\", \"message\"=>\"FFFFFFF\r\n\"}] tail.0: [1532799003.020809000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.020809\", \"message\"=>\"GGGGGGG\r\n\"}]] tail.0: [1532799003.423898000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.423898\", \"message\"=>\"HHHHHHH\r\n\"}]] tail.0: [1532799005.307595000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:05.307595\", \"message\"=>\"IIIIIII\r\n\"}]] tail.0: [1532799003.795889000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.795889\", \"message\"=>\"JJJJJJJ\r\n```\r\n\r\nThe **MULTILINE** log is not appended to the previous log. But if you remove the line`Parser            demo` it will work as expected.\r\n\r\n```log\r\nluent-Bit v0.13.5\r\nCopyright (C) Treasure Data\r\n\r\n[2018/07/29 07:00:06] [ info] [engine] started (pid=253)\r\n\"}] tail.0: [1532799001.035659000, {\"level\"=>\"INF\", \"time\"=>\"Jul 28 17:30:01.035659\", \"message\"=>\"AAAAAAA\r\n[1] tail.0: [1532799001.263384999, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.263385\", \"message\"=>\"BBBBBBB\r\n\"}]     MULTILINE\r\n[2] tail.0: [1532799001.263741000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.263741\", \"message\"=>\"CCCCCCC\r\n\"}]     MULTILINE\r\n[3] tail.0: [1532799001.786663000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:01.786663\", \"message\"=>\"DDDDDDD\r\n\"}]     MULTILINE\r\n\"}] tail.0: [1532799002.199434000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:02.199434\", \"message\"=>\"EEEEEEE\r\n\"}] tail.0: [1532799002.628430000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:02.628430\", \"message\"=>\"FFFFFFF\r\n\"}] tail.0: [1532799003.020809000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.020809\", \"message\"=>\"GGGGGGG\r\n\"}] tail.0: [1532799003.423898000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.423898\", \"message\"=>\"HHHHHHH\r\n\"}] tail.0: [1532799005.307595000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:05.307595\", \"message\"=>\"IIIIIII\r\n\"}] tail.0: [1532799003.795889000, {\"level\"=>\"NOT\", \"time\"=>\"Jul 28 17:30:03.795889\", \"message\"=>\"JJJJJJJ\r\n```\r\n\r\n**Your Environment**\r\n<!--- Include as many relevant details about the environment you experienced the bug in -->\r\n* Version used: v0.13.5",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/696/comments",
+    "author": "JavaCS3",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-08-06T16:45:36Z",
+        "body": "That's the default and expected behavior: if multiline mode is enabled, the only parsers registered are the ones that start with Parser_, e.g:\r\n\r\n- Parser_Firstline\r\n- Parser_1\r\n- Parser_2\r\n- Parser_N"
+      },
+      {
+        "user": "JavaCS3",
+        "created_at": "2018-08-07T05:18:16Z",
+        "body": "@edsiper But why `Parser demo` will affect the result when `Multiline` is on? I don't understand how multiline is worked.\r\n\r\nIn my opinion, I guess fluent-bit will use `Parser_Firstline` to decide whether a line of log is the first line of multiline log. If not matched, then it is multiline content and will use `Parser_1`, `Parser_2` ... and append then to a buffer. If matched, it will flush that buffer, and begin the next cycle."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-08-07T18:30:19Z",
+        "body": "If a Parser is defined, Multiline routine is not processed (despite is On) . I guess the right fix is to trigger a warning about that situation  to avoid confusion. I've pushed the following fix:\r\n\r\n- 7eb7aeed\r\n\r\nWhen  Multiline is On, if a line matched Parser_Firstline, continuation lines will be matched against Parser_N parsers (just if a previous Parser_Firstline match exists)"
+      }
+    ]
+  },
+  {
+    "number": 659,
+    "title": "mem_buf_limit for systemd input ?",
+    "created_at": "2018-06-27T04:54:37Z",
+    "closed_at": "2019-12-10T23:42:45Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/659",
+    "body": "Tail plugin support \"mem_buf_limit\" for dealing with backpressure. Is this available for systemd input? if not, is there a way to control backpressure for this input?\r\n\r\nThanks.",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/659/comments",
+    "author": "Misterhex",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-06-27T15:49:41Z",
+        "body": "mem_buf_limit is a restriction applied to each input plugin that define that specific property. When a limit is reached (pause) or when a plugin can continue ingesting data (resume) is handled by specific callbacks. in_systemd supports that feature."
+      },
+      {
+        "user": "Misterhex",
+        "created_at": "2018-08-10T01:40:00Z",
+        "body": "Thanks for helping, it seems the behaviour of `Mem_Buf_Limit` doesn't apply to this plugin still. \r\n\r\nIt's seems memory usage would keep surging up, i am not sure if this is a memory leak issue or the backpressure mechanism (Mem_Buf_Limit) was not kicking in.\r\n\r\nI am running this on openshift kubernetes:\r\nfluentbit/fluentbit:0.13.7\r\n\r\nmy configuration is as follows:\r\n\r\n```\r\n[SERVICE]\r\n    Flush         1\r\n    Log_Level     info\r\n    Daemon        off\r\n    HTTP_Server   On\r\n    HTTP_Listen   0.0.0.0\r\n    HTTP_Port     2021\r\n\r\n@INCLUDE input-systemd.conf\r\n@INCLUDE output-systemd-forward.conf\r\n\r\n==== input-systemd.conf ====\r\n[INPUT]\r\n    Name            systemd\r\n    Path            /var/log/journal\r\n    Tag             systemd\r\n    Systemd_Filter  _SYSTEMD_UNIT=atomic-openshift-master-api.service\r\n    Systemd_Filter  _SYSTEMD_UNIT=atomic-openshift-master-controllers.service\r\n    Systemd_Filter  _SYSTEMD_UNIT=atomic-openshift-node.service\r\n    Systemd_Filter  _SYSTEMD_UNIT=etcd_container.service\r\n    Systemd_Filter  _SYSTEMD_UNIT=docker.service\r\n    Systemd_Filter  _SYSTEMD_UNIT=systemd-machined.service\r\n    DB              /var/log/systemd.db\r\n    Mem_Buf_Limit  5MB\r\n\r\n====output-systemd-forward.conf====\r\n[OUTPUT]\r\n    Name          forward\r\n    Match         systemd\r\n    Host          ${FORWARD_HOST}\r\n    Port          ${FORWARD_SYSTEMD_PORT}\r\n    Retry_Limit   False\r\n \r\n$ oc adm top pod --containers\r\nPOD                              NAME                 CPU(cores)   MEMORY(bytes)\r\nfluent-bit-cfz8t                 fluent-bit-systemd   22m          189Mi\r\nfluent-bit-k4ghj                 fluent-bit-systemd   992m         295Mi\r\n```\r\n\r\nThanks for helping"
+      },
+      {
+        "user": "Misterhex",
+        "created_at": "2018-08-13T03:43:45Z",
+        "body": "@edsiper , would you be able to help verify if my config is correct? thanks and much appreciated!\r\n\r\nNot sure if this is related to #693 "
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2019-12-10T23:42:45Z",
+        "body": "Systemd plugin has been refactored since then and we have not seen any issue as this one reported.\r\n\r\nPlease upgrade to the last v1.3 release, if the issue persist we can re-open the ticket."
+      }
+    ]
+  },
+  {
+    "number": 613,
+    "title": "How to specify time for TCP input",
+    "created_at": "2018-06-01T17:31:41Z",
+    "closed_at": "2020-05-15T19:12:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/613",
+    "body": "Is it possible to specify a time field for TCP input? I have attempted to do so using a field named 'time' with a format matching the default JSON parser's time pattern. ",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/613/comments",
+    "author": "MikeEdgar",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-06-01T22:26:05Z",
+        "body": "TCP input plugin don't support a time key it self, but what you can do is to add a _time_ key and then use filter parser to do the proper timing adjustment, it's not the right solution but a workaround. "
+      }
+    ]
+  },
+  {
+    "number": 590,
+    "title": "input tail not work in centos 6.3",
+    "created_at": "2018-05-14T11:55:32Z",
+    "closed_at": "2019-12-23T22:25:10Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/590",
+    "body": "in centos 6.3：\r\nfluent-bit -i tail -p path=/var/log/syslog -o stdout\r\necho \"something\" >> /var/log/syslog\r\nnothing appear in the stdout\r\n\r\nin centos7\r\nfluent-bit -i tail -p path=/var/log/syslog -o stdout\r\necho \"something\" >> /var/log/syslog\r\nsomething appear in the stdout\r\n\r\nwhy input tail not work in centos6.3? how to let it work?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/590/comments",
+    "author": "chenshibin-vip",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2019-12-23T22:25:10Z",
+        "body": "For the moment we support Centos >= 7"
+      }
+    ]
+  },
+  {
+    "number": 572,
+    "title": "Nanoseconds missing when using forward input",
+    "created_at": "2018-04-24T19:41:21Z",
+    "closed_at": "2018-04-24T21:10:46Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/572",
+    "body": "Hello,\r\n\r\nI have been struggling with a curious situation where Docker container logs miss the nanosecond piece of timestamp when using `in_forward`. \r\n\r\n#### Failling scenario\r\n\r\n##### fluent-bit.conf:\r\n```\r\n[SERVICE]\r\n    Flush 1\r\n    Daemon Off\r\n    Log_Level info\r\n\r\n[INPUT]\r\n    Name forward\r\n    Host 0.0.0.0\r\n    Port 24224\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nWhen running a Docker image with this setup, the nanosecond precision is converted to 0s:\r\n```\r\n[0] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"frame=51\"}]\r\n[1] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"fps=0.0\"}]\r\n[2] e667dc543a03: [1524598344.000000000, {\"log\"=>\"stream_0_0_q=0.0\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\"}]\r\n[3] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"bitrate=   0.2kbits/s\"}]\r\n[4] e667dc543a03: [1524598344.000000000, {\"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"total_size=48\"}]\r\n[5] e667dc543a03: [1524598344.000000000, {\"log\"=>\"out_time_ms=1920000\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\", \"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\"}]\r\n[6] e667dc543a03: [1524598344.000000000, {\"container_name\"=>\"/determined_poincare\", \"source\"=>\"stdout\", \"log\"=>\"out_time=00:00:01.920000\", \"container_id\"=>\"e667dc543a034403e743a4b715aa345c3ab36bc5211696ad423c2be09643b230\"}]\r\n```\r\n\r\nDuring several tests, I've noticed that if I change `in_forward` to `in_tail` and point the path to the actual container log (i.e. without using `--log-driver fluentd` option) the precision is there:\r\n\r\n#### Working scenario\r\n\r\n##### fluent-bit.conf:\r\n```\r\n[SERVICE]\r\n    Flush 1\r\n    Daemon Off\r\n    Log_Level info\r\n\r\n[INPUT]\r\n    Name tail\r\n    Path /var/lib/docker/containers/<DOCKER_CONTAINER_ID>/*.log\r\n\r\n[OUTPUT]\r\n    Name stdout\r\n    Match *\r\n```\r\n\r\nWith this config, nanosecond precision is printed as expected:\r\n\r\n```\r\n[0] tail.0: [1524598700.422911026, {\"log\"=>\"{\"log\":\"[mp4 @ 0x7f102d2730a0] Using AVStream.codec to pass codec parameters to muxers is deprecated, use AVStream.codecpar instead.\\n\",\"stream\":\"stderr\",\"time\":\"2018-04-24T19:37:47.267283855Z\"}\"}]\r\n[1] tail.0: [1524598700.422927803, {\"log\"=>\"{\"log\":\"frame=51\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795611724Z\"}\"}]\r\n[2] tail.0: [1524598700.422929512, {\"log\"=>\"{\"log\":\"fps=0.0\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795682825Z\"}\"}]\r\n[3] tail.0: [1524598700.422930957, {\"log\"=>\"{\"log\":\"stream_0_0_q=0.0\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795689101Z\"}\"}]\r\n[4] tail.0: [1524598700.422932435, {\"log\"=>\"{\"log\":\"bitrate=   0.2kbits/s\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795694113Z\"}\"}]\r\n[5] tail.0: [1524598700.422933923, {\"log\"=>\"{\"log\":\"total_size=48\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795698881Z\"}\"}]\r\n[6] tail.0: [1524598700.422935424, {\"log\"=>\"{\"log\":\"out_time_ms=1920000\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795703697Z\"}\"}]\r\n[7] tail.0: [1524598700.422936884, {\"log\"=>\"{\"log\":\"out_time=00:00:01.920000\\n\",\"stream\":\"stdout\",\"time\":\"2018-04-24T19:37:47.795708405Z\"}\"}]\r\n```\r\n\r\nIs there anything I'm missing? I am currently running fluent-bit v0.12.18 in a Docker container.\r\n\r\nThanks in advance!",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/572/comments",
+    "author": "gmsecrieru",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T20:13:59Z",
+        "body": "Hi @gmsecrieru \r\n\r\nNote that this missing subsecond resolution happens because the Fluentd driver in Docker engine is not including it by default, I've found that it needs to be enabled manually:\r\n\r\n```\r\n$ docker run -ti --log-driver=fluentd --log-opt fluentd-sub-second-precision=true busybox echo \"go subsecond!\"\r\n```\r\n\r\nnote that enabling this mode will be only compatible with Fluent Bit >= 0.12 and Fluentd >= 0.14."
+      },
+      {
+        "user": "gmsecrieru",
+        "created_at": "2018-04-24T20:26:25Z",
+        "body": "Hi @edsiper \r\n\r\nThanks a lot for your help! I've tried using `--log-opt fluentd-sub-second-precision=true` but I'm getting the following:\r\n\r\n```\r\n$ docker run -d --log-driver=fluentd --log-opt fluentd-sub-second-precision=true [...]\r\ndocker: Error response from daemon: unknown log opt 'fluentd-sub-second-precision' for fluentd log driver.\r\n```\r\n\r\nDocker version:\r\n```\r\n$ docker --version\r\nDocker version 17.09.1-ce, build 19e2cf6\r\n```\r\n\r\nThanks again!"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T20:43:56Z",
+        "body": "I am using this version:\r\n\r\n```\r\n$ docker --version\r\nDocker version 18.02.0-ce, build fc4de44\r\n```"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T21:10:45Z",
+        "body": "Fixed."
+      },
+      {
+        "user": "gmsecrieru",
+        "created_at": "2018-04-24T21:34:42Z",
+        "body": "Thanks @edsiper -- it took me a little extra time to set up my environment but I can confirm that it works with `fluentd-sub-second-precision` flag:\r\n\r\n```\r\n[0] 9ca4e8318660: [1524605606.067591287, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stderr\", \"log\"=>\"[mp4 @ 0x5641e8bc7560] Using AVStream.codec to pass codec parameters to muxers is deprecated, use AVStream.codecpar instead.\"}]\r\n[1] 9ca4e8318660: [1524605606.580875228, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"frame=49\"}]\r\n[2] 9ca4e8318660: [1524605606.581055754, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"fps=0.0\"}]\r\n[3] 9ca4e8318660: [1524605606.581137428, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"stream_0_0_q=29.0\"}]\r\n[4] 9ca4e8318660: [1524605606.581189472, {\"container_id\"=>\"9ca4e8318660cbc23e2e44ac1769923abeeecf1281a6297c0850820fa3632184\", \"container_name\"=>\"/thirsty_raman\", \"source\"=>\"stdout\", \"log\"=>\"bitrate= 205.1kbits/s\"}]\r\n```\r\n\r\nThanks again!"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-24T21:45:00Z",
+        "body": "you are welcome!"
+      },
+      {
+        "user": "JulieLily",
+        "created_at": "2020-09-16T08:16:17Z",
+        "body": "How to use it in kubernetes? The accuracy of the output timestamp is microseconds."
+      }
+    ]
+  },
+  {
+    "number": 569,
+    "title": "\"mapper_parsing_exception\",\"reason\":\"failed to parse\",\"caused_by\":{\"type\":\"json_parse_exception\",\"reason\":\"Duplicate field 'log",
+    "created_at": "2018-04-19T12:11:34Z",
+    "closed_at": "2018-04-26T16:45:12Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/569",
+    "body": "When I used flubent-bit, the following error occurred:\r\n\r\n`\"took\":11,\"errors\":true,\"items\":[{\"index\":{\"_index\":\"logstash-2018.04.19\",\"_type\":\"flb_type\",\"_id\":\"ReBJ3WIBJdTnAySXBQJM\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":2,\"successful\":1,\"failed\":0},\"_seq_no\":1468,\"_primary_term\":1,\"status\":201}},{\"index\":{\"_index\":\"logstash-2018.04.19\",\"_type\":\"flb_type\",\"_id\":\"RuBJ3WIBJdTnAySXBQJM\",\"status\":400,\"error\":{\"type\":\"mapper_parsing_exception\",\"reason\":\"failed to parse\",\"caused_by\":{\"type\":\"json_parse_exception\",\"reason\":\"Duplicate field 'log'\\n at [Source: org.elasticsearch.common.bytes.BytesReference$MarkSupportingStreamInputWrapper@6061e176; line: 1, column: 188]\"}}}},{\"index\":{\"_index\":\"logstash-2018.04.19\",\"_type\":\"flb_type\",\"_id\":\"R-BJ3WIBJdTnAySXBQJM\",\"status\":400,\"error\":{\"type\":\"mapper_parsing_exception\",\"reason\":\"failed to parse\",\"caused_by\":{\"type\":\"json_parse_exception\",\"reason\":\"Duplicate field 'log'\\n at [Source: org.elasticsearch.common.bytes.BytesReference$MarkSupportingStrea`\r\n\r\n\r\nmy config：\r\n\r\n`  input-kubernetes.conf: |\r\n    [INPUT]\r\n        Name              tail\r\n        Tag               kube.*\r\n        Path              /var/log/containers/*.log\r\n        Exclude_Path      /var/log/containers/kube*.log\r\n        Parse            docker\r\n        DB                /var/log/flb_kube.db\r\n        Mem_Buf_Limit     5MB\r\n        Skip_Long_Lines   On\r\n        Refresh_Interval  10\r\n\r\n  filter-kubernetes.conf: |\r\n    [FILTER]\r\n        Name           kubernetes\r\n        Match          kube.*\r\n        Merge_JSON_Log On\r\n        Annotations    Off\r\n\r\n  output-elasticsearch.conf: |\r\n    [OUTPUT]\r\n        Name            es\r\n        Match           *\r\n        Host            ${FLUENT_ELASTICSEARCH_HOST}\r\n        Port            ${FLUENT_ELASTICSEARCH_PORT}\r\n        Logstash_Format On\r\n        Retry_Limit     False\r\n\r\n  parsers.conf: |\r\n    [PARSER]\r\n        Name        docker\r\n        Format      json\r\n        Time_Key    time\r\n        Time_Format %Y-%m-%dT%H:%M:%S.%L\r\n        Time_Keep   On`\r\n\r\nI haven't found the cause for a long time？",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/569/comments",
+    "author": "yonchin",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-25T19:47:07Z",
+        "body": "Looks like one of your records contains the \"log\" key duplicated which raised an exception on elasticsearch:\r\n\r\n```\r\nDuplicate field 'log'\\n at\r\n```"
+      },
+      {
+        "user": "fruuf",
+        "created_at": "2018-06-21T00:51:02Z",
+        "body": "I had the same issue, turned out my parsers.conf was not wired up correctly, its all working fine now."
+      }
+    ]
+  },
+  {
+    "number": 565,
+    "title": "How to configure fluent-bit can be high-availability as fluentd",
+    "created_at": "2018-04-16T03:29:13Z",
+    "closed_at": "2018-04-26T16:45:31Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/565",
+    "body": "I want to configure fluent-bit as td-agent collection application logs, but I can't find some features in fluentd, such as high-availability,\r\nHow to configure fluent-bit can be high-availability as fluentd,thanks very much",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/565/comments",
+    "author": "Barbazoo",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-16T17:13:54Z",
+        "body": "hi @Barbazoo \r\n\r\nthe only HA mode supported is in-memory buffering, meaning: if the logs cannot be shipped to the destination there is a retry logic in place.\r\n\r\nIf you refer to HA where having primary and secondary destinations as well with balancing support that feature has not been implemented yet."
+      },
+      {
+        "user": "Barbazoo",
+        "created_at": "2018-04-17T00:49:27Z",
+        "body": "@edsiper thank you for your answer and thank you anyway"
+      },
+      {
+        "user": "karthikeayan",
+        "created_at": "2018-11-22T09:40:19Z",
+        "body": "Any future plans to implement this for fuent-bit?"
+      }
+    ]
+  },
+  {
+    "number": 561,
+    "title": "Support for writing output to Apache Kafka",
+    "created_at": "2018-04-13T19:08:09Z",
+    "closed_at": "2018-04-13T19:28:23Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/561",
+    "body": "I see output plugin exists for kafka-rest proxy, that is supported by confluent. Do you plan to implement support for Apache Kafka?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/561/comments",
+    "author": "vinbie",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-04-13T19:28:23Z",
+        "body": "Fluent Bit 0.13 (to be released shortly) comes with native support for Apache Kafka (output side)"
+      }
+    ]
+  },
+  {
+    "number": 515,
+    "title": "Question: Support for multiple ES outputs in same fluent-bit config?",
+    "created_at": "2018-02-20T17:33:29Z",
+    "closed_at": "2018-03-05T21:46:02Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/515",
+    "body": "My end goal is to be able to ship different kinds of logs to different indices in ElasticSearch. I've been able to send docker logs to a specific ElasticSearch index; but I would like to send various log files made other applications to different ElasticSearch indices on the same ElasticSearch cluster. I tried to use `Tag` on tail inputs and `Match` on different es outputs, but fluent-bit didn't accept this configuration. Is it likely I used the configuration incorrectly? Is this use case supported by fluent-bit? Thanks so much!",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/515/comments",
+    "author": "brycefisher",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-02-20T17:42:27Z",
+        "body": "@brycefisher please share your configuration file."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-02-26T22:32:15Z",
+        "body": "ping"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2018-03-05T21:46:02Z",
+        "body": "Closing as fixed."
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2019-09-30T16:22:40Z",
+        "body": "@ArturZurawski \r\n\r\nplease for new issues, open a new ticket.\r\n\r\nForward input plugin cannot be tagged since records \"already comes with a tag\", so your tag is not enforced, that could be the root cause of the problem"
+      }
+    ]
+  },
+  {
+    "number": 505,
+    "title": "[error] [filter_kube] upstream connection error",
+    "created_at": "2018-02-07T18:46:12Z",
+    "closed_at": "2018-02-07T21:07:36Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/505",
+    "body": "not sure why this is happening, but cant seem to make it happy.\r\n\r\n```\r\n[root@kubemaster0001 fluent-bit]# kubectl -nlogging logs fluent-bit-b474h\r\n[2018/02/07 18:32:43] [ info] [engine] started\r\n[2018/02/07 18:32:43] [ info] [filter_kube] https=1 host=kubernetes.default.svc.cluster.local port=6443\r\n[2018/02/07 18:32:43] [ info] [filter_kube] local POD info OK\r\n[2018/02/07 18:32:43] [ info] [filter_kube] testing connectivity with API server...\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] could not get meta for POD fluent-bit-b474h\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n[2018/02/07 18:32:43] [error] [filter_kube] upstream connection error\r\n```",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/505/comments",
+    "author": "kplimack",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2018-02-07T20:19:10Z",
+        "body": "your filter cannot reach the Kubernetes API server address ubernetes.default.svc.cluster.local port=6443.\r\n\r\ncan you log into the POD and try to reach the API server using curl ?"
+      },
+      {
+        "user": "kplimack",
+        "created_at": "2018-02-07T21:07:36Z",
+        "body": "The issue was I was using the wrong port, i needed to provide the kubernetes service port which is 443."
+      }
+    ]
+  },
+  {
+    "number": 434,
+    "title": "How to use in_systemd_plugin",
+    "created_at": "2017-11-16T08:43:27Z",
+    "closed_at": "2017-11-21T02:01:08Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/434",
+    "body": "I want to collect log messages from the Journald daemon on Linux environments, and I find that the Systemd/Journald input plugin has been developed. Yesterday, I got the latest source code from Github. But when I try to use that input plugin, the fluent-bit.conf is as flowing:\r\n/---------------------------------------------------------------------------------/\r\n[INPUT]\r\n    Name systemd\r\n    Path /home/xh/Desktop/logdata/journal/*\r\n    Tag  k8s-system\r\n\r\n[OUTPUT]\r\n    Name  stdout\r\n    Match *\r\n/---------------------------------------------------------------------------------/\r\n\r\nI got the following error log:\r\n\r\n/---------------------------------------Error------------------------------------------/\r\nInput plugin 'systemd' cannot be loaded\r\n/---------------------------------------------------------------------------------/\r\n\r\nSo I try to find out why got this, I find that \r\n     1.  fluent-bit.c     \r\n                   /* Create configuration context */\r\n                   config = flb_config_init();\r\n\r\n     2.  flb_config.c  \r\n                   /* Register plugins */\r\n                   flb_register_plugins(config);\r\n\r\n     3.   flb_plugin.h\r\n     \r\nThe flb_plugin.h is produced during compling period according to flb_plugin.h.in.\r\nDuring the compling, I got this \r\n/---------------------------------------------------------------------------------/\r\n-- Could NOT find Journald (missing: JOURNALD_LIBRARY JOURNALD_INCLUDE_DIR) \r\n/---------------------------------------------------------------------------------/\r\n\r\nthen I further to find that in Findjournal.cmake\r\n/----------------------------------------------------------------------------------------------------/\r\nfind_package(PkgConfig)\r\npkg_check_modules(PC_JOURNALD QUIET systemd)\r\n\r\n/----------------------------------------------------------------------------------------------------------/\r\n\r\nIn fact，I find that the package pkg-config is existed , so find_package(PkgConfig) is true.\r\n\r\nIf I use pkg_check_modules(PC_JOURNALD REQUIRED systemd),  I find the systemd are existed.\r\n/----------------------------------------------------------------------------------------------------------/\r\n-- Checking for module 'systemd'\r\n--   Found systemd, version 229\r\n/----------------------------------------------------------------------------------------------------------/\r\n And the PC_JOURNALD_FOUND ia assigned 1. But PC_JOURNALD_CFLAGS_OTHER, PC_JOURNALD_INCLUDEDIR, PC_JOURNALD_INCLUDE_DIRS, PC_JOURNALD_LIBDIR and PC_JOURNALD_LIBRARY_DIRS are not assigned. \r\n\r\nMy OS is Ubuntu 16.04. The cmake version is 3.9.4. The pkg-config version is 0.29.1. The systemd version is 229. \r\n\r\nSo I hope someone can tell me how to do, if I want to use in_systemd_plugin. Thanks very much!\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/434/comments",
+    "author": "wst-casd",
+    "comments": [
+      {
+        "user": "nokute78",
+        "created_at": "2017-11-19T13:27:07Z",
+        "body": "Do you install a header of systemd ? (e.g. systemd-devel in CentOS)\r\nlibsystemd-dev may help to build.\r\n"
+      },
+      {
+        "user": "wst-casd",
+        "created_at": "2017-11-20T01:06:21Z",
+        "body": "Thanks very much，I will make sure whether or not a header of systemd have been installed and have a try of libsystemd-dev."
+      },
+      {
+        "user": "wst-casd",
+        "created_at": "2017-11-21T02:00:57Z",
+        "body": "@nokute78   @edsiper   Thanks, I install the libsystemd-dev on my os and alter  pkg_check_modules(PC_JOURNALD QUIET systemd) to pkg_check_modules(PC_JOURNALD QUIET libsystemd),  then solve the problem."
+      }
+    ]
+  },
+  {
+    "number": 368,
+    "title": "modify record based on existing field",
+    "created_at": "2017-09-02T22:18:34Z",
+    "closed_at": "2019-12-23T22:13:56Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/368",
+    "body": "In fluentd I can do something like:\r\n\r\n```\r\n<filter **>\r\n      @type record_transformer\r\n      <record>\r\n        log_msg ${record[\"log\"]}\r\n      </record>\r\n</filter>\r\n```\r\n\r\nEven though fluentd now has a record_transformer it does not seem to allow to access existing fields in the record.",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/368/comments",
+    "author": "Globegitter",
+    "comments": [
+      {
+        "user": "apmcodes",
+        "created_at": "2017-12-01T10:58:27Z",
+        "body": "Missing this feature, need this feature to use fluent-bit"
+      },
+      {
+        "user": "nokute78",
+        "created_at": "2018-06-15T11:37:06Z",
+        "body": "filter_lua can address this issue. (fluent-bit v0.14 will support filter_lua)\r\n\r\nIt is an example to rename existing key.\r\n\r\nrename_key.lua\r\n```lua\r\nfunction rename_key(tag, timestamp, record)\r\n    new_record = record\r\n    new_record[\"log_msg\"] = record[\"log\"]\r\n\r\n    -- drop old field\r\n    new_record[\"log\"]     = nil\r\n\r\n    return 1, timestamp, new_record\r\nend\r\n```\r\n\r\nConfiguration file\r\n```python\r\n[INPUT]\r\n    Name dummy\r\n    Tag  dummy\r\n\r\n    dummy {\"log\":\"message\", \"foo\":\"bar\"}\r\n\r\n[FILTER]\r\n    Name   lua\r\n    Match  *\r\n    script /path/to/rename_key.lua\r\n    call   rename_key\r\n\r\n[OUTPUT]\r\n    Name  stdout\r\n    Match *\r\n```\r\n\r\nThen original record is\r\n```\r\n[0] dummy: [1529062591.002698704, {\"log\"=>\"message\", \"foo\"=>\"bar\"}]\r\n```\r\nmodified like this.\r\n```\r\n[0] dummy: [1529062515.000829696, {\"foo\"=>\"bar\", \"log_msg\"=>\"message\"}]\r\n```\r\n\r\nFull output is \r\n```\r\n$ bin/fluent-bit -c dummy.conf \r\nFluent-Bit v0.14.0\r\nCopyright (C) Treasure Data\r\n\r\n[2018/06/15 20:35:14] [ info] [engine] started (pid=14669)\r\n[0] dummy: [1529062515.000829696, {\"foo\"=>\"bar\", \"log_msg\"=>\"message\"}]\r\n[1] dummy: [1529062516.000124216, {\"foo\"=>\"bar\", \"log_msg\"=>\"message\"}]\r\n```"
+      }
+    ]
+  },
+  {
+    "number": 359,
+    "title": "How do in_tail deal with Scroll log",
+    "created_at": "2017-08-17T03:50:52Z",
+    "closed_at": "2017-08-18T02:08:20Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/359",
+    "body": "I am sorry to trouble you again ··\r\nI have a little test with in_tail a scrolling log and find a problem:\r\n\r\n- first I touch a log file by `echo aaa > a.log` and run flb\r\n```\r\n./fluent-bit-dev -i tail -p path=$(pwd)/a.log -o stdout\r\n```\r\n\r\n- then append content by echo \r\n\r\n```\r\necho bbb >> a.log\r\necho ccc >> a.log\r\necho ddd >> a.log\r\n```\r\nsince now out put is correct\r\n```\r\nFluent-Bit v0.12.0\r\nCopyright (C) Treasure Data\r\n\r\n[2017/08/17 03:33:49] [ info] [engine] started\r\n[0] tail.0: [1502940829.966728341, {\"log\"=>\"aaa\"}]\r\n[0] tail.0: [1502940841.515776656, {\"log\"=>\"bbb\"}]\r\n[0] tail.0: [1502940850.129314776, {\"log\"=>\"ccc\"}]\r\n[0] tail.0: [1502940856.325415717, {\"log\"=>\"ddd\"}]\r\n```\r\n- then I clean flie and append other  content\r\n```\r\necho eee > a.log \r\necho fff >> a.log\r\n```\r\nNow can't get new record, like docker log if limit the log's max-size and max-file it will do a similar operation, so there is any way to deal with it?",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/359/comments",
+    "author": "vinkdong",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2017-08-18T02:00:21Z",
+        "body": "@VinkDong \r\n\r\nin_tail always follow the file changes like _tail -F_ command does. Meaning it keep tracks of the last position read, if you truncate the file (clear file content) Fluent Bit will not read new changes as there is no way to track backward changes.\r\n\r\nWhen Docker engine rotates a file, what it does is that it rename the file, then Fluent Bit catch that change and assumes the file was rotated. Then in a new scan to lookup for new files will pick up the new generated file by Docker engine.\r\n\r\n"
+      },
+      {
+        "user": "vinkdong",
+        "created_at": "2017-08-18T02:08:09Z",
+        "body": "I got it, Thanks "
+      }
+    ]
+  },
+  {
+    "number": 345,
+    "title": "Will fluent-bit break data in between to keep track of 2MB chunk size for tail plugin",
+    "created_at": "2017-08-04T10:11:37Z",
+    "closed_at": "2017-08-05T05:03:27Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/345",
+    "body": "Hi @edsiper \r\n\r\nFluent-bit tail plugin internally chunks incoming data on 2MB size, I read it somewhere in some forum. Please correct me if I am wrong. And if it is like that will it be possible to variablize the value based on requirement?\r\n\r\nMy query is:\r\n Will fluent-bit take care of \"not-to-break\" data in between to keep track of that 2MB size? \r\n\r\nI have tested with couple of data, and I have observed if for one character it cross the size limit, fluent-bit will put that line into the next chunk. \r\nI just want to clarify whether that is the expected behaviour from fluent-bit in all cases?\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/345/comments",
+    "author": "chillaxd",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2017-08-04T14:25:54Z",
+        "body": "@chillaxd \r\n\r\n1. it is like that will it be possible to variablize the value based on requirement?\r\n\r\nThat's a hard coded value. If you have a special use case where you need to change this let me know to understand the problem you are trying to fix.\r\n\r\n2. Will fluent-bit take care of \"not-to-break\" data in between to keep track of that 2MB size?\r\n\r\nData will always be split internally in chunks and that chunk is immutable until it reach the output plugin who likely will generate a new modified copy (e.g: elasticsearch requires special JSON format instead of Fluent Bit chunk data representation).\r\n\r\nIn general when the input plugins \"insert\" data into the engine, the engine will create it own chunks. "
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2017-08-05T05:03:27Z",
+        "body": "Closing this ticket for now. "
+      }
+    ]
+  },
+  {
+    "number": 343,
+    "title": "add custom fields",
+    "created_at": "2017-08-04T02:44:45Z",
+    "closed_at": "2017-08-08T06:17:35Z",
+    "labels": [
+      "question",
+      "not-an-issue"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/343",
+    "body": "example:\r\n- test.log\r\n```\r\n10.32.197.76 100.116.204.44 \"/usr/share/nginx/index.php\"\r\n```\r\n- parsers.conf:\r\n```\r\nRegex ^(?<server_addr>[^ ]*) (?<remote_addr>[^ ]*) \"(?<request_filename>[^\\\"]*)\"?$\r\n```\r\ni want add custom fields from INPUT plugin,what shoud i do,results as this.\r\n```\r\nserver_addr\t10.32.197.76\r\nremote_addr\t100.116.204.44\r\nrequest_filename\t/usr/share/nginx/index.php\r\nhostname    nginx_server\r\n```\r\nhostname    nginx_server      -> **this is add fileds and valus**",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/343/comments",
+    "author": "icloudnote",
+    "comments": [
+      {
+        "user": "nokute78",
+        "created_at": "2017-08-04T09:16:25Z",
+        "body": "This is duplicated issue.(#202)\r\nThe feature will support v0.12(dev) with filter_record_modifier. \r\n\r\nCould you see #235 ?"
+      }
+    ]
+  },
+  {
+    "number": 330,
+    "title": "Can I modify tag by Parser ?",
+    "created_at": "2017-07-17T08:26:23Z",
+    "closed_at": "2017-07-28T00:15:02Z",
+    "labels": [
+      "question",
+      "fixed"
+    ],
+    "url": "https://github.com/fluent/fluent-bit/issues/330",
+    "body": "Hi, Can I modify tag by Parser?  I want to send journald logs (use 0.12 dev version) to kubernetes plug, it seems like use tag name to send Kube API,  How can I do?\r\n",
+    "comments_url": "https://api.github.com/repos/fluent/fluent-bit/issues/330/comments",
+    "author": "vinkdong",
+    "comments": [
+      {
+        "user": "edsiper",
+        "created_at": "2017-07-17T15:10:38Z",
+        "body": "Altering the tag is not a supported feature at the moment (it will be shortly). What I suggest is that you use one wildcard in the Tag config so it will be auto-populated with the Systemd Unit name."
+      },
+      {
+        "user": "vinkdong",
+        "created_at": "2017-07-19T06:51:52Z",
+        "body": "Yeah, I see it, can we make kubernetes filter plug work with systemd input plugs？"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2017-07-19T13:44:22Z",
+        "body": "Yes, that feature in the filter will be available shortly, it will be part of 0.12 release. I will let you know once is ready (help to test it is welcome)"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2017-07-19T22:53:13Z",
+        "body": "@VinkDong \r\n\r\nI've pushed the required changes for filter_kubernetes to interpret logs coming from Systemd. The changes are in GIT master (v0.12) and the Docker Image is being built (fluent/fluent-bit:0.12-dev). \r\n\r\nI did some basic tests emulating Systemd input since I don't have a K8s cluster with Systemd at the moment. If you can give it a try and send some feedback will be appreciated. \r\n\r\nIn the filter you have to turn on the option 'Use_Journal' :\r\n\r\n```\r\n[FILTER]\r\n    Name         kubernetes\r\n    Match        *\r\n    Use_Journal  On\r\n```"
+      },
+      {
+        "user": "vinkdong",
+        "created_at": "2017-07-20T02:36:55Z",
+        "body": "Ok, I will give it a try as soon "
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2017-07-26T01:44:44Z",
+        "body": "@VinkDong did you manage to test it ?"
+      },
+      {
+        "user": "edsiper",
+        "created_at": "2017-07-28T00:15:02Z",
+        "body": "Closing this as Fixed (systemd input plugin and filter_kubernetes are operational)"
+      }
+    ]
+  }
+]

@@ -1,0 +1,160 @@
+[
+  {
+    "number": 4529,
+    "title": "Router only response first route if using dependency injection on router",
+    "created_at": "2021-02-18T07:23:22Z",
+    "closed_at": "2021-02-18T07:36:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/4529",
+    "body": "This is related to #4528 \r\n\r\nFull codes are as per following:\r\n\r\n<details>\r\n<summary>/index.js</summary>\r\n\r\n```js\r\nconst express = require('express');\r\nconst app = express();\r\n\r\napp.use('/buy',require('./routes/buy'))\r\napp.use('/sell',require('./routes/sell'))\r\n\r\napp.listen(5000,()=>{\r\n  console.log('Server start')\r\n})\r\n```\r\n</details>\r\n\r\n<details>\r\n<summary>/routes/buy.js</summary>\r\n\r\n```js\r\nconst express = require('express')\r\nconst router = express.Router()\r\nconst buyController = require('../controller/buy.js')\r\n\r\nrouter.use('/:id/log', require('./log')(router, 'BuyModel'))\r\nrouter.route('/').get(buyController.fetchBuys)\r\n\r\nmodule.exports = router\r\n```\r\n</details>\r\n\r\n<details>\r\n<summary>/routes/sell.js</summary>\r\n\r\n```js\r\nconst express = require('express')\r\nconst router = express.Router()\r\n\r\nrouter.use('/:id/log', require('./log')(router, 'SaleModel'))\r\n\r\nmodule.exports = router\r\n```\r\n</details>\r\n\r\n<details>\r\n<summary>/routes/log.js</summary>\r\n\r\n```js\r\nconst logController = require('../controller/log')\r\n\r\nmodule.exports = function(router, model){\r\n  router.route('/')\r\n    .get(logController.fetchLogs(model))\r\n  return router\r\n}\r\n```\r\n</details>\r\n\r\n<details>\r\n<summary>/controller/log.js</summary>\r\n\r\n```js\r\nexports.fetchLogs = model => (req, res, next) => {\r\n  console.log('fetch logs');\r\n  console.log('base_url:', req.baseUrl);\r\n  console.log('...');\r\n\r\n  return res.status(200).send('done')\r\n}\r\n```\r\n</details>\r\n\r\n<details>\r\n<summary>/controller/buy.js</summary>\r\n\r\n```js\r\nexports.fetchBuys = (req, res, next) => {\r\n  console.log('base_url:', req.baseUrl);\r\n  console.log('result: fetch buys');\r\n  console.log('...')\r\n  res.status(200).send()\r\n}\r\n\r\n```\r\n</details>\r\n\r\n---\r\n\r\nCurrent code consoles:\r\n\r\n**GET: /buy**\r\nfetch logs\r\nbase_url: /buy\r\n\r\n**GET: /buy/123/log**\r\nfetch logs\r\nbase_url: /buy/123/log\r\n\r\n---\r\n\r\nWhat I hope is:\r\n\r\n**GET: /buy**\r\nfetch buys\r\nbase_url: /buy\r\n\r\n**GET: /buy/123/log**\r\nfetch logs\r\nbase_url: /buy/123/log\r\n\r\n---\r\n\r\nIf I reverse the route sequence in /routes/buy.js like following\r\n\r\n```js\r\nrouter.route('/').get(buyController.fetchBuys)\r\nrouter.use('/:id/log', require('./log')(router, 'BuyModel'))\r\n```\r\n\r\n**GET: /buy**\r\nfetch buys\r\nbase_url: /buy\r\n\r\n**GET: /buy/123/log**\r\nfetch buys\r\nbase_url: /buy/123/log\r\n\r\n---\r\n\r\nWould like to know how can I make it work if I still want to use dependency injection in router",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/4529/comments",
+    "author": "orzinc",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2021-02-18T07:36:57Z",
+        "body": "The issue is that in your `/routes/log.js` file, it has a function that accepts a `router` and attaches the fetchLogs to the GET / route on that router. Of course, you are passing the router that belongs to the buys route in `/routes/buy.js`, so the GET / ends up pointing there. The reason it changes when you arrange lines is because you changed which of the two GET / you have on the same router.\r\n\r\nThere are two ways to fix this:\r\n\r\n1. Change line 5 in `/routes/buy.js` to `router.use('/:id/log', require('./log')(express.Router(), 'BuyModel'))`\r\n2. Change line 5 in `/routes/buy.js` to `router.use(require('./log')(router, 'BuyModel'))` and then change line 4 in `/routes/log.js` to `router.route('/:id/log')` (and of course change line 4 in `/routes/sell.js` to the `app.use` as well.\r\n\r\nI hope this helps!"
+      },
+      {
+        "user": "orzinc",
+        "created_at": "2021-02-18T08:06:48Z",
+        "body": "@dougwilson Thank you for your help, and it works great \ud83d\udc4d"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that prevents route handler conflicts when using dependency injection in Express routers",
+      "An approach that maintains the ability to use dependency injection for passing model information to routes",
+      "A fix that ensures routes respond with the correct handler based on the URL path",
+      "An explanation of why the current implementation causes the routing problem"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:18:45"
+    }
+  },
+  {
+    "number": 3962,
+    "title": "trust-proxy function not called?",
+    "created_at": "2019-05-17T09:36:34Z",
+    "closed_at": "2019-05-17T19:52:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/3962",
+    "body": "My Express server is running in a docker container with an nginx docker container proxying request to it.\r\n\r\n```\r\nRequest -> (nginx) -> (express)\r\n```\r\n\r\nI've been trying to set up Express so it only trusts the one nginx proxy, but so far I've not been able to get the `trust-proxy` setting to work.\r\nThe function I pass to the `trust-proxy` setting seems to never get called in my application.\r\n\r\n```ts\r\napp.set('trust proxy', (ip: string) => {\r\n    console.error(`PROXY ADDR: ${ip}`);\r\n    return false;\r\n});\r\n```\r\nWith this configuration, the `console.error` never appears in the logs.\r\n\r\nAm I doing something wrong here with my configuration, or is `trust proxy` not working as intended?\r\n\r\nMinimal reproduction:\r\n```ts\r\nconst app = express();\r\n\r\napp.set('trust proxy', (ip: string) => {\r\n    console.error(`PROXY ADDR: ${ip}`);\r\n    return false;\r\n});\r\n\r\napp.use('*', (_req: express.Request, res: express.Response) => {\r\n    return res.send('Hi');\r\n});\r\n\r\nconst webServer = createServer(app);\r\nwebServer.listen(3731);\r\n```",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/3962/comments",
+    "author": "Ionaru",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2019-05-17T13:59:41Z",
+        "body": "Hi @Ionaru . The trust proxy function is called when trust of addresses needs to be established. In your example, there is no code that needs to know anything about the upstream, so for optimization reasons, it will not get invoked.\r\n\r\nIf you add something like `req.ip`, `req.hostname` etc to your example, your function should then get called, as Express tries to determine the address."
+      },
+      {
+        "user": "Ionaru",
+        "created_at": "2019-05-17T19:52:03Z",
+        "body": "Ah, I see. My bad."
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of when the trust-proxy function gets called",
+      "Clarification on the optimization behavior of Express regarding proxy trust",
+      "Practical examples of when the trust proxy function would be triggered"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:19:32"
+    }
+  },
+  {
+    "number": 2910,
+    "title": "Blank PDF when served from Express",
+    "created_at": "2016-02-25T20:31:06Z",
+    "closed_at": "2016-02-25T21:51:56Z",
+    "labels": [
+      "4.x",
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/2910",
+    "body": "Similar to #1555 but that one was closed so not sure if my comment will get any attention.\nCopying my comment from there.\n\nI am running into similar issue with my first ever nodejs service. I have following:\n\n``` javascript\n\nvar headers = {} \n///Setting some custom headers for authentication\n\nvar urlObj = new URL( url );\nvar options = {\n            host: urlObj.host,\n            path: urlObj.pathname + urlObj.query,\n            headers: headers\n };\n http.get( options, function( response ) {\n            var body = '';\n            response.on( 'data', function( data ) {\n                body += data;\n             } );\n\n             response.on( 'end', function() {\n                  res.set( 'Content-Type', 'application/pdf' );\n                  res.send( new Buffer( body, 'binary' ) );\n             } );\n } );\n```\n\nBut I see a blank PDF with the correct number of pages and browser renders it as a PDF but all pages are empty.\nAccessing the `url` directly shows the right pdf so the pdf is fine.\nAny input will be really appreciated.\n\nThanks\n",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/2910/comments",
+    "author": "vinodmehta",
+    "comments": [
+      {
+        "user": "wesleytodd",
+        "created_at": "2016-02-25T21:40:20Z",
+        "body": "For stuff like this I usually use the `request` module, you could try something like this:\n\n``` javascript\nvar request = require('request');\nvar app = require('express')();\n\napp.get('/my-pds.pds', function (req, res) {\n  var opts = {} // ...\n  request.get(opts).pipe(res);\n});\n```\n\nRequest and express handle the rest.\n\nAlso, fyi, people who follow the repo also get notifications for comments on closed issues, so your other comment would get seen.\n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2016-02-25T21:44:05Z",
+        "body": "> Also, fyi, people who follow the repo also get notifications for comments on closed issues, so your other comment would get seen.\n\nBut I would say it's best practice to open a new issue unless you have something specific to add to the other issue :) More often than not, a \"me too\" ends up with a different answer, and the original issue author gets emails for something they don't care about. It also means that even if we get the emails, we can't forget to answer you, since we'll see an open issue :)\n"
+      },
+      {
+        "user": "wesleytodd",
+        "created_at": "2016-02-25T21:45:02Z",
+        "body": "Good to know, thanks @dougwilson :)\n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2016-02-25T21:51:56Z",
+        "body": "And of course, just to iterate on the answer from @wesleytodd, hopefully his answer should fix your issue, @vinodmehta. The reason you are seeing odd behavior is because the way you are piping the PDF file ends up corrupting the file, because the operation `body += data;` will actually cause the `data` Buffer to get decoded as if it was UTF-8 into a string, which will corrupt binary data.\n\nThe `request` module is a really good approach, and I would recommend that, as it's very straight-forward and simple :)\n\nIf you wanted to tweak your original code to see where you went wrong, here is a simple tweak that should address the binary data corruption:\n\n``` js\nvar headers = {} \n///Setting some custom headers for authentication\n\nvar urlObj = new URL( url );\nvar options = {\n            host: urlObj.host,\n            path: urlObj.pathname + urlObj.query,\n            headers: headers\n };\n http.get( options, function( response ) {\n            var body = []; // we're going to store all the chunks of binary data\n            response.on( 'data', function( data ) {\n                body.push(data); // build up an array of Buffers\n             } );\n\n             response.on( 'end', function() {\n                  res.set( 'Content-Type', 'application/pdf' );\n                  res.send( Buffer.concat(body) ); // join all the buffers together as a binary blob\n             } );\n } );\n```\n"
+      },
+      {
+        "user": "vinodmehta",
+        "created_at": "2016-02-26T00:03:53Z",
+        "body": "Thanks. Yes `request` module really simplified the code a lot to basically one liner.\n\n``` javascript\nrequest.get( { url: url, headers: headers } ).pipe( res );\n```\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that correctly handles binary data transfer for PDFs",
+      "A simpler approach to proxying PDF content through Express",
+      "Proper content streaming from an external source to the Express response"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:23:11"
+    }
+  },
+  {
+    "number": 2669,
+    "title": "IP address as a url param error",
+    "created_at": "2015-06-03T17:47:46Z",
+    "closed_at": "2015-06-03T19:36:35Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/expressjs/express/issues/2669",
+    "body": "When declaring an IP address as a URL parameter `req.params` incorrectly parses the value. \n\nAdd the following param to the URL  `:ip((?:[0-9]{1,3}\\.){3}[0-9]{1,3})`\n\nUse the value 192.168.1.2 for ip\n\nThen check  `req.params.ip` it will return as 1. \n\n```\nconsole.log('req.originalUrl',req.originalUrl);\nconsole.log('(req.params.ip',req.params.ip);\n```\n",
+    "comments_url": "https://api.github.com/repos/expressjs/express/issues/2669/comments",
+    "author": "DaleCox",
+    "comments": [
+      {
+        "user": "dougwilson",
+        "created_at": "2015-06-03T17:54:54Z",
+        "body": "Hi, Can you supply a full app that reproduces the error (as there are many things that can influence this?\n\nAlso, it may just be because your param definition does not work with `path-to-regexp` module. Try using `:ip([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})`\n"
+      },
+      {
+        "user": "DaleCox",
+        "created_at": "2015-06-03T19:36:35Z",
+        "body": "Unfortunately I don't have anything I can post at this time. \n\nThank you the reg ex you provided solved the issue.  \n"
+      },
+      {
+        "user": "dougwilson",
+        "created_at": "2015-06-03T23:58:33Z",
+        "body": "Gotcha. If the updated reg ex worked, then it looks like it's just a limitation in `path-to-regexp` that we use, which is what I thought (you cannot use `(?:` in the reg ex).\n"
+      }
+    ],
+    "satisfaction_conditions": [
+      "A working regular expression pattern for capturing IP addresses in URL parameters",
+      "A solution that addresses the limitation in path-to-regexp module's parsing of IP addresses",
+      "A pattern that correctly captures all four octets of an IP address in URL parameters"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:23:48"
+    }
+  }
+]

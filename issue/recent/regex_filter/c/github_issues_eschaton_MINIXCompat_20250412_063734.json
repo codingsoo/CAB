@@ -1,0 +1,148 @@
+[
+  {
+    "number": 19,
+    "title": "rename(2) syscall, same as link(2)",
+    "created_at": "2024-12-17T05:11:44Z",
+    "closed_at": "2024-12-17T23:26:44Z",
+    "labels": [],
+    "url": "https://github.com/eschaton/MINIXCompat/issues/19",
+    "body": "Chris, the functions to do `rename(2)` are pretty much the same as for `link(2)`. I've got the code here but my commit is on top of all my other changes, so it won't apply to your main branch at the moment :-)\r\n\r\n```\r\n/*! MINIX `rename(2)` implementation. */\r\nminix_syscall_result_t MINIXCompat_SysCall_rename(minix_syscall_func_t func, uint16_t src_dest, m68k_address_t msg, minix_message_t *message, uint32_t * _Nonnull out_result)\r\n{\r\n    // rename(2) sends mess1\r\n    // - m3_i1: len(name)\r\n    // - m3_i2: len(name2)\r\n    // - m3_p1: name\r\n    // - m3_p2: name2\r\n\r\n    MINIXCompat_Message_Swap(mess1, message);\r\n    int16_t minix_name_len = message->m1_i1;\r\n    int16_t minix_name2_len = message->m1_i2;\r\n    m68k_address_t minix_name = message->m1_p1;\r\n    m68k_address_t minix_name2 = message->m1_p2;\r\n\r\n    // Copy the names (paths) to host memory.\r\n    // The name will include any trailing '\\0' character. (Use of the pointer from the message rather than the message's inline copy is intentional, since the latter can only handle up to 14 characters.)\r\n\r\n    char *minix_name_on_host = MINIXCompat_RAM_Copy_Block_To_Host(minix_name, minix_name_len);\r\n    char *minix_name2_on_host = MINIXCompat_RAM_Copy_Block_To_Host(minix_name2, minix_name2_len);\r\n\r\n    // Rename the file at that path, relative to MINIXCOMPAT_DIR.\r\n\r\n    int16_t rename_err = MINIXCompat_File_Rename(minix_name_on_host, minix_name2_on_host);\r\n\r\n    // rename(2) responds with mess1\r\n    // - mess1.m_type: result\r\n\r\n    MINIXCompat_Message_Clear(message);\r\n    message->m_type = rename_err;\r\n\r\n    MINIXCompat_Message_Swap(mess1, message);\r\n\r\n    *out_result = rename_err;\r\n\r\n    // Clean up.\r\n\r\n    free(minix_name_on_host);\r\n    free(minix_name2_on_host);\r\n\r\n    return minix_syscall_result_success;\r\n}\r\n```\r\n\r\nand\r\n\r\n```\r\nint16_t MINIXCompat_File_Rename(const char *minix_path, const char *minix_path2)\r\n{\r\n    int16_t result;\r\n\r\n    assert(minix_path != NULL);\r\n    assert(minix_path2 != NULL);\r\n\r\n    char *host_path = MINIXCompat_Filesystem_CopyHostPathForPath(minix_path);\r\n    char *host_path2 = MINIXCompat_Filesystem_CopyHostPathForPath(minix_path2);\r\n\r\n    int rename_err = rename(host_path, host_path2);\r\n    if (rename_err == 0) {\r\n        result = 0;\r\n    } else {\r\n        result = -MINIXCompat_Errors_MINIXErrorForHostError(errno);\r\n    }\r\n\r\n    free(host_path);\r\n    free(host_path2);\r\n\r\n    return result;\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/19/comments",
+    "author": "DoctorWkt",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-17T23:26:44Z",
+        "body": "Thanks! Closed as addressed with #17."
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "Brk fix",
+    "created_at": "2024-12-17T01:23:03Z",
+    "closed_at": "2024-12-17T23:21:51Z",
+    "labels": [],
+    "url": "https://github.com/eschaton/MINIXCompat/pull/16",
+    "body": "MINIXCompat/MINIXCompat_Executable.c: Calculate an initial break value,\r\nand get BRK to use this value instead of the current value.\r\n    \r\nI'm not sure if I should round up the text, data and bss sizes to the\r\nnearest click boundary. At present I'm not doing this.",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/16/comments",
+    "author": "DoctorWkt",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-17T23:20:28Z",
+        "body": "We can always fix that if it turns out to be needed! Thanks so much!"
+      }
+    ]
+  },
+  {
+    "number": 7,
+    "title": "MINIXCompat_File_Open should return an error if the file can't be opened",
+    "created_at": "2024-12-11T03:13:52Z",
+    "closed_at": "2024-12-11T04:36:49Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/eschaton/MINIXCompat/pull/7",
+    "body": "  (el)vi(s)  now works, kind of.",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/7/comments",
+    "author": "ksherlock",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-11T04:36:46Z",
+        "body": "Good catch, thanks!"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "title": "Finish signal handling implementation",
+    "created_at": "2024-12-09T22:40:03Z",
+    "closed_at": "2024-12-15T20:00:43Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/eschaton/MINIXCompat/issues/6",
+    "body": "Most of the infrastructure that would be needed by `signal(2)` is in place (and `kill(2)` is implemented) but when a MINIXCompat process is signaled the handlers aren't actually called yet.\r\n\r\nThis is likely to be important for running `cc` since signals are one of the only ways (other than file locking) to handle multi-process coordination on MINIX 1.5.",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/6/comments",
+    "author": "eschaton",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-09T23:13:47Z",
+        "body": "Here's my first idea for how to deliver a signal to the 68K side:\r\n\r\nWe have the 68K-side address of the handler for the signal, so we just need to push the signal number itself on a  stack, jump to that, and switch back to host code when it's done. That means we need to provide two things: A stack on which to execute the handler, and a means of transitioning immediately back to host code when done.\r\n\r\nWe can provide a stack by just reserving another portion of the address space for it, such as the region immediately below the user stack, and setting that to the emulated `SP` (and \"pushing\" the signal number to it) before jumping to the handler. That's quite straightforward.\r\n\r\nTransitioning back to the host as soon as the handler is complete is a little more complicated. My first inclination is to have the `TRAP #1` instruction do that, and to synthesize a `JSR` to the signal handler address instead of setting the emulated `PC` to its address directly. That way we can synthesize a `TRAP #1` after that `JSR` that transitions back to the host and says the emulated handler is done and that we can go back to normal emulation (or run another signal handler, if needed).\r\n"
+      },
+      {
+        "user": "DoctorWkt",
+        "created_at": "2024-12-10T02:19:55Z",
+        "body": "What about this as an idea. When there is a signal to deliver and there is a registered handler, i.e. just before you call `return m68k_execute(cycles);`, perhaps you can do this:\r\n\r\n * push the current PC (REG_PC) on the stack (2 bytes)\r\n * push `rts` then `addq.l #6,sp` on the stack (4 bytes) and record the `addq.l` location\r\n * push the mapped signal number on the stack (2 bytes)\r\n * push the address of the `addq.l` instruction on the stack (2 bytes)\r\n * set REG_PC to the address of the MINIX signal handler\r\n\r\nThen, when you call `m68k_execute()`, it will run the signal handler. At the end, when it does the `rts`, it will jump to the `addq.l` instruction. This will remove the signal number, the `rts` and the `addq.l` from the stack, do the `rts` and then jump to the PC which the code would have done if there was no signal handler."
+      },
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-10T20:28:42Z",
+        "body": "Good idea! That sounds a lot more tractable and doesn't require a bunch of bookkeeping, and it's not really a big deal either to require an executable stack."
+      },
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-11T06:31:30Z",
+        "body": "Oh yeah, and the addresses are actually going to be 4 bytes, not 2. :) But I get your meaning!\r\n"
+      },
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-14T06:12:42Z",
+        "body": "MINIX signal handling always specifies `_begsig` from `catchsig.s` as the handler when calling `signal(2)` when then goes to the vector table to actually call the user-side handler.\r\n\r\nThe trick is that `_begsig` uses `RTR` to return rather than `RTS` so we also need to push the original value of the CCR restore after the PC to resume at."
+      },
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-15T21:38:10Z",
+        "body": "What this means is that all we actually need to do is push (in this order) the PC, the SR, and the signal number, and then set the PC to the signal handler (which is always `_begsig`). It will take caare of the stack for us."
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "title": "EBADEXEC?",
+    "created_at": "2024-12-08T01:18:55Z",
+    "closed_at": "2024-12-09T08:19:18Z",
+    "labels": [
+      "bug"
+    ],
+    "url": "https://github.com/eschaton/MINIXCompat/issues/3",
+    "body": "Hi Chris, I'm trying to compile this on Linux (Devuan Daedalus) with clang 14.0.6. I'm getting a missing errno:\r\n\r\n```\r\nMINIXCompat/MINIXCompat_Executable.c:241:25: error: use of undeclared identifier 'EBADEXEC'\r\n                return -EBADEXEC;\r\n```\r\nCan I replace the error number with something else? I'm guessing this is Apple specific. Thanks!",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/3/comments",
+    "author": "DoctorWkt",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-08T08:10:12Z",
+        "body": "This will be addressed by #2, as will a couple of other needed tweaks."
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "title": "Get MINIXCompat building on Linux",
+    "created_at": "2024-12-06T15:04:38Z",
+    "closed_at": "2024-12-09T08:19:17Z",
+    "labels": [
+      "enhancement"
+    ],
+    "url": "https://github.com/eschaton/MINIXCompat/pull/2",
+    "body": "I got MINIXCompat to build on Linux with these changes (though I'm not sure it works quite correctly yet – is there a simple known-good test case I could run to test it?).\r\n\r\nI've not been able to test whether these changes regress the build on macOS. I'd not expect it to, since the changes make MINIXCompat use more standard interfaces, but you can never know.\r\n\r\nI've sequenced this merge request after #1.",
+    "comments_url": "https://api.github.com/repos/eschaton/MINIXCompat/issues/2/comments",
+    "author": "nortti0",
+    "comments": [
+      {
+        "user": "eschaton",
+        "created_at": "2024-12-07T20:42:33Z",
+        "body": "Thanks for tackling this! I'll check how it builds on NetBSD and macOS with your changes, just to be sure.\r\n\r\nAs for what to run for a test, a good \"smoke test\" is to use it to run MINIX's `/usr/bin/printenv` in an environment with a few `MINIX_`-prefixed environment variables, it uses very few system calls but does exercise everything.\r\n\r\nAnother good quick test is `id` since it uses more system calls and actually reads files (`/etc/passwd` and `/etc/groups`) from the MINIX environment pointed to by `MINIXCOMPAT_DIR`.\r\n"
+      },
+      {
+        "user": "nortti0",
+        "created_at": "2024-12-08T21:39:29Z",
+        "body": "With #5 applied, both binaries run properly. Sequenced this after it."
+      }
+    ]
+  }
+]

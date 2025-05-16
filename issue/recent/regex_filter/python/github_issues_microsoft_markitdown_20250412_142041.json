@@ -1,0 +1,1390 @@
+[
+  {
+    "number": 1162,
+    "title": "AttributeError: type object 'RtfConverter' has no attribute 'register_converters'",
+    "created_at": "2025-03-28T21:07:31Z",
+    "closed_at": "2025-03-31T14:00:56Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1162",
+    "body": "I have the following plugin:\n```python\n# src/markdown/_rtf_converter\n\nimport re\nfrom striprtf import striprtf\nfrom typing import BinaryIO, Any\nfrom markitdown import (\n    DocumentConverter, \n    DocumentConverterResult, \n    StreamInfo, \n    MarkItDown\n)\n\n\n# The version of the plugin interface that this plugin uses. \n# The only supported version is 1 for now.\n__plugin_interface_version__ = 1 \n\n\ndef register_converters(markitdown: MarkItDown, **kwargs):\n    \"\"\"\n    Called during construction of MarkItDown instances to register converters provided by plugins.\n    \"\"\"\n\n    # Simply create and attach an RtfConverter instance\n    markitdown.register_converter(RtfConverter())\n\n\n\nclass RtfConverter(DocumentConverter):\n    def __init__(\n        self\n    ):\n        super().__init__()\n\n    def accepts(\n        self,\n        file_stream: BinaryIO,\n        stream_info: StreamInfo,\n        **kwargs: Any,\n    ) -> bool:\n        \"\"\"\n        Check if the file is an RTF document.\n        RTF files typically start with \"{\\rtf1\" signature.\n        \"\"\"\n        import pdb; pdb.set_trace() \n        # Save the current position\n        current_position = file_stream.tell()\n        \n        # Read first 10 bytes to check for RTF signature\n        header = file_stream.read(10).decode('ascii', errors='ignore')\n        \n        # Restore the original position\n        file_stream.seek(current_position)\n        \n        # Check if the file starts with RTF signature\n        return header.startswith('{\\\\rtf')\n\n    def convert(\n        self,\n        file_stream: BinaryIO,\n        stream_info: StreamInfo,\n        **kwargs: Any,\n    ) -> DocumentConverterResult:\n\n        \"\"\"\n        Convert RTF content to Markdown.\n        \"\"\"\n        # Read the RTF content\n        rtf_content = file_stream.read().decode('ascii', errors='ignore')\n        \n        # Convert RTF to plain text\n        plain_text = striprtf.rtf_to_text(rtf_content)\n        \n        # Basic formatting conversions\n        markdown_text = self._format_as_markdown(plain_text)\n        \n        # Return the conversion result\n        return DocumentConverterResult(\n            markdown=markdown_text,\n        )\n        \n    def _format_as_markdown(self, text: str) -> str:\n        \"\"\"\n        Perform basic formatting to convert plain text to Markdown.\n        This is a simplified conversion that handles common RTF elements.\n        \"\"\"\n        result = text\n        \n        # Handle paragraphs (ensure proper line breaks)\n        result = re.sub(r'\\n\\s*\\n', '\\n\\n', result)\n        \n        # Handle bullet points (often represented as * or • in RTF)\n        result = re.sub(r'^\\s*[•*]\\s*(.+)$', r'* \\1', result, flags=re.MULTILINE)\n        \n        # Handle numbered lists\n        result = re.sub(r'^\\s*(\\d+)[.)]\\s*(.+)$', r'\\1. \\2', result, flags=re.MULTILINE)\n        \n        # Clean up extra whitespace\n        result = re.sub(r' +', ' ', result)\n        result = re.sub(r'\\n{3,}', '\\n\\n', result)\n        return result.strip()\n```\n\nand  the following pyproject.toml\n\n```\n...\n[project.entry-points.\"markitdown.plugin\"]\nmarkitdown_rtf_plugin = \"src.markdown._rtf_converter:RtfConverter\"\n...\n```\n\nI then install the module with `poetry install`.\n\nWhen I attempt to run \n\n```python\nmd = MarkItDown(enable_plugins=True) # Set to True to enable plugins\nresult = md.convert(\"tests/files/file-sample_100kB.rtf\")\nprint(result.text_content)\n```\n\nI get the following error:\n\n```\nUserWarning: Plugin '<class 'iliad_utils.markdown._rtf_converter.RtfConverter'>' failed to register converters:\nTraceback (most recent call last):\n  File \"/Users/hoangsx/Library/CloudStorage/OneDrive-AbbVieInc(O365)/workspace/projects/iliad-utils/.venv/lib/python3.12/site-packages/markitdown/_markitdown.py\", line 221, in enable_plugins\n    plugin.register_converters(self, **kwargs)\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: type object 'RtfConverter' has no attribute 'register_converters'\n\n  warn(f\"Plugin '{plugin}' failed to register converters:\\n{tb}\")\n```\n\nIs there anything I'm doing wrong? Does my plugin class need a `register_converters` method?",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1162/comments",
+    "author": "shoang22",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-31T02:35:29Z",
+        "body": "Thanks for the report. I'll\nLook into it asap.\n\nBut, register_converters does not need to be in the class... only the package.\n\nTry removing :RtfConverter from entry point in pyproject "
+      },
+      {
+        "user": "shoang22",
+        "created_at": "2025-03-31T14:00:56Z",
+        "body": "that worked! thanks"
+      }
+    ]
+  },
+  {
+    "number": 1151,
+    "title": "Make it easier to use AzureKeyCredentials with Azure Doc Intelligence",
+    "created_at": "2025-03-24T18:47:28Z",
+    "closed_at": "2025-03-26T17:44:12Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/1151",
+    "body": "Allow users to use key-based authentication to Azure, and not just Azure Active Directory.\r\n\r\nAdded finer-grained control over which of the supported types are sent to Doc Intel.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1151/comments",
+    "author": "afourney",
+    "comments": [
+      {
+        "user": "saibhaskerraju",
+        "created_at": "2025-04-11T16:30:58Z",
+        "body": "although this PR is merged,  I guess its not pubished. we are not seeing these changes in latest version. please check"
+      }
+    ]
+  },
+  {
+    "number": 1126,
+    "title": "Python 3.12 is more stringent in checking for escape sequences in regular expressions, treating invalid escape sequences as syntax warnings.",
+    "created_at": "2025-03-14T18:34:08Z",
+    "closed_at": "2025-03-16T16:52:05Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1126",
+    "body": "There are several invalid escape sequences in the pydub/utils.py file (\\() * There are invalid escape sequences in youtube_transcript_api/test/test_cli.py (\\-) \n\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1126/comments",
+    "author": "Yevanchen",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-15T06:58:52Z",
+        "body": "Yes, I'm seeing these now too. I'm wondering if anything is changing the warnings filter, and maybe that's why we're seeing this reported to console more now. \n\nIn any case, I'll have to figure out what to do about these issues in 3rd party libraries. "
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-16T16:52:06Z",
+        "body": "Thanks. It looks like we will need to move off pydub, since that project has not been updated in a while. We only use it to help convert audio to PCM / wav before transcribing it -- we could probably just use ffmpeg. In any case, the issues do not appear in codepath we use for conversion.\n\nA patch was submitted upstream to youtube_transcript_api -- but it only impacts therr CLI tests.\n\nHaving investigated both, and determined that they pose no significant issue, I've moved to filter the warnings for now,"
+      }
+    ]
+  },
+  {
+    "number": 1091,
+    "title": "Update _mp3_converter.py to fix issue",
+    "created_at": "2025-03-06T05:06:00Z",
+    "closed_at": "2025-03-06T07:27:43Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/1091",
+    "body": "trying to fix #1084 ",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1091/comments",
+    "author": "SigireddyBalasai",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T07:27:43Z",
+        "body": "Thanks for the PR!\r\n\r\nThis file has been totally refactored in `0.1.0a1`, and performs the conversion without explicitly writing to disk.\r\nClosing for now. Let me know if there other related issues."
+      }
+    ]
+  },
+  {
+    "number": 1084,
+    "title": "Import OS converters/_mp3_converter.py",
+    "created_at": "2025-03-01T16:27:26Z",
+    "closed_at": "2025-03-06T07:28:05Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1084",
+    "body": "\n\nconverters/_mp3_converter.py\", line 65, in convert\n    os.close(handle)                                                            \n    ^^\nNameError: name 'os' is not defined. Did you forget to import 'os'              \n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1084/comments",
+    "author": "orthosie",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T07:28:05Z",
+        "body": "This file has been totally refactored in `0.1.0a1`, and performs the conversion without explicitly writing to disk.\nClosing for now. Let me know if there other related issues."
+      }
+    ]
+  },
+  {
+    "number": 1079,
+    "title": "[Draft] Exploring ways to allow Optional dependencies",
+    "created_at": "2025-02-28T19:58:21Z",
+    "closed_at": "2025-03-03T17:06:19Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/1079",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1079/comments",
+    "author": "afourney",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-01T07:13:23Z",
+        "body": "@Zahlii\r\n@robfitzgerald\r\n@casperdcl\r\n@AdrianVollmer\r\n\r\nLMK what you thing about this approach. Main thing is that I want the converts to print useful message when they think they could handle the file, but don't have the right dependencies.\r\n\r\n(alternatively, you could simply not register the converters at all... but then I worry about discoverability for people not reading docs)\r\n"
+      },
+      {
+        "user": "Zahlii",
+        "created_at": "2025-03-01T07:23:34Z",
+        "body": "I think this will work fine for me - I didn’t check all of the dependencies in detail (maybe there are some more that could be marked as optional?) but at least those that currently lead to CVE warnings are now optional."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-01T07:35:10Z",
+        "body": "> I think this will work fine for me - I didn’t check all of the dependencies in detail (maybe there are some more that could be marked as optional?) but at least those that currently lead to CVE warnings are now optional.\r\n\r\nThere's certainly a balance here. Some are needed just to help identify what filetypes are in use... and those need to be around in all cases. Others help with some of the fall-back converters (plain text etc.). And more generally, html-related dependencies are used by many converters (because the libraries might output HTML rather than markdown). Plus it's generally nice to be able to convert web pages out of the box, I'd argue. I think I'm satisfied with this first cut add organization."
+      },
+      {
+        "user": "AdrianVollmer",
+        "created_at": "2025-03-03T09:07:25Z",
+        "body": "I like it"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-03T17:05:33Z",
+        "body": "K, merging to main... but I'll hold of from releasing to PyPi or cutting a release until we've had a chance to shake-test this a little more, and address a few other potentially API-breaking changes in the works."
+      }
+    ]
+  },
+  {
+    "number": 1062,
+    "title": "Failed to install markitdown: Directory 'packages/markitdown' is not installable. File 'setup.py' not found.",
+    "created_at": "2025-02-26T10:03:00Z",
+    "closed_at": "2025-03-03T01:51:58Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1062",
+    "body": "When I install Markitdown from the source, error occurs:\n```\n~/D/p/g/markitdown>pip3  install  packages/markitdown\nDirectory 'packages/markitdown' is not installable. File 'setup.py' not found.\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1062/comments",
+    "author": "chen1195585098",
+    "comments": [
+      {
+        "user": "SigireddyBalasai",
+        "created_at": "2025-02-28T16:28:40Z",
+        "body": "i think it is something wrong with your os or python installation bro can you please specify your os specs and python version"
+      },
+      {
+        "user": "SigireddyBalasai",
+        "created_at": "2025-03-01T09:40:34Z",
+        "body": "@chen1195585098 \n"
+      },
+      {
+        "user": "chen1195585098",
+        "created_at": "2025-03-03T01:51:58Z",
+        "body": "> i think it is something wrong with your os or python installation bro can you please specify your os specs and python version\n@SigireddyBalasai \nThe version of python3 component in my env is indeed old, it is `3.6.8`.\nI will try a newer versoin， thanks for you reply :) "
+      }
+    ]
+  },
+  {
+    "number": 1061,
+    "title": "Support  SQlite db file",
+    "created_at": "2025-02-26T06:54:32Z",
+    "closed_at": "2025-03-01T07:20:50Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1061",
+    "body": "Convert  SQlite db file to markdown",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1061/comments",
+    "author": "hysia",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-01T07:20:50Z",
+        "body": "This sounds like a good job for the new extension / plugins approach (which you could use for application-specific sqlite databases)\n\nI think SQLite databases are large, rich, and varied enough that it would be hard to come up with a rendering that would be useful in most cases."
+      }
+    ]
+  },
+  {
+    "number": 1059,
+    "title": "Error during conversion of HTML with anchors",
+    "created_at": "2025-02-25T21:56:09Z",
+    "closed_at": "2025-03-01T07:24:06Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/1059",
+    "body": "Hello,\njust noticed because it couldn't convert a docx with links, but the problem is for any html with links.\n\nIn the case of docx document it would raise an exception and it would try to open the file with other converters like the Zip one.\n\nTo fix you need to add the param `parent_tags=None` to the method `convert_a` of the class `_CustomMarkdownify` in the file `_markitdown.py`:\n\n```\ndef convert_a(self, el: Any, text: str, parent_tags=None, convert_as_inline: bool = False):\n...\n```\n\nNot sure there is a better fix (this is just a patch) but in case it's fine, let me know if you want me to open a PR.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1059/comments",
+    "author": "demobvs",
+    "comments": [
+      {
+        "user": "pmbaumgartner",
+        "created_at": "2025-02-26T19:52:58Z",
+        "body": "+1. I had a `docx` file that kept getting interpreted as a `.zip`. When I attempted to look behind the scenes and do a more manual docx -> html -> markdown conversion with markitdown, I got the following:\n\n```\n    293 convert_fn = self.get_conv_fn_cached(node.name)\n    294 if convert_fn is not None:\n--> 295     text = convert_fn(node, text, parent_tags=parent_tags)\n    297 return text\n\nTypeError: _CustomMarkdownify.convert_a() got an unexpected keyword argument 'parent_tags'\n```"
+      },
+      {
+        "user": "aneasystone",
+        "created_at": "2025-03-01T02:30:47Z",
+        "body": "Downgrade markdownify to version 0.14.1, the signature of the `convert_xx` function has been modified in the latest version 1.0.0.\n\n```\npip install markdownify==0.14.1\n```"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-01T07:24:06Z",
+        "body": "Thanks. This is fixed in 0.0.1a5, and pinned in 0.0.2a1 (I will port the fix to 0.0.2 asap to keep pace with markdownify)\n\nI've also updated the Zip converter to not try to read OOXML files (which have zip headers, but otherwise shouldn't be handled the same way)"
+      }
+    ]
+  },
+  {
+    "number": 1045,
+    "title": "File object support for Python API",
+    "created_at": "2025-02-21T16:17:39Z",
+    "closed_at": "2025-03-06T07:32:10Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/1045",
+    "body": "This PR allows MarkItDown to accept file objects as inputs for conversion. All of the individual converters have been refactored to accept a \"ConverterInput\" object that can hold either a file path or a file buffer, rather than just a local path. Additionally, a new conversion set up function for file objects has been added to the main class.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/1045/comments",
+    "author": "KennyZhang1",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T07:32:10Z",
+        "body": "Incorporated into #1088 \r\nThanks again!"
+      }
+    ]
+  },
+  {
+    "number": 861,
+    "title": "add necessary imports",
+    "created_at": "2025-02-16T04:53:51Z",
+    "closed_at": "2025-02-28T07:16:09Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/861",
+    "body": "in _get_llm_description function, base64 and mimetypes used, but not imported.\r\n\r\n```\r\nclient = OpenAI()\r\nmd = MarkItDown(llm_client=client, llm_model=\"gpt-4o\")\r\nresult = md.convert(\"example.jpg\")\r\n>>> NameError: name 'mimetypes' is not defined\r\n```\r\n\r\nin packages/markitdown/src/markitdown/converters/_image_converter.py line #65;\r\n\r\n```\r\n    def _get_llm_description(self, local_path, extension, client, model, prompt=None):                                          if prompt is None or prompt.strip() == \"\":\r\n            prompt = \"Write a detailed caption for this image.\"\r\n\r\n        data_uri = \"\"\r\n        with open(local_path, \"rb\") as image_file:\r\n>>>            content_type, encoding = mimetypes.guess_type(\"_dummy\" + extension)\r\n            if content_type is None:\r\n                content_type = \"image/jpeg\"\r\n>>>            image_base64 = base64.b64encode(image_file.read()).decode(\"utf-8\")\r\n            data_uri = f\"data:{content_type};base64,{image_base64}\"\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/861/comments",
+    "author": "tanreinama",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-02-28T07:12:34Z",
+        "body": "Oooof, I was overly aggressive when refactoring it seems. Thanks for the fix.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 331,
+    "title": "Add Support For PPTX Shape Groups (Fix in code design to not miss out on slide content)",
+    "created_at": "2025-02-13T04:43:55Z",
+    "closed_at": "2025-02-28T07:21:51Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/331",
+    "body": "There was currently 0 support for nested shapes, this aims to add that as well as a test case to support that in the test pptx",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/331/comments",
+    "author": "C0dingMast3r",
+    "comments": [
+      {
+        "user": "C0dingMast3r",
+        "created_at": "2025-02-13T04:49:32Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-02-28T07:22:52Z",
+        "body": "Thanks for the PR. Could you possible create another to add a test string to the nested shapes. It would be great to include this in unit testing, so that we ensure we don't regress. @C0dingMast3r "
+      }
+    ]
+  },
+  {
+    "number": 320,
+    "title": "Fix a typo in sample RTF plugin",
+    "created_at": "2025-02-11T06:16:36Z",
+    "closed_at": "2025-02-11T18:33:52Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/320",
+    "body": "Just a small typo.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/320/comments",
+    "author": "rickygao",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-02-11T18:32:58Z",
+        "body": "Copy and paste. Ooops. Thanks"
+      }
+    ]
+  },
+  {
+    "number": 318,
+    "title": "Cleanup and refactor, in preparation for plugin support.",
+    "created_at": "2025-02-10T04:46:01Z",
+    "closed_at": "2025-02-10T23:21:44Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/318",
+    "body": "Cleanup and refactor, in preparation for plugin support.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/318/comments",
+    "author": "afourney",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2025-02-10T19:11:21Z",
+        "body": "Can you please update the main README? E.g., `pip install -e .` in root won't work."
+      }
+    ]
+  },
+  {
+    "number": 313,
+    "title": "'charmap' codec can't encode characters in position 0-2: character maps to <undefined>",
+    "created_at": "2025-02-03T01:30:43Z",
+    "closed_at": "2025-02-13T06:37:29Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/313",
+    "body": "I was trying to test via CLI commands on korean pdf documents and it ended up giving errors like this.\n\n```Powershell\nPS C:\\Users\\donghwan.lee\\Documents\\markitdown> markitdown test.pdf > document.md\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"C:\\Users\\donghwan.lee\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\markitdown.exe\\__main__.py\", line 7, in <module>\n  File \"C:\\Users\\donghwan.lee\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\markitdown\\__main__.py\", line 43, in main\n    print(result.text_content)\n  File \"C:\\Users\\donghwan.lee\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\encodings\\cp1252.py\", line 19, in encode\n    return codecs.charmap_encode(input,self.errors,encoding_table)[0]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nUnicodeEncodeError: 'charmap' codec can't encode characters in position 0-2: character maps to <undefined>\n```\n\nI have also tried setting the walkaround of  PYTHONIOENCODING=utf-8 but it doesn't works.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/313/comments",
+    "author": "Wonder-donbury",
+    "comments": [
+      {
+        "user": "Linos1391",
+        "created_at": "2025-02-13T03:43:52Z",
+        "body": "Try `-o` instead of `>`, I think it was fixed in #116 "
+      }
+    ]
+  },
+  {
+    "number": 303,
+    "title": "Add support for conversion via Document Intelligence",
+    "created_at": "2025-01-23T22:44:14Z",
+    "closed_at": "2025-01-24T22:09:32Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/303",
+    "body": "This PR adds document intelligence support for markitdown. It allows users to pass in an endpoint to extract text using Document Intelligence instead of the built-in offline converters. If an endpoint is not provided, markitdown will default to using offline conversion",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/303/comments",
+    "author": "KennyZhang1",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2025-01-30T00:31:16Z",
+        "body": "@KennyZhang1 it maybe worth adding an example in README. And a pointer on how to create an azure Doc Int endpoint."
+      }
+    ]
+  },
+  {
+    "number": 301,
+    "title": "feat: Add 'convert_local_content' method to directly convert file content (str)",
+    "created_at": "2025-01-22T21:49:55Z",
+    "closed_at": "2025-03-06T07:47:01Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/301",
+    "body": "Hello, maybe I didn't find it, but I couldn't figure out how to directly convert the content of a file (str) into markdown. This PR contains the unit tests for this method\r\n\r\n```python\r\nfrom markitdown import MarkItDown\r\n\r\nmd = MarkItDown()\r\nresult = md.convert_local_content(\"<h1>Hello World!</h1>\", file_extension=\".html\")\r\nprint(result.text_content)\r\n```\r\n-->\r\n```bash\r\n# Hello World!\r\n```\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/301/comments",
+    "author": "Athroniaeth",
+    "comments": [
+      {
+        "user": "Athroniaeth",
+        "created_at": "2025-01-22T21:51:44Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T07:47:01Z",
+        "body": "MarkItDown deals with byte streams. You can get the same behavior by doing:\r\n\r\n```python\r\nimport io\r\ninput_data = b\"<html><body><h1>Test</h1></body></html>\"\r\nresult = markitdown.convert_stream(io.BytesIO(input_data), file_extension=\".html\")\r\n```\r\n\r\nIf it's a string, then perhaps:\r\n\r\n```python\r\nimport io\r\ninput_data = \"<html><body><h1>Test</h1></body></html>\".encode(\"utf-8\")\r\nresult = markitdown.convert_stream(io.BytesIO(input_data), file_extension=\".html\")\r\n```\r\n \r\nIf this is a common enough pattern, I could imagine creating a convenience method. Perhaps `convert_string`, but would prefer the more explicit approach above rather than adding a new entry-point to maintain. Please let me know what you think."
+      },
+      {
+        "user": "PhiFever",
+        "created_at": "2025-03-10T07:58:41Z",
+        "body": "I thinks in spiders this pattern is common, it will grab the article content in html and convert it to markdown. "
+      }
+    ]
+  },
+  {
+    "number": 280,
+    "title": "Make this a TypeScript SDK",
+    "created_at": "2025-01-13T13:10:35Z",
+    "closed_at": "2025-01-15T06:00:30Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/280",
+    "body": "Convert the project to a TypeScript SDK.\n\n* Add `tsconfig.json` with TypeScript compiler options.\n* Add `package.json` with TypeScript dependencies and build scripts.\n* Add `src/markitdown/index.ts` to convert `src/markitdown/__main__.py` to TypeScript.\n* Add `src/markitdown/markitdown.ts` to convert `src/markitdown/_markitdown.py` to TypeScript.\n* Remove Python-specific files: `pyproject.toml`, `Dockerfile`, `src/markitdown/__main__.py`, `src/markitdown/_markitdown.py`, `src/markitdown/__init__.py`, `src/markitdown/__about__.py`, `src/markitdown/py.typed`.\n* Update `README.md` to include TypeScript SDK usage instructions.\n\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/280/comments",
+    "author": "uratmangun",
+    "comments": [
+      {
+        "user": "keenranger",
+        "created_at": "2025-01-14T01:45:15Z",
+        "body": "This seems like a duplicate PR. #279 How about closing one of them?"
+      }
+    ]
+  },
+  {
+    "number": 253,
+    "title": "refactor: split _markitdown.py into modular components",
+    "created_at": "2025-01-03T11:59:25Z",
+    "closed_at": "2025-03-06T21:27:14Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/253",
+    "body": "## Description\r\nThis PR addresses the growing complexity of `_markitdown.py` by splitting it into smaller, more focused modules. The changes improve code organization and maintainability while preserving all existing functionality.\r\n\r\n### Changes\r\n- Created a new `converters/` package to house different converter implementations\r\n- Split converters into logical groups (document, web, media, text, archive)\r\n- Moved core MarkItDown class functionality to `core.py`\r\n- Separated exception classes into `exceptions.py`\r\n- Updated imports and tests to reflect new structure\r\n\r\n### Testing\r\n- All existing tests pass without modification\r\n- Verified no functionality changes\r\n\r\n### Implementation Details\r\nThe refactoring follows these principles:\r\n1. Single Responsibility: Each module handles a specific type of conversion\r\n2. Open/Closed: New converters can be added without modifying existing code\r\n3. Interface Segregation: Clear base class and consistent converter interface\r\n4. Dependency Inversion: Core MarkItDown class depends on abstractions\r\n\r\n### Migration Notes\r\nThis is a non-breaking change as all public APIs remain unchanged. Internal imports are updated to reflect the new structure.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/253/comments",
+    "author": "t3tra-dev",
+    "comments": [
+      {
+        "user": "t3tra-dev",
+        "created_at": "2025-01-03T12:03:12Z",
+        "body": "@microsoft-github-policy-service agree\r\n"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T21:27:14Z",
+        "body": "Thanks for the work on this. It was included in a recent refactor for 0.1.0a1"
+      }
+    ]
+  },
+  {
+    "number": 245,
+    "title": "Rust rewrite",
+    "created_at": "2025-01-02T16:16:37Z",
+    "closed_at": "2025-01-03T00:46:42Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/245",
+    "body": "This tool seems great, but it's written in Python. Is there a timeline for when the Rust rewrite will be available?",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/245/comments",
+    "author": "jdiaz97",
+    "comments": [
+      {
+        "user": "CypherPotato",
+        "created_at": "2025-01-02T17:25:02Z",
+        "body": "Why? It works fine with Python.\n\nI don't see any advantage in this other than language favoritism."
+      },
+      {
+        "user": "jdiaz97",
+        "created_at": "2025-01-02T17:53:13Z",
+        "body": "To compile binaries\nTo get more performance\nTo use less RAM"
+      },
+      {
+        "user": "infogulch",
+        "created_at": "2025-01-02T19:31:27Z",
+        "body": "There is not one issue in this entire repo that claims that the project uses too much memory. How much memory does it use in cases you care about, and how much memory would you expect it to use?\n\nThe only issue in this repo related to performance says that it processes 1k pages in ~35s. For piecemeal conversion of a fixed set of files even this is completely fine. Are you running into limitations regarding the speed of the project?"
+      },
+      {
+        "user": "CypherPotato",
+        "created_at": "2025-01-02T19:46:24Z",
+        "body": "I think this issue creates a problem that really doesn't exist."
+      },
+      {
+        "user": "spencerthayer",
+        "created_at": "2025-01-03T00:33:37Z",
+        "body": "Python is fine."
+      }
+    ]
+  },
+  {
+    "number": 221,
+    "title": "UnicodeEncodeError: 'gbk' codec can't encode character '\\uff9f' in position 48: illegal multibyte sequence",
+    "created_at": "2024-12-27T08:19:39Z",
+    "closed_at": "2024-12-27T13:33:49Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/221",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/221/comments",
+    "author": "Hoshino-Yumetsuki",
+    "comments": [
+      {
+        "user": "l-lumin",
+        "created_at": "2024-12-27T10:29:39Z",
+        "body": "duplicated #198"
+      }
+    ]
+  },
+  {
+    "number": 218,
+    "title": "Add LLM-based image description to PptxConverter",
+    "created_at": "2024-12-26T08:37:28Z",
+    "closed_at": "2025-02-10T08:31:56Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/218",
+    "body": "This pull request introduces the use of a language model to generate descriptive alt text for images in the `markitdown` module. The key changes include the addition of a new method to generate descriptions using a language model and the integration of this method into the existing image processing workflow.\r\n\r\nIntegration of language model for image descriptions:\r\n\r\n* [`src/markitdown/_markitdown.py`](diffhunk://#diff-141141ccfa1a8ccf158e920bbe87f2f79731875aeb5fceb6c9bf1b34ac4dcf8fR771-R781): Added logic to `convert` method to use a language model client and model for generating image descriptions if provided in `kwargs`.\r\n\r\nNew method for generating descriptions:\r\n\r\n* [`src/markitdown/_markitdown.py`](diffhunk://#diff-141141ccfa1a8ccf158e920bbe87f2f79731875aeb5fceb6c9bf1b34ac4dcf8fR871-R895): Added `_get_llm_description` method to generate image descriptions using a language model. This method constructs a data URI for the image and sends a prompt to the language model client to generate the description.\r\n\r\n### Limitation\r\nBE AWARE BEFORE CONVERTING BIG PPTX FILE  \r\nIt may take a long time.\r\n\r\n### Suggestion\r\n- Add a parameter as kwargs, such as “use_llm,” inside the convert method to allow not only PPTX but also other converters to selectively use LLM for dispatching image descriptions.\r\n- Refactor the file handling logic in `_get_llm_description` into a separate function to make `_get_llm_description` reusable across all converters.\r\n- Add asynchronous logic for generating image descriptions.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/218/comments",
+    "author": "keenranger",
+    "comments": [
+      {
+        "user": "keenranger",
+        "created_at": "2024-12-26T08:38:31Z",
+        "body": "@microsoft-github-policy-service agree company=\"Asleep Inc.\""
+      },
+      {
+        "user": "l-lumin",
+        "created_at": "2024-12-26T10:16:19Z",
+        "body": "hi, could you add tests"
+      },
+      {
+        "user": "keenranger",
+        "created_at": "2024-12-27T07:12:11Z",
+        "body": "@l-lumin Simple LLM test added using the current `test.pptx` file. I included one page with some basic images."
+      }
+    ]
+  },
+  {
+    "number": 196,
+    "title": "feat: outlook \".msg\" file converter",
+    "created_at": "2024-12-21T22:09:34Z",
+    "closed_at": "2025-01-03T21:34:39Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/196",
+    "body": "This pull request introduces a new feature to the application: the ability to convert Outlook .msg files into markdown format by extracting email metadata and content. The implementation adds a new class, OutlookMsgConverter, which extends the DocumentConverter base class.\r\n\r\n---\r\n\r\n**Key Features**\r\n  Email Metadata Extraction:\r\n  Extracts and includes key headers like From, To, Subject  in the markdown output.\r\n  \r\n  Email Body Conversion:\r\n  Reads the email body content and formats it into markdown.\r\n  \r\n  Robust Encoding Support:\r\n  Attempts to decode content in UTF-16 first, falling back to UTF-8 and handling edge cases to ensure accurate conversion.\r\n\r\n---  \r\n\r\n**Implementation Details**\r\n  File Validation:\r\n  Checks the file extension (.msg) before proceeding with the conversion.\r\n  \r\n  Stream Parsing:\r\n  Uses olefile to parse the .msg file structure, extracting streams for headers and body content.\r\n  \r\n  Error Handling:\r\n  Includes comprehensive exception handling to manage invalid files or unexpected errors during the conversion process.\r\n\r\nPlease review the implementation and provide feedback or suggestions for improvement.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/196/comments",
+    "author": "muratcankurtulus",
+    "comments": [
+      {
+        "user": "muratcankurtulus",
+        "created_at": "2024-12-21T22:31:19Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "l-lumin",
+        "created_at": "2024-12-22T07:51:01Z",
+        "body": "could you add tests?"
+      },
+      {
+        "user": "muratcankurtulus",
+        "created_at": "2024-12-22T09:31:47Z",
+        "body": "added the tests."
+      }
+    ]
+  },
+  {
+    "number": 194,
+    "title": "fix(transcription): TRANSCRIPTION_CAPABLE should be iniztialized",
+    "created_at": "2024-12-21T20:17:11Z",
+    "closed_at": "2025-01-03T21:29:26Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/194",
+    "body": "Running `Markitdonw` on audio files without having `pydub` and `speech_recognition` installed would result in a NameError: name 'IS_AUDIO_TRANSCRIPTION_CAPABLE' is not defined.\r\n\r\nThis PR resolves that issue.\r\n\r\n#74 ",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/194/comments",
+    "author": "absadiki",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-01-03T21:19:27Z",
+        "body": "Looks good. Thanks."
+      }
+    ]
+  },
+  {
+    "number": 189,
+    "title": "Chore: precise typing for stream and json parameters",
+    "created_at": "2024-12-21T13:46:01Z",
+    "closed_at": "2025-03-08T05:27:17Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/189",
+    "body": "Propositions for resolving TODOs on typing:\r\n\r\n1. `IO[Any]` for `stream` parameter accommodates both binary and text streams.\r\n2. `Union[dict, list, Any]` for `json` parameter accommodates the possible types of JSON-like data structures.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/189/comments",
+    "author": "konverner",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-08T05:27:15Z",
+        "body": "Thanks for the contribution. \r\n\r\nThe main branch has been refactored, and streams are now properly type-hinted as BinaryIO. Json is still a problem, but I'm not sure how Union[Any, ...] is better than just Any.\r\n\r\nIn any case, I'll close this PR for now since the refactoring created any conflicts. If you want to re-open it and re-target it to the v0.0.X branch, I could probably merge this with fewer issues."
+      }
+    ]
+  },
+  {
+    "number": 188,
+    "title": "Bugz",
+    "created_at": "2024-12-21T13:35:56Z",
+    "closed_at": "2024-12-21T21:43:47Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/188",
+    "body": "U got bugz",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/188/comments",
+    "author": "ImDiPhErEnT",
+    "comments": [
+      {
+        "user": "alenfrey",
+        "created_at": "2024-12-21T16:48:12Z",
+        "body": "No wonder, its by Microsoft XD"
+      }
+    ]
+  },
+  {
+    "number": 164,
+    "title": "PDF to markdown is not good",
+    "created_at": "2024-12-20T07:10:03Z",
+    "closed_at": "2024-12-21T21:45:46Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/164",
+    "body": "while doing PDF to markdown, only text can be extracted, but the whole structure lost",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/164/comments",
+    "author": "charliedream1",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-21T21:45:46Z",
+        "body": "Related to #131; Lets continue discussion there."
+      }
+    ]
+  },
+  {
+    "number": 149,
+    "title": "ValueError: numpy.dtype size changed",
+    "created_at": "2024-12-19T15:29:56Z",
+    "closed_at": "2024-12-20T00:24:46Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/149",
+    "body": "I get the following error trying to convert any pdf to md:\n\n```\n❯ markitdown notes.pdf > notes.md\nTraceback (most recent call last):\n  File \"/Users/davidwoodburn/.config/python/bin/markitdown\", line 5, in <module>\n    from markitdown.__main__ import main\n  File \"/Users/davidwoodburn/.config/python/lib/python3.12/site-packages/markitdown/__init__.py\", line 5, in <module>\n    from ._markitdown import MarkItDown, FileConversionException, UnsupportedFormatException\n  File \"/Users/davidwoodburn/.config/python/lib/python3.12/site-packages/markitdown/_markitdown.py\", line 22, in <module>\n    import pandas as pd\n  File \"/Users/davidwoodburn/.config/python/lib/python3.12/site-packages/pandas/__init__.py\", line 46, in <module>\n    from pandas.core.api import (\n  File \"/Users/davidwoodburn/.config/python/lib/python3.12/site-packages/pandas/core/api.py\", line 1, in <module>\n    from pandas._libs import (\n  File \"/Users/davidwoodburn/.config/python/lib/python3.12/site-packages/pandas/_libs/__init__.py\", line 18, in <module>\n    from pandas._libs.interval import Interval\n  File \"interval.pyx\", line 1, in init pandas._libs.interval\nValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/149/comments",
+    "author": "davidwoodburn",
+    "comments": [
+      {
+        "user": "l-lumin",
+        "created_at": "2024-12-19T15:40:47Z",
+        "body": "could you try downgrading your NumPy version to 1.26.4? I think the issue might be caused by changes to the C API in NumPy 2.0"
+      },
+      {
+        "user": "davidwoodburn",
+        "created_at": "2024-12-19T23:22:23Z",
+        "body": "That worked. Thank you. Now, should being compatible with NumPy 2.0 be a separate issue?"
+      }
+    ]
+  },
+  {
+    "number": 148,
+    "title": "Does it create descriptions of images within files such as pdf, docx, etc?",
+    "created_at": "2024-12-19T14:18:28Z",
+    "closed_at": "2024-12-20T00:25:23Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/148",
+    "body": "Does it create descriptions of images within files such as pdf, docx, etc?  Readme says it can read jpeg images but I'm not clear whether it can within a pdf or docx file.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/148/comments",
+    "author": "BrunoCQ",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-20T00:25:12Z",
+        "body": "See #131 "
+      }
+    ]
+  },
+  {
+    "number": 142,
+    "title": "pdf collum",
+    "created_at": "2024-12-19T09:39:09Z",
+    "closed_at": "2024-12-21T21:48:41Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/142",
+    "body": "the converter not take in account if whe have two collum ",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/142/comments",
+    "author": "alphaleadership",
+    "comments": [
+      {
+        "user": "alphaleadership",
+        "created_at": "2024-12-19T09:40:35Z",
+        "body": "is a canva created pdf "
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-21T21:48:41Z",
+        "body": "Also related to #131 "
+      }
+    ]
+  },
+  {
+    "number": 136,
+    "title": "feat: enable Git support in devcontainer",
+    "created_at": "2024-12-19T07:46:26Z",
+    "closed_at": "2024-12-21T02:09:17Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/136",
+    "body": "Added a process to install Git only when the devcontainer starts.\r\nThis should be helpful when the editor has source control features.\r\nAvoided changes to the image and the addition of a separate Dockerfile.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/136/comments",
+    "author": "numekudi",
+    "comments": [
+      {
+        "user": "numekudi",
+        "created_at": "2024-12-19T07:53:06Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-20T23:05:54Z",
+        "body": "Thanks! We will likely move to a separate Dockerfiles for dev and running. In the meantime this looks good to us."
+      }
+    ]
+  },
+  {
+    "number": 129,
+    "title": "Safeguard against path traversal for ZipConverter",
+    "created_at": "2024-12-18T18:13:35Z",
+    "closed_at": "2024-12-18T20:11:01Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/129",
+    "body": "fix: prevent path traversal vulnerabilities in ZipConverter\r\n\r\nAdded a secure check for path traversal vulnerabilities in the ZipConverter class. Now validates extracted file paths using `os.path.commonprefix` to ensure all files remain within the intended extraction directory. Raises a `ValueError` if a path traversal attempt is detected.\r\n\r\n- Normalized file paths using `os.path.normpath`.\r\n- Added specific exception handling for `zipfile.BadZipFile` and traversal errors.\r\n- Ensured cleanup of extracted files after processing when `cleanup_extracted` is enabled.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/129/comments",
+    "author": "finchy",
+    "comments": [
+      {
+        "user": "finchy",
+        "created_at": "2024-12-18T18:14:55Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "finchy",
+        "created_at": "2024-12-18T18:15:38Z",
+        "body": "@microsoft-github-policy-service agree company=\"ThreatSTOP\""
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-18T19:49:30Z",
+        "body": "@Josh-XT FYI, can you please take a look?"
+      },
+      {
+        "user": "Josh-XT",
+        "created_at": "2024-12-18T19:59:41Z",
+        "body": "> @Josh-XT FYI, can you please take a look?\r\n\r\nLooks like a good improvement to me!"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-18T20:00:14Z",
+        "body": "This Zip issue is what keeps me up at night. (The problem is worse with tar files, which we do not support). \r\n\r\nPR, looks reasonable to me, but I might want to revisit this. We might even consider not including zip support by default -- making it optional."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-18T20:10:49Z",
+        "body": "Thinking on this more, I believe it is possible to open a byte stream for a file in the Zip, without requiring that we decompress the whole archive. We could in theory enumerate supported files, and one by one write them to a tmp file on disk (with a safe name and permissions), convert them, and then clean up.\r\n\r\nIn any case, I'll merge this PR now (as it is strictly better), and we can revisit in a future PR."
+      }
+    ]
+  },
+  {
+    "number": 125,
+    "title": "Checking if the file exists or not by simply opening and closing. #124",
+    "created_at": "2024-12-18T10:55:04Z",
+    "closed_at": "2025-03-06T21:34:34Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/125",
+    "body": "Issue number #124\r\n\r\nAfter:-\r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1289, in convert       \r\n    with open(source, 'r'):\r\n         ^^^^^^^^^^^^^^^^^\r\nFileNotFoundError: [Errno 2] No such file or directory: 'test.xlsx'\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\VK\\two.py\", line 4, in <module>\r\n    result = md.convert(\"test.xlsx\")\r\n             ^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1292, in convert       \r\n    raise FileNotFoundError\r\nFileNotFoundError\r\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/125/comments",
+    "author": "Viddesh1",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-20T22:53:00Z",
+        "body": "Why not use `os.path.exists()`?"
+      },
+      {
+        "user": "Viddesh1",
+        "created_at": "2024-12-21T07:02:44Z",
+        "body": "Hello @gagb ,\r\n\r\nThanks for taking a look.\r\n\r\n```\r\n        try:\r\n            with open(source, 'r'):\r\n                pass  # Just checking if the file can be opened; no need to read its contents.\r\n        except FileNotFoundError:\r\n            raise FileNotFoundError\r\n```\r\n\r\n```with open(\"file_name.xlsx\", \"r\")``` syntax checks if the file exists or not and also opens the file in read mode to see if the file is readable or not.\r\n\r\n```\r\n        if not os.path.exists(source):\r\n            raise FileNotFoundError(f\"File {source} does not exists. Please check\")\r\n```\r\n\r\n```os.path.exists(\"file_name.xlsx\")``` checks if the file name with extension is exists or not. Does not read it content by opening it.\r\n\r\nBy using the ```os.path.exists``` the trace back look like below:- (much shorter)\r\n\r\n```\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\VK\\two.py\", line 5, in <module>\r\n    result = md.convert(\"test.xlsx\")\r\n             ^^^^^^^^^^^^^^^^^^^^^^^\r\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1295, in convert\r\n    raise FileNotFoundError(f\"File {source} does not exists. Please check.\")\r\nFileNotFoundError: File test.xlsx does not exists. Please check.\r\n```\r\n\r\nRegards!\r\nViddesh\r\n"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-21T21:33:49Z",
+        "body": "> Hello @gagb ,\r\n> \r\n> Thanks for taking a look.\r\n> \r\n> ```\r\n>         try:\r\n>             with open(source, 'r'):\r\n>                 pass  # Just checking if the file can be opened; no need to read its contents.\r\n>         except FileNotFoundError:\r\n>             raise FileNotFoundError\r\n> ```\r\n> \r\n> `with open(\"file_name.xlsx\", \"r\")` syntax checks if the file exists or not and also opens the file in read mode to see if the file is readable or not.\r\n> \r\n> ```\r\n>         if not os.path.exists(source):\r\n>             raise FileNotFoundError(f\"File {source} does not exists. Please check\")\r\n> ```\r\n> \r\n> `os.path.exists(\"file_name.xlsx\")` checks if the file name with extension is exists or not. Does not read it content by opening it.\r\n> \r\n> By using the `os.path.exists` the trace back look like below:- (much shorter)\r\n> \r\n> ```\r\n> Traceback (most recent call last):\r\n>   File \"C:\\Users\\Admin\\Desktop\\pdfextract\\VK\\two.py\", line 5, in <module>\r\n>     result = md.convert(\"test.xlsx\")\r\n>              ^^^^^^^^^^^^^^^^^^^^^^^\r\n>   File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1295, in convert\r\n>     raise FileNotFoundError(f\"File {source} does not exists. Please check.\")\r\n> FileNotFoundError: File test.xlsx does not exists. Please check.\r\n> ```\r\n> \r\n> Regards! Viddesh\r\n\r\nWhat's an example of a case where file does exists but open throws an error?"
+      },
+      {
+        "user": "Viddesh1",
+        "created_at": "2024-12-22T08:01:55Z",
+        "body": "Hello @gagb ,\r\n\r\nFind some of example below:-\r\n\r\n1) File permission not provided by root user for read, write\r\n2) File is a directory eg test.xlsx\r\n3) File is locked\r\n4) Invalid encoding. (may be)\r\n5) File is corrupted.\r\n\r\nThanks!\r\nViddesh"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T21:34:34Z",
+        "body": "In the new version of the code, the file is opened much earlier and will throw a FileNotFound exception (or appropriate error), long before any converters are tried. I believe this resolves the issues.\r\n\r\nAlso, this PR breaks the ability to pass in URLs or open file handles.\r\n\r\nI am closing this PR for now, but please open a new issue or PR if the 0.1.X isn't sufficient for your needs."
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "title": "File not found traceback to long",
+    "created_at": "2024-12-18T10:31:28Z",
+    "closed_at": "2025-03-06T21:36:54Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/124",
+    "body": "```python\nfrom markitdown import MarkItDown\n\nmd = MarkItDown()\nresult = md.convert(\"test.xlsx\") # if text.xlsx file does not exist.\nprint(result.text_content)\n```\n\nif the test.xlsx file does not exists then traceback can become too long and uses pandas to check if the file exists or not using open() method.\n\n```\nTraceback (most recent call last):\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\VK\\two.py\", line 4, in <module>\n    result = md.convert(\"test.xlsx\")\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1302, in convert       \n    return self.convert_local(source, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1322, in convert_local \n    return self._convert(path, extensions, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1463, in _convert      \n    raise FileConversionException(\nmarkitdown._markitdown.FileConversionException: Could not convert 'test.xlsx' to Markdown. File type was recognized as ['.xlsx']. While converting the file, the following error was encountered:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1447, in _convert      \n    res = converter.convert(local_path, **_kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 726, in convert        \n    sheets = pd.read_excel(local_path, sheet_name=None)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\.venv\\Lib\\site-packages\\pandas\\io\\excel\\_base.py\", line 495, in read_excel\n    io = ExcelFile(\n         ^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\.venv\\Lib\\site-packages\\pandas\\io\\excel\\_base.py\", line 1550, in __init__\n    ext = inspect_excel_format(\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\.venv\\Lib\\site-packages\\pandas\\io\\excel\\_base.py\", line 1402, in inspect_excel_format\n    with get_handle(\n         ^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\.venv\\Lib\\site-packages\\pandas\\io\\common.py\", line 882, in get_handle  \n    handle = open(handle, ioargs.mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'test.xlsx'\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/124/comments",
+    "author": "Viddesh1",
+    "comments": [
+      {
+        "user": "Viddesh1",
+        "created_at": "2024-12-18T10:59:33Z",
+        "body": "After adding the try and except if file not found. Raises FileNotFoundError\n\n```\nTraceback (most recent call last):\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1289, in convert       \n    with open(source, 'r'):\n         ^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'test.xlsx'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\VK\\two.py\", line 4, in <module>\n    result = md.convert(\"test.xlsx\")\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Admin\\Desktop\\pdfextract\\markitdown\\src\\markitdown\\_markitdown.py\", line 1292, in convert       \n    raise FileNotFoundError\nFileNotFoundError\n```"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T21:36:54Z",
+        "body": "I believe this should be addressed in 0.1.0a1.\n\nI also don't think that long stack traces are a problem -- we want the to reflect where the error occurred.\n\nOn the other hand, I could certainly be convinced that the CLI should print nicer messages for common errors.\n\n"
+      }
+    ]
+  },
+  {
+    "number": 118,
+    "title": "Update _markitdown.py",
+    "created_at": "2024-12-18T08:27:30Z",
+    "closed_at": "2024-12-20T22:49:09Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/118",
+    "body": "Updated code to install modules when the try catch block finds a ModuleNotFOundError",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/118/comments",
+    "author": "GH0STH4CKER",
+    "comments": [
+      {
+        "user": "GH0STH4CKER",
+        "created_at": "2024-12-18T08:29:06Z",
+        "body": "> @microsoft-github-policy-service agree"
+      },
+      {
+        "user": "GH0STH4CKER",
+        "created_at": "2024-12-18T08:29:38Z",
+        "body": "> @GH0STH4CKER please read the following Contributor License Agreement(CLA). If you agree with the CLA, please reply with the following information.\r\n> \r\n> ```\r\n> @microsoft-github-policy-service agree [company=\"{your company}\"]\r\n> ```\r\n> \r\n> > Options:\r\n> > \r\n> > * (default - no company specified) I have sole ownership of intellectual property rights to my Submissions and I am not making Submissions in the course of work for my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree\r\n> > ```\r\n> > \r\n> > \r\n> >     \r\n> >       \r\n> >     \r\n> > \r\n> >       \r\n> >     \r\n> > \r\n> >     \r\n> >   \r\n> > \r\n> > * (when company given) I am making Submissions in the course of work for my employer (or my employer has intellectual property rights in my Submissions by contract or applicable law). I have permission from my employer to make Submissions and enter into this Agreement on behalf of my employer. By signing below, the defined term “You” includes me and my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree company=\"Microsoft\"\r\n> > ```\r\n> \r\n> Contributor License Agreement\r\n\r\n\r\n\r\n> @GH0STH4CKER please read the following Contributor License Agreement(CLA). If you agree with the CLA, please reply with the following information.\r\n> \r\n> ```\r\n> @microsoft-github-policy-service agree [company=\"{your company}\"]\r\n> ```\r\n> \r\n> > Options:\r\n> > \r\n> > * (default - no company specified) I have sole ownership of intellectual property rights to my Submissions and I am not making Submissions in the course of work for my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree\r\n> > ```\r\n> > \r\n> > \r\n> >     \r\n> >       \r\n> >     \r\n> > \r\n> >       \r\n> >     \r\n> > \r\n> >     \r\n> >   \r\n> > \r\n> > * (when company given) I am making Submissions in the course of work for my employer (or my employer has intellectual property rights in my Submissions by contract or applicable law). I have permission from my employer to make Submissions and enter into this Agreement on behalf of my employer. By signing below, the defined term “You” includes me and my employer.\r\n> > \r\n> > ```\r\n> > @microsoft-github-policy-service agree company=\"Microsoft\"\r\n> > ```\r\n> \r\n> Contributor License Agreement\r\n\r\n@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "l-lumin",
+        "created_at": "2024-12-18T09:12:47Z",
+        "body": "why do this when have pyproject.toml? I think It's unusual behavior."
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-19T08:54:58Z",
+        "body": "Thanks for the contribution. Same question as above."
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-20T22:49:10Z",
+        "body": "Thanks for the PR. @afourney and I discussed. In the new year we will examine how to best organize the growing list of dependencies so we are not ready to accept this PR/approach."
+      },
+      {
+        "user": "GH0STH4CKER",
+        "created_at": "2024-12-21T06:47:40Z",
+        "body": "> why do this when have pyproject.toml? I think It's unusual behavior.\r\n\r\nThanks for the feedback! The intent behind this change was to add runtime flexibility in case dependencies aren’t installed in certain environments, even though they're listed in pyproject.toml. This was meant to prevent runtime errors and make the script more self-sufficient, especially in cases where the environment might be missing certain packages. However, I totally get the concern about introducing unexpected behavior. Happy to refine this if it’s not in line with the project's standard approach!"
+      },
+      {
+        "user": "GH0STH4CKER",
+        "created_at": "2024-12-21T06:48:42Z",
+        "body": "> Thanks for the PR. @afourney and I discussed. In the new year we will examine how to best organize the growing list of dependencies so we are not ready to accept this PR/approach.\r\n\r\nWhy did you **closed** it ?"
+      }
+    ]
+  },
+  {
+    "number": 99,
+    "title": "TypeError: MarkItDown.__init__() got an unexpected keyword argument 'llm_client'",
+    "created_at": "2024-12-17T17:48:16Z",
+    "closed_at": "2024-12-17T21:55:16Z",
+    "labels": [
+      "bug",
+      "question"
+    ],
+    "url": "https://github.com/microsoft/markitdown/issues/99",
+    "body": "md = MarkItDown(llm_client=client, llm_model=\"gpt-4o\")",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/99/comments",
+    "author": "gurnamfs",
+    "comments": [
+      {
+        "user": "SigireddyBalasai",
+        "created_at": "2024-12-17T18:11:05Z",
+        "body": "make sure that you are using latest version use git install if possible "
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-17T21:43:14Z",
+        "body": "Sorry for not adding depreciation warning. See #101 "
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-17T21:48:41Z",
+        "body": "#101 will at least correct this issue. I'll cut a new release ASAP to address this."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-17T21:57:10Z",
+        "body": "Version 0.0.1a3 is out now, with this corrected."
+      }
+    ]
+  },
+  {
+    "number": 88,
+    "title": "EPUB Support",
+    "created_at": "2024-12-17T08:30:19Z",
+    "closed_at": "2025-03-17T14:53:19Z",
+    "labels": [
+      "enhancement",
+      "open for contribution"
+    ],
+    "url": "https://github.com/microsoft/markitdown/issues/88",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/88/comments",
+    "author": "albinkc",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2025-03-17T14:53:42Z",
+        "body": "Completed in v0.1.0a4"
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "title": "Update .dockerignore",
+    "created_at": "2024-12-17T04:28:25Z",
+    "closed_at": "2025-03-06T21:26:02Z",
+    "labels": [
+      "awaiting op response"
+    ],
+    "url": "https://github.com/microsoft/markitdown/pull/82",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/82/comments",
+    "author": "HarshKnight2477",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-20T19:06:37Z",
+        "body": "Please add a PR description."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-06T21:26:03Z",
+        "body": "Closed since no response or discussion since December. Re-open as needed."
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "title": "UnicodeEncodeError of gbk",
+    "created_at": "2024-12-17T02:32:56Z",
+    "closed_at": "2024-12-17T21:38:36Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/issues/79",
+    "body": "```powershell\nPS C:\\study\\其他\\社会人文\\毛选> markitdown .\\01.pdf > 01.md\nC:\\software\\Python310\\lib\\site-packages\\pydub\\utils.py:170: RuntimeWarning: Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work\n  warn(\"Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work\", RuntimeWarning)\nTraceback (most recent call last):\n  File \"C:\\software\\Python310\\lib\\runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"C:\\software\\Python310\\lib\\runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"C:\\software\\Python310\\Scripts\\markitdown.exe\\__main__.py\", line 7, in <module>\n  File \"C:\\software\\Python310\\lib\\site-packages\\markitdown\\__main__.py\", line 16, in main\n    print(result.text_content)\nUnicodeEncodeError: 'gbk' codec can't encode character '\\xa9' in position 297: illegal multibyte sequence\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/79/comments",
+    "author": "DangGwanHou",
+    "comments": [
+      {
+        "user": "kentaroy47",
+        "created_at": "2024-12-17T02:59:42Z",
+        "body": "duplicate of #78?"
+      },
+      {
+        "user": "wuhu1234567",
+        "created_at": "2024-12-17T04:52:50Z",
+        "body": "Have you used conda? That package seems unofficial and appears to have some bugs. I encountered the same issue when using conda, but the problem was resolved when I switched back to pip."
+      }
+    ]
+  },
+  {
+    "number": 73,
+    "title": "Fix LLM terminology in code",
+    "created_at": "2024-12-16T21:24:08Z",
+    "closed_at": "2024-12-17T01:04:33Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/73",
+    "body": "Replaced all occurrences of mlm_client and mlm_model with llm_client and llm_model for consistent terminology when referencing Large Language Models (LLMs).",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/73/comments",
+    "author": "CharlesCNorton",
+    "comments": [
+      {
+        "user": "CharlesCNorton",
+        "created_at": "2024-12-16T21:26:50Z",
+        "body": "@microsoft-github-policy-service agree [company=\"{AI}\"]\r\n"
+      },
+      {
+        "user": "CharlesCNorton",
+        "created_at": "2024-12-16T21:27:26Z",
+        "body": "@microsoft-github-policy-service agree\r\n"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-16T22:30:29Z",
+        "body": "I agree with this, but changing this now will break things for people already experimenting with the library. Can we go in 2 steps. First let's enable the llm_ keywords as an alias to mlm_, and mark mlm_ as deprecated. Then we can remove mlm in a future release (e.g., 1 or two releases from now)\r\n"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-17T00:24:42Z",
+        "body": "@CharlesCNorton can you please resolve the conflicts. Also double check any other mentions of mlm e.g., in the README. [Update] Sorry I see the two PRs. I'll merge them together.,"
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "title": "Fix LLM terms",
+    "created_at": "2024-12-16T21:23:09Z",
+    "closed_at": "2024-12-17T01:06:25Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/72",
+    "body": "Updated all instances of mlm_client and mlm_model to llm_client and llm_model in the readme. The previous terms (mlm_client and mlm_model) are incorrect in the context of configuring Large Language Models (LLMs), as \"MLM\" typically refers to Masked Language Models, which is unrelated to the intended functionality. This change aligns the documentation with standard naming conventions for LLM configuration parameters and improves clarity for users integrating with LLMs like OpenAI's GPT models.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/72/comments",
+    "author": "CharlesCNorton",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2024-12-16T22:16:50Z",
+        "body": "Indeed. This code dates back a while (to about the time of gpt-4-vision-preview), at which point it wasn't clear that to call the darned things, while making it clear the multimodality was necessary.\r\n\r\nAnyhow: I agree with this, but changing this now will break things for people already experimenting with the library. Can we go in 2 steps. First let's enable the llm_ keywords as an alias to mlm_, and mark mlm_ as deprecated. Then we can remove mlm in a future release (e.g., 1 or two releases from now)"
+      }
+    ]
+  },
+  {
+    "number": 71,
+    "title": "feat: Add IpynbConverter",
+    "created_at": "2024-12-16T19:42:05Z",
+    "closed_at": "2024-12-17T23:41:51Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/71",
+    "body": "- Implemented IpynbConverter class for converting Jupyter Notebook (.ipynb) files into Markdown format.\r\n- Supports markdown cells, code cells and raw cells.\r\n- First markdown heading is used as the title if no title is found in notebook metadata.\r\n- Created a test notebook (`test_notebook.ipynb`) to verify the functionality of the converter.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/71/comments",
+    "author": "AumGupta",
+    "comments": [
+      {
+        "user": "AumGupta",
+        "created_at": "2024-12-16T19:45:06Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-16T22:33:54Z",
+        "body": "This is pretty cool, and I like that it doesn't really add any new dependencies (since it's all just json). "
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-16T22:40:45Z",
+        "body": "Looks like a small formatting error. \r\n\r\nCan you do a:\r\n\r\n```bash\r\npre-commit install\r\npre-commit run --all-files\r\n```\r\n\r\nAnd then re-commit / push _markitdown.py? Very likely, the formatting will be corrected automatically.\r\n"
+      },
+      {
+        "user": "AumGupta",
+        "created_at": "2024-12-17T05:20:56Z",
+        "body": "> Looks like a small formatting error.\r\n> \r\n> Can you do a:\r\n> \r\n> ```shell\r\n> pre-commit install\r\n> pre-commit run --all-files\r\n> ```\r\n> \r\n> And then re-commit / push _markitdown.py? Very likely, the formatting will be corrected automatically.\r\n\r\n@afourney brother, I've done it."
+      }
+    ]
+  },
+  {
+    "number": 63,
+    "title": "Ensure hatch is installed before running tests",
+    "created_at": "2024-12-16T13:23:49Z",
+    "closed_at": "2024-12-17T01:40:15Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/63",
+    "body": "This update adds a prerequisite check to ensure that the **hatch** tool is installed before running tests. \r\nWithout it, the test commands won't execute as expected.\r\n\r\n**Key Changes:**\r\n\r\n- Added instructions to install hatch in the Running Tests section of the documentation.\r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/63/comments",
+    "author": "cybernobie",
+    "comments": [
+      {
+        "user": "Viddesh1",
+        "created_at": "2024-12-16T15:57:38Z",
+        "body": "I have a question why not put hatch in pyproject.toml file as dependencies? It can be directly install from source when needed like pip install -e ."
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "title": "new file",
+    "created_at": "2024-12-16T12:02:51Z",
+    "closed_at": "2024-12-17T00:07:53Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/59",
+    "body": null,
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/59/comments",
+    "author": "Moustafaplusplus",
+    "comments": [
+      {
+        "user": "Viddesh1",
+        "created_at": "2024-12-16T16:00:16Z",
+        "body": "Empty file ?\r\n"
+      }
+    ]
+  },
+  {
+    "number": 51,
+    "title": "Why remove image dataurl, That`s useful",
+    "created_at": "2024-12-16T07:55:25Z",
+    "closed_at": "2025-03-21T02:38:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/markitdown/issues/51",
+    "body": "```python\n        # Remove dataURIs\n        if src.startswith(\"data:\"):\n            src = src.split(\",\")[0] + \"...\"\n```\n\nWhen I convet a DOCX file, I noticed that every image lost. by trace code , docx converted to html properly and image store in html as dataurl, but when html convert to markdown, you removed that in def convert_img at line 120 whitout any config. Every image lost without any alert.\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/51/comments",
+    "author": "fab617",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2024-12-16T18:12:58Z",
+        "body": "Perhaps we can make this optional, but the reason they are removed is because we were feeding the text_content into LLMs (the primary motivation for development), and the base64-encoded images would overwhelm the context windows."
+      },
+      {
+        "user": "tccgogogo",
+        "created_at": "2024-12-18T09:03:05Z",
+        "body": "> 也许我们可以将其设为可选，但删除它们的原因是我们将text_content提供给 LLM（开发的主要动机），而 base64 编码的图像会压倒上下文窗口。\n\n\n\n> Perhaps we can make this optional, but the reason they are removed is because we were feeding the text_content into LLMs (the primary motivation for development), and the base64-encoded images would overwhelm the context windows.\n\nWhen I convert a PDF to Markdown using the following code, it only outputs the textual information without any image information.\nmd = MarkItDown(llm_client=client, llm_model=\"qwen-long\")\nresult = md.convert(\"\")\nprint(result.text_content)\n"
+      },
+      {
+        "user": "fab617",
+        "created_at": "2024-12-18T09:30:55Z",
+        "body": "> Perhaps we can make this optional, but the reason they are removed is because we were feeding the text_content into LLMs (the primary motivation for development), and the base64-encoded images would overwhelm the context windows.\n\nI see, maybe we could make another copy without images and feed it to LLMs, so user can get the full document."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-03-21T02:38:21Z",
+        "body": "Fixed in #1140"
+      }
+    ]
+  },
+  {
+    "number": 49,
+    "title": "Small type hint fixing + added makefile with couple commands.",
+    "created_at": "2024-12-16T05:00:40Z",
+    "closed_at": "2024-12-18T04:05:00Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/49",
+    "body": "Hello!\r\n\r\nI've found some places where type hinting was missed, so I decided to fix these places and also added Makefile to simplify the command run. \r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/49/comments",
+    "author": "Abdujabbar",
+    "comments": [
+      {
+        "user": "Abdujabbar",
+        "created_at": "2024-12-16T07:15:30Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-16T23:46:54Z",
+        "body": "@jackgerrits do you think it makes sense to mix make files and pyproject.toml ?"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-16T23:49:49Z",
+        "body": "Related #46 "
+      },
+      {
+        "user": "jackgerrits",
+        "created_at": "2024-12-17T02:41:49Z",
+        "body": "> @jackgerrits do you think it makes sense to mix make files and pyproject.toml ?\r\n\r\nLooks like this repo has no existing scripts or a system for defining scripts to run. A make file is totally reasonable and lightweight :) Can always be replaced if something like poe is used in future"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-18T00:37:06Z",
+        "body": "@afourney are you okay with including a make file?"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-18T00:40:22Z",
+        "body": "> @afourney are you okay with including a make file?\r\n\r\nSure. If @jackgerrits says it's fine, I'll take that as gospel :) "
+      },
+      {
+        "user": "jackgerrits",
+        "created_at": "2024-12-18T14:37:52Z",
+        "body": "> > @afourney are you okay with including a make file?\r\n> \r\n> Sure. If @jackgerrits says it's fine, I'll take that as gospel :)\r\n\r\nGiven the simplicity of the makefile, personally I'd not add it to just keep the repo simple. But if it is helping someone then it's no harm"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-18T19:54:23Z",
+        "body": "Sorry @Abdujabbar, we appreciate your contributions though."
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "title": "'res' variable not declared inside _convert before usage",
+    "created_at": "2024-12-15T18:07:47Z",
+    "closed_at": "2025-02-28T07:11:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/markitdown/issues/40",
+    "body": "`res` variable inside `MarkItDown` class `_convert` method is not declared before usage:\n\n```\n_markitdown.py\", line 1045, in _convert\n    if res is not None:\n       ^^^\nUnboundLocalError: cannot access local variable 'res' where it is not associated with a value\n```",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/40/comments",
+    "author": "dsimanis",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-15T19:17:58Z",
+        "body": "Can you please share more context for repro?"
+      },
+      {
+        "user": "sambartik",
+        "created_at": "2024-12-15T21:40:34Z",
+        "body": "> Can you please share more context for repro?\n\nI got this error when I tried to convert a non-existing pdf file:\n\n```python\nfrom markitdown import MarkItDown\n\nmarkitdown = MarkItDown()\nresult = markitdown.convert(\"file-that-doesnt-exist.pdf\")\nprint(result.text_content)\n```"
+      },
+      {
+        "user": "tarrasque73",
+        "created_at": "2024-12-16T10:15:47Z",
+        "body": "I have the same issue just by executing the sample code on github (using a PDF) and the file definitely exists\n\n```\nfrom markitdown import MarkItDown\n\nmarkitdown = MarkItDown()\nresult = markitdown.convert(\"test.pdf\")\nprint(result.text_content)\n```"
+      },
+      {
+        "user": "sidesteps",
+        "created_at": "2024-12-16T11:26:20Z",
+        "body": "Getting same error for pdf file that exists in the current dir."
+      },
+      {
+        "user": "sambartik",
+        "created_at": "2024-12-16T14:42:19Z",
+        "body": "> I have the same issue just by executing the sample code on github (using a PDF) and the file definitely exists\n> \n> ```\n> from markitdown import MarkItDown\n> \n> markitdown = MarkItDown()\n> result = markitdown.convert(\"test.pdf\")\n> print(result.text_content)\n> ```\n\nI can't reproduce your results. This exact code works for me with repo's example test.pdf in CWD.\n\nEnvironment:\n```\nPython 3.13.1\nmacOS 15.1.1 x86_64\nmarkitdown             0.0.1a2\n```"
+      },
+      {
+        "user": "sidesteps",
+        "created_at": "2024-12-16T15:24:50Z",
+        "body": "With exact same code and test.pdf in cwd I get:\n\n```\nTraceback (most recent call last):\n  File \"/home/sstep/tomd/tomd.py\", line 5, in <module>\n    result = md.convert(\"test.pdf\")\n             ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/sstep/tomd/.venv/lib/python3.12/site-packages/markitdown/_markitdown.py\", line 902, in convert\n    return self.convert_local(source, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/sstep/tomd/.venv/lib/python3.12/site-packages/markitdown/_markitdown.py\", line 922, in convert_local\n    return self._convert(path, extensions, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/sstep/tomd/.venv/lib/python3.12/site-packages/markitdown/_markitdown.py\", line 1045, in _convert\n    if res is not None:\n       ^^^\nUnboundLocalError: cannot access local variable 'res' where it is not associated with a value\n```\n\n\n```\nPython 3.12.7\nmarkitdown   0.0.1a2\nArch Linux 6.12.4-arch1-1\n```"
+      },
+      {
+        "user": "dsimanis",
+        "created_at": "2024-12-16T16:24:49Z",
+        "body": "> Can you please share more context for repro?\n\nSimply need to declare `res = None` in the beginning of the `_convert` method befor using it."
+      },
+      {
+        "user": "tarrasque73",
+        "created_at": "2024-12-16T17:37:25Z",
+        "body": "> > I have the same issue just by executing the sample code on github (using a PDF) and the file definitely exists\n> > ```\n> > from markitdown import MarkItDown\n> > \n> > markitdown = MarkItDown()\n> > result = markitdown.convert(\"test.pdf\")\n> > print(result.text_content)\n> > ```\n> \n> I can't reproduce your results. This exact code works for me with repo's example test.pdf in CWD.\n> \n> Environment:\n> \n> ```\n> Python 3.13.1\n> macOS 15.1.1 x86_64\n> markitdown             0.0.1a2\n> ```\n\nI'm using Python 3.12.8 on Win 11"
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "title": "Catching pydub's warning of ffmpeg or avconv missing",
+    "created_at": "2024-12-15T16:34:19Z",
+    "closed_at": "2024-12-16T23:28:53Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/39",
+    "body": "Made a small PR to catch pydub's warning of ffmpeg and avconv missing and used it to also disable audio transcript.\r\n\r\nConnected issue #21",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/39/comments",
+    "author": "SH4DOW4RE",
+    "comments": [
+      {
+        "user": "SH4DOW4RE",
+        "created_at": "2024-12-15T16:35:44Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-15T20:55:40Z",
+        "body": "Can you please run pre-commit? 'pre-commit run --all-files'"
+      },
+      {
+        "user": "SH4DOW4RE",
+        "created_at": "2024-12-15T21:11:32Z",
+        "body": "~~where do i run that ? (first time seeing pre-commit)~~\r\nNever mind i found it, just pushed a new commit after running pre-commit"
+      }
+    ]
+  },
+  {
+    "number": 34,
+    "title": "[BUG] JSON not supported?",
+    "created_at": "2024-12-15T12:13:29Z",
+    "closed_at": "2025-01-04T00:40:44Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/microsoft/markitdown/issues/34",
+    "body": "Based on the README, I see that JSON is a supported extension, however, when I passed a sample JSON to it, I get the following error:\n\n```\nmarkitdown._markitdown.UnsupportedFormatException: Could not convert '/tmp/SAMPLE-FILE.json' to Markdown.\nThe formats ['.json', '.json'] are not supported.\n```\n\nPlease look into this, thanks! ",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/34/comments",
+    "author": "adhishthite",
+    "comments": [
+      {
+        "user": "olin2011",
+        "created_at": "2024-12-16T02:47:29Z",
+        "body": "`markitdown._markitdown.UnsupportedFormatException: Could not convert 'qa-1213.csv' to Markdown. The formats ['.csv'] are not supported.`\n\nI tried csv, json, and both had the same problem."
+      },
+      {
+        "user": "realrajaryan",
+        "created_at": "2024-12-16T02:55:19Z",
+        "body": "After taking a look, I believe there was an assumption that **PlainTextConverter** class would’ve handled the file extensions mentioned under **“Various other text-based formats”** in the README. \n\nHowever, the PlainTextConverter class only handles files that **mimetypes** identifies as **text/***, but JSON text for example has a MIME type of **application/json**.\n\nAdding converters for these extensions separately would be the best way to go about fixing this."
+      },
+      {
+        "user": "Gad",
+        "created_at": "2024-12-18T21:53:47Z",
+        "body": "Would a converter that strips JSON text of its nested syntax delimiters be ok for the purpose of \"indexing, text analysis\" while keeping some indentation (thus loosing e.g. the distinction between key/values and arrays) or should reformatting it into e.g. tables  be more useful for this project ? "
+      },
+      {
+        "user": "Evgeny105",
+        "created_at": "2024-12-23T15:07:14Z",
+        "body": "I could be wrong, but in my case, the problem with text formats was solved when I installed the \"mime-support\" package additionally in the docker container"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-01-04T00:13:46Z",
+        "body": "> After taking a look, I believe there was an assumption that **PlainTextConverter** class would’ve handled the file extensions mentioned under **“Various other text-based formats”** in the README.\n> \n> However, the PlainTextConverter class only handles files that **mimetypes** identifies as **text/***, but JSON text for example has a MIME type of **application/json**.\n> \n> Adding converters for these extensions separately would be the best way to go about fixing this.\n\nYou are correct. This was my assumption, and it was wrong. I'll address this asap."
+      },
+      {
+        "user": "afourney",
+        "created_at": "2025-01-04T00:42:12Z",
+        "body": "Addressed in #261. Other PRs (#219 and #251) that do something more sophisticated are still under review."
+      },
+      {
+        "user": "homanp",
+        "created_at": "2025-02-06T09:23:20Z",
+        "body": "@afourney this is still and issue in `0.0.1-a3`"
+      }
+    ]
+  },
+  {
+    "number": 19,
+    "title": "Fix character decoding issues with text-like files",
+    "created_at": "2024-12-14T08:04:49Z",
+    "closed_at": "2024-12-16T21:49:48Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/19",
+    "body": "fixes #18\r\n\r\nNon utf-8 html pages are still not supported. It will need detecting language from content-type header or meta tags like `<meta charset=\"utf-8\" />` or `<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />`. And at last fall back to auto detecting.\r\n\r\nBing, WikiPedia and Youtube converters don't need this as they always have utf-8 encoding.",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/19/comments",
+    "author": "brc-dd",
+    "comments": [
+      {
+        "user": "brc-dd",
+        "created_at": "2024-12-14T08:05:38Z",
+        "body": "@microsoft-github-policy-service agree"
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-14T09:23:06Z",
+        "body": "@brc-dd can you please expand the tests? Or at least share an example csv with this error? "
+      },
+      {
+        "user": "brc-dd",
+        "created_at": "2024-12-14T09:37:40Z",
+        "body": "Updated the tests."
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-14T22:51:55Z",
+        "body": "Can you please run the pre-commit checks? I think it should be `pre-commit run --all-files`."
+      },
+      {
+        "user": "brc-dd",
+        "created_at": "2024-12-15T05:08:41Z",
+        "body": "Formatted."
+      }
+    ]
+  },
+  {
+    "number": 16,
+    "title": "Add example of using MarkItDown with OpenAI to README",
+    "created_at": "2024-12-13T23:54:35Z",
+    "closed_at": "2024-12-15T02:55:43Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/16",
+    "body": "Add an example of using MarkItDown with OpenAI integration to the `README.md`.\r\n\r\n* Add a new section \"Example with OpenAI Integration\".\r\n* Include code to import `MarkItDown` and `OpenAI`.\r\n* Show initializing the `OpenAI` client.\r\n* Demonstrate converting an image file using `MarkItDown` with the `OpenAI` client.\r\n\r\nAddresses #15 #12 #9 \r\n",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/16/comments",
+    "author": "gagb",
+    "comments": [
+      {
+        "user": "kylehowells",
+        "created_at": "2024-12-14T01:52:13Z",
+        "body": "I didn't realise the model could do this."
+      },
+      {
+        "user": "gagb",
+        "created_at": "2024-12-15T02:56:02Z",
+        "body": "Fixed by the other PR."
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "title": "CLI usage instructions",
+    "created_at": "2024-12-13T19:06:16Z",
+    "closed_at": "2024-12-16T21:45:06Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/11",
+    "body": "Plus added  a PyPI badge",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/11/comments",
+    "author": "simonw",
+    "comments": [
+      {
+        "user": "gagb",
+        "created_at": "2024-12-13T19:46:25Z",
+        "body": "@simonw thank you so much for the PR! You need to accept CLA!"
+      },
+      {
+        "user": "afourney",
+        "created_at": "2024-12-14T05:11:57Z",
+        "body": "Love it. Thanks.\r\n\r\n[edit]\r\nOh @gagb is right. It won't let me merge until the CLA is accepted, @simonw "
+      },
+      {
+        "user": "loeffel-io",
+        "created_at": "2024-12-14T17:34:44Z",
+        "body": "small fr for the cli: \r\n\r\n- static binary (no idea if this is possible in python, but its nearly 2025)\r\n- homebrew support "
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "title": "Remove invalid classifiers",
+    "created_at": "2024-12-13T18:53:44Z",
+    "closed_at": "2024-12-14T05:10:54Z",
+    "labels": [],
+    "url": "https://github.com/microsoft/markitdown/pull/10",
+    "body": "requires-python says 3.10 and higher only",
+    "comments_url": "https://api.github.com/repos/microsoft/markitdown/issues/10/comments",
+    "author": "simonw",
+    "comments": [
+      {
+        "user": "afourney",
+        "created_at": "2024-12-14T05:03:23Z",
+        "body": "Yup. Good catch. Thanks! Will merge once I sort out why CodeQL didn't run."
+      }
+    ]
+  }
+]

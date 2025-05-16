@@ -1,0 +1,38 @@
+[
+  {
+    "number": 321,
+    "title": "Blocked image generation should throw",
+    "created_at": "2025-03-18T17:00:38Z",
+    "closed_at": "2025-03-28T17:28:59Z",
+    "labels": [
+      "type: bug",
+      "priority: p2"
+    ],
+    "url": "https://github.com/googleapis/js-genai/issues/321",
+    "body": "Right now depending on the type of image generation block it will either throw or return a response without an image. There seems to be a pre-filter that throws, giving an error like:\n\n    400 Bad Request. {\"error\":{\"code\":400,\"message\":\"Image generation failed with the following error: The prompt could not be submitted. This prompt contains sensitive words that violate Google's Responsible AI practices.\n\nBut there's a separate failure condition that does not throw but returns a response like:\n\n```ts\n{\n  generatedImages: [\n    {\n      image: {},\n      raiFilteredReason: \"Unable to show generated images. All images were filtered out because they violated Vertex AI's usage guidelines. You will not be charged for blocked images. Try rephrasing the prompt. If you think this was an error, send feedback. Support codes: 29310472\",\n      safetyAttributes: {}\n    }\n  ]\n}\n```\n\nI believe the latter should throw with the `raiFilteredReason` included in the error message. If the generation does not return any images, it is an error.",
+    "comments_url": "https://api.github.com/repos/googleapis/js-genai/issues/321/comments",
+    "author": "mbleigh",
+    "comments": [
+      {
+        "user": "yyyu-google",
+        "created_at": "2025-03-26T18:17:05Z",
+        "body": "Hi @mbleigh \n\nI assume for both cases, you are talking about the `models.generateImages()` method is it? Because there are two ways to obtain images, one is by using `models.generateImages()`, another is by using `models.generateContent()` with a `responseModalites = ['TEXT', 'IMAGE']` config."
+      },
+      {
+        "user": "matthew29tang",
+        "created_at": "2025-03-26T18:30:16Z",
+        "body": "For `models.generateImages()` there are 2 common reasons why images may not be generated, which you listed above.\n\n1) Prompt could not be submitted. This means that the user's prompt failed the filter checks, so no image generation can be done. This throws an error\n\n2) The prompt is fine, but the model produced (at least) some results that failed the filter checks. Sometimes if multiple images are requested, some images may be filtered out, while others can pass through. That's why there is the field raiFilteredReason, to help explain what happened. It would be inconsistent to change the behavior of throwing on raiFilteredReason depending on the number of images requested, so we do not throw an error if any raiFilteredReason"
+      },
+      {
+        "user": "mbleigh",
+        "created_at": "2025-03-26T18:58:06Z",
+        "body": "This creates inconsistent and undesirable behavior that has to be programmed around. You could do something like:\n\n```ts\nif (response.generatedImages.every(img => !!img.raiFilteredReason)) {\n  throw new Error(\"All generated images were filtered by safety checks\");\n}\n```\n\nfrom a developer's perspective, if I try to generate images and none are returned, how is it anything other than an exception?\n\nIt's awkward to have to handle errors for the same call twice in different places."
+      },
+      {
+        "user": "matthew29tang",
+        "created_at": "2025-03-28T17:28:59Z",
+        "body": "> \"if I try to generate images and none are returned, how is it anything other than an exception?\"\n\nThere are certain parameters that can return metadata about blocked images (include_rai_reason, include_safety_attributes) which should be returned without throwing an exception.\n\nThis is also the API's behavior, so the SDK will not be doing anything to change this behavior."
+      }
+    ]
+  }
+]

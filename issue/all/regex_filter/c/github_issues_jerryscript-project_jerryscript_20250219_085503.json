@@ -1,0 +1,771 @@
+[
+  {
+    "number": 5006,
+    "title": "gc for strings in jerryscript",
+    "created_at": "2022-05-10T04:44:16Z",
+    "closed_at": "2022-07-22T07:32:52Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/5006",
+    "body": "will string be reclaimed when gc runs in jerryscript. how string will be managed when it is no longer needed. for example\r\n```code\r\nfunction PrintHello() \r\n{\r\n     var hello = \"hello\"\r\n}\r\nfunction main()\r\n{\r\n    PrintHello();\r\n}\r\n```\r\nwhen `PrintHello` call in `main` finished, will \"hello\" be reclaimed if we do not have enough memory for new objects allocation ",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/5006/comments",
+    "author": "godmiaozi",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2022-05-23T09:46:20Z",
+        "body": "Hi @godmiaozi!\r\n\r\nDefining `no longer is needed` is not that simple. First of all, \"hello\" string is not allocated in each invocation of the `PrintHello` function, it's stored in the function's literal pool as a constant. The parser uses the same string table for every function to prevent duplicated existence of static string constants all the string are alive until the engine is not terminated. So summarize, reclaiming the memory for static strings are not supported by the engine, however the dynamically allocated strings like `\"foo\" + \"bar\"` gets garbage collected when they are no longer needed of course."
+      }
+    ]
+  },
+  {
+    "number": 4839,
+    "title": "Javascript Classes...when using multiple calls to jerry_eval",
+    "created_at": "2021-11-30T15:10:58Z",
+    "closed_at": "2021-12-08T10:55:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/4839",
+    "body": "Hi,\r\n\r\nI've just started using JerryScript, it looks great! I have a question around Javascript classes though...\r\n\r\nThe following executes as expected when running it with jerry_eval...\r\n\r\n\r\n```\r\nclass Foo {\r\n   bar() {\r\n     print('Hello World!');\r\n   }\r\n};\r\n\r\nvar foo = new Foo();\r\nfoo.bar();\r\n```\r\n\r\n\r\nHowever, when calling jerry_eval to create the class......\r\n\r\n```\r\nclass Foo {\r\n   bar() {\r\n     print('Hello World!');\r\n   }\r\n};\r\n```\r\n\r\n\r\n...and then calling jerry_eval to use the class fails...\r\n\r\n```\r\nvar foo = new Foo();\r\nfoo.bar();\r\n```\r\n\r\n\r\nPerhaps this is a scope thing? or deliberately designed this way to minimise memory usage?\r\n\r\nThanks in advance!\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/4839/comments",
+    "author": "Dave-Osborne",
+    "comments": [
+      {
+        "user": "dbatyai",
+        "created_at": "2021-12-02T16:26:28Z",
+        "body": "Hi Dave!\r\n\r\nThis is indeed scoping related, there are two key parts to this.\r\n\r\nThe first thing is that classes are lexically scoped. This is similar to how variables declared with `let` work, they can only be referenced until the lexical environment they were declared in goes out of scope.\r\n\r\n```js\r\nclass Foo {};\r\n\r\n{\r\n  class Bar {};\r\n  \r\n  // Both Foo and Bar are usable here\r\n}\r\n\r\n// Foo is usable, Bar will throw a ReferenceError\r\n```\r\n\r\nSecondly, eval calls are always evaluated in a new lexical environment, which is destroyed once the eval call is finished.\r\nIn the first example, both the class declaration and constructor call are in the same lexical environment that was created by the eval call, and so `Foo` can be resolved.\r\n\r\nIn the second example however, the lexical environment where the class was declared will go out of scope once the first eval call is finished. The second eval will be unable to reference any lexical variables from the previous lexical environment. It would roughly be equivalent to the following code:\r\n\r\n```js\r\n// First eval\r\n{\r\n  class Foo {};\r\n}\r\n\r\n// Second eval\r\n{\r\n  new Foo();\r\n}\r\n```\r\n"
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2021-12-08T10:55:49Z",
+        "body": "According to the detailed description above the original issue seems resolved to me. "
+      }
+    ]
+  },
+  {
+    "number": 4798,
+    "title": "Using the JerryScript Parser to make other tooling",
+    "created_at": "2021-10-21T10:40:41Z",
+    "closed_at": "2021-10-28T11:33:39Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/4798",
+    "body": "Hello!\r\n\r\nI was looking at ESBuild and other alternatives to Webpack and Rollup that are not written in JS themselves and wondered if it was possible to utilize the JerryScript parser?\r\n\r\nLooking at the `jerry-core/parser` files, it seems that it would be possible to. But the \"public\" headers in `/include` don't seem to mention the parser at all (or I just overlooked it, quite possible).\r\n\r\nWhat function would I be going for to just parse JS into an AST and then walk or possibly re-write it? For instance, to re-write imports, or to append other functions and alike.\r\n\r\nThanks and kind regards,\r\nIngwie",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/4798/comments",
+    "author": "IngwiePhoenix",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2021-10-28T11:18:49Z",
+        "body": "The function you are looking for does not exists since JerryScript's parser does not build AST. It generates the bytecode while reading the source and the scanner component is used to guide the parser on situations where a simple lookahead for the next token is not enough."
+      },
+      {
+        "user": "IngwiePhoenix",
+        "created_at": "2021-10-28T11:33:39Z",
+        "body": "Ohhh, I see. Thank you! I wasn't aware that the parser immediately goes into outputting bytecode. I'll have to look somewhere else for a pure to-AST parser then.\r\n\r\nI am closing this since the question is answered; but if you have an idea, i'd be happy to hear about it!"
+      }
+    ]
+  },
+  {
+    "number": 4263,
+    "title": "jerry-script snapshot documentation doesn't explain how to generate snapshot for function (-f)",
+    "created_at": "2020-10-01T14:45:01Z",
+    "closed_at": "2020-10-01T14:51:48Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/4263",
+    "body": "I spend some time trying to understand how to use `jerry-generate` to generate bycode for functions and not scripts \r\n(jerry_generate_function_snapshot vs jerry_generate_snapshot)\r\n\r\nthe jerry-generate --help is not really helpful:\r\n```\r\n./jerry-snapshot --help                                                       jerryscript/git/master !\r\n./jerry-snapshot [-h] [COMMAND]\r\n\r\n  -h, --help            print this help and exit\r\n  COMMAND               specify the command\r\n\r\nAvailable commands:\r\n  generate\r\n  litdump\r\n  merge\r\n\r\nPassing -h or --help after a command displays its help.\r\n```\r\n\r\nTo figure I need to use: \r\n`./jerry-snapshot generate ./function.js -f _function`\r\n\r\nI think the `-f` option is explained nowhere in the doc, I figured it from the code.\r\n\r\n###### JerryScript revision\r\nmaster: 0ffe1665\r\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/4263/comments",
+    "author": "jvermillard",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2020-10-01T14:49:35Z",
+        "body": "Hi @jvermillard!\r\n\r\nPassing `--help` after `generate` cli options gives you more detailed information about the capabilities of the snapshot generator.\r\n\r\n```\r\n$ build/bin/jerry-snapshot generate --help\r\nbuild/bin/jerry-snapshot generate [-h] [-s] [-f ARGUMENTS] [--load-literals-list-format FILE]\r\n  [--show-opcodes] [-o FILE] [FILE]\r\n\r\n  -h, --help            print this help and exit\r\n  -s, --static          generate static snapshot\r\n  -f, --generate-function-snapshot ARGUMENTS\r\n                        generate function snapshot with given arguments\r\n  --load-literals-list-format FILE\r\n                        import literals from list format (for static snapshots)\r\n  --show-opcodes        print generated opcodes\r\n  -o FILE               specify output file name (default: js.snapshot)\r\n  FILE                  input source file\r\n\r\n```"
+      },
+      {
+        "user": "jvermillard",
+        "created_at": "2020-10-01T14:51:48Z",
+        "body": "damn I tried `jerry-snapshot --help generate` and `jerry-snapshot help generate` not this one and wait straight ot the code :facepalm:  \r\n\r\nthanks"
+      }
+    ]
+  },
+  {
+    "number": 4107,
+    "title": " Does jerry have a tool similar to d8 in v8 to measure the time of each stage of compilation and execution?",
+    "created_at": "2020-08-04T09:30:31Z",
+    "closed_at": "2020-11-16T14:06:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/4107",
+    "body": "\r\nDoes jerry have a tool similar to d8 in v8 to measure the time of each stage of compilation and execution?",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/4107/comments",
+    "author": "gofreelee",
+    "comments": [
+      {
+        "user": "dbatyai",
+        "created_at": "2020-08-10T13:35:15Z",
+        "body": "In jerry we don't have multiple stages of compilation so we never really had the need for very intricate measurment tools. We have a `--parse-only` flag for measuring compilation times of scripts if necessary, otherwise we usually just measure the total elapsed time which includes both compilation and execution.\r\n\r\nI'm not entirely famailiar with what options d8 provides, is there anything specific you're interested in?"
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2020-11-16T14:06:37Z",
+        "body": "Closing due to inactivity."
+      }
+    ]
+  },
+  {
+    "number": 4058,
+    "title": "Question: How to handle Date object in native C?",
+    "created_at": "2020-07-26T00:41:31Z",
+    "closed_at": "2020-08-03T09:19:56Z",
+    "labels": [
+      "question",
+      "api"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/4058",
+    "body": "Hi, I'm having hard time to figure out how to get the Date.year, month, date in the native C code. Also having hard time to figure out how to return a Date object from native to javascript. Thanks\r\n\r\nJavascript\r\n```javascript\r\nlet date = native_driver_gui_calendar.setTodayDate(new Date(2020, 6, 10));\r\n```\r\n\r\nNative C\r\n```C\r\nstatic jerry_value_t function_native_driver_gui_calendar_setTodayDate(const jerry_value_t func_value, /**< function object */\r\n                                 const jerry_value_t this_value, /**< this arg */\r\n                                 const jerry_value_t args[],    /**< function arguments */\r\n                                 const jerry_length_t args_cnt)  /**< number of function arguments */\r\n{\r\n  //How to get the year, month, date of a Date object?\r\n  //The following code returns all zero\r\n  printf(\"Year:%d Month:%d Day:%d\\n\", ecma_date_year_from_time(args[0]), ecma_date_month_from_time(args[0]), ecma_date_date_from_time(args[0]));\r\n\r\n //How to return \"new Date(2020, 0,0)\" value to the javascript?\r\n  return jerry_create_date();\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/4058/comments",
+    "author": "weixiongmei",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2020-07-27T08:10:06Z",
+        "body": "Hello @weixiongmei !\r\n\r\nUnfortunately, currently we do not have any API functions to handle date objects.\r\nAlso the reason is why the the called `ecma` level functions are not working, it that these methods expect an `ecma_number_t` instead of a `jerry_value_t`. If you unpack it into a double variable with `jerry_get_number_from_value(args[0])` you can use these internal methods, with the warning of the usage of non-api functions is not the best practice.\r\n\r\nMoreover I can suggest you two __better__ solutions:\r\n**A:**\r\n - ecma_date_year_from_time(args[0]) is almost equivalent to perform `Date.prototype.getYear.call(args[0])`\r\n - `.call()` can be performed with `jerry_invoke_function` with `args[0]` as `this` argument \r\n - `getYear` is the property of `Date.prototype`\r\n - `Date.prototype` is the property of `Date`\r\n - `Date` is the property of the `global object.`\r\n - So putting the pieces together,  use `jerry_get_property (global, \"Date\")`, then `jerry_get_property(Date, \"prototype\")`, then `jerry_get_property(Date.prototype, \"getYear\")` and finally `jerry_invoke_function (Date.prototype.getYear, args[0], NULL, 0)`\r\n\r\n**B:**\r\n - If you have free-time/capacity it'd be great to publish these internal method to the API. I think we should have one single universal function for retrieving information form a date object. So my proposal would look like this:\r\n\r\n```c\r\ntypedef enum\r\n{\r\n  JERRY_DATE_OPERATION_GET_YEAR,\r\n  JERRY_DATE_OPERATION_GET_MONTH,\r\n  // ... and so on\r\n} jerry_date_operation_t;\r\n\r\njerry_value_t\r\njerry_date_get (jerry_date_operation_t operation, jerry_value_t value)\r\n{\r\n  // step 1: validate date object\r\n  \r\n  // step 2: get the internal date\r\n  ecma_number_t date_num = get_the_stored_internal_date_value() // see ecma_builtin_date_prototype_dispatch_routine\r\n  ecma_number_t result;\r\n  // step 3: choose the operation\r\n  switch (operation) {\r\n    case JERRY_DATE_OPERATION_GET_YEAR: {\r\n      result = ecma_date_year_from_time (date_num);\r\n      break;\r\n    }\r\n    case JERRY_DATE_OPERATION_GET_MONTH: {\r\n      result = ecma_date_month_from_time (date_num);\r\n      break;\r\n    }\r\n\r\n   // ... and so on\r\n  }\r\n\r\n  return ecma_make_number_value (result);\r\n}\r\n```\r\n\r\nBoth options are suitable for resolve your problem, but IMHO the option **B** would be more future-proof also much efficient as well.\r\n  \r\n"
+      },
+      {
+        "user": "weixiongmei",
+        "created_at": "2020-07-29T04:38:06Z",
+        "body": "@rerobika Thank you so much~~"
+      }
+    ]
+  },
+  {
+    "number": 3984,
+    "title": "questions about the heap allocator",
+    "created_at": "2020-07-07T03:23:02Z",
+    "closed_at": "2020-07-13T11:01:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/3984",
+    "body": "I have several questions about the heap allocator which jerry is using, hope someone can help.\r\n\r\n* the allocator have 2 different strategies, one is for 8bytes chunk allocation, the other is for large size chunk allocation. why jerry choose 8bytes alignment， not 4, 5 or 7. Is there any special consideration about this?\r\n*  In some scenario, i have found some memory fragment issue with jerry. In the future is there any plan that a compacting  gc algorithm will be implemented?\r\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/3984/comments",
+    "author": "godmiaozi",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2020-07-07T07:46:00Z",
+        "body": "cc: @dbatyai "
+      },
+      {
+        "user": "dbatyai",
+        "created_at": "2020-07-07T09:40:28Z",
+        "body": "Hi @godmiaozi,\r\n\r\n5 or 7 byte alignment isn't very feasible, memory should always be aligned to a power of two to be efficient. The main deciding factor between 4 and 8 byte alignment was how jerryscript allocates memory internally. Jerryscript used to allocate a lot of 8 byte sized chunks (8 byte chunks are still the most common, but less so than in the past), so it made sense to choose 8 byte alignment. Using 4 byte alignment would've also meant that we would have to align memory manually after allocation for values that require it (like doubles), which would've wasted additional memory and potentially caused further fragmentation.\r\n\r\nWe've also seen that some workloads can cause excessive fragmentation. Unfortunately a compacting gc is not feasible at this point due to stray pointers on the C stack, which prevent us from safely moving objects. We would have to transition to a handle based approach, but that would have rather large impact on memory usage, so I'm not sure whether it would be worth the effort.\r\n\r\nThere are plans however to improve the allocation strategy to cause less fragmentation, and also improve the algorithm so that fragmentation has less of an effect on performance. I can't give an ETA at this point, but it should probably happen in the next couple of months.\r\n\r\n"
+      },
+      {
+        "user": "godmiaozi",
+        "created_at": "2020-07-07T14:21:16Z",
+        "body": "@dbatyai thanks for your reply. i still do not understand the following description：\r\n` Using 4 byte alignment would've also meant that we would have to align memory manually after allocation for values that require it (like doubles), which would've wasted additional memory and potentially caused further fragmentation.`\r\nif we use 4 bytes alignment， double will take 8bytes，why will we have more fragment and why we need to manually align the memory after allocation?"
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2020-07-07T16:14:46Z",
+        "body": "Because on several systems, a `double` has to be aligned to 8 bytes. So, if memory chunks were 4-bytes-aligned, we'd have to deal with alignment of `double`s manually. I.e., we'd have to allocate 12 bytes to guarantee that there are 8 consecutive bytes in the chunk that start on an 8-bytes-aligned address.\r\n\r\nTry `alignof.c`:\r\n```c\r\n#include <stdalign.h>\r\n#include <stdio.h>\r\n\r\nint main() {\r\n    printf(\"align double to %d bytes\\n\", alignof(double));\r\n    return 0;\r\n}\r\n```\r\n\r\nCompile and run:\r\n```\r\n$ gcc -o alignof alignof.c \r\n$ ./alignof \r\nalign double to 8 bytes\r\n```\r\n\r\nNote that `alignof()` is C11, not C99, but that shouldn't matter in this demonstration.\r\n\r\nAlso note that alignment of `double`s is implementation-dependent in theory, but is quite often 8 bytes in practice."
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2020-07-13T11:01:24Z",
+        "body": "I think we can treat this question answered."
+      }
+    ]
+  },
+  {
+    "number": 3144,
+    "title": "Help with getting name of registered jerry_external_handler_t name, please.",
+    "created_at": "2019-09-21T18:06:46Z",
+    "closed_at": "2019-09-27T11:23:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/3144",
+    "body": "How to get information from const **jerry_value_t function_object** and **const jerry_value_t function_this** in code like below. I need to get the name of called external handler (some_handler) inside this handler, is it possible? Not to provide by arguments[], but to get from  function_object for example.\r\nPlease help. And what is the structure of **function_object** and **function_this** to use them in a code.\r\n\r\n#include <stdio.h>\r\n#include \"jerryscript.h\"\r\n\r\nstatic jerry_value_t\r\nsome_handler (const jerry_value_t function_object,\r\n               const jerry_value_t function_this,\r\n               const jerry_value_t arguments[],\r\n               const jerry_length_t arguments_count)\r\n{\r\n\t\r\n  return jerry_create_undefined ();\r\n}\r\n\r\nint\r\nmain (void)\r\n{\r\n  const jerry_char_t script[] = \"call_handler('First arg');\";\r\n  const jerry_length_t script_size = sizeof (script) - 1;\r\n\r\n  jerry_init (JERRY_INIT_EMPTY);\r\n\r\n  {\r\n    jerry_value_t global_object = jerry_get_global_object ();\r\n    jerry_value_t property_name_print = jerry_create_string ((const jerry_char_t *) \"call_handler\");\r\n    jerry_value_t property_value_func = jerry_create_external_function (print_handler);\r\n    jerry_value_t set_result = jerry_set_property (global_object, property_name_print, property_value_func);\r\n\r\n    jerry_release_value (set_result);\r\n    jerry_release_value (property_value_func);\r\n    jerry_release_value (property_name_print);\r\n    jerry_release_value (global_object);\r\n  }\r\n\r\n  jerry_value_t parsed_code = jerry_parse (NULL, 0, script, script_size, JERRY_PARSE_NO_OPTS);\r\n\r\n  if (!jerry_value_is_error (parsed_code))\r\n  {\r\n    jerry_value_t ret_value = jerry_run (parsed_code);\r\n    jerry_release_value (ret_value);\r\n  }\r\n  jerry_release_value (parsed_code);\r\n  jerry_cleanup ();\r\n  return 0;\r\n}\r\n\r\nThanks a lot!",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/3144/comments",
+    "author": "rafail-ufa",
+    "comments": [
+      {
+        "user": "galpeter",
+        "created_at": "2019-09-26T14:31:29Z",
+        "body": "Hi!\r\n\r\nBy default an external method (created via `jerry_create_external_function`) does not have a name.\r\n\r\nHowever, you can attach a `name` property to the created function object. This `name` property then can be accessed via the `function_object` argument in the C method (or at any other place if required).\r\n\r\nExample to set/get `name` property for an external function (snippet):\r\n\r\n```c\r\nstatic jerry_value_t some_handler (\r\n    const jerry_value_t function_object,\r\n    const jerry_value_t function_this,\r\n    const jerry_value_t arguments[],\r\n    const jerry_length_t arguments_count)\r\n{   \r\n    jerry_value_t name_val = jerry_create_string ((const jerry_char_t *) \"name\");\r\n    jerry_value_t prop = jerry_get_property (function_object, name_val);\r\n\r\n    jerry_size_t string_size = jerry_get_string_size (prop);\r\n    jerry_char_t prop_str[string_size + 1];\r\n\r\n    jerry_size_t copied =\r\n        jerry_substring_to_char_buffer (prop,\r\n                                        0,\r\n                                        string_size,\r\n                                        prop_str,\r\n                                        string_size);\r\n    prop_str[copied] = '\\0';\r\n\r\n    jerry_release_value (prop);\r\n    jerry_release_value (name_val);\r\n\r\n    printf(\"Called function with name: %s\\n\", prop_str);\r\n\r\n    return jerry_create_undefined;\r\n}\r\n\r\nvoid set_function_name(jerry_value_t func, char* name) {\r\n    jerry_value_t name_key = jerry_create_string ((const jerry_char_t *) \"name\");\r\n    jerry_value_t name_value = jerry_create_string ((const jerry_char_t *) name);\r\n    jerry_value_t set_result = jerry_set_property (func, name_key, name_value);\r\n    // TODO: check set result if there is an error\r\n    jerry_release_value(set_result);\r\n    jerry_release_value(name_value);\r\n    jerry_release_value(name_key);\r\n}\r\n\r\nint main() {\r\n    const jerry_char_t script[] = \"call_handler('First arg');\";\r\n    const jerry_length_t script_size = sizeof (script) - 1;\r\n\r\n    current_instance_p = jerry_create_instance(512 * 1024, instance_alloc, NULL);\r\n    jerry_init (JERRY_INIT_EMPTY);\r\n\r\n    {   \r\n        jerry_value_t global_object = jerry_get_global_object ();\r\n        jerry_value_t property_name_print =\r\n            jerry_create_string ((const jerry_char_t *) \"call_handler\");\r\n        jerry_value_t property_value_func = jerry_create_external_function (some_handler);\r\n\r\n        set_function_name (property_value_func, \"MyFunction\");\r\n\r\n        jerry_value_t set_result =\r\n            jerry_set_property (global_object, property_name_print, property_value_func);\r\n        // TODO: check the 'set_result' if it is an error.\r\n        jerry_release_value (set_result);\r\n        jerry_release_value (property_value_func);\r\n        jerry_release_value (property_name_print);\r\n        jerry_release_value (global_object);\r\n\r\n    }\r\n\r\n    jerry_value_t parsed_code =\r\n        jerry_parse (NULL, 0, script, script_size, JERRY_PARSE_NO_OPTS);\r\n\r\n    if (!jerry_value_is_error (parsed_code))\r\n    {   \r\n        jerry_value_t ret_value = jerry_run (parsed_code);\r\n        jerry_release_value (ret_value);\r\n    }\r\n\r\n    jerry_release_value (parsed_code);\r\n    jerry_cleanup ();\r\n    return 0;\r\n}\r\n```\r\n\r\nIn case of a native C method the `function_object` argument means the function object which was invoked (in this case this was crated via the `jerry_create_external_function` method). The `function_this` is the `this` object which used to invoke the method.\r\n\r\nFor example if the following JS code is executed in this example:\r\n\r\n```js\r\ncall_handler(\"First arg\");\r\n```\r\n\r\nThe `function_this` value is an `undefined` value (as there was no 'this' set for the function). \r\n\r\nHowever, if the following JS code is executed:\r\n\r\n```js\r\nvar my_demo = { val: 6 }\r\ncall_handler.call(my_demo, \"First arg\");\r\n```\r\n\r\nThe `function_this` will be the object referenced by the `my_demo` var."
+      },
+      {
+        "user": "rafail-ufa",
+        "created_at": "2019-09-26T15:32:23Z",
+        "body": "Hi! \r\nThat really works.\r\nI thought that can get function name from function object, but really, if there is no property you can add your own.\r\n\r\n Thank you very much!\r\n\r\n> Hi!\r\n> \r\n> By default an external method (created via `jerry_create_external_function`) does not have a name.\r\n> \r\n> However, you can attach a `name` property to the created function object. This `name` property then can be accessed via the `function_object` argument in the C method (or at any other place if required).\r\n> \r\n> Example to set/get `name` property for an external function (snippet):\r\n> \r\n> ```c\r\n> static jerry_value_t some_handler (\r\n>     const jerry_value_t function_object,\r\n>     const jerry_value_t function_this,\r\n>     const jerry_value_t arguments[],\r\n>     const jerry_length_t arguments_count)\r\n> {   \r\n>     jerry_value_t name_val = jerry_create_string ((const jerry_char_t *) \"name\");\r\n>     jerry_value_t prop = jerry_get_property (function_object, name_val);\r\n> \r\n>     jerry_size_t string_size = jerry_get_string_size (prop);\r\n>     jerry_char_t prop_str[string_size + 1];\r\n> \r\n>     jerry_size_t copied =\r\n>         jerry_substring_to_char_buffer (prop,\r\n>                                         0,\r\n>                                         string_size,\r\n>                                         prop_str,\r\n>                                         string_size);\r\n>     prop_str[copied] = '\\0';\r\n> \r\n>     jerry_release_value (prop);\r\n>     jerry_release_value (name_val);\r\n> \r\n>     printf(\"Called function with name: %s\\n\", prop_str);\r\n> \r\n>     return jerry_create_undefined;\r\n> }\r\n> \r\n> void set_function_name(jerry_value_t func, char* name) {\r\n>     jerry_value_t name_key = jerry_create_string ((const jerry_char_t *) \"name\");\r\n>     jerry_value_t name_value = jerry_create_string ((const jerry_char_t *) name);\r\n>     jerry_value_t set_result = jerry_set_property (func, name_key, name_value);\r\n>     // TODO: check set result if there is an error\r\n>     jerry_release_value(set_result);\r\n>     jerry_release_value(name_value);\r\n>     jerry_release_value(name_key);\r\n> }\r\n> \r\n> int main() {\r\n>     const jerry_char_t script[] = \"call_handler('First arg');\";\r\n>     const jerry_length_t script_size = sizeof (script) - 1;\r\n> \r\n>     current_instance_p = jerry_create_instance(512 * 1024, instance_alloc, NULL);\r\n>     jerry_init (JERRY_INIT_EMPTY);\r\n> \r\n>     {   \r\n>         jerry_value_t global_object = jerry_get_global_object ();\r\n>         jerry_value_t property_name_print =\r\n>             jerry_create_string ((const jerry_char_t *) \"call_handler\");\r\n>         jerry_value_t property_value_func = jerry_create_external_function (some_handler);\r\n> \r\n>         set_function_name (property_value_func, \"MyFunction\");\r\n> \r\n>         jerry_value_t set_result =\r\n>             jerry_set_property (global_object, property_name_print, property_value_func);\r\n>         // TODO: check the 'set_result' if it is an error.\r\n>         jerry_release_value (set_result);\r\n>         jerry_release_value (property_value_func);\r\n>         jerry_release_value (property_name_print);\r\n>         jerry_release_value (global_object);\r\n> \r\n>     }\r\n> \r\n>     jerry_value_t parsed_code =\r\n>         jerry_parse (NULL, 0, script, script_size, JERRY_PARSE_NO_OPTS);\r\n> \r\n>     if (!jerry_value_is_error (parsed_code))\r\n>     {   \r\n>         jerry_value_t ret_value = jerry_run (parsed_code);\r\n>         jerry_release_value (ret_value);\r\n>     }\r\n> \r\n>     jerry_release_value (parsed_code);\r\n>     jerry_cleanup ();\r\n>     return 0;\r\n> }\r\n> ```\r\n> \r\n> In case of a native C method the `function_object` argument means the function object which was invoked (in this case this was crated via the `jerry_create_external_function` method). The `function_this` is the `this` object which used to invoke the method.\r\n> \r\n> For example if the following JS code is executed in this example:\r\n> \r\n> ```js\r\n> call_handler(\"First arg\");\r\n> ```\r\n> \r\n> The `function_this` value is an `undefined` value (as there was no 'this' set for the function).\r\n> \r\n> However, if the following JS code is executed:\r\n> \r\n> ```js\r\n> var my_demo = { val: 6 }\r\n> call_handler.call(my_demo, \"First arg\");\r\n> ```\r\n> \r\n> The `function_this` will be the object referenced by the `my_demo` var."
+      }
+    ]
+  },
+  {
+    "number": 2905,
+    "title": "The try-catch block is unable to catch the exception?",
+    "created_at": "2019-06-12T12:36:11Z",
+    "closed_at": "2019-07-05T10:21:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2905",
+    "body": "The try-catch block is unable to catch the error when I execute the code shows below, but throw  `ERR_REF_COUNT_LIMIT` error .\r\n````\r\nvar func = function () {\r\n\tfoo.prototype = new Array(1, 2, 3);\r\n\tfunction foo() {}\r\n\tvar f = new foo();\r\n\tf.length = f;\r\n\ttry {\r\n\t\tprint(\"run to try\");\r\n\t\tprint(\"Using f will give an error: \" + f);\r\n\t\tprint(\"run to 2\");\r\n\t} catch (e) {\r\n\t\tprint(\"run to catch!\")\r\n\t}\r\n};\r\nfunc();\r\n````\r\nThe output is:\r\n````\r\nrun to try\r\nError: ERR_REF_COUNT_LIMIT\r\n````",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2905/comments",
+    "author": "YaoHouyou",
+    "comments": [
+      {
+        "user": "LaszloLango",
+        "created_at": "2019-06-12T12:45:53Z",
+        "body": "`ERR_REF_COUNT_LIMIT` is a fatal error of the engine and not an ECMA262 standard exception, so you cannot catch it."
+      },
+      {
+        "user": "YaoHouyou",
+        "created_at": "2019-06-12T12:54:35Z",
+        "body": "Do you mean it's a bug of jerry?"
+      },
+      {
+        "user": "LaszloLango",
+        "created_at": "2019-06-12T12:55:42Z",
+        "body": "No, it is not a bug."
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2019-06-13T08:42:06Z",
+        "body": "@YaoHouyou I agree with @LaszloLango It's not a bug, it is simply a JS call stack overflow. If you remove the `try-catch` block around the `print(\"Using f will give an error: \" + f);` and test it in any browser you will get a RangeError (This is what the catch clause truly catches). Jerry does not manages the call stack size internally, which could lead to `ERR_REF_COUNT_LIMIT` since each call adds an extra reference to the function object/arguments, and in a while, these continuously growing references reaches the limit which terminates the engine."
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2019-06-28T14:45:19Z",
+        "body": "@rerobika jerry-core can be configured to have a recursion limit via the `VM_RECURSION_LIMIT` cmake option (or via the `--vm-recursion-limit` option of build.py). Would that solve the issue and make the engine throw/catch RangeError correctly?"
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2019-06-28T15:47:29Z",
+        "body": "@akosthekiss IMO after a little modification of  `VM_RECURSION_LIMIT` it would be suitable for this problem. This guard prevents only the recursion of the interpreted code blocks but the builtin/native functions calls are not guarded either. I'll open a PR for it. "
+      }
+    ]
+  },
+  {
+    "number": 2858,
+    "title": "List of things that JerryScript can do and can't do?",
+    "created_at": "2019-05-03T16:04:43Z",
+    "closed_at": "2019-05-04T19:02:08Z",
+    "labels": [
+      "question",
+      "documentation"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2858",
+    "body": "Hello.\r\n\r\nBy skimming the source files and the wiki as well as the project's page, I kept reading that it supports ECMAScript 5.1, however JerryScript is implemented in such a small source tree, that I wonder what it actually supports - and what not?\r\n\r\nA small listing of what it does and does not do, would be very nice :)\r\n\r\nKind regards,\r\nIngwie",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2858/comments",
+    "author": "IngwiePhoenix",
+    "comments": [
+      {
+        "user": "akosthekiss",
+        "created_at": "2019-05-03T16:41:21Z",
+        "body": "Hi @IngwiePhoenix,\r\n\r\nMy fellow maintainers will correct me if I'm wrong, but according to my best understanding ES5.1 support is indeed complete and up to the specs. ES5.1 version (branch) of test-262 is passing fine.\r\n\r\nAnd yes, the source code is small (even if that's a subjective assessment), because that was the design goal of JerryScript right from the start: both code and memory footprint should be as small as possible. (Note that this comes at a price: don't expect performance boost by just-in-time compilation or anything like that available in JS engines that target \"big\" boxes.)\r\n\r\nWhat's not complete is ES6 support (and above). And there you have a point: we still haven't published a checklist on the feature set, although requested by many for long.\r\n\r\nI hope this answers your question,\r\nAkos"
+      },
+      {
+        "user": "IngwiePhoenix",
+        "created_at": "2019-05-04T19:02:07Z",
+        "body": "Hello @akosthekiss !\r\n\r\nYes, that reply helped me a lot, thank you very much :) I took Jerry to a test and just threw some random stuff at the repl to see if they'd work. Sort of like manual feature detection, I guess... :)\r\n\r\nA list of supported features would really help a lot, because many people may know what ECMAScript means and is, but not exactly which features fall into 5.1 - let alone what ES6 features may be supported by this time.\r\n\r\nThank you for your answer! =)"
+      }
+    ]
+  },
+  {
+    "number": 2417,
+    "title": "jerryscript baremetal",
+    "created_at": "2018-07-04T05:39:30Z",
+    "closed_at": "2018-07-04T09:37:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2417",
+    "body": "Can i build jerryscript without any OS for a target e.g. stm32f4? I cant seem to find any clear instructions for building it for a baremetal MCU. Also in the targets folder, stm32f4 is with either Nuttx or Riot but no baremetal. Can someone confirm this? ",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2417/comments",
+    "author": "wajahat-abbas",
+    "comments": [
+      {
+        "user": "LaszloLango",
+        "created_at": "2018-07-04T05:55:30Z",
+        "body": "There is no baremetal support for any certain MCU at this point."
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2018-07-04T07:52:40Z",
+        "body": "Actually, JerryScript _should_ work on baremetal, too. Except for its debugger server component, which can be disabled (or, is disabled by default), the project has no OS dependencies. So, if you have a compiler with a decent libc, you should be fine. But, of course, you'll have to write the porting layer (a handful of functions only) and the application that embeds/calls the JerryScript library."
+      },
+      {
+        "user": "wajahat-abbas",
+        "created_at": "2018-07-04T07:55:45Z",
+        "body": "I get the idea however currently such an implementation does not exist is that right?"
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2018-07-04T08:47:58Z",
+        "body": "That's correct, no such example exists in the code base right now."
+      }
+    ]
+  },
+  {
+    "number": 2358,
+    "title": "Prevent jerry_create_string from copying string?",
+    "created_at": "2018-05-24T16:03:34Z",
+    "closed_at": "2018-05-29T20:58:54Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2358",
+    "body": "Is there a way to make `jerry_create_string` not duplicate the string literal instead use the same reference?",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2358/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "LaszloLango",
+        "created_at": "2018-05-25T05:56:14Z",
+        "body": "No, it is not trivial because of the inner representation of strings."
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2018-05-25T10:44:50Z",
+        "body": "I am not sure I fully understand your question, but do you want to \"pass a `char*` pointer\" to jerryscript? Currently that is only possible for ES6 buffers."
+      },
+      {
+        "user": "ghost",
+        "created_at": "2018-05-25T12:05:58Z",
+        "body": "Yes! How do I pass a pointer to JS?"
+      }
+    ]
+  },
+  {
+    "number": 2284,
+    "title": "Using jerryscript in Mobile Devices",
+    "created_at": "2018-04-17T05:44:27Z",
+    "closed_at": "2018-04-19T07:35:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2284",
+    "body": "I want to use jerryscript in iOS and Android, can I use jerryscript through referencing the source code?",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2284/comments",
+    "author": "yemingyu",
+    "comments": [
+      {
+        "user": "akosthekiss",
+        "created_at": "2018-04-17T10:25:08Z",
+        "body": "@yemingyu JerryScript may be freely used according to its license (Apache 2.0, which is quite permissive, you only have to mention the original license and copyright notices in derivative works -- roughly). Regarding referencing the source code, that's the usual way of using the project. There are no officially prepackaged or prebuilt libs of the engine, but other projects typically use and build the sources of JerryScript directly, e.g., as a git submodule in their own source tree.\r\n\r\nLet us know if this answers your question (and whether it suites your needs). "
+      },
+      {
+        "user": "yemingyu",
+        "created_at": "2018-04-19T02:57:42Z",
+        "body": "I don't know what part jerryscript needs to refer to, whether there is a document or a c project example？"
+      },
+      {
+        "user": "martijnthe",
+        "created_at": "2018-04-19T07:17:35Z",
+        "body": "The are no fully fledged iOS/Android project examples in this repo. For iOS it should be as straightforward as adding all the .c files to an Xcode project and writing a bit of code to start the engine. For the latter you can look at one of the existing main.c files in the repo and use it as an example. For Android I don’t have any advice (I know too little about it)."
+      },
+      {
+        "user": "yemingyu",
+        "created_at": "2018-04-19T07:35:41Z",
+        "body": "OK，I will try it，thank you very much!"
+      }
+    ]
+  },
+  {
+    "number": 2263,
+    "title": "Question: dealing with \\u0000 in strings from jerry_string_to_utf8_char_buffer / jerry_string_to_char_buffer",
+    "created_at": "2018-04-03T08:49:23Z",
+    "closed_at": "2020-05-26T13:56:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/2263",
+    "body": "I realize this is not a JerryScript specific question, but I was wondering what people's approaches are towards dealing with strings from JS when they have a `\\u0000` unicode code point(s) in them. This ends up being encoded as a `0x00` byte, which happens to be the \"terminator\" of a C string as well.\r\n\r\nI can imagine this being a source of bugs, esp. if assumptions are made in the C code w.r.t. the length given by `jerry_get_(utf8_)string_length()` vs `strlen()`/`strlen_s()`.\r\n\r\nSome approaches I can think of to deal with this:\r\n- Don't use anything from `<string.h>`, instead use a proper utf8 library to deal with strings that only takes in string data in the form of a pointer + length.\r\n- Truncate: just use the first `0x00` as the end and wipe all data after it just to be sure.\r\n- ...",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/2263/comments",
+    "author": "martijnthe",
+    "comments": [
+      {
+        "user": "rerobika",
+        "created_at": "2020-05-26T13:56:22Z",
+        "body": "Closing the issue due to inactivity, please reopen if needed."
+      }
+    ]
+  },
+  {
+    "number": 1884,
+    "title": "Is it possible to store the JS program in bytecode as a const in ROM?",
+    "created_at": "2017-06-07T23:20:54Z",
+    "closed_at": "2017-06-13T18:59:15Z",
+    "labels": [
+      "question",
+      "snapshot"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1884",
+    "body": "Hi, \r\nI'm working on a project which need a Javascript engine as a replacement of configuration file.\r\nSince the SRAM on my board is really limited, while there are still a some ROM, I am wondering if I could port only the vm part to my firmware and cut out the parser part. In this way, I could cut down the ROM space of parser part and save the SRAM that was used to save bytecode.\r\n\r\nSo, it's basically two questions:\r\n1. Is it possible to port VM only?\r\n2. Is it possible to store bytecode as a const?\r\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1884/comments",
+    "author": "cnnblike",
+    "comments": [
+      {
+        "user": "zherczeg",
+        "created_at": "2017-06-08T04:52:24Z",
+        "body": "JerryScript is a modular JS engine. Almost any feature can be disabled.\r\n\r\nTo disable the parser, set:\r\n`#define JERRY_JS_PARSER 0`\r\nor pass `--js-parser off` to tools/build.py\r\n\r\nYou can execute byte-code from memory, just align the buffer to 4 bytes. The byte code can also be run from ROM without loading it into the RAM."
+      },
+      {
+        "user": "cnnblike",
+        "created_at": "2017-06-08T21:48:06Z",
+        "body": "Thank you, so the bytecode is platform-independent, right? Meaning I could parse it on x86 platform and use it on armv7?"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2017-06-09T04:06:42Z",
+        "body": "As long as the byte order of the two machines are the same (little endian in this case, so it works), and you use the same compressed pointer size (e.g. 16 bit)."
+      },
+      {
+        "user": "cnnblike",
+        "created_at": "2017-06-13T06:12:44Z",
+        "body": "@zherczeg \r\nAs for the ROM usage problem, I just did a simple test and get some interesting result .\r\nBefore adding jerryscript:\r\ntext 23980 data: 244 bss:5332\r\nafter adding jerryscript(just use VM module):\r\ntext: 150904 data: 348 bss: 28128\r\nafter adding jerryscript(with VM and parser):\r\ntext: 176064 data: 348 bss: 28128 \r\n\r\nHere is my question: \r\nso the parser actually doesn't take much ROM, right?  Or did I make anything wrong? How could I continue decrease ROM usage?\r\nIt's just opposite from how I thought it would be - I thought the parser would cost much more than the vm do.\r\n\r\n\r\nthis is how i build my VM-only version of libjerryscript:\r\n```bash\r\npython tools/build.py --toolchain=cmake/toolchain_mcu_stm32f1.cmake --jerry-cmdline OFF --jerry-libc OFF --jerry-libm OFF --js-parser OFF --mem-heap=20 --jerry-port-default OFF --clean\r\n```\r\nparser+VM:\r\n```bash\r\npython tools/build.py --toolchain=cmake/toolchain_mcu_stm32f1.cmake --jerry-cmdline OFF --jerry-libc OFF --jerry-libm OFF --js-parser ON --mem-heap=20 --jerry-port-default OFF --clean\r\n```"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2017-06-13T06:46:31Z",
+        "body": "What is your platform? On arm thumb2 the whole engine is around 140K, and can be reduced to around 80K as far as I remember (Please use -Os optimization). You can disable a lot of features, please check `jerry-core/profiles/minimal.profile`"
+      },
+      {
+        "user": "cnnblike",
+        "created_at": "2017-06-13T14:30:06Z",
+        "body": "@zherczeg \r\nThank you a lot for replying!\r\nI'm now building for stm32f103vct6, a M3 with 48kB SRAM and 256kB Flash. After some troubleshooting, the problem might lies in jerry-ext, I forgot to disable this part.\r\n \r\nif I disable js-parser, jerry-ext, jerry-libm, jerry-libc, jerry-port-default, use the minimal profile , use the build option Os, \r\nThis is interesting, because from my build, the minimal.profile really helped a lot, while abandon js-parser doesn't.\r\nwith minimal profile. the size is like the following:\r\nbare-HAL: 24k \r\nbare-HAL + jerry-vm = 67k \r\nbare-HAL + jerry-vm + js-parser = 91k\r\n\r\nThis is the toolchain file I used for building:\r\n```\r\ninclude(CMakeForceCompiler)\r\nset(CMAKE_SYSTEM_NAME MCU)\r\nset(CMAKE_SYSTEM_PROCESSOR armv7l)\r\nset(CMAKE_SYSTEM_VERSION STM32F1)\r\nset(FLAGS_COMMON_ARCH -mlittle-endian -mthumb -mcpu=cortex-m3 -march=armv7-m)\r\nCMAKE_FORCE_C_COMPILER(arm-none-eabi-gcc GNU)\r\n```\r\n\r\n\r\n--\r\nupdate:\r\nThis is the key is JUST like what you said, is to use a minimal profile, instead of a es5.1 profile.\r\nwith jerry-vm+es5.1profile, it's 150k\r\nwith jerry-vm+js-parser+es5.1profile, it's 170k\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 1351,
+    "title": "[Proposal][Question] Run-time paging of bytecode ",
+    "created_at": "2016-09-14T21:30:22Z",
+    "closed_at": "2019-10-25T19:56:19Z",
+    "labels": [
+      "question",
+      "snapshot"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1351",
+    "body": "We are investigating the implementation of a _paging_ mechanism for jerryscript bytecode. The goal is to minimize the RAM overhead when executing snapshots by dynamically loading bytecode in fixed-size pages. By doing this we hope that we can execute snapshots that are at least as large as the amount of memory available to the Jerryscript interpreter, and set expectations on the amount of memory available to the executing application.\n\nWhile planning out a potential implementation of this, I have run into some roadblocks that I would appreciate some help to overcome, those are listed at the end of this post. My thoughts on a potential implementation are as follows:\n\n**Saving a snapshot**\n- Add a new `CBC_CODE_FLAGS_SNAPSHOT` to each bytecode header. This would make it clear during execution whether we need to account for paging or not.\n\n**Loading a snapshot**\n- In `jerry_exec_snapshot()` and `snapshot_load_compiled_code()`, we want to avoid any modification of the snapshot, either in place or into newly allocated blocks.\n- Linking of CBC Literals to the global literal table should be done as late as possible.\n  - With my understanding, this requires keeping around the literal map (`lit_map_p`) in RAM so that this can be done efficiently.\n- In `snapshot_load_compiled_code()` we also do not want to recurse on template literals. The loading of this compiled code should be deferred until we need to create an object for these literals.\n\n**Executing a snapshot**\n- In order to enable paging of bytecode, rather than using a pointer to the bytecode, we would need to abstract this away to some concept of a program counter.\n- In `vm_run()`, the `vm_frame_ctx_t` would be constructed with this program counter for `byte_code_p` and `byte_code_start_p`.\n- In `vm_loop()` and the rest of the pipeline, we ask the underlying system to translate that program counter as necessary.\n\nIn my design investigation, I see many issues when looking through the execution stages. A few of the larger issues are:\n- `vm_init_loop()` wants to create a literal object for all template literals in the frame. This requires our bytecode to be loaded, which we don't want to load until use. This is also a more general problem with the creation of function object which we do not want to use right away.\n- Transparent pointers to `ecma_compiled_code_t` are used all over the place to access the bytecode, and we would like to abstract this away.\n- Trying to maintain the common codepaths for paged and non-paged execution (directly from source, `eval()`, etc).\n\nMy thoughts on a good first step would be to only perform paging of the `CBC_INSTRUCTION_LISTS`. When loading the snapshot, we would load the literal tables as is currently done, but when setting `CBC_SET_BYTECODE_PTR` we would set a PC value in there and implement a translation step in `vm_loop()`. All of the literal tables would still have to sit in memory, but it would allow for paging of the bytecode itself.\n\nUnfortunately, due to things that I've mentioned above I see no clear path to achieving paging of literal tables along with bytecode. It is quite likely that there are some things in Jerryscript that I have overlooked when trying to wrap my head around this, and I would appreciate any feedback on the approach and roadblocks I've mentioned here, as well as thoughts from the Jerryscript team on a feature of this nature.\n\nThank you\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1351/comments",
+    "author": "mjessome",
+    "comments": [
+      {
+        "user": "zherczeg",
+        "created_at": "2016-09-15T07:56:23Z",
+        "body": "I would like to understand more this use case before suggesting any changes. May I have some questions:\n- am I understand correctly that byte code is not accessible from ROM, it needs to be loaded into RAM in your system (this is usually not an issue on ARM, we can just access data from ROM)\n- do you plan to translate a virtual program counter to a page for every executed instruction (wouldn't that be slow?)\n- do you plan this to be a compile time enabled feature?\n\nPersonally I would probably mark those points in the where translating is possible (e.g. jumps, add a byte code to mark the end of a page for sequential execution), and would leave the current implementation. This would eliminate the handling of byte code splitting (when a byte code spans across two pages), and would do the costly translation when necessary\n"
+      },
+      {
+        "user": "mjessome",
+        "created_at": "2016-09-15T19:40:21Z",
+        "body": "> am I understand correctly that byte code is not accessible from ROM, it needs to be loaded into RAM in your system (this is usually not an issue on ARM, we can just access data from ROM)\n\nThis is correct, these snapshots need to be loaded out of external flash and it is expensive to be reading from constantly. Paging allows for us to do a single bulk read out of flash into RAM per page, rather than having to reach to external flash on a per-instruction basis.\n\n> do you plan to translate a virtual program counter to a page for every executed instruction (wouldn't that be slow?)\n\nYes, that is the idea. A performance hit is expected, but when not at a page boundary PC translation should be very cheap. The trade off here is that we can enable larger applications and make a best-effort guarantee of RAM available to running apps.\n\n> do you plan this to be a compile time enabled feature?\n\nYes, part of the goal would be to have support enabled at Jerryscript compile time.\n\n> Personally I would probably mark those points in the where translating is possible (e.g. jumps, add a byte code to mark the end of a page for sequential execution), and would leave the current implementation. \n\nThis is a _very_ interesting approach. It definitely simplifies paging and impact on the interpreter as well. One shortcoming that jumps out to me immediately is that it becomes the snapshot itself dictating page size rather than the interpreter / underlying system. While this probably isn't a massive concern, it potentially locks us into long-term support of these snapshots.\n\n> This would eliminate the handling of byte code splitting (when a byte code spans across two pages), and would do the costly translation when necessary\n\nI am looking through `vm_loop()` and I am not so sure that I follow why bytecode splitting is an issue. Is there any chance that you could elaborate on this?\n\nIn addition to the Instruction List paging that we are discussing here, do have any thoughts on what might be done about function literal tables and regular expression objects? As I mentioned in my original post, one of the major hurdles that I see here is the required linking of function literal tables to the global literal table, as well as the fact that (for example) `vm_init_loop()` wants to load and construct these function objects whether they are used or not. As I read through how these template literals are loaded out of the snapshot and created at runtime, I've been unable to come up with a reasonable way to defer their loading until use.\n"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2016-09-16T05:00:26Z",
+        "body": "Thank you for explaining the use case. Currently we support ROM execution only if the whole byte code is addressable. This saves a lot of RAM usage.\n\n> Yes, that is the idea. A performance hit is expected, but when not at a page boundary PC translation should be very cheap.\n\nI think this is very important. Do you plan to add a macro which inlines the fast case?\n\n> While this probably isn't a massive concern, it potentially locks us into long-term support of these snapshots.\n\nDoes snapshots created by third party and you have to load them into flashes with various page sizes? Anyway my idea is a byte_code to byte_code translation, where the original byte code comes from a snapshot, and extra bytes are inserted at the end of each page and jump targets are updated. The result is another byte code which supports a specific page size. You can create multiple of these of course. Even the original byte code could be restored from an updated snapshot if necessary (since the translator inserts only a given byte code which is not used by the parser).\n\n> I am looking through vm_loop() and I am not so sure that I follow why bytecode splitting is an issue. Is there any chance that you could elaborate on this?\n\nCBC is a variable length byte code. E.g. when we execute a CBC_EXT_SET_SETTER opcode, first we read an opcode byte, which tells that this is an extended opcode, so we read another opcode byte. Then we read two literal arguments. An argument read is similar, so we read a byte, and if the argument is two byte long we read a second byte. During this process we can encounter a page reload at any time. It feels like we need a lot of checks but the impact might be low. I cannot judge it.\n\n> In addition to the Instruction List paging that we are discussing here, do have any thoughts on what might be done about function literal tables and regular expression objects?\n\nIf you could mark those functions which has not loaded yet, you probably can defer function loading. Currently the function literal is a two byte compressed pointer, which points to the function in the memory. Somehow you need to mark those functions, which are not yet loaded from the flash (perhaps splitting the address space). Then vm_construct_literal_object could realize that its literal object comes from the flash, and construct the function in a different way.\n\nTheoretically regular expressions could be executed from the flash as well, but their execution engine has not prepared for that yet, so I expect some serious rework first.\n"
+      },
+      {
+        "user": "rerobika",
+        "created_at": "2019-10-25T19:56:18Z",
+        "body": "Static snapshot was introduced in #2239 which is the correct solution for this problem so IMO, we can finally close this issue."
+      }
+    ]
+  },
+  {
+    "number": 1319,
+    "title": "how can i share a c variable to jerry readonly",
+    "created_at": "2016-09-05T03:01:23Z",
+    "closed_at": "2016-09-06T05:52:22Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1319",
+    "body": "suppose I have a huge struct to export to javascript, but i don't want javascript to modify the value.\n\nseems now every value have to make a copy to vm, two copy in C and jerrry is a waste memory and it's hard to sync every value changed to jerry.\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1319/comments",
+    "author": "dbskccc",
+    "comments": [
+      {
+        "user": "zherczeg",
+        "created_at": "2016-09-05T09:14:32Z",
+        "body": "I would recommend to create an external function and it returns the requested value. A string argument could represent the name of the value (since you have a big struct).\n"
+      },
+      {
+        "user": "dbskccc",
+        "created_at": "2016-09-06T01:23:30Z",
+        "body": "now, I change every single value to a function like below:\nstruct Ttest{\ndouble balance;\nchar\\* name;\nint history[10];\n}\nproperty balance become to an external function obj.balance(), in jerry read by call balance() and write by call obj.balance(newblance);\n\nbut for array property history[10], it's still no good way to operate the value.\n"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2016-09-06T03:00:26Z",
+        "body": "I think you just need to pass an index argument to the function, i.e. obj.getHistory(4); obj.setHistory(5, \"newvalue\") or just checking the number of parameters (1 - read, 2 - write)\n"
+      },
+      {
+        "user": "dbskccc",
+        "created_at": "2016-09-06T05:52:22Z",
+        "body": "yeah, got it.\nfor array we can make it a object property and access like below:\nread: obj.history.at(0) obj.history.length()\nwrite:obj.hostory.at(1,newValue)\n"
+      }
+    ]
+  },
+  {
+    "number": 1297,
+    "title": "Change name of public API header?",
+    "created_at": "2016-08-29T19:46:35Z",
+    "closed_at": "2017-03-04T06:15:01Z",
+    "labels": [
+      "question",
+      "api"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1297",
+    "body": "The 1.0 release is approaching, but before it happens, we might reconsider the name of the public API header of the JerryScript library. Now, it is called jerry-api.h, which is somewhat unusual. For an ordinary library user, writing `#include <jerry.h>` might be more intuitive.\n\nThe time of the release is close and the change might need adaptation at various places of the project, but we should think about it since whatever we choose will most probably stay with us for good (or, for a long time, at least), as the name of the header is also part of the fixed API.\n\n(Note: I'm not proposing to change the name of jerry-port.h. That's OK, IMHO, as it is important for and used by port developers only.)\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1297/comments",
+    "author": "akosthekiss",
+    "comments": [
+      {
+        "user": "zherczeg",
+        "created_at": "2016-08-30T04:40:08Z",
+        "body": "I don't mind to rename the header. I think the question is how risky this change is.\n"
+      },
+      {
+        "user": "LaszloLango",
+        "created_at": "2016-08-30T06:37:21Z",
+        "body": "I think it is not the right time to change the header name. Such change implies an RC3. It will delay the release if we rename it.\n"
+      },
+      {
+        "user": "tilmannOSG",
+        "created_at": "2016-08-30T07:26:56Z",
+        "body": "In terms of release I think it's too late for an invasive change like that, we should only cherry-pick bug fixes for critical bugs which would block the release for one reason or another :)  \nIn terms of header naming I think \"jerryscript.h\" would be even more appropriate since after all the project is called JerryScript not Jerry :)\n"
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2016-08-30T08:12:46Z",
+        "body": "OK, let's wait with renamings then. (BTW: calling the resulting library libjerry-core.a is also a bit unnatural, libjerry.a or libjerryscript.a would seem more clean.)\n\nRemoving the issue from the 1.0 release milestone but leaving it open as a reminder that we might still consider something like this in the future. (Feel free to close it if you disagree, though.)\n"
+      },
+      {
+        "user": "tilmannOSG",
+        "created_at": "2016-08-30T08:26:01Z",
+        "body": "Yes, I'd very much in favor of changing the header name to \"jerryscript.h\" and the library name to \"libjerryscript.a\" in the future :)  \nI think we should consider this for the next stable release after 1.0.\n"
+      }
+    ]
+  },
+  {
+    "number": 1296,
+    "title": "Disallow failures of Travis CI jobs on OS X?",
+    "created_at": "2016-08-29T19:30:16Z",
+    "closed_at": "2016-08-31T09:42:17Z",
+    "labels": [
+      "question",
+      "infrastructure"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1296",
+    "body": "Currently, OS X Travis CI jobs may fail without turning the build status red. However, the landing of #1269 made OS X jobs pass. The question is whether we should \"promote\" OS X jobs to voting status?\n\nCons:\n- OS X is not on the list of official development environments.\n\nPros:\n- It can give a better test coverage. (E.g., the issue fixed by #1269 was core the memory subsystem, still, no test environment revealed it but OS X.)\n- If the OS X jobs remain in the \"allow failures\" category, the current good status may degrade easily. (It is easy to focus on the general green/red status indicator at PRs and not check all CI jobs one-by-one.)\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1296/comments",
+    "author": "akosthekiss",
+    "comments": [
+      {
+        "user": "LaszloLango",
+        "created_at": "2016-08-30T06:23:31Z",
+        "body": "I don't have a Mac, so I cannot debug any problem with that platform. So I'd keep OS X jobs in the allow failures category. Who will maintain the platform?\n"
+      },
+      {
+        "user": "tilmannOSG",
+        "created_at": "2016-08-30T07:12:21Z",
+        "body": "I would be quite in favor of promoting macOS to become a fully supported platform but I agree that we need an official maintainer for that.  \n@akosthekiss how did you fix the macOS issues? Travis CI obviously has support for macOS builds but I guess using that for debugging purposes is quite awkward?\n"
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2016-08-30T08:24:26Z",
+        "body": "@tilmannOSG I started using a mac lately, but I admit that that's a constrained resource both hardware and human-wise. (Perviously, I used Travis to track down some issues -- by uploading patches to own branch in own repo and looking at the logs --but that's a somewhat inconvenient method.)\n"
+      },
+      {
+        "user": "tilmannOSG",
+        "created_at": "2016-08-30T08:35:01Z",
+        "body": "@akosthekiss Would you be willing to become the official maintainer of the macOS port of JerryScript? :)\n"
+      },
+      {
+        "user": "akosthekiss",
+        "created_at": "2016-08-30T13:48:40Z",
+        "body": "@tilmannOSG As there are not much OS-specific things in either the library or in the build system, I expect few issues that need OSX maintenance. Thus, I might give the maintainership a try and hope that it can be done even with my limited resources.\n"
+      },
+      {
+        "user": "tilmannOSG",
+        "created_at": "2016-08-31T09:42:17Z",
+        "body": "@akosthekiss Thanks Akos!  \nI guess we can close this issue :)\n"
+      }
+    ]
+  },
+  {
+    "number": 1262,
+    "title": "[Q & Suggestion] Does jerryscript run generational GC?",
+    "created_at": "2016-08-12T04:18:42Z",
+    "closed_at": "2017-01-31T13:24:29Z",
+    "labels": [
+      "question",
+      "memory management"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/1262",
+    "body": " After I analyze the memory management code of jerryscript, I've got a question about WHITE_GRAY GC pool and BLACK GC pool.\n According to the code, the objects in WHITE_GRAY pool are gonna be swept after visiting process and ones in BLACK pool remain in memory. However, once gc process done, BLACK pool is converted to WHITE_GRAY pool as below in order to check them at later GC.\n\n```\n[jerry-core/ecma/base/ecma-gc.c (ecma_gc_run:577)]\n/* Unmarking all objects */\n  ecma_object_t *black_objects = JERRY_CONTEXT (ecma_gc_objects_lists) [ECMA_GC_COLOR_BLACK];\n  JERRY_CONTEXT (ecma_gc_objects_lists)[ECMA_GC_COLOR_WHITE_GRAY] = black_objects;\n  JERRY_CONTEXT (ecma_gc_objects_lists) [ECMA_GC_COLOR_BLACK] = NULL;\n```\n\n**Question is here**. It seems insufficient to regard current jerryscript GC as a generational GC, even though it runs GC in SEVERITY_LOW condition only if newly allocated objects are more than threshold and it only checks WHTE_GRAY pool in GC process because **there's no object in BLACK pool at start of GC**.\n\n**What if the objects in BLACK pool is not moved to WHITE_GRAY pool after each GC so as not to check older objects in the memory at later GC?** I think it makes the GC more generational, despite of no assurance about perf and memory usage before check. :)\n\nIf I understood the GC process wrongly, please fix me.\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/1262/comments",
+    "author": "esevan",
+    "comments": [
+      {
+        "user": "zherczeg",
+        "created_at": "2016-08-12T05:26:15Z",
+        "body": "Jerry gc is just mark and sweep. It could be improved though.\n"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2017-01-31T13:24:29Z",
+        "body": "Closing due to inactivity. Please reopen if needed."
+      }
+    ]
+  },
+  {
+    "number": 754,
+    "title": "How to get a function object using API",
+    "created_at": "2015-11-29T12:32:52Z",
+    "closed_at": "2015-12-23T12:34:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/754",
+    "body": "Hi,\n  I read the API reference but can not figure out how to get a function object using the API, for example, there is piece of js code\n\n```\nfunction testFunction() {\n   //.....\n}\n```\n\nI want to know how to get the 'testFunction' from C code using API directly.\nMany thanks.\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/754/comments",
+    "author": "qdk0901",
+    "comments": [
+      {
+        "user": "qdk0901",
+        "created_at": "2015-11-29T13:39:50Z",
+        "body": "figure out now, below code works fine\n\n```\n    jerry_run ();\n\n    jerry_api_value_t val2;\n    jerry_api_value_t val3;\n    bool is_ok = jerry_api_get_object_field_value (glob_obj_p, (jerry_api_char_t*)\"testFunction\", &val2);\n\n    if (is_ok) {\n        jerry_api_call_function(val2.v_object, NULL, &val3, NULL, 0);\n        jerry_api_release_object (val2.v_object);\n    }\n```\n"
+      },
+      {
+        "user": "ruben-ayrapetyan",
+        "created_at": "2015-11-30T12:42:30Z",
+        "body": "@qdk0901, although, in this particular example, type of value in `val2` would always be object, the `jerry_api_get_object_field_value` could also receive values of another types. So, its better to explicitly check for type of the received values through `type` field, or to add an `assert` that type is same as expected.\n"
+      }
+    ]
+  },
+  {
+    "number": 665,
+    "title": "Property lookup cache prevents GC",
+    "created_at": "2015-10-13T04:20:28Z",
+    "closed_at": "2016-07-28T09:50:50Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/665",
+    "body": "It looks like from `ecma_lcache_insert()`, adding a property of an object increases RC for the object. This sometimes could prevent GC. \n\nI'm not sure I'm right about it, but I've reached tentative conclusion by exploring this for a while that this could be significant . For example, if we have a function only called once at the begining of program.\n\n```\nfunction foo(a) {\n  ...\n}\n```\n\nA lexical environment object is created for executing the function, and after finishes, the lexical object could not be freed by GC since a property of it is cached.\n\nPlease note that as my investigation is incomplete, the truth could be different. But I think we need to check this.\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/665/comments",
+    "author": "ILyoan",
+    "comments": [
+      {
+        "user": "ruben-ayrapetyan",
+        "created_at": "2015-10-26T12:40:03Z",
+        "body": "@ILyoan, lcache actually could prevent GC, causing false positive out-of-memory.\n\nOne of possible solutions is to consider lcache's references as weak references in GC.\n"
+      },
+      {
+        "user": "zherczeg",
+        "created_at": "2016-07-28T09:50:50Z",
+        "body": "Lcache has only weak references now.\n"
+      }
+    ]
+  },
+  {
+    "number": 572,
+    "title": "error: control reaches end of non-void function",
+    "created_at": "2015-08-13T22:06:58Z",
+    "closed_at": "2015-08-28T00:19:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/572",
+    "body": "Some functions like `lit_get_magic_string_utf8()` ends with \n\n```\n  JERRY_UNREACHABLE ();\n}\n```\n\nand does not return value. \nIn this case without `-Wno-return-type` mips compiler fails with an `error: control reaches end of non-void function`. Should I use this option `-Wno-return-type` or should I add something like this?\n\n```\n  JERRY_UNREACHABLE ();\n  return NULL; /* make compiler happy */\n}\n```\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/572/comments",
+    "author": "seanshpark",
+    "comments": [
+      {
+        "user": "egavrin",
+        "created_at": "2015-08-13T23:05:32Z",
+        "body": "This flag is useful, so I'd prefer to add `return NULL;`.\n"
+      },
+      {
+        "user": "ruben-ayrapetyan",
+        "created_at": "2015-08-14T09:15:43Z",
+        "body": "`JERRY_UNREACHABLE` macro calls `jerry_unreachable` function that is marked with `noreturn` attribute (`jerry_unreachable` leads to either `exit` or `abort`).\nSo, seems that the warning is false-positive.\nTo fix this, maybe, `while (true) {}` loop could be added after call to `jerry_unreachable` in the macro.\n"
+      },
+      {
+        "user": "seanshpark",
+        "created_at": "2015-08-17T00:02:28Z",
+        "body": "adding `while (true) {}` to end of `jerry_fatal()` works. \nthere are `jerry_assert_fail()`, `jerry_unreachable()` and `jerry_unimplemented()` that calls `jerry_fatal()` and all of them has `noreturn` attribute.\n@ruben-ayrapetyan , if you confirm I'll make a PR.\n"
+      },
+      {
+        "user": "egavrin",
+        "created_at": "2015-08-17T07:02:36Z",
+        "body": "@seanshpark @ruben-ayrapetyan \n\n``` cpp\n#define JERRY_UNREACHABLE() \\\n  do \\\n  { \\\n    jerry_unreachable (NULL, __FILE__, __func__, __LINE__); \\\n    __builtin_unreachable(); \\\n  } while (0)\n```\n"
+      },
+      {
+        "user": "seanshpark",
+        "created_at": "2015-08-17T07:55:34Z",
+        "body": "@egavrin , that will change 6 lines in jrt.h, is it ok? :)\n"
+      },
+      {
+        "user": "egavrin",
+        "created_at": "2015-08-17T08:05:43Z",
+        "body": "@seanshpark :+1: \n"
+      },
+      {
+        "user": "seanshpark",
+        "created_at": "2015-08-28T00:19:28Z",
+        "body": "Close as #586 landed\n"
+      }
+    ]
+  },
+  {
+    "number": 180,
+    "title": "Faster debug version",
+    "created_at": "2015-06-14T23:49:42Z",
+    "closed_at": "2015-06-17T22:57:43Z",
+    "labels": [
+      "enhancement",
+      "question",
+      "normal"
+    ],
+    "url": "https://github.com/jerryscript-project/jerryscript/issues/180",
+    "body": "As  new eval has landed, one small problem is that debug version execution has became very slow.\nCan there be some level of checking so that it might be somewhat faster for debugging?\n",
+    "comments_url": "https://api.github.com/repos/jerryscript-project/jerryscript/issues/180/comments",
+    "author": "seanshpark",
+    "comments": [
+      {
+        "user": "ILyoan",
+        "created_at": "2015-06-15T04:03:49Z",
+        "body": "It seems like `rcs_chunked_list_t::get_prev()` and `rcs_chunked_list_t::get_next()` are called too many times in debug mode. The prominent caller of them are `assert_node_is_correct()` and `assert_list_is_correct()`. \n"
+      },
+      {
+        "user": "ruben-ayrapetyan",
+        "created_at": "2015-06-15T13:07:13Z",
+        "body": "/CC @sand1k \n"
+      },
+      {
+        "user": "sand1k",
+        "created_at": "2015-06-15T14:23:07Z",
+        "body": "Surrouned code of assert_list_is_correct(), assert_node_is_correct() and rcs_recordset_t::assert_state_is_correct() with `#ifdef JERRY_HEAVY_DEBUG ... #endif`, so that this checks run only for unit tests.\nPull request #193 performs the update.\n"
+      },
+      {
+        "user": "seanshpark",
+        "created_at": "2015-06-15T23:32:30Z",
+        "body": "Nice!\n"
+      }
+    ]
+  }
+]

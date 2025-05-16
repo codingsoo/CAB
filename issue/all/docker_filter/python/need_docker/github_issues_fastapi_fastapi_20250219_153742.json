@@ -1,0 +1,92 @@
+[
+  {
+    "number": 3354,
+    "title": "Weird `args` and `kwds` in path schema when using Generic subclass as dependency and using python 3.8",
+    "created_at": "2021-06-10T03:30:36Z",
+    "closed_at": "2023-02-27T22:48:56Z",
+    "labels": [
+      "question",
+      "question-migrate"
+    ],
+    "url": "https://github.com/fastapi/fastapi/issues/3354",
+    "body": "### Problem\r\n\r\nHere is a minimal code to reproduce the problem:\r\n\r\n```Python\r\n# filename: main.py\r\nfrom typing import TypeVar, Generic\r\nfrom fastapi import FastAPI, Depends\r\n\r\nT = TypeVar(\"T\")\r\n\r\nclass Foo(Generic[T]):\r\n    pass\r\n\r\n\r\nclass Bar(Foo[int]):\r\n    pass\r\n\r\n\r\napp = FastAPI()\r\n\r\n\r\n@app.get(\"/\")\r\nasync def homepage(bar: Bar = Depends()):\r\n    pass\r\n```\r\n\r\nRun the above code with `uvicorn main:app`, with python 3.8, the generated path schema is:\r\n\r\n```json\r\n{\r\n  \"paths\": {\r\n    \"/\": {\r\n      \"get\": {\r\n        \"summary\": \"Homepage\",\r\n        \"operationId\": \"homepage__get\",\r\n        \"parameters\": [\r\n          {\r\n            \"required\": true,\r\n            \"schema\": {\r\n              \"title\": \"Args\"\r\n            },\r\n            \"name\": \"args\",\r\n            \"in\": \"query\"\r\n          },\r\n          {\r\n            \"required\": true,\r\n            \"schema\": {\r\n              \"title\": \"Kwds\"\r\n            },\r\n            \"name\": \"kwds\",\r\n            \"in\": \"query\"\r\n          }\r\n        ],\r\n        \"responses\": {\r\n          \"200\": {\r\n            \"description\": \"Successful Response\",\r\n            \"content\": {\r\n              \"application/json\": {\r\n                \"schema\": {\r\n                  \r\n                }\r\n              }\r\n            }\r\n          },\r\n          \"422\": {\r\n            \"description\": \"Validation Error\",\r\n            \"content\": {\r\n              \"application/json\": {\r\n                \"schema\": {\r\n                  \"$ref\": \"#/components/schemas/HTTPValidationError\"\r\n                }\r\n              }\r\n            }\r\n          }\r\n        }\r\n      }\r\n    }\r\n  },\r\n}\r\n```\r\n\r\nWhen using python 3.9, the path schema is:\r\n\r\n```json\r\n{\r\n  \"paths\": {\r\n    \"/\": {\r\n      \"get\": {\r\n        \"summary\": \"Homepage\",\r\n        \"operationId\": \"homepage__get\",\r\n        \"responses\": {\r\n          \"200\": {\r\n            \"description\": \"Successful Response\",\r\n            \"content\": {\r\n              \"application/json\": {\r\n                \"schema\": {\r\n                  \r\n                }\r\n              }\r\n            }\r\n          }\r\n        }\r\n      }\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nNote that, with python 3.9, the generated schema is expected, but with python 3.8, there are wired parameters `args` and `kwds`. \r\n\r\n\r\n### Environment\r\n\r\nPython 3.8 env:\r\n\r\n```sh\r\n$ uname\r\nDarwin\r\n\r\n$ python --version\r\nPython 3.8.2\r\n\r\n$ pip freeze\r\nasgiref==3.3.4\r\nclick==8.0.1\r\nfastapi==0.65.1\r\nh11==0.12.0\r\npydantic==1.8.2\r\nstarlette==0.14.2\r\ntyping-extensions==3.10.0.0\r\nuvicorn==0.14.0\r\n```\r\n\r\nPython 3.9 env:\r\n\r\n```sh\r\n$ uname\r\nDarwin\r\n\r\n$ python --version\r\nPython 3.9.0\r\n\r\n$ pip freeze\r\nasgiref==3.3.4\r\nclick==8.0.1\r\nfastapi==0.65.1\r\nh11==0.12.0\r\npydantic==1.8.2\r\nstarlette==0.14.2\r\ntyping-extensions==3.10.0.0\r\nuvicorn==0.14.0\r\n```\r\n\r\nI'm not familiar with internals of FastAPI's typing system, so I don't know how to dig further to figure out the cause. Can anyone help to solve the problem? \r\n",
+    "comments_url": "https://api.github.com/repos/fastapi/fastapi/issues/3354/comments",
+    "author": "StephenPCG",
+    "comments": [
+      {
+        "user": "francipvb",
+        "created_at": "2021-06-10T12:56:46Z",
+        "body": "Hello,\r\n\r\nWhat happen if you add an attribute to the parent schema or to the child schema?"
+      },
+      {
+        "user": "StephenPCG",
+        "created_at": "2021-06-10T13:16:47Z",
+        "body": "```python\r\n# Code-1\r\nclass Foo(Generic[T]):\r\n    def __init__(self, a: int):\r\n        self.a = a\r\n\r\n\r\nclass Bar(Foo[int]):\r\n    pass\r\n\r\n# Code-2\r\nclass Foo(Generic[T]):\r\n    pass\r\n\r\n\r\nclass Bar(Foo[int]):\r\n    def __init__(self, a: int):\r\n        self.a = a\r\n\r\n# Code-3\r\nclass Foo(Generic[T]):\r\n    def __init__(self, a: int):\r\n        self.a = a\r\n\r\n\r\nclass Bar(Foo[int]):\r\n    def __init__(self):\r\n        pass\r\n```\r\n\r\n| Code | Python 3.8 | Python 3.9 |\r\n| --- | --- | --- |\r\n| Code-1 | `args`, `kwds` | `a` |\r\n| Code-2 | `args`, `kwds` | `a` |\r\n| Code-3 | `args`, `kwds` | none |\r\n\r\nWith the above three variants of code, Python 3.9 always works as expected, however Python 3.8 always behave the same."
+      },
+      {
+        "user": "uriyyo",
+        "created_at": "2021-06-27T10:29:48Z",
+        "body": "@StephenPCG That's because of how `inspect.signature` function behaves at python 3.8.\r\n\r\nYou can fix this behavior by introducing helper mixin class:\r\n```py\r\nimport inspect\r\n\r\nclass GenericSignatureMixin:\r\n    def __init_subclass__(cls, **kwargs):\r\n        sign = inspect.signature(cls.__init__)\r\n\r\n        params = iter(sign.parameters.values())\r\n        next(params)  # skip first parameter\r\n\r\n        cls.__signature__ = inspect.Signature(\r\n            parameters=[*params],\r\n            return_annotation=sign.return_annotation,\r\n        )\r\n```\r\n\r\nAnd usage will be pretty simple (notice that mixin should go after `Generic` class):\r\n```py\r\nclass Foo(Generic[T], GenericSignatureMixin):\r\n    pass\r\n\r\n\r\nclass Bar(Foo[int]):\r\n    pass\r\n```\r\n"
+      },
+      {
+        "user": "StephenPCG",
+        "created_at": "2021-06-28T02:03:29Z",
+        "body": "@uriyyo Thanks! This works for me! "
+      },
+      {
+        "user": "uriyyo",
+        "created_at": "2021-07-07T14:56:10Z",
+        "body": "@StephenPCG Happy to hear that. I believe you can close this issue."
+      }
+    ],
+    "satisfaction_conditions": [
+      "A solution that prevents the unwanted 'args' and 'kwds' parameters from appearing in the FastAPI path schema when using Generic subclasses in Python 3.8",
+      "An explanation of why the behavior differs between Python 3.8 and 3.9",
+      "A practical implementation that can be integrated into existing code with minimal changes"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:20:45"
+    }
+  },
+  {
+    "number": 1154,
+    "title": "get_running_loop/get_event_loop doesnt seem to run in fastapi..but runs in starlette",
+    "created_at": "2020-03-22T17:28:51Z",
+    "closed_at": "2023-02-28T10:18:38Z",
+    "labels": [
+      "question",
+      "question-migrate"
+    ],
+    "url": "https://github.com/fastapi/fastapi/issues/1154",
+    "body": "This works in Starlette\r\n\r\n```\r\n#!/usr/bin/env python\r\n# -*- coding: utf-8 -*-\r\nimport inspect\r\nimport os\r\nimport sys\r\n\r\nimport asyncio\r\n\r\nimport uvicorn\r\nfrom starlette.applications import Starlette\r\nfrom starlette.responses import JSONResponse\r\n\r\napp = Starlette(debug=True)\r\n\r\n\r\ndef main():\r\n    CONFIG = uvicorn.Config(\r\n        app,\r\n        host=\"0.0.0.0\",\r\n        port=8000,\r\n        lifespan=\"on\",\r\n        loop=\"uvloop\",\r\n        log_level=\"info\",\r\n        use_colors=True,\r\n        workers=1,\r\n    )\r\n    SERVER = uvicorn.Server(config=CONFIG)\r\n    LOOP = asyncio.new_event_loop()\r\n    asyncio.set_event_loop(LOOP)\r\n\r\n    try:\r\n        LOOP.run_until_complete(SERVER.serve())\r\n\r\n    except asyncio.CancelledError:\r\n        pass\r\n\r\n    # uvicorn.run(app, host='127.0.0.1', port=8080)\r\n\r\n\r\n@app.route('/')\r\nasync def image(request):\r\n    # ext = request.path_params['ext']\r\n    loop = asyncio.get_running_loop()\r\n    return JSONResponse({'hello': 'world'})\r\n\r\n\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n\r\n```\r\n\r\nThis does not work in fastapi\r\n```\r\n\r\nfrom fastapi import FastAPI\r\nimport asyncio\r\nimport uvicorn\r\n\r\nimport logging\r\n\r\napp = FastAPI()\r\n\r\n\r\n@app.get(\"/\")\r\ndef root():\r\n    loop = asyncio.get_running_loop()\r\n    return{\"hello\":\"world\"}\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    logging.basicConfig(level=2, format=\"%(levelname)-9s %(message)s\")\r\n    CONFIG = uvicorn.Config(\r\n        app,\r\n        host=\"0.0.0.0\",\r\n        port=8000,\r\n        lifespan=\"on\",\r\n        loop=\"asyncio\",\r\n        log_level=\"info\",\r\n        use_colors=True,\r\n        workers=1,\r\n    )\r\n    SERVER = uvicorn.Server(config=CONFIG)\r\n\r\n    LOOP = asyncio.new_event_loop()\r\n    asyncio.set_event_loop(LOOP)\r\n\r\n    try:\r\n        LOOP.run_until_complete(SERVER.serve())\r\n    except asyncio.CancelledError:\r\n        pass\r\n```\r\n\r\nI'm looking to access the global event loop .\r\nam i doing anything wrong ?",
+    "comments_url": "https://api.github.com/repos/fastapi/fastapi/issues/1154/comments",
+    "author": "sandys",
+    "comments": [
+      {
+        "user": "phy25",
+        "created_at": "2020-03-22T20:13:09Z",
+        "body": "You need `async` for your `root()` function in your FastAPI app, otherwise it's running in a threaded pool."
+      },
+      {
+        "user": "tiangolo",
+        "created_at": "2020-04-13T18:45:06Z",
+        "body": "Thanks for your help here @phy25 ! :rocket: :cake: \r\n\r\nIf that answers your question you can close this issue @sandys \r\n\r\n<!-- issue-manager: answered -->"
+      },
+      {
+        "user": "sandys",
+        "created_at": "2020-04-14T17:59:16Z",
+        "body": "closed with thanks"
+      }
+    ],
+    "satisfaction_conditions": [
+      "An explanation of why the event loop is accessible in Starlette but not in FastAPI",
+      "A solution for accessing the event loop in FastAPI",
+      "Clarification on how FastAPI handles synchronous vs asynchronous route handlers"
+    ],
+    "_classification": {
+      "category": "Can be dockerized without any issue",
+      "timestamp": "2025-04-13 23:24:31"
+    }
+  }
+]

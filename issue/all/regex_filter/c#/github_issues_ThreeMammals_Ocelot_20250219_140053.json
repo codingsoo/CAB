@@ -1,0 +1,2388 @@
+[
+  {
+    "number": 1942,
+    "title": "在使用异步流返回时，并不是实时刷新逐条返回结果，而是一次返回结果",
+    "created_at": "2024-01-22T08:58:11Z",
+    "closed_at": "2024-01-23T09:24:04Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1942",
+    "body": "## Steps to Reproduce the Problem\r\n\r\n  1. 当响应体中有text/event-stream时，返回结果为一次性加载返回，而并非实时刷新\r\n  2. 即使我加载了自己的Middleware添加到OcelotPipelineExtensions时，也不能实时刷新，以异步流的形式收到结果\r\n自定义拓展代码如下\r\n\r\n  \r\n`\r\n\r\n    public class CustomResponseMiddleware : OcelotMiddleware\r\n    {\r\n        private readonly RequestDelegate _next;\r\n        public CustomResponseMiddleware(RequestDelegate next, IOcelotLoggerFactory loggerFactory)\r\n            : base(loggerFactory.CreateLogger<CustomResponseMiddleware>())\r\n        {\r\n            _next = next;\r\n        }\r\n\r\n        public async Task Invoke(HttpContext httpContext)\r\n        {\r\n            var response = httpContext.Items.DownstreamResponse();\r\n            const string streamingContent = \"text/event-stream\";\r\n            if (httpContext.Response.Headers[\"Content-Type\"] == streamingContent\r\n                || httpContext.Response.ContentType == streamingContent)\r\n            {\r\n                //await ForwardStream(httpContext.Response.Body, response);\r\n                var stream = await response.Content.ReadAsStreamAsync();\r\n                await WriteServerStreamEventsAsync(httpContext, stream);\r\n            }\r\n            await _next.Invoke(httpContext);\r\n        }\r\n        private static async Task WriteServerStreamEventsAsync(HttpContext httpContext, Stream contentStream)\r\n        {\r\n            var responseStream = httpContext.Response.Body;\r\n            await contentStream.CopyToAsync(responseStream, httpContext.RequestAborted);\r\n            await responseStream.FlushAsync(httpContext.RequestAborted);\r\n        }\r\n }\r\n\r\n\r\n` \r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1942/comments",
+    "author": "alivy",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-22T11:05:02Z",
+        "body": "Dear @alivy !\r\nThe official language of the project is English. Most of our teammates and even our contributors/developers from all over the world do not understand Chinese!"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-22T11:06:57Z",
+        "body": "Please update the description using English texts, otherwise the issue will be closed!"
+      },
+      {
+        "user": "ggnaegi",
+        "created_at": "2024-01-22T12:17:37Z",
+        "body": "When there is text/event-stream in the response body, the returned result is loaded and returned at once, not refreshed in real time.\r\nEven when I load my own Middleware and add it to OcelotPipelineExtensions, it doesn't refresh in real time, and the results are received as an asynchronous stream.\r\nThe custom extension code is as follows"
+      },
+      {
+        "user": "ggnaegi",
+        "created_at": "2024-01-22T12:23:36Z",
+        "body": "@alivy @raman-m  我不懂中文，所以可能无法用中文表达清楚。I would like to learn your language though. I think, you should wait the latest changes that were pushed to the develop branch. We are not copying the request body and response body directly anymore."
+      },
+      {
+        "user": "alivy",
+        "created_at": "2024-01-23T01:27:23Z",
+        "body": "> @alivy @raman-m 我不懂中文，所以可能无法用中文表达清楚。不过我想学习你们的语言。我认为，您应该等待推送到开发分支的最新更改。我们不再直接复制请求正文和响应正文。\r\n\r\nDue to environmental factors, the code cannot be made public, but I can describe the scenario to you ：\r\nWhen I used Ocelot to handle OpenAI's dialogue interface v1/chat/completion, the direct request was to refresh each field in real-time and return it in asynchronous flow form. However, when I used the Ocelot gateway, the response result was also returned in asynchronous flow form, but all dialogue information was returned at once"
+      },
+      {
+        "user": "alivy",
+        "created_at": "2024-01-23T01:30:07Z",
+        "body": "> 请使用英文文本更新描述，否则问题将被关闭！\r\n\r\nThe scene is as follows:\r\nWhen I used Ocelot to handle OpenAI's dialogue interface v1/chat/completion, the direct request was to refresh each field in real-time and return it in asynchronous flow form. However, when I used the Ocelot gateway, the response result was also returned in asynchronous flow form, but all dialogue information was returned at once"
+      },
+      {
+        "user": "alivy",
+        "created_at": "2024-01-23T02:41:05Z",
+        "body": "When I tried to modify the addition of middleware in the pipeline to respond to data asynchronously, an error occurred;\r\n\r\n```C#\r\n public class CustomResponseMiddleware : OcelotMiddleware\r\n {\r\n\r\n     private readonly RequestDelegate _next;\r\n     public CustomResponseMiddleware(RequestDelegate next, IOcelotLoggerFactory loggerFactory)\r\n         : base(loggerFactory.CreateLogger<CustomResponseMiddleware>())\r\n     {\r\n         _next = next;\r\n     }\r\n\r\n     public async Task Invoke(HttpContext httpContext)\r\n     {\r\n         var response = httpContext.Items.DownstreamResponse();\r\n         const string streamingContent = \"text/event-stream\";\r\n         if (httpContext.Response.Headers[\"Content-Type\"] == streamingContent\r\n             || httpContext.Response.ContentType == streamingContent\r\n             || response.Content.Headers.ContentType?.ToString() == streamingContent)\r\n         {\r\n             //await ForwardStream(httpContext.Response.Body, response);\r\n             var stream = await response.Content.ReadAsStreamAsync();\r\n             await WriteServerStreamEventsAsync(httpContext, stream);\r\n         }\r\n         await _next.Invoke(httpContext);\r\n     }\r\n     private static async Task WriteServerStreamEventsAsync(HttpContext httpContext, Stream contentStream)\r\n     {\r\n         var responseStream = httpContext.Response.Body;\r\n         await contentStream.CopyToAsync(responseStream, httpContext.RequestAborted);\r\n         await responseStream.FlushAsync(httpContext.RequestAborted);\r\n     }\r\n }\r\n```\r\n\r\n\r\nThe error message is as follows：\r\n\r\nMicrosoft.AspNetCore.Server.Kestrel[13]\r\n      Connection id \"0HN0RN6PE4IOV\", Request id \"0HN0RN6PE4IOV:00000002\": An unhandled exception was thrown by the application.\r\n      System.InvalidOperationException: Response Content-Length mismatch: too few bytes written (0 of 71354).\r\n"
+      },
+      {
+        "user": "ggnaegi",
+        "created_at": "2024-01-23T08:55:20Z",
+        "body": "@alivy could you tell us which Ocelot version you are using?"
+      },
+      {
+        "user": "alivy",
+        "created_at": "2024-01-23T08:56:33Z",
+        "body": "> @alivy您能告诉我们您使用的是哪个 Ocelot 版本吗？\r\n\r\n Ocelot 22.0.1"
+      },
+      {
+        "user": "alivy",
+        "created_at": "2024-01-23T09:07:37Z",
+        "body": "> @alivy您能告诉我们您使用的是哪个 Ocelot 版本吗？\r\n\r\nMy project uses .net6"
+      }
+    ]
+  },
+  {
+    "number": 1791,
+    "title": "Multiple Ocelot.Json Configuration Issue",
+    "created_at": "2023-11-20T11:08:59Z",
+    "closed_at": "2023-11-20T11:56:49Z",
+    "labels": [
+      "question",
+      "wontfix"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1791",
+    "body": " \r\nWe are facing issue in on fly changes in multiple ocelots. Json files, when any Ocelot. Json file configuration changed then require changes not reflecting in respective configuration file in Api gateway.  Kindly suggest any prior solution to resolve this issue.\r\n\r\nThanks, ",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1791/comments",
+    "author": "SheruGaur",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-20T11:49:52Z",
+        "body": "Hey, Sheru!\r\nWhy didn't you fork the repository?\r\n\r\nBased on your description in 2 sentences, I would say, I don't see any issues.\r\nJust keep all config files in repo or in file system of gateway app. And restart your app to get all files merged to one **ocelot.json** file. Re-distribute this file! And be happy!"
+      }
+    ]
+  },
+  {
+    "number": 1747,
+    "title": "How to forward remote IP address for http?",
+    "created_at": "2023-10-19T10:24:34Z",
+    "closed_at": "2023-10-19T13:22:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1747",
+    "body": "When I send a ws request to the _Blazor Server Side_ then I get the real remote IP address of the remote device, but when the request is a http request to the _Rest API_ then the remote IP is `::1`.\r\n\r\nSince I cannot test the application on a server without considerable effort, I wonder if it could have to do with the debug environment.\r\n\r\n## Expected Behavior\r\nGet the remote ip address on http and ws request\r\n\r\n## Actual Behavior\r\nRemote ip address is `::1` on http and \"real\" on ws.\r\n\r\n## Specifications\r\n  - Version: 20.0.0\r\n  - Platform: Windows 10\r\n  - Backend: Microsoft.NET.Sdk.Worker .NET 7.0, Microsoft.AspNetCore\r\n\r\n## Configs:\r\nocelot.json\r\n```json\r\n\"Routes\": [\r\n  {\r\n    \"__ServiceName\": \"Rest API\",\r\n    \"DownstreamPathTemplate\": \"/api/{everything}\",\r\n    \"DownstreamScheme\": \"http\",\r\n    \"DownstreamHostAndPorts\": [\r\n      {\r\n        \"Host\": \"localhost\",\r\n        \"Port\": 5000\r\n      }\r\n    ],\r\n    \"UpstreamPathTemplate\": \"/api/{everything}\",\r\n    \"UpstreamHttpMethod\": [ \"Get\", \"Delete\", \"Patch\", \"Put\", \"Post\" ],\r\n    \"SwaggerKey\": \"crud\"\r\n  },\r\n  {\r\n    \"__ServiceName\": \"Blazor Server Side\",\r\n    \"DownstreamPathTemplate\": \"/{catchAll}\",\r\n    \"DownstreamScheme\": \"ws\",\r\n    \"DownstreamHostAndPorts\": [\r\n      {\r\n        \"Host\": \"localhost\",\r\n        \"Port\": 5001\r\n      }\r\n    ],\r\n    \"UpstreamPathTemplate\": \"/{catchAll}\",\r\n    \"UpstreamHttpMethod\": [ \"GET\", \"POST\", \"PUT\", \"DELETE\", \"OPTIONS\" ]\r\n  }\r\n```\r\n\r\n#### IpForwardHandler : DelegatingHandler\r\n```csharp\r\npublic sealed class IpForwardHandler : DelegatingHandler\r\n{\r\n    private readonly IHttpContextAccessor _contextAccessor;\r\n    private readonly ILogger<IpForwardHandler> _logger;\r\n\r\n    public IpForwardHandler(IHttpContextAccessor contextAccessor, ILogger<IpForwardHandler> logger)\r\n    {\r\n        _contextAccessor = contextAccessor;\r\n        _logger = logger;\r\n    }\r\n\r\n    protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)\r\n    {\r\n        AddIpHeader(request, cancellationToken);\r\n        return base.Send(request, cancellationToken);\r\n    }\r\n\r\n    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)\r\n    {\r\n        AddIpHeader(request, cancellationToken);\r\n        return base.SendAsync(request, cancellationToken);\r\n    }\r\n\r\n    private void AddIpHeader(HttpRequestMessage request, CancellationToken cancellationToken)\r\n    {\r\n        const string key = \"X-Forwarded-For\";\r\n        if (!request.Headers.Any(x => x.Key == key))\r\n        {\r\n            var ip = _contextAccessor.HttpContext.Connection.RemoteIpAddress.ToString();\r\n            request.Headers.Add(key, ip);\r\n            _logger.LogInformation(\"Added IP {ip}\", ip);\r\n        }\r\n    }\r\n}\r\n```\r\n\r\n## Additional question\r\nWhat would be a feasible way to forward the remote ip address?\r\nas the:\r\n```json\r\n\"UpstreamHeaderTransform\": {\r\n  \"X-Forwarded-For\": \"{RemoteIpAddress}\"\r\n}\r\n```\r\nConfiguration does not seem to do anything. (at least not in the ASP.NET backend)",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1747/comments",
+    "author": "OnSive",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-10-19T13:19:24Z",
+        "body": "Well...\r\n\r\n>When I send a **ws** request to the _Blazor Server Side_\r\n>Get the remote ip address on http and **ws** request\r\n\r\nAre you saying about Websockets requests? Websockets feature?\r\n\r\n-----\r\n> Remote ip address is ::1 on http and \"real\" on ws.\r\n\r\nYeah, you see such facts because of different protocols, and they behave differently. Don't you ask us, as Ocelot team, to fix that? 🤣 \r\n\r\n----\r\n>```json\r\n>     \"DownstreamHostAndPorts\": [\r\n>       {\r\n>         \"Host\": \"localhost\", // come on!\r\n>         \"Port\": 5000\r\n>       }\r\n>     ],\r\n> ```\r\n\r\nYou use `localhost` and local environment PC to host the solution, and you wonder why do you have localhost addresses?\r\nCome on!\r\nWhat is your upstream settings in global section? I mean this:\r\n```json\r\n    \"GlobalConfiguration\": {\r\n        \"BaseUrl\": \"somehost:someport\"\r\n    }\r\n```\r\nI guess, BaseUrl is also `localhost`, right? 😉 \r\n\r\n---\r\n> #### IpForwardHandler : DelegatingHandler\r\n\r\nWhy do you write special delegating handler to get remote address IP? It seems you didn't read the documentation..."
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-10-19T13:20:29Z",
+        "body": "I don't see the issue! I'm going to convert to a discussion..."
+      }
+    ]
+  },
+  {
+    "number": 1698,
+    "title": "Why Ocelot not AWS Gateway?",
+    "created_at": "2023-09-21T19:42:58Z",
+    "closed_at": "2023-09-28T07:44:55Z",
+    "labels": [
+      "question",
+      "wontfix"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1698",
+    "body": "Hi,\r\n\r\nCan anyone explain what is perk of ocelot gateway over AWS gateway, just its free gateway? Is it safe as AWS gateway and much scalable and secure?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1698/comments",
+    "author": "ks1990cn",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-21T21:13:26Z",
+        "body": "Hi Tanmay!\r\n\r\nDifficult question, without seeing AWS Gateway repository...\r\nIs AWS Gateway open-source?\r\nIs it coded in C# ? 😉 \r\n"
+      },
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-09-22T07:19:26Z",
+        "body": "Amazon don't show their code!\r\n\r\nI seached same question over Google Bard regarding Ocelot vs AWS Gateway API, you can go and is there any thing else want to add you can add, but till this time it gives me satisfactory answer.\r\n\r\nQuestions :- Can we think for adding monitoring implementation with Ocelot? Do we additional repo to implement this gateway with .Net code and hence we can route and manage like any other  API gateways.\r\n\r\nIt showed me following differences.\r\n\r\n```\r\nAWS API Gateway is a fully managed service, which means that Amazon takes care of all the provisioning, scaling, and maintenance. It is also highly scalable and can handle millions of requests per second. AWS API Gateway supports a wide range of features, including:\r\n\r\nAuthentication and authorization\r\nRate limiting\r\nCaching\r\nAPI versioning\r\nMonitoring and analytics\r\n```\r\n\r\n```\r\nOcelot is an open-source API gateway that is built on .NET Core. It is lightweight and easy to use, but it does not offer as many features as AWS API Gateway. Ocelot supports the following features:\r\n\r\nRouting\r\nAuthentication and authorization\r\nLoad balancing\r\nCaching\r\nCircuit breaker\r\n```\r\n\r\n<html>\r\n<body>\r\n<!--StartFragment-->\r\n\r\nFeature | AWS API Gateway | Ocelot\r\n-- | -- | --\r\nManaged service | Yes | No\r\nScalability | High | Medium\r\nFeatures | Authentication, authorization, rate limiting, caching, API versioning, monitoring, analytics | Routing, authentication and authorization, load balancing, caching, circuit breakers\r\nPlatform | Cloud-agnostic | .NET Core\r\nOpen source | No | Yes\r\n\r\n<!--EndFragment-->\r\n</body>\r\n</html>"
+      },
+      {
+        "user": "RaynaldM",
+        "created_at": "2023-09-22T09:02:19Z",
+        "body": "Hi Tanmay,\r\nIt all depends on what you want to achieve.\r\nIf you want to be able to use the same gateway on AWS and Azure (or Google), you must not be tied to one of their technologies, and so a gateway like Ocelot is the obvious choice.\r\nIn our case, that's one of the reasons why we chose Ocelot, the other being the ability to \"work\" on requests in DelegatingHandlers, and that gives us great flexibility.\r\nThe last point is that Ocelot is open-source and its code is easy to learn."
+      },
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-09-23T13:01:06Z",
+        "body": "I understand complete funda for ocelot. Was just unable to think when to use Ocelot and when to use AWS/ Azure gateway, what is exact use case?\r\n\r\nIf we host any website and use Ocelot, then also we will be paying cause any RestAPI will be using EC2 or Serverless system.\r\n\r\nFor open source and modification, its no doubt best option... I will be continue to learn on this and start contribution soon. Thanks"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-28T09:18:25Z",
+        "body": "@ks1990cn \r\nDear Tanmay,\r\n\r\nWe don't care about AWS services! We care about Ocelot only!\r\nWe don't need any comparison tables because it is incorrect to compare paid service with closed code to an open-source project. **They cannot be compared at all!**\r\nIn theory only atomic features can be compared.\r\n\r\n### First,\r\nScalability of Ocelot depends on hosting environment. Ocelot can be built as Docker image based on Kestrel web server, and after that Docker image can be instantiated as Docker container in environment with scalability options. For example in custom Kubernetes cluster, including cloud clusters like Azure Kubernetes Service and Amazon EKS.\r\n\r\n### Second,\r\nAs I said, Ocelot is open source. We ensure some fairness and honesty when delivering Ocelot features. So, as an open-source product, Ocelot is open for extensions and audit. Can you audit Amazon service? No!\r\n\r\n### Third, \r\nOcelot is open for security audit. We don't track requests, we don't analyze request bodies to sniff the client's traffic. Ocelot has no integrations to some persistent storages to save statistics. Can you say the same about AWS Gateway?\r\n\r\n### Fifth,\r\nAs a standard ASP.NET app, Ocelot can be deployed into private environments aka on-premises to serve the traffic of private networks of companies with high security standards, who care about data privacy and security. Can you say the same about Amazon Gateway?\r\n\r\n### Finally,\r\nAs I said, that's wrong to compare closed-source products to open-source products. \r\n\r\n@RaynaldM  For having fun! FYI! 😉 "
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-28T09:20:21Z",
+        "body": "@ks1990cn \r\n> I will be continue to learn on this and start contribution soon.\r\n\r\nWe welcome your intention to return back to us with some interesting features/issues and PRs!\r\nGood luck in learning Ocelot!"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-28T09:39:11Z",
+        "body": "@ks1990cn commented [on Sep 22](#issuecomment-1730926975)\r\n> Feature | AWS API Gateway | Ocelot\r\n> -- | -- | --\r\n> Managed service | Yes | No\r\n\r\nIn what terms we understand \"managed\" here? Having some nice buttons to press on web-site? That's management, right?\r\nAs a developer, you can extend, build, and deploy Ocelot as you wish.\r\n\r\n---\r\n> Feature | AWS API Gateway | Ocelot\r\n> -- | -- | --\r\n> Scalability | High | Medium\r\n\r\nI would say, Ocelot has high scalability also, because of building as Docker image. Scalability has provided by containerization services.\r\n\r\n> Feature | AWS API Gateway | Ocelot\r\n> -- | -- | --\r\n> Features | Authentication, authorization, rate limiting, caching, API versioning, monitoring, analytics | Routing, authentication and authorization, load balancing, caching, circuit breakers\r\n\r\nEvery API gateway has its own nice features, and development teams choose what features they need to build a software product.\r\n\r\n---\r\n> Feature | AWS API Gateway | Ocelot\r\n> -- | -- | --\r\n> Platform | Cloud-agnostic | .NET Core\r\n\r\nTo be cloud-agnostic means AWS Gateway can be hosted in Azure and Google clouds... Hmmm... Really?\r\nCould you share a link to prove that plz?\r\nAs .NET app, Ocelot can be deployed to **any** cloud too!\r\n\r\n---\r\n> Feature | AWS API Gateway | Ocelot\r\n> -- | -- | --\r\n> Open source | No | Yes\r\n\r\nTotally agree!\r\nYou can pay for Amazon services. Jeff Bezos needs new one villa more in India 🤣 "
+      },
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-10-02T10:14:33Z",
+        "body": "Thank you Raman for helping with nice and discriptive answers"
+      }
+    ]
+  },
+  {
+    "number": 1692,
+    "title": "How to configure Ocelot to prevent it from adding the port to my downstream URL?",
+    "created_at": "2023-09-12T22:08:03Z",
+    "closed_at": "2023-10-19T18:44:37Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1692",
+    "body": "Hello,\r\nI am currently working on a Proof of Concept (POC) using Ocelot, but I have encountered an issue when making a URL call from localhost to route traffic to my API.\r\n**Is that correct when missing downstream port is replaced with an upstream port?**\r\n\r\n## Actual Behavior \r\nThe base URL of my project is:\r\n- Host: **localhost**\r\n- Port: **5021**\r\n\r\nI also have a downstream URL, for instance:\r\n- Downstream URL: `my-external-api.com` (without specifying any port)\r\n\r\nHowever, when I make a call to my URL through the Ocelot gateway, it adds a port to my URL, causing my external API to malfunction because it doesn't expect a port.\r\n\r\nHere's what happens:\r\n> I call my upstream URL as follows: `localhost:5021/gateway/my-api`\r\n> Ocelot attempts to call my downstream and adds a port: `my-external-api.com:5021`\r\n\r\n## Expected Behavior \r\nNow, I'm looking for a way to configure Ocelot to ignore this added port (e.g., 5021) when making calls to my API. I've already removed the port from my downstream configuration.\r\n\r\n**How can I configure Ocelot to resolve this issue and prevent it from adding the port to my downstream URL?**\r\n\r\n## Specifications\r\n  - Version: **19.0.2**\r\n  - Platform: **.NET 7**\r\n  - Subsystem: Windows\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1692/comments",
+    "author": "walissonde",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-15T09:12:33Z",
+        "body": "Hi Walisson!\r\nThanks for your interest in Ocelot!\r\n\r\nAs far as I understood, *Ocelot substitutes downstream port by upstream port when there is no downstream port.* Correct?\r\nIf Yes, it can be a bug. But this scenario should be reproduced and proved.\r\nAlso, you need to check Ocelot logs for a warnings & messages of configuration validation.\r\nCould you check your logs for messages please?\r\n\r\nOn my opinion, when there is no specified downstream port, so a warning should be logged.\r\nMoreover, as a default feature, missing port must be initialized by default port of current scheme (protocol) like:\r\n- http: 80\r\n- https: 443\r\n- ws: ?\r\n- etc.\r\n"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-09-15T09:22:36Z",
+        "body": "> How can I configure Ocelot to resolve this issue and prevent it from adding the port to my downstream URL?\r\n\r\nJust define the downstream port for all routes! For example:\r\n```json\r\n{\r\n  \"Routes\": [\r\n    {\r\n      // Route 1\r\n      \"DownstreamScheme\": \"http\",\r\n      \"DownstreamHostAndPorts\": [\r\n        {\r\n          \"Host\": \"route1.com\",\r\n          \"Port\": 80\r\n        }\r\n      ],\r\n      // ...\r\n    },\r\n    {\r\n      // Route 2\r\n      \"DownstreamScheme\": \"https\",\r\n      \"DownstreamHostAndPorts\": [\r\n        {\r\n          \"Host\": \"route2.com\",\r\n          \"Port\": 443\r\n        }\r\n      ],\r\n      // ...\r\n    },\r\n  ],\r\n  \"GlobalConfiguration\": {\r\n  }\r\n}\r\n```\r\n\r\nLet me know testing results please!"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-10-09T11:58:31Z",
+        "body": "> @walissonde commented [on Sep 13](#issue-1893368516)\r\n\r\nAnswering your question\r\n> How can I configure Ocelot to resolve this issue and prevent it from adding the port to my downstream URL?\r\n\r\nI [suggested you](#issuecomment-1720958621) just specify Port value explicitly as is done for all routes now as the default behavior. \r\n\r\nRegarding potential bug of port substitution from upstream... Still need to check it... Haven't you received validation errors 7 warning in the log?\r\n\r\nAlso, I've looked into the code, the [DownstreamRequestCreator](/search?q=repo%3AThreeMammals%2FOcelot%20DownstreamRequestCreator&type=code) class, and it has no extra logic related to `Port` property.\r\nThe [Port](/search?q=repo%3AThreeMammals%2FOcelot+Port+language%3AC%23+path%3A%2F%5Esrc%5C%2F%2F&type=code) property has no implicit initializations...\r\nHistorically Port should be initialized explicitly in configuration of the Route, because downstream services have deployed behind firewalls which open access with specific ports.\r\n\r\n----\r\n**Have I answered on your question?\r\nWould you like to convert your question to bug/feature type?**"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-10-09T12:02:33Z",
+        "body": "@walissonde  It could be a bug, it can be a feature, I'm not sure now. Historically all routes should have specified port.\r\nSo, moving this thread to discussions..."
+      }
+    ]
+  },
+  {
+    "number": 1622,
+    "title": "Transform claim key not found to an empty string.",
+    "created_at": "2022-11-25T10:12:50Z",
+    "closed_at": "2023-12-15T11:31:56Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1622",
+    "body": "Hi Ocelot team,\r\n\r\nIt's a question, not an issue.\r\n\r\nIs it possible to check if a key exists and if not pass an empty string?\r\n\r\nFor example:\r\n\r\nWhat I have: \r\n`\"AddQueriesToRequest\": {\r\n        \"userId\": \"Claims[sub] > value\"\r\n}`\r\n\r\nError Code: CannotFindClaimError Message: \r\nCannot find claim for key: sub errors found in ResponderMiddleware. Setting error response for request\r\n\r\nWhat I would like to do (If the key doesn't exist, send an empty string.)\r\n`\"AddQueriesToRequest\": {\r\n        \"userId\": \"Claims[sub] ? Claims[sub] > value : '' \"\r\n}`\r\n\r\nThank you.\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1622/comments",
+    "author": "guilhermebentomarques",
+    "comments": [
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-12-10T14:26:09Z",
+        "body": "@guilhermebentomarques  No! this breaks functionality. Why you are trying to put claim key after being authenticated? Its not a right idea.\r\n\r\n"
+      },
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-12-10T14:27:19Z",
+        "body": "@raman-m this can be closed I think, do think it is feasible even?"
+      }
+    ]
+  },
+  {
+    "number": 1607,
+    "title": "Disable CORS headers from downstream services",
+    "created_at": "2022-09-29T09:52:16Z",
+    "closed_at": "2023-11-22T11:19:57Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1607",
+    "body": "I handle CORS in the Gateway project and everything works fine, but some of the downstream services mistakenly add CORS headers to the downstream response (e.g. `allow-access-control-origin: *`) which breaks the CORS configuration in the Gateway project.\r\nIs there a built-in feature for disabling CORS headers from downstream services ?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1607/comments",
+    "author": "a510",
+    "comments": [
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-11-19T05:29:33Z",
+        "body": "Gateway can not do that. Infact no api can change configuration of any other API."
+      }
+    ]
+  },
+  {
+    "number": 1601,
+    "title": "Ocelot:  UnableToCompleteRequestError ",
+    "created_at": "2022-09-15T22:13:59Z",
+    "closed_at": "2023-12-15T12:03:29Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1601",
+    "body": "I added logging to the API Gateway which uses Ocelot.  This .Net Core 2.2 API is running on a linux server.\r\nI added middleware to log the request IP address.\r\n\r\nIt appears to route requests just fine.\r\n\r\nHowever, it never hits my middleware and instead is logging this exception from Ocelot.\r\n\r\n```\r\n[2022-09-15 17:02:50.5415][vmc-mercub][Warn] requestId: 0HMKNC1L9QQOG:00000001, previousRequestId: no previous request id, message: Error Code: **UnableToCompleteRequestError** Message: Error making http request, exception: System.Threading.Tasks.TaskCanceledException: The operation was canceled. ---> \r\nSystem.IO.IOException: Unable to read data from the transport connection: \r\nOperation canceled. ---> System.Net.Sockets.SocketException: Operation canceled\r\n   --- End of inner exception stack trace ---\r\n   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error)\r\n   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.GetResult(Int16 token)\r\n   at System.Net.Http.HttpConnection.SendAsyncCore(HttpRequestMessage request, CancellationToken cancellationToken)\r\n   --- End of inner exception stack trace ---\r\n   at System.Net.Http.HttpConnection.SendAsyncCore(HttpRequestMessage request, CancellationToken cancellationToken)\r\n   at System.Net.Http.HttpConnectionPool.SendWithNtConnectionAuthAsync(HttpConnection connection, HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)\r\n   at System.Net.Http.HttpConnectionPool.SendWithRetryAsync(HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)\r\n   at System.Net.Http.HttpClient.FinishSendAsyncBuffered(Task`1 sendTask, HttpRequestMessage request, CancellationTokenSource cts, Boolean disposeCts)\r\n   at Ocelot.Requester.HttpClientHttpRequester.GetResponse(DownstreamContext context) errors found in ResponderMiddleware. Setting error response for request path:/api/v1.0/Parts/Inventory, request method: POST \r\n```\r\n\r\nThoughts? Ideas? on what could be causing this?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1601/comments",
+    "author": "clintcarter1999",
+    "comments": [
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-10-24T13:29:43Z",
+        "body": "Can you share code hints of what and where you have put middleware?\r\n\r\nAlso Oclelot, looks like something wrong with socket"
+      }
+    ]
+  },
+  {
+    "number": 1563,
+    "title": "Getting HttpClient for downstream path",
+    "created_at": "2022-02-11T23:21:07Z",
+    "closed_at": "2023-12-25T16:16:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1563",
+    "body": "Is there anyway for me to get and HttpClient based on a path? \r\nI want to build an aggregator (the builtin functionality is not enough) where one POST is calling 3 services, like Facade pattern.\r\nI tried using a custom controller, but couldn't get it to map to the controller. Ocelot kept saying there was no route for the request.\r\n\r\nSo I digged into DelegateHandlers which could work. I'm using ServiceDiscovery with Kubernetes and I thought why not let Ocelot give me an HttpClient based on the path I want to call.\r\n\r\nThis is what I got so far, which is probably a big hack. Any ideas? This doesn't work. It doesn't find the right route, and the HttpClientBuilder does not set the base url.\r\n\r\n```csharp\r\nbuilder.Services.AddTransient<Ocelot.Requester.IHttpClientBuilder, Ocelot.Requester.HttpClientBuilder>();\r\nbuilder.Services.AddTransient<IOcelotLogger>(c =>\r\n{\r\n    var loggerFactory = c.GetService<IOcelotLoggerFactory>();\r\n    return loggerFactory.CreateLogger<HttpClientHttpRequester>();\r\n});\r\n\r\n\r\npublic class GetDeviceHandler : DelegatingHandler\r\n{\r\n    private readonly IHttpContextAccessor httpContext;\r\n    private readonly Ocelot.Requester.IHttpClientBuilder httpClientBuilder;\r\n    private readonly IDownstreamRouteProvider downstreamRouteProvider;\r\n\r\n    public GetDeviceHandler(IHttpContextAccessor httpContext, Ocelot.Requester.IHttpClientBuilder httpClientBuilder, IDownstreamRouteProvider downstreamRouteProvider)\r\n    {\r\n        this.httpContext = httpContext;\r\n        this.httpClientBuilder = httpClientBuilder;\r\n        this.downstreamRouteProvider = downstreamRouteProvider;\r\n    }\r\n\r\n    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)\r\n    {\r\n        var configuration = httpContext.HttpContext.Items.IInternalConfiguration();\r\n        var downstreamRouteHolder = httpContext.HttpContext.Items.DownstreamRouteHolder();\r\n        var downstreamRoute = downstreamRouteHolder.Route.DownstreamRoute.FirstOrDefault();\r\n        var client = httpClientBuilder.Create(downstreamRoute);\r\n\r\n        var devEui = downstreamRouteHolder.TemplatePlaceholderNameAndValues.First().Value;\r\n\r\n        var response = downstreamRouteProvider.Get($\"api/devices/{devEui}/endpoints\", null, \"Get\", configuration, null).Data;\r\n        var endpoiintsHttpClient = httpClientBuilder.Create(response.Route.DownstreamRoute.FirstOrDefault());\r\n        \r\n        //do stuff and optionally call the base handler..\r\n        return await base.SendAsync(request, cancellationToken);\r\n    }\r\n}\r\n```",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1563/comments",
+    "author": "mbendtsen",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-12-25T16:16:16Z",
+        "body": "Hi Michael!\r\nCool research! 😄 \r\nIt is hard to say something right now. :expressionless: \r\nGoing to convert the issue to discussion..."
+      }
+    ]
+  },
+  {
+    "number": 1530,
+    "title": "Authentication/Authorization - Conceptual Questions ",
+    "created_at": "2021-10-29T12:48:36Z",
+    "closed_at": "2024-01-06T14:39:03Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1530",
+    "body": "I'm struggling to comprehend why is it so damn hard to do proper authentication/authorization if you hide your downstream services behind a gateway. Please help me to understand, and advise!\r\n\r\nSo, just a quick background info. We are currently working on a modular platform (micro-frontend/microservices) where different teams can add modules freely to the same system. We only need Azure AD authentication therefore I wanted to avoid using Identity Server and having a separate issuer service implementation. I'm trying to keep it simple.\r\n\r\nAs far as I understand, the fastest possible solution is if the downstream services don't do shit, we configure the Azure AD auth on Ocelot level only. That's fine I guess, but with this way claims won't be extracted automatically by the downstream services (that's why, I guess, Ocelot has this obscure claims transformation feature in the first place). I couldn't find any simple solution on the Internet to make a downstream service to accept the JWT token coming from the gateway. It's hard to believe that no one ever needed that before me.\r\n\r\nThe other problem I have with this approach is that I don't want to configure the Gateway all the time when another team creates a new API endpoint. They should be able to use the [Authorize] attribute in their code to finetune their authentication/authorization requirements. But with this approach authentication won't work, unless you do many hacks/workarounds. (Downstream service URL in HTTP 302 redirections and such, you can't initiate signin at downstream level and expect from the upstream to be able to finish correctly)\r\n\r\nSo, isn't here a better solution for this? Don't tell me nobody suffers from this. The web is full of utterly terrible solutions, one is worse than the other, while I don't want to reinvent the wheel here, I'm sure there must be a simple solution for this. Or am I missing something important? Please help! \r\n\r\nThanks!",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1530/comments",
+    "author": "mercenaryntx",
+    "comments": [
+      {
+        "user": "RomainHautefeuille",
+        "created_at": "2021-11-12T15:56:34Z",
+        "body": "Not sure how Azure AD works, I assume it is using OAuth 2.0 / OpenID Connect with a bearer token since you are referring to claims transformation.\r\n\r\n> the fastest possible solution is if the downstream services don't do shit, we configure the Azure AD auth on Ocelot level only\r\n\r\nThat's a way to do it.\r\n\r\n> That's fine I guess, but with this way claims won't be extracted automatically by the downstream services (...) I couldn't find any simple solution on the Internet to make a downstream service to accept the JWT token coming from the gateway.\r\n\r\nBy default Ocelot is forwarding headers, so Authorization header should forward the access-token as-is to downstream apis. You _could_ parse the token there (using standard Authentication middleware in a dotnet core api for instance). But that could lead to other issues:\r\n- Outside world might not be reachable from those Apis to validate the token with Azure AD.\r\n- Audience would probably be wrong on the token since it was issued for the user to reach the gateway, not for the gateway to reach all downstream apis. You would have to either disable token validation or at least tweak it (TokenValidationParameters).\r\n- User token is leaking in downstream services. If someone gets it, one could impersonate the end-user to perform actions in its name on the gateway.\r\n- Finally the gateway itself should be using some kind of authentication for reaching downstream apis. It could take multiple forms, but in our case we are also using Authorization header with an OpenID Connect token issued for the gateway (using a server-to-server flow) with scopes/audience being all downstream apis.\r\n\r\nThe solution we've opted for:\r\n- a token user/gateway that is validated by the gateway and does not leak downstream.\r\n- 1 middleware in the gateway to strip all signature from the user token and just grab the claims part + 1 delegating handler to send that in a custom header to downstream apis.\r\n- a server-server token gateway/apis validated by apis (not carrying any user data).\r\n- 1 middleware in downstream apis to parse the user claims + 1 delegating handler to forward it when jumping from api to api if needed.\r\n\r\nNot sure this is a perfect solution but that works for us and it is reasonably simple.\r\n\r\n> (that's why, I guess, Ocelot has this obscure claims transformation feature in the first place).\r\n\r\nIt could also be a way to simplify/restrict public endpoints. For instance, say you have a downstream route `Get /users/:id/profile`. You could prevent anyone from calling this endpoint for another user than current user by simply using claims transformation to inject the user id into the downstream route, just exposing publicly a more restrictive endpoint `Get /me/profile`.\r\n\r\n> The other problem I have with this approach is that I don't want to configure the Gateway all the time when another team creates a new API endpoint. They should be able to use the [Authorize] attribute in their code to finetune their authentication/authorization requirements\r\n\r\nI don't see a simple way around that. I mean the gateway is meant to control which routes can be accessed, in between an application and the apis, so each team will probably want to update the gateway at some point. Imagine an api exposed by 2 gateways (2 applications) but not all routes should be in the first gateway (it could be a public web app versus a back office for the second gateway, with more sensible actions).\r\n\r\nIn our case we don't use standard Identity Users in the apis since the token used for authentication is not a end user one, but we are still able to check user claims in the apis using our dedicated UserService.\r\n\r\nNot a perfect answer, but I hope it still helps.\r\n"
+      }
+    ]
+  },
+  {
+    "number": 1523,
+    "title": "How to reduce the compilation time of ocelot.json with multiple configuration files",
+    "created_at": "2021-10-05T22:04:30Z",
+    "closed_at": "2024-01-06T15:05:34Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1523",
+    "body": "## Expected Behavior / New Feature\r\nThe ocelot should not take much time at startup when we add multiple configuration files in gateway.\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\nDue to the multiple and large file size of configuration files, ocelot taking too much time at startup \r\n## Steps to Reproduce the Problem\r\n\r\n  1.add multiple configuration files in ocelot with diffrent name \r\n  2  A single  file size could be of 84 kb \r\n  3 Start the ocelot gateway and observe how much time it will take to compile those files\r\n\r\n## Specifications\r\n\r\n  - Version: \r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1523/comments",
+    "author": "Erol5678",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-06T15:01:57Z",
+        "body": "How large are your files? How many files?\r\nWhy do you have these multiple config files?\r\n\r\nIf your config is really large, then seems service definitions should be managed by a service discovery tools like Consul."
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-06T15:05:04Z",
+        "body": "> 1.add multiple configuration files in ocelot with diffrent name\r\n\r\nImpossible to reproduce the issue!"
+      }
+    ]
+  },
+  {
+    "number": 1506,
+    "title": "How to check if those requests are duplicated?",
+    "created_at": "2021-08-19T11:22:34Z",
+    "closed_at": "2023-10-30T19:19:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1506",
+    "body": "I'm using Ocelot, but I have a problem that I can't find a solution for\r\n- My system is having a lot of requests sent at the same time\r\n- How can I check if those requests are duplicated, can I block them\r\nRequests submitted at the same time hh:mm:ss:sss ",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1506/comments",
+    "author": "vnlevanduoc",
+    "comments": [
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-10-28T00:10:29Z",
+        "body": "Facing lot of hits and want to control that? RateLimiter is solution for it.\r\n\r\nRateLimiter check `clientIdentity` internally and work on it.\r\n\r\nCan you explain more on this, what exactly you are looking for if ratelimiter is not solution for you."
+      }
+    ]
+  },
+  {
+    "number": 1466,
+    "title": "Question: priority, same upstream host",
+    "created_at": "2021-04-22T23:40:16Z",
+    "closed_at": "2024-01-06T12:47:23Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1466",
+    "body": "In hosting several microservices, the same upstream host is used.  \r\n\r\nEach microservice has its own path template, along with some routes that are anonymous.  I'm concerned that each catch all for each microservice will all have priority 0, AND, i will have to set every other route to have a specific priority.  Each microservice has 3 or 4 paths that should be numbered 1-4 on priority.  Now, i will end up with 10 microservices each with matching priorities to other services.\r\n\r\nI assume all priority is marked as 0 by default.   I'm worried about getting in a priority mess.  \r\n\r\nCan you provide guidance?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1466/comments",
+    "author": "CoderJason123",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-06T12:47:23Z",
+        "body": "Interesting story! :rofl: \r\nStay with Ocelot! :muscle: "
+      }
+    ]
+  },
+  {
+    "number": 1454,
+    "title": "Okd openshift support",
+    "created_at": "2021-03-22T12:17:18Z",
+    "closed_at": "2024-01-06T17:12:59Z",
+    "labels": [
+      "question",
+      "Service Discovery"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1454",
+    "body": "## Expected Behavior / New Feature\r\nservice discovery support for okd (open shift)\r\n\r\n## Actual Behavior / Motivation for New Feature\r\nwe are going to upgrade from k8s vanilla to okd (openshift), i would like to know if it is supported ?\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1454/comments",
+    "author": "yoramda",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-06T17:12:00Z",
+        "body": "Hi @yoramda !\r\nAre you still with Ocelot?\r\n\r\n------\r\n> i would like to know if OpenShift is supported ?\r\n\r\n**No!** Officially we try to support K8s but not OpenShift.\r\nIf you have an intention to contribute we can discuss how to move in this direction."
+      }
+    ]
+  },
+  {
+    "number": 1420,
+    "title": "Why doesn't my Custom error message work in IClaimsAuthoriser?",
+    "created_at": "2021-01-15T10:53:57Z",
+    "closed_at": "2023-11-05T09:52:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1420",
+    "body": "Hi, I want to use custom error when http status code was ``Forbidden(403)``, so for reach this I try this:\r\n\r\n```C#\r\npublic class CustomClaimsAuthoriser : IClaimsAuthoriser\r\n{\r\n    public Response<bool> Authorise(\r\n        ClaimsPrincipal claimsPrincipal,\r\n        Dictionary<string, string> routeClaimsRequirement,\r\n        List<PlaceholderNameAndValue> urlPathPlaceholderNameAndValues)\r\n    {\r\n        // some code\r\n        return new ErrorResponse<bool>(new UserDoesNotHaveClaimError(\"User does not have required claims\"));\r\n    }\r\n}\r\n```\r\nBut response has no content and just return status code 403.\r\nMy code is wrong or what's the problem?\r\n## Specifications\r\n\r\n  - Ocelot Version: 16.0.1\r\n  - Asp.net core 3.1\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1420/comments",
+    "author": "sa-es-ir",
+    "comments": [
+      {
+        "user": "ks1990cn",
+        "created_at": "2023-11-03T17:47:33Z",
+        "body": "What `content `you expect when Unauthorised? "
+      },
+      {
+        "user": "sa-es-ir",
+        "created_at": "2023-11-05T03:54:03Z",
+        "body": "@ks1990cn Pretty old issue and I don't remember how I handled that.\r\nBecause of better user experience on API response, I wanted to send a message along with a 403 status code."
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-05T09:43:38Z",
+        "body": "> @sa-es-ir commented [Jan 15, 2021](#issue-786801609)\r\n\r\nHi Saeed!\r\nPlease, upload your solution to your GitHub repo to demonstrate the bug... It is hard to guess and recommend something, if there's no real code to review.\r\nYou can fork the Ocelot repo and create feature branch with solution, or it could be separate repo where you make reference to Ocelot NuGet package.\r\nThanks!"
+      }
+    ]
+  },
+  {
+    "number": 1394,
+    "title": "Kubernetes Permissive RBAC permissions",
+    "created_at": "2020-12-13T13:44:24Z",
+    "closed_at": "2024-01-04T12:06:27Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1394",
+    "body": "Hello, \r\n\r\nI came across `Ocelot` for running it as API gateway in Kubernetes cluster. I was going through `Kubernetes` documentation and I noticed that I have to execute below command to allow pod access to `api` server.\r\n\r\n```\r\nkubectl create clusterrolebinding permissive-binding –clusterrole=cluster-admin –user=admin –user=kubelet –group=system:serviceaccounts\r\n``` \r\n\r\nIs above command necessary to expose all service accounts to have cluster admin privileges to api server? Below is what I read from `kubernetes` site.\r\n\r\n> Warning:\r\n> The following policy allows ALL service accounts to act as cluster administrators. Any application running in a container receives service account credentials automatically, and could perform any action against the API, including viewing secrets and modifying permissions. This is not a recommended policy.\r\n\r\nBit concerned about executing above command to allow ocelot pod to access api server. `Kubernetes` RBAC is not my strongest suit so wanted to check if anyone was able to modify above command with least privilege access?\r\n\r\nThanks,\r\n\r\nRay",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1394/comments",
+    "author": "raymak23",
+    "comments": [
+      {
+        "user": "aashu4uiit",
+        "created_at": "2022-02-21T13:48:53Z",
+        "body": "It's an old thread so not sure if helpful to you but sharing for the community here. You don't have to give the role to all service account's if that's not required. You can use something like this to give this to a particular user or a service account.\r\n\r\nkubectl create clusterrolebinding permissive-binding \\\r\n--clusterrole=cluster-admin \\\r\n--group=system:serviceaccount:namespace:serviceaccounta"
+      },
+      {
+        "user": "simontt",
+        "created_at": "2024-01-03T17:49:18Z",
+        "body": "Hi Ray! Also felt concerned about simply giving all service accounts cluster-admin, so did what @aashu4uiit recommended. Created a new service account specifically for my Ocelot API gateway, then added a ClusterRoleBinding of the \"cluster-admin\" cluster role to this new service account. Lastly, I referenced this service account in the deployment part of my manifest:\r\n\r\n```\r\napiVersion: v1\r\nkind: ServiceAccount\r\nmetadata:\r\n  name: api-gateway # create a new service account named api-gateway\r\n---\r\napiVersion: rbac.authorization.k8s.io/v1\r\nkind: ClusterRoleBinding\r\nmetadata:\r\n  name: api-gateway-cluster-admin\r\nsubjects:\r\n- kind: ServiceAccount\r\n  name: api-gateway\r\n  namespace: default\r\n  apiGroup: \"\" # \"\" for ServiceAccount subjects\r\nroleRef:\r\n  kind: ClusterRole\r\n  name: cluster-admin\r\n  apiGroup: \"\"\r\n---\r\napiVersion: v1\r\nkind: Service\r\nmetadata:\r\n  name: <name>\r\nspec:\r\n  type: ClusterIP\r\n  ports:\r\n  - port: 80\r\n    targetPort: 8080\r\n  selector:\r\n    app: <name>\r\n---\r\napiVersion: apps/v1\r\nkind: Deployment\r\nmetadata:\r\n  name: <name>\r\nspec:\r\n  replicas: 1\r\n  selector:\r\n    matchLabels:\r\n      app: <name>\r\n  template:\r\n    metadata:\r\n      labels:\r\n        app: <name>\r\n    spec:\r\n      serviceAccountName: api-gateway\r\n      containers:\r\n      - name: apigateway\r\n        image: <image>\r\n        imagePullPolicy: Always\r\n        ports:\r\n        - containerPort: 8080\r\n      imagePullSecrets:\r\n      - name: <pullsecret>\r\n---\r\napiVersion: networking.k8s.io/v1\r\nkind: Ingress\r\nmetadata:\r\n  name: <name>\r\n  annotations:\r\n    kubernetes.io/ingress.class: nginx\r\nspec:\r\n  rules:\r\n  - http:\r\n      paths:\r\n      - pathType: Prefix\r\n        path: \"/\"\r\n        backend:\r\n          service:\r\n            name: <name>\r\n            port:\r\n              number: 80\r\n```\r\nNote that in my case, I also have an Ingress in front of the Ocelot gateway. Ideally, I'd actually look into what permissions Ocelot needs and then reduce the scope of the service account accordingly. That's on my backlog. 😜"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-04T12:05:56Z",
+        "body": "Guys, if you don't mind, I'm going to convert this thread to a discussion...\r\nNothing here to take in development!"
+      }
+    ]
+  },
+  {
+    "number": 1328,
+    "title": "Is this repo safe to go production environment?",
+    "created_at": "2020-08-31T14:19:07Z",
+    "closed_at": "2023-11-04T10:25:21Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1328",
+    "body": "I know that contributors to this repository are not obliged to support the problems presented by a library that is free and they work in their spare time but I am very concerned about adopting a library that is not supported or is not ready for go to production.\r\nThere are issues open since 2018 and this is very worrying in my point of view.\r\nI would like to get opinions from those who already use this library in production.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1328/comments",
+    "author": "luciapeixoto54",
+    "comments": [
+      {
+        "user": "stann1",
+        "created_at": "2020-09-10T07:32:15Z",
+        "body": "I would definitely say: No, it is not suitable for prod"
+      },
+      {
+        "user": "luciapeixoto54",
+        "created_at": "2020-09-14T14:38:01Z",
+        "body": "That's really bad!!\r\nAre you using this library only in development or staging environments?\r\n"
+      },
+      {
+        "user": "wast",
+        "created_at": "2021-01-28T09:52:33Z",
+        "body": "Using in prod in intranet with 100 users daily and 20 RPM. No problems with such usage."
+      },
+      {
+        "user": "abdulmoizlogiciel",
+        "created_at": "2022-03-29T12:43:40Z",
+        "body": "Any security concerns?"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-04T10:21:54Z",
+        "body": "> @abdulmoizlogiciel commented [on Mar 29, 2022](#issuecomment-1081825120)\r\n\r\nFeel free to run any security scanners against Ocelot repo.\r\nAnd let us know your feedback please!"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-04T10:24:37Z",
+        "body": "@luciapeixoto54 \r\nI'm going to close this and open new discussion..."
+      }
+    ]
+  },
+  {
+    "number": 1274,
+    "title": "Missing scheme on downstream request",
+    "created_at": "2020-06-27T16:52:54Z",
+    "closed_at": "2024-11-09T19:14:18Z",
+    "labels": [
+      "question",
+      "proposal",
+      "needs feedback",
+      "waiting"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/pull/1274",
+    "body": "## Actual Behavior\r\nOn the **LeastConnection** balancer the downstream host **scheme** property is ignored and not return when **Lease** is called.\r\n\r\n## Fixes\r\n???\r\n\r\n## Proposed Changes\r\n- [LeastConnection](../blob/develop/src/Ocelot/LoadBalancer/LoadBalancers/LeastConnection.cs#L14) predicates (filters) take the `HostAndPort.Scheme` property into account",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1274/comments",
+    "author": "rubenmonteiro",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-07-19T16:12:10Z",
+        "body": "Hi Ruben!\r\nThanks for your interest in Ocelot!\r\n\r\nWhat [issue](../issues) is this PR related to?\r\n\r\nIf Not related,\r\nCould you describe your user case in details please?\r\n"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-08-01T17:43:01Z",
+        "body": "@ggnaegi @RaynaldM \r\nCould you review this piece of art please? 😄 "
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-11-09T19:14:18Z",
+        "body": "### Fixed by #2111 "
+      }
+    ]
+  },
+  {
+    "number": 1132,
+    "title": "Update to the latest NuGet version of the dependencies",
+    "created_at": "2020-02-14T23:49:48Z",
+    "closed_at": "2020-04-11T09:00:59Z",
+    "labels": [
+      "question",
+      "waiting"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/1132",
+    "body": "",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1132/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "jmezach",
+        "created_at": "2020-02-18T16:52:23Z",
+        "body": "Hi @pedramrezaei could you please clarify your request? Why do you need Ocelot to update its dependencies? And what dependencies would you like to see updated? Or is this related to pull request #1133?"
+      },
+      {
+        "user": "ghost",
+        "created_at": "2020-02-19T17:25:59Z",
+        "body": "Thanks. Yes, it is pull request #1133. Thanks a bunch!"
+      }
+    ]
+  },
+  {
+    "number": 982,
+    "title": "Consul Proxy Configuration",
+    "created_at": "2019-08-06T12:43:08Z",
+    "closed_at": "2024-03-16T15:20:28Z",
+    "labels": [
+      "question",
+      "waiting",
+      "Service Discovery",
+      "Consul"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/982",
+    "body": "## Expected Behavior / New Feature\r\nIt would be really nice if we could change proxy settings used by Ocelot to communicate with Consul.  The `ConsulClientFactory` class currently instantiates the `ConsulClient` class, but does not use the overload which allows us to modify the HttpHandler.\r\n\r\nIn our case, I've recreated the factory to simply disable the proxy.\r\n\r\n## Actual Behavior / Motivation for New Feature\r\nIt's only possible to change proxy behaviour by interfering with the internals of Ocelot.\r\n\r\n## Steps to Reproduce the Problem\r\n  1. Set up an Ocelot service that uses Consul\r\n  1. Fire up Fiddler\r\n  1. Run the service\r\n  1. Make a request\r\n  1. Observe the calls to Consul in Fiddler.\r\n\r\n## Specifications\r\n\r\n  - Version: 13.0.0\r\n  - Platform: Windows\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/982/comments",
+    "author": "garethrpratt",
+    "comments": [
+      {
+        "user": "jamieomaguire",
+        "created_at": "2019-08-06T12:47:21Z",
+        "body": "This seems like a wise idea!"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-02-10T10:53:45Z",
+        "body": "@ggnaegi Could you help the author, please?"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-03-16T15:20:28Z",
+        "body": "@garethrpratt\r\nWill you contribute to deliver this feature?\r\nSeems not!"
+      },
+      {
+        "user": "garethrpratt",
+        "created_at": "2024-03-17T18:57:09Z",
+        "body": "> @garethrpratt Will you contribute to deliver this feature? Seems not!\r\n\r\nHi thanks for taking the time to look at it. This was five years ago,  and I haven't used Ocelot since 2021, happy for this to be closed"
+      }
+    ]
+  },
+  {
+    "number": 751,
+    "title": "Question: Access Ocelot config outside of Ocelot pipeline",
+    "created_at": "2019-01-15T21:14:10Z",
+    "closed_at": "2024-01-02T11:36:07Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/751",
+    "body": "Is there a way to access the strongly typed Ocelot configuration from outside of the Ocelot pipeline in a delegating handler or middleware, maybe have it injected via DI?\r\n\r\nI've run into a situation where I need to grab a config value based on a part of the upstream path.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/751/comments",
+    "author": "rwestonbutler",
+    "comments": [
+      {
+        "user": "margaale",
+        "created_at": "2019-01-15T21:16:15Z",
+        "body": "We have the issue #738 exactly for that, is gonna take a while though..."
+      },
+      {
+        "user": "rwestonbutler",
+        "created_at": "2019-01-15T21:19:19Z",
+        "body": "Gotcha, thank you! "
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-02T11:35:00Z",
+        "body": "Hey @rwestonbutler and @margaale!\r\nHow were your holidays? 😉 \r\nPay attention that #738 is accepted but it is still in development waiting for development.\r\nBut it describes a bit different scenario with custom properties and seems **custom properties will not be strongly typed**.\r\n"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-02T11:35:23Z",
+        "body": "Going to convert to a discussion..."
+      }
+    ]
+  },
+  {
+    "number": 733,
+    "title": "Question: Middleware injection ideas",
+    "created_at": "2019-01-04T18:32:01Z",
+    "closed_at": "2019-01-09T19:33:41Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/733",
+    "body": "I have a question regarding middleware injection. I would need a simple way of injecting middleware (to be used as part of the configuration in Startup.cs of a simple ASP.NET Core Gateway). The purpose of the middleware would be to simply intercept and log information about the user that is attempting to access it. \r\n\r\nNote: I do **not** intend to do this in a controller, hence mentioned doing it in Configure\r\n\r\n```\r\npublic void Configure(IApplicationBuilder app, IHostingEnvironment env)\r\n{\r\n    var configuration = new OcelotPipelineConfiguration\r\n    {\r\n        // inject some useful middleware here\r\n    };\r\n    app.UseOcelot(configuration).Wait();\r\n}\r\n```\r\n\r\nHow to do it properly? I can intercept information from a lambda expression, but then I don't know when I can really use that to output the desired information.\r\n\r\nThank you, any clarification with a very basic code sample is enough, just as much as correctly intercepting **User.Identity.Name** there, and logging it by using\r\n\r\n```\r\nLog.Information(message);\r\n```\r\n\r\nAnother note: there is already a custom logger provider setup, which is working perfectly.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/733/comments",
+    "author": "istvan2015",
+    "comments": [
+      {
+        "user": "philproctor",
+        "created_at": "2019-01-04T18:38:41Z",
+        "body": "Two possibilities:\r\n\r\n1. Implement an ASP.NET middleware that logs the request prior to passing to the Ocelot pipeline. This will catch all the requests before processing and you can log whatever you want there.\r\n2. Use the OcelotPipelineConfiguration as you've mentioned above with something like the sample below.\r\n\r\n```\r\nnew OcelotPipelineConfiguration\r\n            {\r\n                //PreQueryStringBuilderMiddleware occurs after authorization\r\n                PreQueryStringBuilderMiddleware = async (ctx, next) =>\r\n                {\r\n                    var name = ctx.HttpContext.User.Identity.Name;\r\n                    Log.Information($\"{name}\");\r\n                    await next.Invoke();\r\n                }\r\n            };\r\n```"
+      },
+      {
+        "user": "philproctor",
+        "created_at": "2019-01-09T19:33:41Z",
+        "body": "Closing this issue, please re-open if my response did not resolve the problem."
+      }
+    ]
+  },
+  {
+    "number": 690,
+    "title": "RouteClaimsRequirement conundrum ",
+    "created_at": "2018-11-16T14:18:09Z",
+    "closed_at": "2024-01-07T10:48:11Z",
+    "labels": [
+      "question",
+      "wontfix",
+      "Authorization"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/690",
+    "body": "## Expected Behavior / New Feature\r\nRouteClaimsRequirement should work with IdentityServer4 + AddJwtBearer \r\nor\r\nIdentityServer4 + Action<IdentityServerAuthenticationOptions> should have token validated event\r\n\r\n## Actual Behavior \r\nCurrently, when using IdentityServer4 you have to choose whether you want to use multiple roles along with RouteClaimsRequirement, or if you want to be able to capture additional properties like the username for logging, but you can't do both.\r\n\r\n## Steps to Reproduce the Problem\r\nIf you use a scheme for IdentityServer4 with AddJwtBearer it does appear to work and I have the ability to listen to the token validation event so I can grab additional information for logging.  Problem is, RouteClaimsRequirement doesn't work with roles.  Here is the configuration of my scheme for this scenario:\r\n\r\n    services.AddAuthentication()\r\n        .AddJwtBearer(\"IDP\", jwtOptions =>\r\n        {\r\n        jwtOptions.Authority = $\"{ Configuration[\"IDP:Authority\"]}\";\r\n        jwtOptions.Audience = Configuration[\"IDP:Audience\"];                     \r\n        jwtOptions.TokenValidationParameters = new TokenValidationParameters\r\n        {\r\n            ValidateIssuerSigningKey = true,\r\n            ValidateIssuer = false\r\n        };\r\n        jwtOptions.Events = new JwtBearerEvents\r\n        {\r\n            OnAuthenticationFailed = context =>\r\n            {\r\n                return myRemoteFailure(context);\r\n            },\r\n            OnTokenValidated = context =>\r\n            {\r\n                // this is where I grab username for logging purposes\r\n                return myIDPUserValidationLogic(context);\r\n            }\r\n        };\r\n    })\r\n\r\nIf you use a scheme for IdentityServer4 like the documentation suggests using Action<IdentityServerAuthenticationOptions>, RouteClaimsRequirement now works with multiple roles no problem, but there is no way for me to listen to the token validation event.  I need this so I can grab the username for logging purposes.  Here is my other custom scheme:\r\n \r\n    var authenticationProviderKey = \"IDP2\";\r\n            Action<IdentityServerAuthenticationOptions> isoptions = o =>\r\n            {\r\n                o.Authority = $\"{ Configuration[\"IDP:Authority\"]}\";\r\n                o.ApiName = Configuration[\"IDP:ClientId\"];\r\n                o.SupportedTokens = SupportedTokens.Both;\r\n                o.ApiSecret = Configuration[\"IDP:Secret\"];\r\n                // how can I grab the username for logging?\r\n            };\r\n    services.AddAuthentication()\r\n    .AddIdentityServerAuthentication(authenticationProviderKey, isoptions)\r\n\r\n## Specifications\r\n\r\n  - Version: 12.0.1\r\n  - Platform: .Net Core 2.1\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/690/comments",
+    "author": "PostImpatica",
+    "comments": [
+      {
+        "user": "PostImpatica",
+        "created_at": "2018-11-16T15:14:29Z",
+        "body": "I can add the following to the bottom scheme shown above (\"IDP2\") but the events never get raised:\r\n\r\n    Action<IdentityServerAuthenticationOptions> isoptions = o =>\r\n            {\r\n                o.Authority = $\"{ Configuration[\"IDP:Authority\"]}\";\r\n                o.ApiName = Configuration[\"IDP:ClientId\"];\r\n                o.SupportedTokens = SupportedTokens.Both;\r\n                o.ApiSecret = Configuration[\"IDP:Secret\"];\r\n                o.Events = new JwtBearerEvents\r\n                {\r\n                    OnAuthenticationFailed = context =>\r\n                    {\r\n                        return myRemoteFailure(context);\r\n                    },\r\n                    OnTokenValidated = context =>\r\n                    {\r\n                        return myIDPUserValidationLogic(context);\r\n                    }\r\n\r\n                };\r\n            };"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-07T10:43:54Z",
+        "body": "Hi Clay!\r\n\r\nYou've described rare user scenario.\r\nOcelot is not responsible for any user security models.\r\nI cannot accept this ticket for development. I see several unsubstantiated phrases that need to be checked.\r\nIf you have intention to contribute with absolutely new Authorization features, then we can discuss where to go.\r\n\r\nGoing to convert to a discussion..."
+      }
+    ]
+  },
+  {
+    "number": 675,
+    "title": "Can Ocelot serve up Client Credentials",
+    "created_at": "2018-10-31T13:45:51Z",
+    "closed_at": "2024-01-06T21:32:54Z",
+    "labels": [
+      "help wanted",
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/675",
+    "body": "Is there some way to generate and serve up client credentials from the Ocelot itself, or do I have to use an external identity provider for this?  When I ask if there is a way, I don't mean theoretically, what I mean is, is there an easy way to do this?  If so please give me a hint to get me started.  Thanks!!!\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/675/comments",
+    "author": "PostImpatica",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-06T21:32:05Z",
+        "body": "@PostImpatica \r\nHi Clay!\r\nAre you still interested in this adventure?"
+      }
+    ]
+  },
+  {
+    "number": 669,
+    "title": "Ocelot doesn't really authenticate does it?",
+    "created_at": "2018-10-19T13:20:40Z",
+    "closed_at": "2019-01-10T00:42:26Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/669",
+    "body": "Ocelot documentation says that it performs authentication but it doesn't correct?  It can only very that the user has already been authenticated.  \r\n\r\nCurrently I'm using Ocelot to verify my external apps have been authenticated through Azure B2C.\r\n\r\nThe only reason I'm asking is that I'm about to make a presentation on Ocelot and I want to make sure I'm understanding this correctly when my boss asks me, \"Why can't the Ocelot do authentication, the website says it has this functionality?\".",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/669/comments",
+    "author": "PostImpatica",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-21T17:07:19Z",
+        "body": "@helzgate I dont really understand your question.\r\n\r\nOcelot calls \r\n\r\n```\r\ncontext.HttpContext.AuthenticateAsync(context.DownstreamReRoute.AuthenticationOptions.AuthenticationProviderKey);\r\n```\r\n\r\nin AuthenticationMiddleware.cs this uses asp.net code to authenticate the given http context against the given authentication provider. The code has nothing to do with Ocelot. Ocleot just calls the asp.net authentication stuff. So Ocelot does authentication but nothing other than calling asp.net authentication code."
+      }
+    ]
+  },
+  {
+    "number": 664,
+    "title": "Ocelot caching in multiple servers",
+    "created_at": "2018-10-16T09:11:17Z",
+    "closed_at": "2018-10-21T16:57:41Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/664",
+    "body": "## Expected Behavior / New Feature\r\nWhen the gateway is installed in multiple servers and in front of those servers a load balancer exists that manages the traffic, there is a need for shared cache, in order to share the same routings between the servers in case of an update (Administration API). Does Ocelot currently supports this feauture? If yes how?\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/664/comments",
+    "author": "PKompis",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-21T16:57:07Z",
+        "body": "@PKompis at the moment the only option you would have it use consul to store the Ocelot configuration and set it up for the config is shared correctly. Ocelot doesnt keep file configurations in sink (you could make something to do this, I tried using raft but havent had time to make it work properly).\r\n\r\nA few people have asked for redis, databases etc but no one has added the feature yet as far as Im aware. It is super easy to do. Just implemented IFileConfigurationRepository for your given datastore. Then register it in services and it will override ocelots default."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-21T16:57:41Z",
+        "body": "I will close this as a duplicate of #654"
+      }
+    ]
+  },
+  {
+    "number": 662,
+    "title": "Rate Limiting After Authentication",
+    "created_at": "2018-10-14T21:51:27Z",
+    "closed_at": "2023-11-30T13:30:30Z",
+    "labels": [
+      "question",
+      "Rate Limiting"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/662",
+    "body": "I want to use Rate Limiting but I want to take **RequestId** from claims. I see RateLimiting handler runs before authentication handler and `ClaimsToHeadersMiddleware` handler.   I think we should change order RateLimiting and authentication . I don't trust clear header value. Client can change ClientId value always and make request to server and can break Rate Limiting control. I want to take **RequestID** from in to the claims after authentication.\r\n\r\n**How can we do?**\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/662/comments",
+    "author": "osmansonmez",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-21T16:50:44Z",
+        "body": "@osmansonmez yes this makes sense I think, I would accept a PR for this but don't have time to do the work myself atm. I will mark this issue as a new feature."
+      },
+      {
+        "user": "harindaka",
+        "created_at": "2019-09-12T09:24:45Z",
+        "body": "This really needs to be addressed. ETA anyone? At least it this should be mentioned in the documentation that this can be exploited to launch a dos attack on a valid client in its current state (mark as experimental maybe?). "
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-30T13:24:07Z",
+        "body": "@harindaka commented [on Sep 12, 2019](#issuecomment-530743183):\r\n\r\n> this can be exploited to launch a dos attack on a valid client in its current state\r\n\r\nWotta?\r\n\r\n----\r\n> mark as experimental maybe?\r\n\r\nCan I mark your message as experimental? 😉 "
+      }
+    ]
+  },
+  {
+    "number": 646,
+    "title": "How to add check helth method to my Gateway project .net core",
+    "created_at": "2018-09-29T21:39:58Z",
+    "closed_at": "2018-10-13T16:40:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/646",
+    "body": "#Feature\r\n\r\nIs there any way to enforce requests to a project controller with Ocelet (my GatewayApi project) for example create the check url to register in the Consul.\r\nURL to check the integrity of my GatewayAPI in the .NET core.\r\n\r\nWhen I make any request for a controller in my GatewayApi project, I always get an error with the message \"Could not find the downstream route to the path\"\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1. Create a project web.api C# .net core\r\n  2. Add a Controller (InfoController) with one method Foo (retrun date time)\r\n  3. Add reference for Ocelot\r\n  4. Make Request with postman, webbrowser to localhost:9000;\r\n\r\n\r\n\r\n## Specifications\r\n\r\n  - Version: last version Ocelot\r\n  - Platform: .net core \r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/646/comments",
+    "author": "lucianoscastro",
+    "comments": [
+      {
+        "user": "q315523275",
+        "created_at": "2018-09-30T01:18:13Z",
+        "body": "@lucianoscastro  网关的健康检查，可以在预留中间件里添加健康检查地址，不过一般这个地址都是给nginx使用的\r\n\r\n> \r\n                    var conf = new OcelotPipelineConfiguration()\r\n                    {\r\n                        PreErrorResponderMiddleware = async (ctx, next) =>\r\n                        {\r\n                            if (ctx.HttpContext.Request.Path.Equals(new PathString(\"/\")))\r\n                            {\r\n                                await ctx.HttpContext.Response.WriteAsync(\"ok\");\r\n                            }\r\n                            else\r\n                            {\r\n                                await next.Invoke();\r\n                            }\r\n                        }\r\n                    };\r\n                    app.UseOcelot(conf).Wait();\r\n\r\n\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-30T07:13:21Z",
+        "body": "@lucianoscastro \"Could not find the downstream route to the path\" means that Ocelot cannot find your anything in json configuration for your requested route.\r\n\r\nCan you share your configuration json?\r\n\r\nOcelot doesn't do health checks at the moment. I would suggest using Consul if you want that functionality. "
+      },
+      {
+        "user": "dimitridaras",
+        "created_at": "2020-09-01T11:23:21Z",
+        "body": "I think the idea behind this is to add a healthcheck endpoint to the ocelot gateway itself, so that you can check that it's up and running."
+      },
+      {
+        "user": "knight1219",
+        "created_at": "2021-04-01T15:07:19Z",
+        "body": "Did anything ever com from this? having api/controller methods in the gateway that can be called is a very usefull tool."
+      },
+      {
+        "user": "hjchin",
+        "created_at": "2022-08-13T14:38:25Z",
+        "body": "> @lucianoscastro 网关的健康检查，可以在预留中间件里添加健康检查地址，不过一般这个地址都是给nginx使用的\r\n> \r\n> > \r\n> \r\n> ```\r\n>                 var conf = new OcelotPipelineConfiguration()\r\n>                 {\r\n>                     PreErrorResponderMiddleware = async (ctx, next) =>\r\n>                     {\r\n>                         if (ctx.HttpContext.Request.Path.Equals(new PathString(\"/\")))\r\n>                         {\r\n>                             await ctx.HttpContext.Response.WriteAsync(\"ok\");\r\n>                         }\r\n>                         else\r\n>                         {\r\n>                             await next.Invoke();\r\n>                         }\r\n>                     }\r\n>                 };\r\n>                 app.UseOcelot(conf).Wait();\r\n> ```\r\n\r\nmaybe path '/hc' is a better path. In my opinion, it is always good to protect the root and returns 404. "
+      },
+      {
+        "user": "hjchin",
+        "created_at": "2022-08-13T14:42:18Z",
+        "body": "> Did anything ever com from this? having api/controller methods in the gateway that can be called is a very usefull tool.\r\n\r\nThe snippet above does the job, it is a quick workaround. \r\n\r\nSecond approach or rather a proper one is to setup the Consul with Ocelot and configure the health check url at htttps://_ocelot-host_:8500 (haven't try it)"
+      }
+    ]
+  },
+  {
+    "number": 619,
+    "title": "Intention to Contribute for Adding Support for Redis",
+    "created_at": "2018-09-13T02:03:57Z",
+    "closed_at": "2018-09-20T17:54:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/619",
+    "body": "## Inquiry and not a bug at all\r\nHi Guys,\r\n\r\nCan I politely ask how can I contribute by adding support for Redis-based rate limiting?\r\n\r\nWould love to help out this wonderful project!\r\n\r\nRegards,\r\nAllan",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/619/comments",
+    "author": "allanchua101",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-13T07:01:07Z",
+        "body": "@allanchua101 first thanks for your interest in the project. It is really appreciated. \r\n\r\nThe first thing we were thinking of doing with rate limiting is improving our basic implementation....this is not really documented yet but the issue is #553. The general idea was to move our rate limiting to a bucket algorithm.\r\n\r\nAfter that the idea is it will be much easier to implement different providers because we will have a better abstraction.\r\n\r\nI don't really know the rate limiting code that well, to just hack it out and get it working with what Ocelot already has might just be a case of implementing IRateLimitCounterHandler.cs for Redis. You are welcome to give it a go. \r\n\r\nAll the Ocelot services are registered with TryAddSingleton so you can easily override this with your rate limit provider.\r\n\r\nYou can do it in the Ocelot project (make things simple) but I would break this out into another package like Ocelot.Provider.Redis eventually so Ocelot doesn't have a dependency on Redis. In theory you don't even need to touch Ocelot to get it working due to TryAddSingleton but I don't know 100%.\r\n\r\nHope that makes sense and provides some guidance."
+      }
+    ]
+  },
+  {
+    "number": 611,
+    "title": "how to count number of requests served ??",
+    "created_at": "2018-09-11T11:56:51Z",
+    "closed_at": "2018-09-12T06:49:25Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/611",
+    "body": "## Expected Behavior / New Feature\r\n\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/611/comments",
+    "author": "Preetham-D",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-12T06:49:25Z",
+        "body": "@Preetham-D you can just add a middleware above Ocelot and count the requests? Does that work for you? Let me know if not and we can re-open this issue! "
+      }
+    ]
+  },
+  {
+    "number": 582,
+    "title": "Aggregator is not used by ocelot",
+    "created_at": "2018-08-29T14:07:53Z",
+    "closed_at": "2018-08-30T09:57:13Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/582",
+    "body": "Hello,\r\n\r\nI followed the documentation on how to implement a custom Aggregator, but for some reasons it isn't used by ocelot. Here is what I've done :\r\n\r\nocelot.json\r\n```\r\n  \"Aggregates\": [\r\n    {\r\n      \"ReRouteKeys\": [\r\n        \"AuthenticationSwaggerFile\"\r\n      ],\r\n      \"UpstreamPathTemplate\": \"/testtest\",\r\n      \"Aggregator\": \"SwaggerFilesAggregator\"\r\n\r\n    }\r\n  ],\r\n```\r\n\r\nAggregator file\r\n```\r\n    class SwaggerFilesAggregator : IDefinedAggregator\r\n    {\r\n        public Task<DownstreamResponse> Aggregate(List<DownstreamResponse> responses)\r\n        {\r\n            Console.WriteLine(\"This should be written but isn't\");\r\n            return new Task<DownstreamResponse>(() =>\r\n            {\r\n                return responses[0];\r\n            });\r\n        }\r\n    }\r\n```\r\n\r\nStartup.cs\r\n```\r\n            services.AddOcelot()\r\n                .AddSingletonDefinedAggregator<SwaggerFilesAggregator>();\r\n```\r\n\r\nI always get the Result of the first ReRouteKey, even if I change `return responses[0]` tu `return null` in the Aggregator file. It seems like the line `\"Aggregator\": \"SwaggerFilesAggregator\"` is ignored.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/582/comments",
+    "author": "REPRESSION",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-30T05:58:38Z",
+        "body": "@REPRESSION mmmm can you share your source code or at least program.cs, startup.cs and json config and I will look further."
+      },
+      {
+        "user": "REPRESSION",
+        "created_at": "2018-08-30T09:57:13Z",
+        "body": "I found out what my problem was, I had only one entry in ReRouteKeys."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-30T11:00:01Z",
+        "body": "OK cool, glad its sorted :)"
+      },
+      {
+        "user": "MatiasAMercado",
+        "created_at": "2018-12-04T14:32:08Z",
+        "body": "Hello, \r\n\r\nplease could you show an example about how work with the responses? Because this is the unique example that I saw and just returns the responses[0]....\r\n\r\nThanks in advance."
+      }
+    ]
+  },
+  {
+    "number": 581,
+    "title": "Configuration can do a little bit",
+    "created_at": "2018-08-29T09:34:05Z",
+    "closed_at": "2018-09-14T17:00:28Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/581",
+    "body": "## Expected Behavior / New Feature\r\n1, Reroutes elements can be added to the Title describes what this route is a micro-service, easy to generate Swagger route and its description;\r\n2, Request aggregation configuration can do a little bit, do not rely on reroutes node, Reroutekeys refactoring as:\r\n    {\r\n         \"Key\": {\r\n         \"ServiceName\":  \"string\",//value corresponds to ServiceName in reroutes\r\n         \"UpstreamRequestUrl\":  \"string\",//value relative to upstreampathtemplate real request path in reroutes\r\n     \"HttpMethod\":  \"post\"//value is get,post,put,delete ...\r\n}\r\n} \r\nAdditionally, you can add Claims to Claims, Claims to Headers, Claims to Query String, Claims to Request Body ...\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/581/comments",
+    "author": "iexapl",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-01T09:25:17Z",
+        "body": "@iexapl I don't understand what you are suggesting for this issue? Please could add more detail?"
+      },
+      {
+        "user": "iexapl",
+        "created_at": "2018-09-03T01:14:00Z",
+        "body": "Lower configuration costs without having to configure multiple nodes in reroutes for each aggregation request"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-03T05:53:11Z",
+        "body": "@iexapl could you do a full example of how this would work?"
+      }
+    ]
+  },
+  {
+    "number": 558,
+    "title": "[Question] Custom headers to apis from HttpContext.Current.Request.Headers",
+    "created_at": "2018-08-17T12:15:11Z",
+    "closed_at": "2018-09-02T09:18:49Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/558",
+    "body": "## Expected Behavior / New Feature\r\nHow to add custom headers to api by retrieving its value from the HttpContext.Current.Request.Headers?\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/558/comments",
+    "author": "stamatiagk",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-17T17:41:49Z",
+        "body": "@stamatiagk can you be more explicit here?\r\n\r\nYou want to get values from HttpContext.Current.Request.Headers and use them for what?"
+      },
+      {
+        "user": "stamatiagk",
+        "created_at": "2018-08-20T07:08:06Z",
+        "body": "Good morning @TomPallister , I want to forward for example the HttpContext.Current.Request.UserAgent to the apis"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-20T19:17:53Z",
+        "body": "@stamatiagk this should be forwarded already (I think). Ocelot just sends whatever headers came in to the service."
+      }
+    ]
+  },
+  {
+    "number": 557,
+    "title": "线上环境并发大httpclient提交到下游服务偶尔报错",
+    "created_at": "2018-08-17T10:03:21Z",
+    "closed_at": "2018-09-14T16:56:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/557",
+    "body": "报错的代码： Ocelot.Requester.HttpClientHttpRequester  类中\r\nvar response = await httpClient.SendAsync(context.DownstreamRequest.ToHttpRequestMessage())\r\n\r\n\r\n错误信息：Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|requestId: no request id, previousRequestId: no previous request id, message: Error making http request, exception: System.Net.Http.HttpRequestException: Error while copying content to a stream. ---> System.IO.IOException: The read operation failed, see inner exception. ---> System.Net.Http.CurlException: Transferred a partial file\r\n   at System.Net.Http.CurlHandler.ThrowIfCURLEError(CURLcode error)\r\n   at System.Net.Http.CurlHandler.MultiAgent.FinishRequest(StrongToWeakReference`1 easyWrapper, CURLcode messageResult)\r\n   --- End of inner exception stack trace ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.IO.Stream.<CopyToAsyncInternal>d__27.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.Net.Http.NoWriteNoSeekStreamContent.<>c.<SerializeToStreamAsync>b__4_0(Task t, Object s)\r\n   at System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot)\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.Net.Http.HttpContent.<LoadIntoBufferAsyncCore>d__48.MoveNext()\r\n   --- End of inner exception stack trace ---\r\n   at System.Net.Http.HttpContent.<LoadIntoBufferAsyncCore>d__48.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.Net.Http.HttpClient.<FinishSendAsyncBuffered>d__58.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at Ocelot.Requester.HttpClientHttpRequester.<GetResponse>d__4.MoveNext()",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/557/comments",
+    "author": "zhaolei0914",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-17T17:33:15Z",
+        "body": "@511568420 thanks for your interest in the project. Can you confirm this error happens when Ocelot is under heavy load?\r\n\r\ngoogle translate : Online environment concurrent large httpclient submitted to downstream service occasionally error\r\n"
+      },
+      {
+        "user": "zhaolei0914",
+        "created_at": "2018-08-21T03:30:33Z",
+        "body": " @TomPallister    The Ocelot cluster is deployed in the Linux environment, using Docker deployment, and the downstream service cluster is also deployed in the Linux environment using Docker. Now each Ocelot service has a failure rate of 0.8% to 1% per hour to access the downstream service. However, millions of visits to the test environment are normal, except that the test environment is deployed on the same machine. On the device, the formal environment is in the same LAN, but not the same IP."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-02T09:18:30Z",
+        "body": "@511568420 when Ocelot errors what is written to the logs? Can you run the test and tell me? It could just be a network problem. Or something wrong with Ocelot."
+      }
+    ]
+  },
+  {
+    "number": 503,
+    "title": "Question: Globally configure the DownstreamHostAndPorts",
+    "created_at": "2018-07-27T09:21:39Z",
+    "closed_at": "2018-08-25T12:25:45Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/503",
+    "body": "Hi,\r\n\r\nI've just started to use Ocelot and it is brilliant! Everything is up and running but I had a quick question to see if it is possible to set the DownstreamHostAndPorts dynamically within code or whether you can set it globally within the GlobalConfiguration section. Our services are hosted within our own custom built service registry and it would be nice to not have to declare the DownstreamHostAndPorts for all services. I could use the catchall option by setting \"DownstreamPathTemplate\": \"/api/{everything}.\" Would that be the only way?\r\n\r\nMany thanks,\r\n\r\nRickesh",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/503/comments",
+    "author": "rickesh123",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-27T17:06:32Z",
+        "body": "@rickesh123 thanks for your interest in Ocelot. Unfortunately there is no way to do this other than implement an IServiceDiscoveryProvider for your service registry and change the IServiceDiscoveryProviderFactory to return it. This is all custom code so you would need to fork Ocelot probably or just override Ocelots implementations of these things in the asp.net dependency injection container. Ocelot uses TryAddSingleton etc so if it already exists in the container it wont add it.\r\n\r\nI'm not sure how the catch all would help so maybe I haven't understood your use case!"
+      },
+      {
+        "user": "rickesh123",
+        "created_at": "2018-07-31T07:18:38Z",
+        "body": "Hi Tom,\r\n\r\nThanks for getting back to me with the info! I'll take a look and see if I can override Ocelots implementation and will get back to you with my findings."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-31T07:39:21Z",
+        "body": "OK cool sounds good!"
+      }
+    ]
+  },
+  {
+    "number": 496,
+    "title": "Error when AddDelegatingHandler",
+    "created_at": "2018-07-24T20:01:04Z",
+    "closed_at": "2018-07-30T06:08:16Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/496",
+    "body": "Hi,\r\n\r\nI want to add one handler to trace but it throws exception\r\n\r\nwarn: Ocelot.Responder.Middleware.ResponderMiddleware[0]\r\n      => ConnectionId:0HLFHJV2SU5QA => RequestId:0HLFHJV2SU5QA:00000002 RequestPath:/api/r/userprofile/countries\r\n      requestId: 0HLFHJV2SU5QA:00000002, previousRequestId: no previous request id, message: Error Code: UnableToCompleteRequestError Message: Error making http request, exception: System.Net.Http.HttpRequestException: An error occurred while sending the request. ---> System.Net.Http.WinHttpException: The parameter is incorrect\r\n         at System.Net.Http.WinHttpException.ThrowExceptionUsingLastError()\r\n         at System.Net.Http.WinHttpHandler.InternalSendRequestAsync(WinHttpRequestState state)\r\n         at System.Net.Http.WinHttpHandler.<StartRequest>d__105.MoveNext()\r\n         --- End of inner exception stack trace ---\r\n         at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n         at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n         at System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult()\r\n         at System.Net.Http.DiagnosticsHandler.<SendAsync>d__2.MoveNext()\r\n      --- End of stack trace from previous location where exception was thrown ---\r\n         at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n         at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n         at System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult()\r\n         at System.Net.Http.HttpClient.<FinishSendAsyncBuffered>d__58.MoveNext()\r\n      --- End of stack trace from previous location where exception was thrown ---\r\n         at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n\r\nMy code is similar your guide\r\n\r\nservices.AddOcelot()\r\n        .AddDelegatingHandler<FakeHandler>(true);\r\n\r\n public class FakeHandler : DelegatingHandler\r\n    {\r\n        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)\r\n        {\r\n            return base.SendAsync(request, cancellationToken);\r\n        }\r\n    }\r\n\r\nBesides, could you please provide one sample to integrate to zipkin or Jeager?\r\n\r\nThansk,\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/496/comments",
+    "author": "tungphuong",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T07:34:02Z",
+        "body": "@tungphuong does Ocelot work without the delegating handler? Can you share your program.cs / startup.cs and json configuration? Also what URL are you calling Ocelot on?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-30T06:08:16Z",
+        "body": "Let me know if you want to reopen this!"
+      }
+    ]
+  },
+  {
+    "number": 493,
+    "title": "No errors in 8.0.0, change to 8.0.1 Error",
+    "created_at": "2018-07-24T12:53:18Z",
+    "closed_at": "2018-07-25T06:28:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/493",
+    "body": "\r\n\r\n  I follow the case instructions on the 8.0.1 and always make an error. It's OK to replace the 8.0.0.\r\n## Specifications\r\n\r\n  - Version:8.01\r\n  - Platform:windows10\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/493/comments",
+    "author": "shao200",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T05:49:41Z",
+        "body": "@shao200 someone else has said this. I don’t understand why :( please can you share startup.cs / program.cs and Json config?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T06:09:45Z",
+        "body": "@shao200 could you also tell me the URL you use to call Ocelot and the HTTP method?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T06:28:47Z",
+        "body": "duplicate of #490 will close this one"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T07:49:09Z",
+        "body": "@shao200 please try new verison 8.0.2"
+      },
+      {
+        "user": "shao200",
+        "created_at": "2018-07-25T13:24:45Z",
+        "body": "ok.I Try"
+      }
+    ]
+  },
+  {
+    "number": 492,
+    "title": "How to log 500 error/exception from other services?",
+    "created_at": "2018-07-24T11:23:52Z",
+    "closed_at": "2023-11-29T19:46:33Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "question",
+      "good first issue",
+      "small effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/492",
+    "body": "Hello,\r\n\r\nI have just used it. It works well but I have one concern that how to log exception (Http code 500) from downstream services. Currently, if I switch log level to \"error\", I cannot receive anything. However, if log level is \"trace\", there is some below info\r\n```\r\ntrce: Ocelot.Logging.OcelotDiagnosticListener[0]\r\n      => RequestId:0HLFHAF0APTOQ:00000002 RequestPath:/api/r/xxx/countries => RequestId:0HLFHAF0APTOQ:00000002 RequestPath:/api/r/xxx/countries => RequestId:0HLFHAF0APTOQ:00000002 RequestPath:/api/r/xxx/countries\r\n      requestId: 0HLFHAF0APTOQ:00000002, previousRequestId: no previous request id, message: MiddlewareFinished: Microsoft.AspNetCore.Cors.Infrastructure.CorsMiddleware; 500\r\n: Ocelot.Logging.OcelotDiagnosticListener[0]\r\n      requestId: 0HLFHAF0APTOQ:00000002, previousRequestId: no previous request id, message: MiddlewareFinished: TransitionToOcelotMiddleware; 500\r\n```\r\nPlease let me know if there is any missing.\r\n\r\nThanks,",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/492/comments",
+    "author": "tungphuong",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T06:08:01Z",
+        "body": "@tungphuong I will test this and get back to you ASAP! If you want to submit a PR that adds the logging let me know."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-25T07:30:46Z",
+        "body": "from other issue\r\n\r\n```\r\nHi,\r\n\r\nCurrently, if downstream service throw exception with httpcode 500, but Ocelot just logs \"warning\" or \"debug\". It will not clear and difficult to trace/monitor on production. Because we cannot set log level is debug/info for production.\r\n\r\nI suggest we should check status code. If it is 500, we wil log like error.\\\r\n\r\nCheers,\r\n\r\nPhuong Le\r\n```"
+      },
+      {
+        "user": "tungphuong",
+        "created_at": "2018-07-25T10:12:12Z",
+        "body": "Yes, 2 items are the same. Ok, I will submit one PR :)"
+      }
+    ]
+  },
+  {
+    "number": 452,
+    "title": "Ocelot能否当作反代理工具来转发网站内容呢?",
+    "created_at": "2018-07-07T01:48:27Z",
+    "closed_at": "2018-07-09T01:11:07Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/452",
+    "body": "Ocelot能否当作反代理工具来转发网站内容呢?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/452/comments",
+    "author": "bao2314483",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-08T14:05:55Z",
+        "body": "@bao2314483 Thanks for your interest in the project! I'm sorry but I do not understand the question.\r\n\r\nGoogle translates this question to..\r\n\r\nCan I use the anti-agent tool to forward website content?\r\n\r\nIs anybody able to help?"
+      }
+    ]
+  },
+  {
+    "number": 429,
+    "title": "Ocelot and FIPS",
+    "created_at": "2018-06-22T20:38:53Z",
+    "closed_at": "2018-07-02T18:59:01Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/429",
+    "body": "I tried to find information around this. but could not find it. How do i enable FIPS 140.2 compliant SSL offloading in Ocelot? We want to run ocelot on windows containers",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/429/comments",
+    "author": "vramanx",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-25T17:32:29Z",
+        "body": "@vramanx Ocelot is not really designed to offload SSL. I would recommend doing this with an appliance designed for that role.\r\n\r\nOcelot can receive a request on HTTPS and then make a subsequent request on HTTP. It does this by the user configuring http for their request to the service. I have no idea if this is FIPS compliant, I guess you can turn FIPS mode on in Windows and see if it still works? Ocelot just uses standard .NET framework for TLS stuff and I have no specific code around it.\r\n\r\nSorry to not be much help, unfortunately I am not a FIPS expert. "
+      },
+      {
+        "user": "vramanx",
+        "created_at": "2018-06-28T22:44:45Z",
+        "body": "@TomPallister - from what i understand, it depends on the openssl version. if .net core can be configured to use the right openssl version - then we should be good. but i have no clue on what that means. I will try it out.\r\n\r\nFor the second part from your post - Ocelot will terminate SSL and call the microservice endpoint on http or https. Is that right understanding?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-29T17:59:24Z",
+        "body": "@vramanx yes correct Ocelot can receive HTTPs and proxy on HTTP. I guess this is terminating SSL!"
+      }
+    ]
+  },
+  {
+    "number": 427,
+    "title": "block queries on servicediscovery with consul",
+    "created_at": "2018-06-22T03:12:24Z",
+    "closed_at": "2019-03-12T23:13:32Z",
+    "labels": [
+      "question",
+      "needs validation"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/pull/427",
+    "body": "Fixes / New Feature #\r\nblock queries on servicediscovery with consul\r\n\r\nissue #374\r\nPollingInterval default is 10000 ms. May be someone should add this introduction in doc.\r\n\r\n## Proposed Changes\r\nchange query to block query could solve the problem of polling interval\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/427/comments",
+    "author": "SnailDev",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-22T06:16:10Z",
+        "body": "@SnailDev thanks for this I will have a look at it later!"
+      },
+      {
+        "user": "SnailDev",
+        "created_at": "2018-06-22T06:24:44Z",
+        "body": "@TomPallister ok."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-28T06:30:43Z",
+        "body": "@SnailDev are you happy for me to merge this? If you are then I will! :)\r\n\r\nedit: after the tests pass, not sure why they have failed yet.\r\nedit2: looks like a stackoveflow"
+      },
+      {
+        "user": "SnailDev",
+        "created_at": "2018-06-28T07:04:35Z",
+        "body": "@TomPallister  Of course happy for you to merge it. I'm also not sure why all checks have failed. UnitTests in my pc all passed."
+      },
+      {
+        "user": "thiagoloureiro",
+        "created_at": "2018-12-18T18:52:57Z",
+        "body": "@TomPallister  need help in this one ? We will still merge this? Thanks!"
+      },
+      {
+        "user": "thiagoloureiro",
+        "created_at": "2019-03-12T23:13:32Z",
+        "body": "closing the Pr after inactivity\r\n"
+      }
+    ]
+  },
+  {
+    "number": 385,
+    "title": "Inject multiple PreQueryStringBuilderMiddleware ",
+    "created_at": "2018-06-06T18:36:28Z",
+    "closed_at": "2018-06-13T18:41:00Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/385",
+    "body": "Hi, Great job with ocelot ! \r\n\r\n\r\nI have a small question, is it possible to inject multiple PreQueryStringBuilderMiddleware ?\r\n\r\nI have multiple cross-cutting concern I want to address in the my ocelot gateway and i would like to implement it in multiple middleware. \r\n\r\nThanks. \r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/385/comments",
+    "author": "fbeauche",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-08T14:43:25Z",
+        "body": "@fbeauche thanks for your interest in the project. This is not possible. However you can call into whatever code you want from the pre query string builder middleware. I’m not sure that Ocelot needs this responsibility. If you would like to try and implement it let me know and I can help "
+      }
+    ]
+  },
+  {
+    "number": 361,
+    "title": "how can i config consul in ocelot if there is a consul cluster?  use virtual ip?",
+    "created_at": "2018-05-16T08:42:15Z",
+    "closed_at": "2018-05-18T05:35:18Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/361",
+    "body": " \"ServiceDiscoveryProvider\": {\r\n      \"Provider\": \"Consul\",\r\n      \"Host\": \"localhost\",\r\n      \"Port\": 8500\r\n    }",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/361/comments",
+    "author": "jrlygdsj",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-05-16T21:19:35Z",
+        "body": "@jrlygdsj if you run a cluster you should have a consul agent running as a client installed as a sidecar next to Ocelot. Ocelot calls the local agent and the agent is connected to the cluster."
+      },
+      {
+        "user": "jrlygdsj",
+        "created_at": "2018-05-17T04:24:01Z",
+        "body": "thank you TomPallister :\r\n  if so, when consul's process is dead but ocelot is alive, request may get error"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-05-17T05:34:04Z",
+        "body": "@jrlygdsj that is correct but it should not matter because you should have a load balancer in front of Ocelot  that’s knows the service is down and doesn’t route requests to it."
+      }
+    ]
+  },
+  {
+    "number": 299,
+    "title": "Dose ConsulServiceDiscoveryProvider request the services' register info by consul http api for each http request?",
+    "created_at": "2018-04-02T09:18:00Z",
+    "closed_at": "2018-04-06T22:33:47Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/299",
+    "body": "        public async Task<List<Service>> Get()\r\n        {\r\n            var queryResult = await _consul.Health.Service(_consulConfig.KeyOfServiceInConsul, string.Empty, true);\r\n\r\n            var services = new List<Service>();\r\n\r\n            foreach (var serviceEntry in queryResult.Response)\r\n            {\r\n                if (IsValid(serviceEntry))\r\n                {\r\n                    services.Add(BuildService(serviceEntry));\r\n                }\r\n                else\r\n                {\r\n                    _logger.LogError($\"Unable to use service Address: {serviceEntry.Service.Address} and Port: {serviceEntry.Service.Port} as it is invalid. Address must contain host only e.g. localhost and port must be greater than 0\");\r\n                }\r\n            }\r\n\r\n            return services.ToList();\r\n        }\r\n\r\nI think this solution costs more network traffic. Correct me if I'm wrong?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/299/comments",
+    "author": "zlzforever",
+    "comments": [
+      {
+        "user": "zlzforever",
+        "created_at": "2018-04-02T11:06:35Z",
+        "body": "And the second issue: Consul down cause Ocelot down? May we need a reroute configuration cache."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-02T15:31:04Z",
+        "body": "@zlzforever thanks for your interest in the project!  Consul should run as a sidecar so there is no network traffic. I'm not sure what the cost of calling localhost (quick google didnt find much) is but i think its minimal as this is how Consul is designed.\r\n\r\nThere is another Ocelot feature that stores the configuration in Consul and that uses a poller and has a cache so it doesnt matter if Consul goes down, the same technique could be applied to the problem above.\r\n\r\nHowever if the consul sidecar goes down you probably have bigger problems on your host or something. I would say the chances of just the Consul sidecar going down are very slim when running next to Ocelot.\r\n\r\nIf you are not running Consul next to Ocelot (e.g. sidecar style or at least on same host) then you are going to be calling across the network but this is not a supported configuration.\r\n\r\nI don't think we need to worry too much about this."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-06T22:33:47Z",
+        "body": "Closing as no activity, feel free to reopen"
+      }
+    ]
+  },
+  {
+    "number": 293,
+    "title": "Unhandled Exception: Consul.ConsulRequestException: Unexpected response, status code InternalServerError: rpc error: connection is shut down",
+    "created_at": "2018-03-26T02:30:41Z",
+    "closed_at": "2018-04-06T22:32:32Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/293",
+    "body": "## Steps to Reproduce the Problem\r\n\r\nUnhandled Exception: Consul.ConsulRequestException: Unexpected response, status code InternalServerError: rpc error: connection is shut down\r\n   at Consul.GetRequest`1.<Execute>d__5.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at Consul.KV.<Get>d__13.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()\r\n   at Ocelot.Configuration.Repository.ConsulFileConfigurationRepository.<Get>d__4.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()\r\n   at Ocelot.Configuration.Repository.ConsulFileConfigurationPoller.<Poll>d__7.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\r\n   at Ocelot.Configuration.Repository.ConsulFileConfigurationPoller.<<-ctor>b__6_0>d.MoveNext()\r\n--- End of stack trace from previous location where exception was thrown ---\r\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\r\n   at System.Threading.ExecutionContext.Run(ExecutionContext executionContext, ContextCallback callback, Object state)\r\n   at System.Threading.ThreadPoolWorkQueue.Dispatch()\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/293/comments",
+    "author": "guoming",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-26T07:49:39Z",
+        "body": "@guoming Thanks for your interest in the project :) I have a few questions that will help work out what the problem is.\r\n\r\nIs your consul instance accessible? \r\n\r\nCan you see the object with key \"OcelotConfiguration\" in your consul KeyValue store?\r\n\r\nPlease could you paste your configuration.json and startup.cs / program.cs files?"
+      }
+    ]
+  },
+  {
+    "number": 217,
+    "title": "I can't build ocelot on .net core sdk 2.1.4 ",
+    "created_at": "2018-02-02T03:14:39Z",
+    "closed_at": "2018-02-08T18:10:31Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/217",
+    "body": "Hi bro,\r\nBelow is my build env:\r\nVM - windows 7-64bit\r\nvs2017\r\nsdk: net core 2.1.4\r\nruntime:.net core 2.0\r\nI got the latest version from github. When I build it, the vs2017 return below error:\r\nThe current .NET SDK does not support targeting .NET Core 2.0.  Either target .NET Core 1.1 or lower, or use a version of the .NET SDK that supports .NET Core 2.0.\r\n\r\nI mark sure I installed it on my book.\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/217/comments",
+    "author": "JamesYing",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-02T08:30:23Z",
+        "body": "@JamesYing thanks for your interest in the project!\r\n\r\nCan you build any other .net core 2.0 projects?"
+      },
+      {
+        "user": "JamesYing",
+        "created_at": "2018-02-02T08:48:38Z",
+        "body": "@TomPallister \r\nHi， Thanks for your answer.\r\nYes, I can build other .net core 2.0 project. And when I create a new solution and add ocelot.csproj，it's well.\r\n\r\nWould you like to check the .sln file?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-02T09:20:25Z",
+        "body": "@JamesYing if you can work out what the problem is and create a pull request that would be awesome!\r\n\r\nIf not I will have a look at it asap."
+      },
+      {
+        "user": "JamesYing",
+        "created_at": "2018-02-05T05:10:34Z",
+        "body": "@TomPallister \r\nhi Tom,I tried several times and found that it was a build.ps1 file has problem,  when I deleted the file, the project could be build.            \r\nBut I don't know much about PowerShell So I can't help you modify it .\r\nCould you check it ?\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-05T18:33:56Z",
+        "body": "@JamesYing build.ps1 is from the cake framework. It might need updating but this seems very strange!"
+      },
+      {
+        "user": "JamesYing",
+        "created_at": "2018-02-06T05:44:04Z",
+        "body": "@TomPallister \r\nHi Tom, I found the problem from the build.ps1, I get the latest build.ps1 on your project and I rebuild it, Now it's fine.\r\nAnd the sdk version is 2.0.2 in global.json file, so I changed it to 2.1.4 by myself.\r\n\r\nYou can close this issue and Thanks for your help!\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-06T08:44:07Z",
+        "body": "@JamesYing I will fix in develop before I close! Thanks for your help."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-08T18:10:31Z",
+        "body": "I have updated the build.ps1 on develop...will not upgrade sdk yet..but soon."
+      }
+    ]
+  },
+  {
+    "number": 214,
+    "title": "Problem when routing calls to an API that has no response body.",
+    "created_at": "2018-02-01T14:04:29Z",
+    "closed_at": "2018-02-05T19:16:24Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/214",
+    "body": "Hi\r\nI try to forward calls to a method in an  Web API method that has a \"void\" return type. What happens is that Ocelot hangs indefinitely. It seems to occur for any verb. Calling the method directly works fine and responds with HTTP/200.\r\n\r\nIs this an issue with my hosting or configuration, or could be a another problem.\r\n\r\nMy Ocelot Gateway Implementation runs under IIS, and calling a method returning a response body works fine.\r\n\r\nThanks\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/214/comments",
+    "author": "janhabelvik",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-01T20:34:33Z",
+        "body": "@janhabelvik I have no idea why this is happening :( I will look into it. I assume you have a controller that returns void? It might be something to do with the fact is doesn't have a response body."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-01T20:36:54Z",
+        "body": "@janhabelvik also how are you hosting Ocelot? IIS, Kestrel etc?"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T09:50:47Z",
+        "body": "@TomPallister  I'm hosting in IIS, but the issue seems to happen independent of the hosting environment.\r\n\r\nI downloaded the source and did some debugging, the processing seems to hang on ResponderMiddleware.Invoke on the line:  await _responder.SetResponseOnHttpContext(context, HttpResponseMessage);\r\n\r\nThis code seems to get stuck when the content.Length is 0. I guess the copy step can be skipped if it's the case.\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-02T11:07:45Z",
+        "body": "@janhabelvik thanks for looking into this. If you want you can submit a PR with the change?\r\n\r\nOtherwise I will fix it asap! :D"
+      },
+      {
+        "user": "janhabelvik",
+        "created_at": "2018-02-02T11:48:25Z",
+        "body": "This little fix resolved the issue for me:\r\n            using (Stream stream = new MemoryStream(content))\r\n            {\r\n                if (response.StatusCode != HttpStatusCode.NotModified\r\n                    **&& context.Response.ContentLength != 0**)\r\n                {\r\n                    await stream.CopyToAsync(context.Response.Body);\r\n                }\r\n            }"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-02-05T19:16:24Z",
+        "body": "fixed in 3.0.2"
+      }
+    ]
+  },
+  {
+    "number": 138,
+    "title": "About http 503 error",
+    "created_at": "2017-11-01T08:22:05Z",
+    "closed_at": "2017-12-01T08:19:33Z",
+    "labels": [
+      "help wanted",
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/138",
+    "body": "Hi，I hosted Ocelot on IIS，but sometimes，my request will be received 503 error. And only one interface request error, the other normal.\r\n\r\nThis is my configuration information\r\n\r\n```\r\n\"DownstreamPathTemplate\": \"/api/{root}/\",\r\n      \"DownstreamScheme\": \"http\",\r\n      \"DownstreamPort\": 8878,\r\n      \"DownstreamHost\": \"localhost\",\r\n      \"UpstreamPathTemplate\": \"/api/{root}/\",\r\n      \"UpstreamHttpMethod\": [\r\n        \"Post\",\r\n        \"Get\"\r\n      ],\r\n      \"QoSOptions\": {\r\n        \"ExceptionsAllowedBeforeBreaking\": 3,\r\n        \"DurationOfBreak\": 10,\r\n        \"TimeoutValue\": 10000\r\n      }\r\n```\r\n\r\nThis is my log information\r\n\r\n`2017-11-01 10:04:19.6185|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:05:40.1941|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:07:19.8178|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:08:51.6621|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:30.3553|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3464|Ocelot.Requester.HttpClientHttpRequester|ERROR|Error in CircuitBreakingDelegatingHandler.SendAync : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3464|Ocelot.Requester.QoS.PollyQoSProvider|ERROR|.Breaker logging: Breaking the circuit for 10ms! : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3464|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3464|Ocelot.Requester.HttpClientHttpRequester|ERROR|Error in CircuitBreakingDelegatingHandler.SendAync : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Requester.QoS.PollyQoSProvider|ERROR|.Breaker logging: Breaking the circuit for 10ms! : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Requester.HttpClientHttpRequester|ERROR|Error in CircuitBreakingDelegatingHandler.SendAync : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Requester.QoS.PollyQoSProvider|ERROR|.Breaker logging: Breaking the circuit for 10ms! : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Requester.HttpClientHttpRequester|ERROR|Error in CircuitBreakingDelegatingHandler.SendAync : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Requester.HttpClientHttpRequester|ERROR|Error in CircuitBreakingDelegatingHandler.SendAync : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:09:50.3484|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:10:09.0995|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:10:09.2555|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:10:10.5656|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:10:12.2067|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:14:01.5568|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:14:49.6555|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:38.5943|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:40.1034|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:41.1325|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:42.2255|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:45.9698|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:46.4198|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:46.6078|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:47.9829|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:50.1180|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:50.3100|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:51.7261|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:54.0042|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:54.6903|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:54.9713|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:15:58.1215|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:16:18.0886|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set \r\n2017-11-01 10:16:19.2037|Ocelot.Responder.Middleware.ResponderMiddleware|ERROR|1 pipeline errors found in ResponderMiddleware. Setting error response status code : OcelotRequestId - not set `\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/138/comments",
+    "author": "Cglvzh",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-11-01T09:16:32Z",
+        "body": "@Cglvzh for some reason the circuit breaker is kicking in hence the 503...maybe @geffzhang can help? Or I will look at it after I have finished the .net core 2.0 upgrade."
+      },
+      {
+        "user": "Cglvzh",
+        "created_at": "2017-11-02T01:41:54Z",
+        "body": "Ok，Thank You.I will try to reproduce the problem in the test environment.\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-11-28T21:59:58Z",
+        "body": "@Cglvzh did you ever get to the bottom of this?"
+      },
+      {
+        "user": "saitejaprattipati",
+        "created_at": "2019-08-04T14:07:33Z",
+        "body": "@Cglvzh Hi, I am getting same error can you please tell me the solution that you have done to solve it."
+      }
+    ]
+  },
+  {
+    "number": 120,
+    "title": "Is it possible to upgrade .Net Standard 2.0?",
+    "created_at": "2017-08-28T02:23:14Z",
+    "closed_at": "2017-08-29T18:54:51Z",
+    "labels": [
+      "duplicate",
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/120",
+    "body": "@TomPallister @binarymash @geffzhang 友善大神 \r\nLooking forward to Ocelot upgrade to .Net Standard 2.0?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/120/comments",
+    "author": "lfzm",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-08-29T18:54:51Z",
+        "body": "Hi @aqa510415008 thanks for contributing! This is a duplicate of #114 \r\n\r\nI am going to start working on the upgrade asap. Unfortunately it is not going to be simple."
+      }
+    ]
+  },
+  {
+    "number": 60,
+    "title": "Thanks",
+    "created_at": "2017-03-06T10:52:17Z",
+    "closed_at": "2017-03-07T13:27:58Z",
+    "labels": [
+      "question"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/60",
+    "body": "Hi, I was looking for about a Gateway for .NET for a long time. I´m very happy for found your project. I´m going to study the documentation and try to put in practice. \r\n\r\nDo you have plans to continue this project?\r\n\r\nThanks for your time.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/60/comments",
+    "author": "juancash",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-03-06T12:36:05Z",
+        "body": "@jsantanainel thanks for appreciating the effort! \r\n\r\nI do intend to keep working on the project. It is very early days so the code isn't amazing yet. I think there are a lot more features to add and a lot of refactoring to do before it is a good product.\r\n\r\nThe next thing I'm working on is some kind of clustering so you can have multiple instances deployed and they keep themselves updated when you make config changes."
+      }
+    ]
+  },
+  {
+    "number": 1240,
+    "title": "Update caching.rst",
+    "created_at": "2020-05-24T08:30:08Z",
+    "closed_at": "2023-07-20T06:37:23Z",
+    "labels": [
+      "help wanted",
+      "small effort",
+      "needs feedback",
+      "documentation",
+      "waiting"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/pull/1240",
+    "body": "Related to\r\n- #1167 \r\n\r\nI forgot to say \"Thank you\" to myself. 😎 ",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/1240/comments",
+    "author": "EngRajabi",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-07-19T18:26:42Z",
+        "body": "Related to #1167 "
+      }
+    ]
+  },
+  {
+    "number": 729,
+    "title": "Support sticky sessions for ServiceDiscoveryProviders",
+    "created_at": "2018-12-29T11:02:43Z",
+    "closed_at": "2024-01-07T15:39:30Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "Service Discovery"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/729",
+    "body": "## Expected Behavior / New Feature\r\nSupport sticky sessions for ServiceDiscoveryProviders\r\n\r\n## Actual Behavior / Motivation for New Feature\r\nWhen using websockets with ocelot in a distributed system, problem can arise since ocelot, as far as i know, doesn't support sticky sessions when working with service discovery providers.\r\n\r\nThe functionality could be great if it could work with both consul and servicefabric.\r\n\r\nFeel free to delete this issue if i'm wrong.\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/729/comments",
+    "author": "MartinCarpentier",
+    "comments": [
+      {
+        "user": "philproctor",
+        "created_at": "2019-01-02T21:26:30Z",
+        "body": "I'll have to investigate this to find out if it's true, though I'm not sure it's totally appropriate to address if it is true.\r\n\r\nSticky sessions are not generally recommended and the reason why is that requests from one client are always directed to the same server, making that client dependent on that server. If you are using Service Discovery and the server drops from the pool, any clients that were sticky to that server will experience a loss of session and have other potential side effects. It doesn't seem like SD + Sticky Sessions would mix very well, especially in an environment where servers change frequently.\r\n\r\nThat being said, we do offer both, so we probably should implement a fix at some point if it doesn't already work."
+      },
+      {
+        "user": "MartinCarpentier",
+        "created_at": "2019-01-03T12:15:04Z",
+        "body": "It's true that sticky sessions are generally not favorable. But in some cases the underlying technology needs it. (Sadly)\r\n\r\nIf I understand your documentation correctly it's not supported. I might be mistaken though and if i am that would be great.\r\n\r\nThe reason why I would like sticky sessions is that we plan to use SignalR. \r\nSignalR requires sticky sessions, so that the initial negotiations with the server reaches the same server every time.\r\n\r\nI have looked into the ServiceFabric implementation and it looks like you're using the ServiceFabric reverse proxy for the load distribution?\r\nIf that's the case then Ocelot will not be able to support sticky sessions through ServiceFabric with the current implementation since the SF ReverseProxy doesn't support it.\r\n\r\nThere is an endpoint in ServiceFabric for retrieving information about each service that's running on the system (Service Discovery Provider) but it doesn't look like you're using it?\r\n\r\n\r\n"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-01-07T15:38:40Z",
+        "body": "No communication!\r\nNo contribution!\r\nConverting to an Idea discussion..."
+      }
+    ]
+  },
+  {
+    "number": 718,
+    "title": "Websocket authentication token",
+    "created_at": "2018-12-14T14:12:07Z",
+    "closed_at": "2024-06-15T13:05:45Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "proposal"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/718",
+    "body": "Hello, I'm currently using the websocket proxying feature which is working correctly but I would require my system to run a bit of code to check for token validity and token existence, from what I understand this is not implemented, where should I start to implement this kind of feature myself, or is someone already working on something similar ?\r\n\r\n\r\nI was planning to use a query parameter retrieved by the HttpContext to check for this (I can already do that at micro-service level, but it would be better to do it at gateway level)",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/718/comments",
+    "author": "Rakiah",
+    "comments": [
+      {
+        "user": "Rakiah",
+        "created_at": "2018-12-17T13:02:23Z",
+        "body": "Merge request opened for this issue"
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-06-15T13:05:13Z",
+        "body": "Will be fixed in #1040 "
+      },
+      {
+        "user": "raman-m",
+        "created_at": "2024-06-15T13:05:35Z",
+        "body": "Duplicate of #1040 "
+      }
+    ]
+  },
+  {
+    "number": 641,
+    "title": "store configuration in consul  problem on v12.0.0",
+    "created_at": "2018-09-28T03:05:12Z",
+    "closed_at": "2018-10-15T01:50:37Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "medium effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/641",
+    "body": "## Expected Behavior / New Feature\r\nhi\r\n\r\nWhen the configuration is stored in consul, restarting the application causes local ocelot. json information to be synchronized to consul, resulting in loss of consul configuration data;\r\n\r\nI find that every restart application is executed.\r\n\r\n`if(AdministrationApiInUse(adminPath))`\r\n`{`\r\n    `   var fileConfigSetter = builder.ApplicationServices.GetService<IFileConfigurationSetter>();`\r\n    `   await SetFileConfig(fileConfigSetter, fileConfig);`\r\n`}`\r\n## Actual Behavior / Motivation for New Feature\r\n\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.\r\n  1.\r\n  1.\r\n\r\n## Specifications\r\n\r\n  - Version:v12.0.0\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/641/comments",
+    "author": "q315523275",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-28T17:43:45Z",
+        "body": "@q315523275 mmmmm I will check this out ASAP, I thought I fixed this already."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-10-13T16:44:41Z",
+        "body": "@q315523275 Ive had a chance to look at this issue, it looks like expected behaviour. If you are using the administration API when Ocelot starts up it writes to ocelot.json and ocelot.{env}.json because users expect both of these configs to be in sync.\r\n\r\nIf you are using consul instead of using DiskFileConfigurationRepository to do the save it uses the Consul version and hence it saves to your consul instance.\r\n\r\nThe fix for this is say if using consul to store ocelot configuration don't save the config when starting Ocelot. This would mean exposing some kind of delegate from Ocelot.Provider.Consul package.\r\n\r\nFor now I would suggest dont use the administration api when using Consul. You shouldnt need both."
+      },
+      {
+        "user": "q315523275",
+        "created_at": "2018-10-15T01:50:37Z",
+        "body": "@TomPallister Thank you very much for your reply. I will use API management in another way."
+      }
+    ]
+  },
+  {
+    "number": 628,
+    "title": "Is it possible to add a security module",
+    "created_at": "2018-09-20T08:10:29Z",
+    "closed_at": "2018-09-30T09:17:11Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "large effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/628",
+    "body": "Is it possible to add a security module?\r\nIP whitelist, blacklist\r\nAuthorizationToken blacklist",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/628/comments",
+    "author": "lfzm",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-20T17:16:50Z",
+        "body": "@aqa510415008 yes it would be possible. This would be a new feature!\r\n\r\nYou could have a go at implementing this as a piece of middleware and seeing if it works in your project. Then maybe we could add it to Ocelot?"
+      },
+      {
+        "user": "lfzm",
+        "created_at": "2018-09-21T01:43:59Z",
+        "body": "@TomPallister  I have started to integrate Ocelot. I discussed feasibility with @geffzhang yesterday. IP whitelists and blacklists are configured through Ocelot, and other security components are extensible. When I submit the PR, you can see if it works."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-21T06:40:33Z",
+        "body": "I have reviewed the PR, looks good, changes requested! \r\n\r\nThank you for this. I really appreciate it."
+      },
+      {
+        "user": "lfzm",
+        "created_at": "2018-09-21T07:23:14Z",
+        "body": "@TomPallister Thank you for your review, if you can, I add a unit test."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-22T06:41:08Z",
+        "body": "Ok I will wait for tests :)"
+      },
+      {
+        "user": "lfzm",
+        "created_at": "2018-09-26T01:42:47Z",
+        "body": "Security protection extension for Ocelot AuthorizationToken\r\n\r\n[Ocelot.Security.AuthorizationToken.EntityFramework](Ocelot.Security.AuthorizationToken.EntityFramework)"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-30T09:17:11Z",
+        "body": "Released in 12.0.1, should be on NuGet soon :)\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 623,
+    "title": "How to get RemoteIPAddress in Asp.Net core 2.1 Service behind ocelot",
+    "created_at": "2018-09-17T08:32:46Z",
+    "closed_at": "2018-09-30T09:17:14Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "medium effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/623",
+    "body": "## Expected Behavior / New Feature\r\nGet User Real IP Address\r\n\r\n## Actual Behavior / Motivation for New Feature\r\nGet Ocelot gateway IP Address\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1.Ocelot route http request to my asp.net core 2.1 service;\r\n  2.In asp.net core 2.1 controller get remoteIPAddress from method \"var ipAddress = _httpContextAccessor.HttpContext.Connection.RemoteIpAddress.ToString();\"\r\n\r\n\r\n## Specifications\r\n\r\n  - Version:9.0.0\r\n  - Platform:CentOS7\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/623/comments",
+    "author": "bishopjun11",
+    "comments": [
+      {
+        "user": "bishopjun11",
+        "created_at": "2018-09-18T02:18:26Z",
+        "body": "Hello, Any comments????"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-18T06:41:06Z",
+        "body": "@bishopjun11 the best way for this to happen would be an x forwarded for header. I think this is a new feature. I will get round to it eventually but for now if you want this you would have to implement it yourself either your own piece of middleware that adds it as a header and then ocelot will automatically forward it."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-18T06:41:45Z",
+        "body": "In terms of implementing this use the header placeholder stuff"
+      },
+      {
+        "user": "bishopjun11",
+        "created_at": "2018-09-18T10:20:09Z",
+        "body": "> @bishopjun11 the best way for this to happen would be an x forwarded for header. I think this is a new feature. I will get round to it eventually but for now if you want this you would have to implement it yourself either your own piece of middleware that adds it as a header and then ocelot will automatically forward it.\r\n\r\nI add a Nginx before ocelot and add x forwarded header in Nginx."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-18T20:34:06Z",
+        "body": "@bishopjun11 Yep that should work fine, good idea. Btw if you are using nginx already you might not need Ocelot! What are you using it for?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-30T09:17:14Z",
+        "body": "Released in 12.0.1, should be on NuGet soon :)\r\n\r\n"
+      }
+    ]
+  },
+  {
+    "number": 564,
+    "title": "Routing based on value in claim",
+    "created_at": "2018-08-20T14:25:39Z",
+    "closed_at": "2018-09-19T06:40:19Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "large effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/564",
+    "body": "## Expected Behavior / New Feature\r\n\r\nI'm looking for direction on how to route to a specific downtream resource based on a value in .net identity claim.  Ex) user has claim    TenantId = \"xxx\" and this would route them to a specic downstream resource I have setup.\r\n\r\n## Actual Behavior / Motivation for New Feature\r\n\r\nNeed to support multi tenant multi site routing with single enpoint visible to user\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1. Go to example.com\r\n  1. User would login and get a claim \"TenantId\": \"xxx\"\r\n  1. Route is setup to check for \"TenantId\" claim and route to specific resource based on TenantId value\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/564/comments",
+    "author": "twilly86",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-20T19:17:04Z",
+        "body": "@twilly86 thanks for your interest in Ocelot, this isn't possible at the moment. There are some issues open for different ways of doing routing that I intend to look at after doing some refactoring to make Ocelot better. I will take a look at this when I get round to them...it isn't something I will be able to do super quick. This will be a big change to Ocelot because the routing happens before authentication at the moment."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-19T06:40:19Z",
+        "body": "Turns out this is a duplicate of #460"
+      }
+    ]
+  },
+  {
+    "number": 559,
+    "title": "Infinite configuration file growth when ASPNETCORE_ENVIRONMENT is defined",
+    "created_at": "2018-08-17T22:37:17Z",
+    "closed_at": "2018-09-20T17:53:11Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "medium effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/559",
+    "body": "## Expected Behavior\r\n\r\nOcelot should be able to read and merge multiple configuration files (ocelot.*.json).\r\n\r\n## Symptom\r\n\r\nMerged configuration files are growing in size (in an arithmetic progression) on each API Gateway restart.\r\n2nd and all subsequent API Gateway app runs have broken configuration.\r\n\r\n## Problem\r\n\r\n**When**\r\n\r\n_ASPNETCORE_ENVIRONMENT_ environment variable is defined\r\n\r\n**and** \r\nOcelot has at least one dedicated configuration file initially deployed (Ocelot.Something.json)\r\n\r\n**then**\r\n\r\n_On first run_ Ocelot produces \"Ocelot.{env.EnvironmentName}.json\" file containing initial content of \"Ocelot.Something.json\".\r\n\r\n_On second run_ Ocelot uses \"Ocelot.{env.EnvironmentName}.json\" and \"Ocelot.Something.json\" as input for config merge operation and produces new \"Ocelot.{env.EnvironmentName}.json\" file that contains concatenation of existing \"Ocelot.{env.EnvironmentName}.json\" and \"Ocelot.Something.json\". The resulting file gets \"Ocelot.Something.json\" content duplicated two times (since that moment API Gateway configuration is broken).\r\n\r\n_On third run_ ... Ocelot does the same operation (again). The merged configuration file becomes 3x of \"Ocelot.Something.json\"\r\n\r\nThe problem seems to be caused by interference of business-logic of two classes:\r\nConfiguration\\Repository\\DiskFileConfigurationRepository.cs\r\nand\r\nDependencyInjection\\ConfigurationBuilderExtensions.cs\r\n\r\n\r\nIn **DiskFileConfigurationRepository.cs** file the configuration file name is built from current IHostingEnvironment.EnvironmentName value:\r\n\r\n```\r\npublic DiskFileConfigurationRepository(IHostingEnvironment hostingEnvironment)\r\n{\r\n     _configFilePath = $\"{AppContext.BaseDirectory}/{ConfigurationFileName}{(string.IsNullOrEmpty(hostingEnvironment.EnvironmentName) ? string.Empty : \".\")}{hostingEnvironment.EnvironmentName}.json\";\r\n}\r\n```\r\n\r\nthen FileConfiguration is saved like so:\r\n\r\n```\r\npublic Task<Response> Set(FileConfiguration fileConfiguration)\r\n{\r\n    string jsonConfiguration = JsonConvert.SerializeObject(fileConfiguration, Formatting.Indented);\r\n\r\n    lock(_lock)\r\n    {\r\n        if (System.IO.File.Exists(_configFilePath))\r\n        {\r\n            System.IO.File.Delete(_configFilePath);\r\n        }\r\n\r\n        System.IO.File.WriteAllText(_configFilePath, jsonConfiguration);\r\n    }\r\n\r\n    return Task.FromResult<Response>(new OkResponse());\r\n}\r\n```\r\n\r\n**ConfigurationBuilderExtensions.cs** \r\ncontains _AddOcelot()_ extension method which knows nothing about IHostingEnvironment and assumes that any file matching pattern \"(?i)ocelot\\\\.([a-zA-Z0-9]*)(\\\\.json)$\" is perfectly valid candidate for merge (including the file created by DiskFileConfigurationRepository).\r\n\r\n\r\n## Solution\r\n\r\nThe quick fix I can see here is to to pass IHostingEnvironment to AddOcelot() extension method to let it filter out ocelot.{ASPNETCORE_ENVIRONMENT}.json during the merge cycle.\r\n\r\n## Specifications\r\n\r\n  - Version: 10.x and down to 7.x (at least)\r\n  - Platform: Any\r\n  - Subsystem: Ocelot configuration\r\n\r\n## Comments\r\n\r\nThis issue actually breaks Continuous Integration / Continuous Deployment cycle when micro-services ecosystem is being developed and tested on IIS instances.\r\n\r\nAt the project I'm working on we have multiple .NET Core micro-services connected by API Gateway (which uses Ocelot). Each micro-service comes with it's own Gateway configuration (re-routes and aggregates). Some deployment environments have unique capabilities so we have as many ASPNETCORE_ENVIRONMENT variations as the number of unique environments.\r\n\r\nWhen a micro-service is being deployed, the deployment agent replaces corresponding Ocelot.ServiceName.json file at the API Gateway root by the latest gateway configuration file from microservice bundle and restarts the API Gateway.\r\nThe problem is that this only works once :)\r\nCurrently our script explicitly deletes ocelot.{ASPNETCORE_ENVIRONMENT}.json before starting back the API Gateway service... but if API Gateway is being shutdown and restarted by IIS (by any reason) it breaks the Gateway service.\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/559/comments",
+    "author": "snb83",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-18T07:02:31Z",
+        "body": "@snb83 thanks for this, I really appreciate it.\r\n\r\nI will review ASAP."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-20T17:53:11Z",
+        "body": "fixed in 12.0.0, just released to NuGet"
+      }
+    ]
+  },
+  {
+    "number": 556,
+    "title": "SetResponseOnHttpContext can throw - Improper use of content.Length",
+    "created_at": "2018-08-17T04:02:40Z",
+    "closed_at": "2018-08-25T12:24:57Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "small effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/556",
+    "body": "## Expected Behavior\r\nProxying should work with a custom `IHttpRequester`\r\n\r\n## Actual Behavior\r\nProxying fails if the custom `IHttpRequester` returns a response whose content isn't wrapping a `MemoryStream`. Things work by default because `HttpClient.SendAsync`'s default is to buffer the entire response into an internal `MemoryStream`, which supports `Stream.Length`.\r\n\r\nHowever, if a custom `IHttpRequester` uses `HttpClient.SendAsync(..., HttpCompletionOption.ResponseHeadersRead)`, the resulting content will wrap a non-seekable stream. This will throw if trying to read `Stream.Length`.\r\n\r\nCulprit is `HttpContextResponder.SetResponseOnHttpContext`:\r\n\r\n```cs\r\nAddHeaderIfDoesntExist(context, new Header(\"Content-Length\", new []{ content.Length.ToString() }) );\r\n```\r\n\r\n## Steps to Reproduce the Problem\r\n\r\n  1. Implement a custom `IHttpRequester` that calls `HttpClient.SendAsync(..., HttpCompletionOption.ResponseHeadersRead)`\r\n  1. Make a request to a target that returns a response body\r\n\r\n## Specifications\r\n\r\n  - Version: 10.0.2\r\n  - Platform: Windows 10, .NET Framework 4.6.2\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/556/comments",
+    "author": "davidni",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-17T06:54:57Z",
+        "body": "@davidni what do you think the best fix is here? I guess I need a failing test first! But was thinking...\r\n\r\n```csharp\r\n if(response.Content.Headers.ContentLength != null)\r\n            {\r\n                AddHeaderIfDoesntExist(context, new Header(\"Content-Length\", new []{ response.Content.Headers.ContentLength.ToString() }) );\r\n            }\r\n```"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-08-25T12:24:57Z",
+        "body": "Should be fixed in 10.0.4! Let me know if any problems."
+      }
+    ]
+  },
+  {
+    "number": 475,
+    "title": "Specify specific folder for config.AddOcelot()",
+    "created_at": "2018-07-18T04:42:19Z",
+    "closed_at": "2018-07-21T08:29:59Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "medium effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/475",
+    "body": "## New Feature\r\nI use the AddOcelot extension-method on IConfigurationBuilder to configure Ocelot in a project I'm working on. The default implementation looks in the current folder for config files and combines these into an ocelot.json file. \r\n\r\nI would like to have the ability to specify a specific folder when using config.AddOcelot. \r\n\r\n## Motivation for New Feature\r\nI like to define the reroutes for every API I want to publish using Ocelot in a separate config file. The new feature would enable me to have a separate folder per environment in which I can place these config files. Consider the next folder structure:\r\n\r\n- OcelotConfig\r\n  - Development\r\n    - ocelot.global.json\r\n    - ocelot.FirstAPI.json\r\n    - ocelot.SecondAPI.json\r\n    - ocelot.ThirdAPI.json\r\n  - Production\r\n    - ocelot.global.json\r\n    - ocelot.FirstAPI.json\r\n    - ocelot.SecondAPI.json\r\n    - ocelot.ThirdAPI.json\r\n\r\nNow I can combine all the ReRoutes specified in the separate config files for a speific environment by calling: \r\n`config.AddOcelot($\"OcelotConfig\\\\{hostingContext.HostingEnvironment.EnvironmentName}\");`\r\n\r\n## Specifications\r\n\r\n  - Version: 8.0.0\r\n\r\n## Notes\r\nIn a project that I'm working on I've already added an overload of the AddOcelot extension-method on IConfigurationBuilder that accepts a folder. This works like a charm. So if this is considered a valuable addition, I can make a PR. \r\n\r\nAnother approach would be to take the Environment into consideration when traversing the config files. But this would be my second choice.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/475/comments",
+    "author": "EdwinVW",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-18T05:55:15Z",
+        "body": "@EdwinVW thanks for your interest in Ocelot. Yes I would love a PR for this! Sounds useful."
+      },
+      {
+        "user": "EdwinVW",
+        "created_at": "2018-07-18T08:43:20Z",
+        "body": "Will do. Code is complete and unit-tests are green. Will create PR shortly. \r\nCan you assign me to the issue?"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-18T17:42:18Z",
+        "body": "@EdwinVW awesome thanks! I will review ASAP."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-19T16:50:21Z",
+        "body": "@EdwinVW good PR thank you very much. I will release this with next version of Ocelot."
+      },
+      {
+        "user": "EdwinVW",
+        "created_at": "2018-07-19T16:58:53Z",
+        "body": "Great, thanks for the fast review and merge!"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-21T08:29:58Z",
+        "body": "Released in version 8.0.1"
+      }
+    ]
+  },
+  {
+    "number": 460,
+    "title": "Claim based routing / partition routing",
+    "created_at": "2018-07-10T02:04:33Z",
+    "closed_at": "2023-11-29T19:03:24Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "large effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/460",
+    "body": "## Expected Behavior / New Feature\r\n\r\nwe have one service with several deployed instances, each instances serve a group of users. we use this way to do horizontal scaling. \r\n\r\nRight now, we want to use gateway as the single api address for all instances, each http request will attach token with claim which indicates the userid. I'm wondering if Ocelot can help on this scenario?\r\n\r\n## Actual Behavior / Motivation for New Feautre\r\n\r\n\r\n## Specifications\r\n\r\n  - Version:\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/460/comments",
+    "author": "mogliang",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-10T06:46:42Z",
+        "body": "@mogliang thanks for your interest in Ocelot!\r\n\r\nAt the moment you cannot do this with Ocelot. However it is an interesting idea. I will think about it and get back to you ASAP! "
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-09-19T06:40:28Z",
+        "body": "Expected Behavior / New Feature\r\nI'm looking for direction on how to route to a specific downtream resource based on a value in .net identity claim. Ex) user has claim TenantId = \"xxx\" and this would route them to a specic downstream resource I have setup.\r\n\r\nActual Behavior / Motivation for New Feature\r\nNeed to support multi tenant multi site routing with single enpoint visible to user\r\n\r\nSteps to Reproduce the Problem\r\nGo to example.com\r\nUser would login and get a claim \"TenantId\": \"xxx\"\r\nRoute is setup to check for \"TenantId\" claim and route to specific resource based on TenantId value"
+      },
+      {
+        "user": "mvdburght",
+        "created_at": "2019-04-04T08:15:57Z",
+        "body": "I managed to get this working with the current version of Ocelot, just by adding a custom AspNetCore middleware before Ocelot in the pipeline:\r\n\r\n``` csharp\r\npublic class HostNameByTenantHeaderMiddleware\r\n    {\r\n        private readonly RequestDelegate _next;\r\n\r\n        public HostNameByTenantHeaderMiddleware(RequestDelegate next)\r\n        {\r\n            _next = next;\r\n        }\r\n\r\n        public async Task InvokeAsync(HttpContext context)\r\n        {\r\n            var tenantId = context.Request.Headers[\"SomeHeaderThatConainsTheTenantId\"].ToString();\r\n\r\n            if (!string.IsNullOrEmpty(tenantId))\r\n            {\r\n                context.Request.Host = HostString.FromUriComponent(tenantId);\r\n            }\r\n            \r\n            await _next(context);\r\n        }\r\n    }\r\n```\r\nIn your Ocelot.json you can use the `UpstreamHost` to supply different configurations per tenant.\r\n\r\nIt should be easy to change this to substract the TenantId from a claim."
+      }
+    ]
+  },
+  {
+    "number": 419,
+    "title": "Incorrect routing when UpstreamHost is specified and UpstreamHttpMethod is empty",
+    "created_at": "2018-06-19T19:45:14Z",
+    "closed_at": "2018-06-22T06:43:11Z",
+    "labels": [
+      "bug",
+      "help wanted",
+      "good first issue",
+      "small effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/419",
+    "body": "## Expected Behavior\r\nWhen a reroute rule specifies `UpstreamHost`, it should only match requests with that host name. There's a bug where this check is ignored if the rule has an empty or null `UpstreamHttpMethod`\r\n\r\n## Actual Behavior\r\n`UpstreamHost` is ignored\r\n\r\n## Specifications\r\n\r\n  - Version: 7.0.5\r\n  - Platform: all\r\n\r\nI will submit a PR shortly that addresses this.",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/419/comments",
+    "author": "davidni",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-19T20:05:39Z",
+        "body": "@davidni at first glance I agree! This looks good. Let me double check by pulling your code and seeing if I get a failing test!"
+      },
+      {
+        "user": "davidni",
+        "created_at": "2018-06-20T00:04:34Z",
+        "body": "Please double check, thanks. FWIW, I added a test and confirmed it fails before my changes and passes after."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-20T21:41:25Z",
+        "body": "@davidni really appreciate your help! Thanks 😄 "
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-22T06:43:11Z",
+        "body": "Released in 7.0.6"
+      }
+    ]
+  },
+  {
+    "number": 415,
+    "title": "RPC docking APi gateway",
+    "created_at": "2018-06-19T08:00:08Z",
+    "closed_at": "2018-07-20T01:37:06Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "small effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/415",
+    "body": "Excuse me. We have a requirement that requires RPC to also connect to the APi gateway. Is there a corresponding document?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/415/comments",
+    "author": "lfzm",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-19T17:02:37Z",
+        "body": "@aqa510415008 Is this RPC over HTTP? If so Ocelot supports http so it should work like any other url structure in a ReRoute."
+      }
+    ]
+  },
+  {
+    "number": 382,
+    "title": "Fixed querystring in DownstreamPathTemplate",
+    "created_at": "2018-06-05T12:54:46Z",
+    "closed_at": "2018-07-11T05:59:38Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "medium effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/382",
+    "body": "I'd like to ask another (hopefully silly) question. \r\nIs it possible to set a querystring on the downstreamPathTemplate? \r\n`            \"DownstreamPathTemplate\": \"/Instances?attributes=user_key\",\r\n            \"DownstreamScheme\": \"https\",\r\n            \"DownstreamHostAndPorts\": [\r\n                {\r\n                    \"Host\": \"customerservice.super.com\",\r\n                    \"Port\": 443\r\n                }\r\n            ],\r\n            \"UpstreamPathTemplate\": \"/Stub/Families\",\r\n            \"UpstreamHttpMethod\": [ \"Get\" ]\r\n`\r\nApparently this configuration results in the '?' character being encoded as %3F and no longer recognized by the API receiving the request.\r\nThank you so much\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/382/comments",
+    "author": "fablacky",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-05T15:11:43Z",
+        "body": "@fablacky thanks for your interest in the project. This isn’t supported at the moment. If your request sends the querystring then it will be forwarded to the downstream services. We could implement this if that does not help! Let me know what you think? "
+      },
+      {
+        "user": "fablacky",
+        "created_at": "2018-06-05T16:07:23Z",
+        "body": "@TomPallister \r\nthank you so much for you quick response. This feature is kinda important but I'd love to keep using your project. Therefore I'd like to ask you if it's not much trouble to implement it. \r\n\r\nI am a bit tight on time and I'll probably try to solve it myself, in this case I'd love to get some advice on where to act (codewise) and in general best practices on how to edit the project."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-06T07:43:31Z",
+        "body": "@fablacky I think we would need to do this in the same way we can add headers to requests. It wouldn’t make sense to live in the path template code I think. I cannot look in detail until next week. I will reply again then. "
+      },
+      {
+        "user": "fablacky",
+        "created_at": "2018-06-07T13:20:27Z",
+        "body": "Wonderful, for now I simply wrote a quick DelegatingHandler replacing the encoded character and everything works nicely. Let me know next week if you were able to look into it."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-07-11T05:59:28Z",
+        "body": "This has been released in Ocelot 8.0.0!"
+      }
+    ]
+  },
+  {
+    "number": 370,
+    "title": "Incorrect response StatusCode for middleware added before Ocelot",
+    "created_at": "2018-05-22T18:02:47Z",
+    "closed_at": "2018-06-12T06:23:02Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "small effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/370",
+    "body": "I am adding request/response logging middleware to the pipeline before Ocelot. \r\nI noticed that response status code received by this middleware is always 200, even if it is not. At the same time, it is correct in response headers sent to the client. \r\n\r\nLooks like the reason of this is next logic at HttpContextResponder:\r\n`\r\npublic void SetErrorResponseOnContext(HttpContext context, int statusCode)\r\n{\r\n            context.Response.OnStarting(x =>\r\n            {\r\n                context.Response.StatusCode = statusCode;\r\n                return Task.CompletedTask;\r\n            }, context);\r\n}\r\n`\r\n\r\nWill it cause any problems if to set it directly without using OnStarting delegate?  \r\n\r\n## Specifications\r\n\r\n  - Version: 6.0.0\r\n  - Platform:\r\n  - Subsystem:\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/370/comments",
+    "author": "AlexKuriatnyk",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-05-22T20:28:39Z",
+        "body": "@AlexKuriatnyk Thanks for your interest in the project! \r\n\r\nasp.net used to throw an exception if your tried to set it without using the OnStarting function and giving it a delegate function. I have not tested it recently though..have you tried it? If you could test this and let me know that would be awesome. If you don't have time I will keep this issue open for now and try and look asap! 😄 "
+      },
+      {
+        "user": "AlexKuriatnyk",
+        "created_at": "2018-05-23T00:40:12Z",
+        "body": "Yeah, I tried to set it directly at SetErrorResponseOnContext and this solves the problem"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-05-23T05:19:08Z",
+        "body": "@AlexKuriatnyk awesome do you want to submit a PR with this change? "
+      },
+      {
+        "user": "AlexKuriatnyk",
+        "created_at": "2018-05-23T23:36:40Z",
+        "body": "@TomPallister , ok, will do."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-12T06:23:02Z",
+        "body": "Released in 7.0.5"
+      }
+    ]
+  },
+  {
+    "number": 366,
+    "title": "Ocelot on full .Net framework 4.6.1 fails to create HttpClient and use",
+    "created_at": "2018-05-21T10:52:01Z",
+    "closed_at": "2018-06-12T06:23:27Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue",
+      "small effort",
+      "merged"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/366",
+    "body": "## Steps to Reproduce the Problem\r\n\r\nIn VS 2017 create .Net Core project but select (at the second screen) .NET Framework, not .Net Core one.\r\nSelect in the Project -> properties 4.6.1 framework.\r\nConfigure Ocelot and run.\r\nAn attempt to get into a route will throw.\r\n\r\n## Specifications\r\n\r\n  - Version: Win 10\r\n  - Platform: .NET 4.6.1\r\n  - Subsystem:\r\n\r\nAnd here is the code to fix it:\r\n\r\n<pre>\r\n--- a/src/Ocelot/Requester/HttpClientBuilder.cs\r\n+++ b/src/Ocelot/Requester/HttpClientBuilder.cs\r\n@@ -42,15 +42,29 @@ namespace Ocelot.Requester\r\n             {\r\n                 return httpClient;\r\n             }\r\n-\r\n-            var httpclientHandler = new HttpClientHandler\r\n+            bool useCookies = context.DownstreamReRoute.HttpHandlerOptions.UseCookieContainer;\r\n+            HttpClientHandler httpclientHandler;\r\n+            // Dont' create the CookieContainer if UseCookies is not set ot the HttpClient will complain\r\n+            // under .Net Full 46\r\n+            if (useCookies)\r\n             {\r\n-                AllowAutoRedirect = context.DownstreamReRoute.HttpHandlerOptions.AllowAutoRedirect,\r\n-                UseCookies = context.DownstreamReRoute.HttpHandlerOptions.UseCookieContainer,\r\n-                CookieContainer = new CookieContainer()\r\n-            };\r\n+                httpclientHandler = new HttpClientHandler\r\n+                {\r\n+                    AllowAutoRedirect = context.DownstreamReRoute.HttpHandlerOptions.AllowAutoRedirect,\r\n+                    UseCookies = context.DownstreamReRoute.HttpHandlerOptions.UseCookieContainer,\r\n+                    CookieContainer = new CookieContainer()\r\n+                };\r\n+            }\r\n+            else\r\n+            {\r\n+                httpclientHandler = new HttpClientHandler\r\n+                {\r\n+                    AllowAutoRedirect = context.DownstreamReRoute.HttpHandlerOptions.AllowAutoRedirect,\r\n+                    UseCookies = context.DownstreamReRoute.HttpHandlerOptions.UseCookieContainer,\r\n+                };\r\n+            }\r\n\r\n-            if(context.DownstreamReRoute.DangerousAcceptAnyServerCertificateValidator)\r\n+            if (context.DownstreamReRoute.DangerousAcceptAnyServerCertificateValidator)\r\n             {\r\n                 httpclientHandler.ServerCertificateCustomValidationCallback = (request, certificate, chain, errors) => true;\r\n\r\ndiff --git a/src/Ocelot/Requester/HttpClientHttpRequester.cs b/src/Ocelot/Requester/HttpClientHttpRequester.cs\r\nindex c7914c9..60d4899 100644\r\n--- a/src/Ocelot/Requester/HttpClientHttpRequester.cs\r\n+++ b/src/Ocelot/Requester/HttpClientHttpRequester.cs\r\n@@ -32,7 +32,17 @@ namespace Ocelot.Requester\r\n\r\n             try\r\n             {\r\n-                var response = await httpClient.SendAsync(context.DownstreamRequest.ToHttpRequestMessage());\r\n+                var message = context.DownstreamRequest.ToHttpRequestMessage();\r\n+\r\n+                // Remove Content from the message if not put or post or the http client will choke\r\n+                // under .Net Full 46\r\n+                if (message.Method != HttpMethod.Post &&\r\n+                    message.Method != HttpMethod.Put)\r\n+                {\r\n+                    message.Content = null;\r\n+                }\r\n+                _logger.LogDebug(string.Format(\"Sending {0}\", message));\r\n+                var response = await httpClient.SendAsync(message);\r\n                 return new OkResponse<HttpResponseMessage>(response);\r\n             }\r\n             catch (TimeoutRejectedException exception)\r\n</pre>",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/366/comments",
+    "author": "tsirkin",
+    "comments": [
+      {
+        "user": "tsirkin",
+        "created_at": "2018-05-21T10:58:18Z",
+        "body": "Created a pull request for this\r\nThanks for the great project"
+      },
+      {
+        "user": "tsirkin",
+        "created_at": "2018-06-06T14:49:39Z",
+        "body": "Dear @TomPallister  \r\nSince you merged my fix for the issue could you please release a new nuget package for it?\r\nI plan to use Ocelot in our project and the issue is a show stopper for me as I can't use SAML2 lib which depends on .Net full fr.\r\nThanks"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-08T14:37:34Z",
+        "body": "@tsirkin thanks for reminding me I will do a release next week!"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-06-12T06:23:27Z",
+        "body": "Released in 7.0.5"
+      }
+    ]
+  },
+  {
+    "number": 335,
+    "title": "When delegate handler throws an exception, service returns 404 (not found)",
+    "created_at": "2018-04-27T12:05:02Z",
+    "closed_at": "2018-04-30T18:37:08Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "small effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/335",
+    "body": "## Expected\r\n\r\nWhen a delegate handler throws an exception I would expect the service to return 500 (internal server error)\r\n\r\n## Actual\r\n\r\nWhen a delegate handler throws an exception the service returns 404 (not found)\r\n\r\n## Steps to Reproduce the Problem\r\n\r\nCreate a delegate handler (inherit from DelegatingHandler) and configure it in startup/config\r\nGet the handler to throw and exception\r\nPostman to the endpoint that contains the handler and 404 is returned\r\n\r\n## Possible fix\r\n\r\nAdd the following code to the ErrorsToHttpStatusCodeMapper:\r\n\r\n```cs\r\nif (errors.Any(e => e.Code == OcelotErrorCode.UnableToCompleteRequestError))\r\n{\r\n        return 500;\r\n}\r\n```\r\n## Other\r\nI am not sure if the current behavior is for a reason so will not do anything until I hear this is not a daft thing to change!\r\n\r\n## Specifications\r\n\r\n  - Version: 5.5.7\r\n  - Platform: Windows 10\r\n  - Subsystem: Visual Studio 2017 C# Core 2.0\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/335/comments",
+    "author": "Dilsy99",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-27T22:03:53Z",
+        "body": "@Dilsy99 yep I pretty much agree with this. I don't think there is any reason for this other than I haven't accounted for delegating handlers throwing exceptions since I did the error mapper stuff. I did the error mapping stuff maybe a year and a half ago and delegating handlers are 6 months old so probably my bad :(\r\n\r\nI guess this should really be configurable because some places might want to return a 404 instead of 500 to discourage hackers because they think that a 500 means vulnerable to buffer overflow etc. I personally don't see a problem returning a 500 in .net but maybe I'm naive :( However for now happy for you to make this map to a 500 if you want to submit a PR!? :)"
+      },
+      {
+        "user": "Dilsy99",
+        "created_at": "2018-04-30T08:18:23Z",
+        "body": "@TomPallister Many thanks for the response\r\n\r\nI did think about configuration and how that would work in practice but it rather overwhelmed my Friday afternoon brain!\r\n\r\nI have made the change and the only byproduct that I have noticed (because the test failed :-)) is that the ssl certificate configuration error now returns 500 rather than 404 (which makes sense as the handler is throwing the error).\r\n\r\nAre you OK that this breaks existing functionality that  people \"may\" rely on?\r\n\r\n```cs\r\npublic void should_not_dangerous_accept_any_server_certificate_validator()\r\n```"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-30T09:23:37Z",
+        "body": "@Dilsy99 this is all fine with me :)\r\n\r\nI've just merged the PR and will do a release some time today so we can close this issue! :)"
+      },
+      {
+        "user": "Dilsy99",
+        "created_at": "2018-04-30T09:26:54Z",
+        "body": "@TomPallister  Excellent. Many thanks"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-30T18:37:08Z",
+        "body": "@Dilsy99 released in version 6.0.0"
+      }
+    ]
+  },
+  {
+    "number": 287,
+    "title": "New Feature - Provide more detailed log",
+    "created_at": "2018-03-20T02:08:35Z",
+    "closed_at": "2018-04-07T21:11:02Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "good first issue"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/287",
+    "body": "Hello ,  I encountered some difficulties in configuring error lookups.\r\n\r\nCan you provide more detailed content in the logging content?  like the request URL and current error configuration.\r\n\r\nThis is the current logging content :\r\n```\r\nrequestId: no request id, previousRequestId: no previous request id, message: DownstreamRouteFinderMiddleware setting pipeline errors. IDownstreamRouteFinder returned Error Code: UnableToFindDownstreamRouteError Message: UnableToFindDownstreamRouteError\r\n```\r\nand\r\n\r\n```\r\nrequestId: no request id, previousRequestId: no previous request id, message: 1 pipeline errors found in ResponderMiddleware. Setting error response status code\r\n```\r\n\r\nWhen I have a lot of configuration, it's hard to find out which configuration item caused the error.\r\n\r\nThanks~!\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/287/comments",
+    "author": "yang-xiaodong",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-20T08:43:19Z",
+        "body": "@yuleyule66 I agree this could be a lot better."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-20T21:09:01Z",
+        "body": "I log errors at the end of the pipeline...would make more sense to log them as they happen."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-20T21:10:30Z",
+        "body": "@yuleyule66 what do you mean by \"current error configuration\"? asp.net core should indicate the type of log in the message e.g. error, debug etc "
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-20T21:11:23Z",
+        "body": "Maybe add url to log context, maybe we just need some sort of log context object with all these things on...it would be nice to just log when an error object is created (hook into this somehow)\r\n\r\nMaybe an error object pool and when you take  from it, something calls the logger, no idea just throwing ideas out!"
+      },
+      {
+        "user": "yang-xiaodong",
+        "created_at": "2018-03-21T02:40:58Z",
+        "body": "@TomPallister \r\n\"current error configuration\" That is to say, I am currently configuring the wrong configuration item in configuration.json, such as \"DownstreamHostAndPorts\" to specify the wrong unreachable address or port . we can print them out when logging. I don't know if this is more difficult to implement,  just an idea !"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-03-21T06:28:28Z",
+        "body": "@yuleyule66 yep that makes sense, I will see if we can make it better!"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-07T11:04:02Z",
+        "body": "close after release"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2018-04-07T21:11:02Z",
+        "body": "logging improved in version 5.5.0, if you need anything specific let me know! :)"
+      }
+    ]
+  },
+  {
+    "number": 175,
+    "title": "Allow services to register with Ocelot Cluster",
+    "created_at": "2017-12-13T18:10:50Z",
+    "closed_at": "2023-11-29T15:41:13Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "wontfix",
+      "large effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/175",
+    "body": "I'm putting this here because I had a thought on the train. This potentially removes the need for consul providing the service locations. However fully understand sticking with consul as it is probably way better than my raft implementation and does a lot of other stuff!\r\n\r\n**Happy path**\r\nWhen raft finished allow services to register with Ocelot.\r\nThe service can call Ocelot's administration API with IdentityServer client auth workflow?\r\nThis Administration controller would fire a command to the Cluster leader to add a new service to the registry. \r\nThe registry is persisted to the cluster.\r\nOcelot looks at the registry for services it can call.\r\n\r\n",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/175/comments",
+    "author": "TomPallister",
+    "comments": [
+      {
+        "user": "raman-m",
+        "created_at": "2023-11-29T15:41:13Z",
+        "body": "Outdated! The author doesn't care!"
+      }
+    ]
+  },
+  {
+    "number": 112,
+    "title": "The interface is stored in the database",
+    "created_at": "2017-07-25T14:39:04Z",
+    "closed_at": "2017-11-28T21:55:11Z",
+    "labels": [
+      "feature",
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/112",
+    "body": "Interfaces are stored in configuration files, some of which are inconvenient for the processing and interfacing of multiple systems. They want to configure the interface in the database and operate with the interface configuration",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/112/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-08-04T06:12:58Z",
+        "body": "Hi @ArrorShine do you mean implementing a way to store the ocelot configuration in a database rather than in memory / flat file?\r\n\r\nThis is of course possible and I could work on it one day but I am still working on Ocelot clustering at the moment.\r\n\r\nPlease feel free to study the code and submit a PR for the feature if you have time!\r\n\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-11-28T21:55:11Z",
+        "body": "Hi there, I'm closing this because it's been quite a few days since this was discussed and I am not planning to implement this feature myself anytime soon.\r\n\r\nSorry!!!\r\n\r\nThanks for your contribution though! :D"
+      }
+    ]
+  },
+  {
+    "number": 101,
+    "title": "IdentityServer reference token to JWT exchange",
+    "created_at": "2017-05-15T19:18:06Z",
+    "closed_at": "2017-11-28T21:56:50Z",
+    "labels": [
+      "feature",
+      "help wanted",
+      "large effort"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/101",
+    "body": "I have a need to exchange a public IdSvr reference token for an internal only JWT. I've created and deployed a custom grant type on my IdSvr that does the exchange. Are there plans to expand Ocelot to allow custom grant types during the upstream request authentication phase and inject the new bearer token (JWT) in the downstream request? If not, I can start coming up with something and submit a PR. Otherwise, I can start on it with guidance on what you were thinking.  -Paul",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/101/comments",
+    "author": "ghost",
+    "comments": [
+      {
+        "user": "juancash",
+        "created_at": "2017-05-16T18:01:05Z",
+        "body": "@tempworks \r\nSorry, you'll have to wait for Tom (the project owner) to come back on vacation, but I believe there isn't any problem if you want start to work in a solution."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-06-25T19:53:30Z",
+        "body": "@tempworks sorry for not replying sooner. I don't have plans to add this feature at the moment however I would welcome a pull request. I'm not even sure how you do the thing you want to do! :("
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-11-28T21:56:45Z",
+        "body": "Hi there, I'm closing this because it's been quite a few days since this was discussed and I am not planning to implement this feature myself anytime soon.\r\n\r\nSorry!!!\r\n\r\nThanks for your contribution though! :D"
+      },
+      {
+        "user": "ggoyal-Axum",
+        "created_at": "2019-09-06T07:05:56Z",
+        "body": "is there still no support for this feature?"
+      }
+    ]
+  },
+  {
+    "number": 95,
+    "title": "Going on holiday for 3 weeks does anybody want to maintain the project while I'm away? :)",
+    "created_at": "2017-05-08T07:46:39Z",
+    "closed_at": "2017-06-09T14:18:37Z",
+    "labels": [
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/95",
+    "body": "Going on holiday for 3 weeks does anybody want to maintain the project while I'm away? :)",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/95/comments",
+    "author": "TomPallister",
+    "comments": [
+      {
+        "user": "juancash",
+        "created_at": "2017-05-10T06:42:28Z",
+        "body": "I'll try to help as much as I can to people with doubts, but I think I'll can't cover all the project."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-05-11T19:29:49Z",
+        "body": "Thanks @juancash !"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-06-09T14:18:37Z",
+        "body": "Im back! thanks for all the help."
+      }
+    ]
+  },
+  {
+    "number": 86,
+    "title": "Path Prefix",
+    "created_at": "2017-04-16T20:39:20Z",
+    "closed_at": "2017-04-23T14:41:44Z",
+    "labels": [
+      "feature",
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/86",
+    "body": "Hi Tom, I'm in the process of evaluating Ocelot, looks great, nice work.  In my architecture I have several microservices each with their own REST API, some simple, some more complex.  I looks like in Ocelot I have to define each HTTP request I want to map, which doesn't feel right and would add quite a lot of development overhead.  Traefik for example supports a PathPrefix, can this kind of thing be done with Ocelot or have I misunderstood it's concept?",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/86/comments",
+    "author": "danny-waite",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-04-17T07:13:53Z",
+        "body": "@danny-waite I had a look at that pathprefix and tbh didn't really get it :( I can be a bit stupid. Could you explain to me exactly what you want to do?\r\n\r\nI'm thinking rather than defining all your incoming requests with the API gateway you want to have some kind of easy to define convention that just works for most / all of your incoming requests?\r\n\r\nOcelot wasn't designed with that in mind initially thought it would be a good feature.\r\n\r\nIf I was you I would go with traefik! Seems to be quite decent. Kong and Tyk look good too."
+      },
+      {
+        "user": "juancash",
+        "created_at": "2017-04-19T09:23:39Z",
+        "body": "@TomPallister \r\n\r\nIn my case I have 3 api and I only want redirect the traffic via Ocelot, I thinked in the following configuration:\r\n\r\n```\r\n{\r\n      \"UpstreamPathTemplate\": \"/api/api1/{urlPath}\",\r\n      \"UpstreamHttpMethod\": \"Get\",\r\n      \"DownstreamPathTemplate\": \"/api/{urlPath}\",\r\n      \"DownstreamScheme\": \"http\",\r\n      \"DownstreamHost\": \"localhost\",\r\n      \"DownstreamPort\": 5001,\r\n      \"QoSOptions\": {\r\n        \"ExceptionsAllowedBeforeBreaking\": 3,\r\n        \"DurationOfBreak\": 10,\r\n        \"TimeoutValue\": 10000\r\n      }\r\n    },\r\n    {\r\n      \"UpstreamPathTemplate\": \"/api/api2/{urlPath}\",\r\n      \"UpstreamHttpMethod\": \"Get\",\r\n      \"DownstreamPathTemplate\": \"/api/{urlPath}\",\r\n      \"DownstreamScheme\": \"http\",\r\n      \"DownstreamHost\": \"localhost\",\r\n      \"DownstreamPort\": 5002,\r\n      \"QoSOptions\": {\r\n        \"ExceptionsAllowedBeforeBreaking\": 3,\r\n        \"DurationOfBreak\": 10,\r\n        \"TimeoutValue\": 10000\r\n      }\r\n    },\r\n    {\r\n      \"UpstreamPathTemplate\": \"/api/api3/{urlPath}\",\r\n      \"UpstreamHttpMethod\": \"Get\",\r\n      \"DownstreamPathTemplate\": \"/api/{urlPath}\",\r\n      \"DownstreamScheme\": \"http\",\r\n      \"DownstreamHost\": \"localhost\",\r\n      \"DownstreamPort\": 5003,\r\n      \"QoSOptions\": {\r\n        \"ExceptionsAllowedBeforeBreaking\": 3,\r\n        \"DurationOfBreak\": 10,\r\n        \"TimeoutValue\": 10000\r\n      }\r\n    },\r\n```\r\nThe requests to:\r\n\r\n/api/api1 is redirected to port 5001\r\n/api/api2 is redirected to port 5002\r\n/api/api3 is redirected to port 5003\r\n\r\nWhen I do a request to /api/api1/values works fine but with /api/api1/values/5 not works.\r\nIn the last case my api receive the request /api/values instead of /api/values/5.\r\nSeems that the problem is with the parameters or slash character.\r\n\r\nMaybe the problem is in the class UrlPathPlaceholderNameAndValueFinder.cs like you comment in post #74 \r\n\r\nIt´s possible develop this? The idea it´s not to have to edit de configuration.json of our gateway every time we add new controllers to api1, api2 and api3. In this way, we have only edit the configuration.json when we need add a new api.\r\n\r\nThanks.\r\n"
+      },
+      {
+        "user": "juancash",
+        "created_at": "2017-04-20T10:13:40Z",
+        "body": "Hi @TomPallister \r\n\r\nI created a fork of your project and created a branch to add this functionality. The changes are only a couple of lines. I don´t know if you want add this to your project. In affirmative case, say me what I must to do, because it´s my first time on github.\r\n\r\nThanks.\r\n"
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-04-21T15:22:45Z",
+        "body": "@juancash looks good, i left a comment on the PR if you could take a look. Thanks very much for your efforts!!"
+      },
+      {
+        "user": "juancash",
+        "created_at": "2017-04-22T21:12:01Z",
+        "body": "@Tom Acceptance test added to the PR #89.\r\nThanks to you for this great project."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-04-23T14:41:44Z",
+        "body": "@juancash thank you once again, I really liked the way you made this change! Very simple 👍 "
+      }
+    ]
+  },
+  {
+    "number": 77,
+    "title": "Hierarchial Configuration ",
+    "created_at": "2017-03-27T16:48:20Z",
+    "closed_at": "2017-11-24T21:16:37Z",
+    "labels": [
+      "feature",
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/77",
+    "body": "Hi Tom,\r\nCongrats and thanks for your good initiative. \r\nIMHO, As the intention is to provide a gateway for MicroServices we shall split the reroute configuration. \r\nNew  MicroService level configuration or Downstream host level configuration, here we shall have the Authentication part.  we use identity server to protect our client API,  Instead of specifying this for each route we shall specify at top level. \r\nA wild card mapping will be a lot interesting as well. \r\n\r\nWaiting to hear from you, will send a pull request soon.  Cheers",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/77/comments",
+    "author": "abdulkaderjeelani",
+    "comments": [
+      {
+        "user": "TomPallister",
+        "created_at": "2017-03-28T21:27:23Z",
+        "body": "@abdulkaderjeelani Sounds good, when you do the pull request please do not break existing ways of configuring Ocelot. It need to support many configuration methods! \r\n\r\nThank you for taking an interest in this project. "
+      }
+    ]
+  },
+  {
+    "number": 41,
+    "title": "Get Cake build working on MacOS",
+    "created_at": "2017-02-12T14:59:15Z",
+    "closed_at": "2017-02-19T15:32:15Z",
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "url": "https://github.com/ThreeMammals/Ocelot/issues/41",
+    "body": "Think the problem is that cake cannot reference variables declared at top of page in private methods on macos...no idea why it can on windows!",
+    "comments_url": "https://api.github.com/repos/ThreeMammals/Ocelot/issues/41/comments",
+    "author": "TomPallister",
+    "comments": [
+      {
+        "user": "binarymash",
+        "created_at": "2017-02-19T13:34:48Z",
+        "body": "Had the same problem when trying to set stuff up on my own project, and got it working... I'll pick this up now."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-02-19T13:41:34Z",
+        "body": "@binarymash thanks! I spent ages trying to work this out so very interested in why it didn't just work."
+      },
+      {
+        "user": "binarymash",
+        "created_at": "2017-02-19T15:10:12Z",
+        "body": "I don't understand the difference between Mac and Windows, but the variables can be accessed from all the tasks so the solution is just to pass them into the private methods."
+      },
+      {
+        "user": "TomPallister",
+        "created_at": "2017-02-19T15:28:10Z",
+        "body": "Sounds good! I'm a bit embarrassed I didn't try that!"
+      }
+    ]
+  }
+]
