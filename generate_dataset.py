@@ -37,7 +37,7 @@ def find_latest_commit_before_date(repo_url, issue_date):
             return ""
     
     # Look for commit file in the directory
-    commit_files_dir = "/mnt/efs/people/mysoo/CodeAssistBench/github_commits"
+    commit_files_dir = "CHANGE_IT_TO_YOUR_PATH" # commit path
     
     # Try different possible filename patterns
     patterns = [
@@ -180,8 +180,8 @@ def process_no_docker_issue(file_path, language):
 
 def generate_dataset():
     """Generate the jsonl file from build_env and no_need_docker directories."""
-    base_dir = "/mnt/efs/people/mysoo/CodeAssistBench/issue/all/docker_filter"
-    output_file = "/mnt/efs/people/mysoo/CodeAssistBench/dataset_all.jsonl"
+    base_dir = "CHANGE_IT_TO_YOUR_PATH" #dockerfilter
+    output_file = "CHANGE_IT_TO_YOUR_PATH" #datasetname
     
     # Get all language directories
     lang_dirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]

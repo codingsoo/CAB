@@ -10,8 +10,8 @@ import shutil
 from datetime import datetime
 
 # Configure path
-ISSUES_DIR = "/mnt/efs/people/mysoo/CodeAssistBench/issue/recent/scon_filter/c"
-DOCKER_FILTER_DIR = "/mnt/efs/people/mysoo/CodeAssistBench/issue/recent/docker_filter/c"
+ISSUES_DIR = "CHANGE_IT_TO_YOUR_PATH"
+DOCKER_FILTER_DIR = "CHANGE_IT_TO_YOUR_PATH"
 NEED_DOCKER_DIR = os.path.join(DOCKER_FILTER_DIR, "need_docker")
 NO_NEED_DOCKER_DIR = os.path.join(DOCKER_FILTER_DIR, "no_need_docker")
 NEED_DOCKER_BUT_CANNOT_DIR = os.path.join(DOCKER_FILTER_DIR, "need_docker_but_cannot")

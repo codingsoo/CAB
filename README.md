@@ -122,6 +122,7 @@ Once Step 5 is complete, run:
 ```bash
 python conv_filter.py
 ```
+Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
 #### What the script does
 
@@ -149,6 +150,8 @@ Once Step 6 is complete, run:
 python msg_filter.py
 ```
 
+Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+
 #### What the script does
 
 | Phase                         | Description                                                                           |
@@ -169,6 +172,7 @@ Once Step 7 is complete, run:
 ```bash
 python scon_filter.py
 ```
+Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
 #### What the script does
 
@@ -191,6 +195,7 @@ Once Step 8 is complete, run:
 ```bash
 python docker_filter.py
 ```
+Please note that you need to specify your issue/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
 #### What the script does
 
@@ -224,6 +229,8 @@ python get_github_commit.py
 python generate_dockerfile.py
 ```
 
+Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+
 #### What the scripts do
 
 | Phase                                 | Description                                                                                                                      |
@@ -252,6 +259,8 @@ Run the `generate_dataset.py` script to produce a newline-delimited JSON file:
 ```bash
 python generate_dataset.py
 ```
+
+Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
 #### What the script does
 
@@ -293,6 +302,61 @@ python generate_dataset.py
 
 #### Output
 - **Dataset file**: dataset_all.jsonl — one JSON object per line, ready for downstream analysis or model training.
+
+### 12. Run Tests
+
+Execute the `run.py` script to process your dataset and run the full test pipeline:
+
+```bash
+python run.py
+```
+Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+
+#### What the script does
+
+| Phase                  | Description                                                                                                           |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| 🐍 Initialize           | Configures application & LLM logging, loads `.env`, sets up Bedrock/OpenAI and Docker clients                       |
+| 📥 Load dataset         | Reads `dataset_all.jsonl` (or language-specific JSONL under `language_results_gpt/`)                                  |
+| 🔗 Clone & checkout     | For each issue: clones the repo at the selected commit, with retry & timeout logic                                    |
+| 🔍 Interactive exploration | Runs up to N iterations of “explore” commands via the maintainer agent to gather code context                       |
+| 💬 Conversation loop    | Alternates between user and maintainer agents (with optional judge) until user satisfaction or max rounds             |
+| 🐳 Docker validation    | If a Dockerfile is present, builds the image, runs generated test commands inside the container, collects logs        |
+| ⚖️ Judge solution        | Evaluates the final maintainer answer against reference conversation & user satisfaction conditions                   |
+| 💾 Persist results      | Writes per-batch JSONL files (`responses_*.jsonl` / `docker_responses_*.jsonl`) and updates `summary_*.json` reports |
+| 📊 Generate summary     | Aggregates metrics: success rates, satisfaction, alignment scores, conversation stats, and LLM call counts           |
+
+#### Outputs
+
+- Processed batches: `language_results_gpt/{language}/batch_{n}_{timestamp}.jsonl`
+- Docker batches: `language_results_gpt/{language}/docker_responses_{n}_{timestamp}.jsonl`
+- Batch summaries: `language_results_gpt/{language}/summary_{timestamp}.json`
+
+### 13. Produce Results
+
+Run the `produce_results.py` script to aggregate and display model performance metrics:
+
+```bash
+python produce_results.py
+```
+Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+
+#### What the script does
+
+| Phase                    | Description                                                                                                                            |
+|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| 📥 Load model outputs     | Scans each model’s `language_results_*` directories for all languages and JSONL files                                                  |
+| 🏷️ Parse entries          | Reads each JSONL entry, extracting `final_verdict`, verbosity, original conversation length, and total LLM rounds                         |
+| 🔢 Aggregate statistics   | Counts total entries, verdict distributions, verbosity distributions, and per-language verdict counts                                    |
+| ➕ Compute averages        | Calculates average original conversation length and average LLM history length per verdict                                              |
+| 🗄️ Build summary tables    | Prepares overall accuracy comparison and per-language breakdowns                                                                         |
+| 📈 Print summaries         | Outputs formatted tables:  
+  - Overall accuracy comparison across models  
+  - Per-language comparison tables for verdicts and verbosity  
+
+#### Outputs
+- Overall accuracy comparison across models
+- Per-language comparison tables for verdicts and verbosity
 
 ## Logs & Reproducibility
 

@@ -376,8 +376,8 @@ def process_file(input_file: str, output_file: str, bedrock_client: BedrockClien
 
 def main():
     # Configure input and output directories
-    input_dir = '/mnt/efs/people/mysoo/CodeAssistBench/issue/recent/conv_filter/c'
-    output_dir = '/mnt/efs/people/mysoo/CodeAssistBench/issue/recent/msg_filter/c'
+    input_dir = 'CHANGE_IT_TO_YOUR_PATH' # Change it to your 
+    output_dir = 'CHANGE_IT_TO_YOUR_PATH'
 
     # Create output directory if it doesn't exist
     Path(output_dir).mkdir(parents=True, exist_ok=True)

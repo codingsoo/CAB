@@ -14,12 +14,12 @@ from botocore.config import Config
 LANG = "python"
 
 # Define paths
-input_dir = f"/mnt/efs/people/mysoo/CodeAssistBench/issue/all/docker_filter/{LANG}/need_docker"
-output_dir = f"/mnt/efs/people/mysoo/CodeAssistBench/issue/all/docker_filter/{LANG}/build_env"
-github_commits_dir = "/mnt/efs/people/mysoo/CodeAssistBench/github_commits"
+input_dir = f"CHANGE_IT_TO_YOUR_PATH" #need_docker 
+output_dir = f"CHANGE_IT_TO_YOUR_PATH" #buil_env
+github_commits_dir = "CHANGE_IT_TO_YOUR_PATH" # commit directory path
 
 # Define the directory where failure logs should be stored
-failure_logs_dir = f"/mnt/efs/people/mysoo/CodeAssistBench/issue/all/docker_filter/{LANG}/build_env/issue_build_failure_logs"
+failure_logs_dir = f"CHANGE_IT_TO_YOUR_PATH" #filaure log
 # Create the directory if it doesn't exist
 os.makedirs(failure_logs_dir, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
@@ -30,7 +30,7 @@ LLM_CALL_COUNT = 0
 def setup_logging():
     """Set up logging with rotation based on time and size"""
     # Create log directory if it doesn't exist
-    log_dir = f"/mnt/efs/people/mysoo/CodeAssistBench/issue/all/docker_filter/{LANG}/build_env/llm_logs"
+    log_dir = f"CHANGE_IT_TO_YOUR_PATH" # llm log
     os.makedirs(log_dir, exist_ok=True)
     
     # Create a new log file with timestamp
