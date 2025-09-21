@@ -1,371 +1,420 @@
-# CAB: CodeAssistBench
+# 🚀 CAB: CodeAssistBench
 
-## Overview
-This repository contains two main directories: `issue` and `repo`, organizing GitHub data based on time periods and filtering stages.
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: CC--BY--NC--4.0](https://img.shields.io/badge/License-CC--BY--NC--4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![NeurIPS 2025](https://img.shields.io/badge/NeurIPS-2025-orange.svg)](https://neurips.cc/)
+[![arXiv](https://img.shields.io/badge/arXiv-2507.10646-b31b1b.svg)](https://arxiv.org/abs/2507.10646)
 
-## Directory Structure
+> **NeurIPS 2025 Datasets & Benchmarks Track** - Comprehensive Benchmark for AI Coding Assistants
 
-### 📁 repo/
-Contains repository information categorized by time periods.
+**CAB (CodeAssistBench)** evaluates AI coding assistants on real-world programming problems from GitHub issues. It provides a standardized way to measure how well AI models can help with actual development challenges.
 
-#### 📂 all/
-- Top 100 starred repositories
-- Includes `top_20/` subdirectory with repositories selected based on:
-  - Active "help wanted" and "question" issue tags
-  - Priority given to repositories with higher issue counts when scores are tied
+## 🎯 What CAB Does
 
-#### 📂 recent/
-- Top 1000 starred repositories created after November 1, 2024
-- Includes `top_20/` subdirectory with similar selection criteria as `all/`
+CAB is designed to provide a robust and reproducible benchmark for evaluating the capabilities of AI coding assistants in multi-turn, chat-based interactions within realistic project environments.
 
-### 📁 issue/
-Contains processed GitHub issues with various filtering stages.
+### 📊 **Step 1: Dataset Collection**
+**Option A: Use Pre-Collected Dataset**
+- **Ready-to-use**: Complete dataset from our NeurIPS 2025 paper
+- **7 programming languages**: C, C++, C#, Java, JavaScript, Python, and TypeScript
+- **Real GitHub issues**: Curated from top-starred repositories with verified solutions
+- **Multi-turn conversations**: Full discussion threads between users and maintainers
+- **Docker environments**: Automatically generated build environments for reproducible testing
 
-#### Common Structure for both `all/` and `recent/`:
-```text
-issue/
-├── conv_filter/       # Issues after conversation filtering
-├── virtual_user/      # Extracted satisfactory conditions
-├── msg_filter/        # Issues after message filtering
-├── regex_filter/      # Issues after regex filtering
-└── docker_filter/     # Issues after docker filtering
-    ├── c/
-        ├── build_env               # Issues with docker environment
-        ├── need_docker             # Issues require docker environment
-        ├── need_docker_but_cannot  # Issues require docker environment, but we cannot dockerize them due to constraints such as hardware dependency, network dependency, ...
-        └── no_need_docker          # Issues do not require docker environment
-    ├── c#/
-    ├── cpp/
-    ├── java/
-    ├── javascript/
-    ├── python/
-    └── typescript/
-```
-Each programming language directory contains individual repository files with their respective processed issues.
+**Option B: Generate Custom Dataset**
+- **Automated pipeline**: Collect fresh datasets from GitHub with your own criteria
+- **Customizable filtering**: Choose specific languages, repository types, or issue categories
+- **Scalable processing**: Handle thousands of repositories and issues
+- **Quality control**: LLM-powered filtering for high-quality, technically relevant conversations
+- **Fresh data**: Get the latest issues and repositories for up-to-date evaluation
 
-## Quick‑Start Guide
+### 🤖 **Step 2: Simulated User Environment**
+- **Modular Architecture**: Clean separation between agents and testing framework
+- **Agent Interface**: Any AI model can be tested by implementing the `CABAgent` interface
+- **Realistic interactions**: Simulate real developer scenarios with AI coding assistants
+- **Multi-turn conversations**: Support for back-and-forth dialogue between user and assistant
+- **Context awareness**: Maintain conversation history and project context
+- **Environment setup**: Automatic Docker containerization for isolated testing
+- **Easy Integration**: Support for OpenAI, Claude, local models, and custom agents
 
-### 1 ― Prerequisites
-- **Python >= 3.12** (tested on 3.12.6)
-- A GitHub **Personal Access Token (classic)** with at least `public_repo` scope.
-- `pip` (comes with Python) and optionally `virtualenv`/`venv` for isolated environments.
+### ⚖️ **Step 3: Automated Judging**
+- **Solution evaluation**: Compare AI-generated solutions against human-verified answers
+- **Satisfaction criteria**: Evaluate based on user satisfaction conditions from original issues
+- **Multi-metric assessment**: Comprehensive evaluation across multiple dimensions
+- **Technical correctness**: Assess accuracy and completeness of solutions
+- **Docker validation**: Verify solutions work in containerized environments
+- **Verbosity assessment**: Evaluate response clarity and appropriateness
+- **Reproducible scoring**: Consistent and objective evaluation methodology
+- **Performance analytics**: Detailed analysis and comparison of different AI models
 
-### 2 ― Installation
+## 🚀 Quick Start
+
+### 🎯 Super Easy Start (Recommended)
 ```bash
-# 1. Clone the repo
-$ git clone https://github.com/<your‑org>/CodeAssistBench.git
-$ cd CodeAssistBench
+# See what CAB can do (no setup required)
+python scripts/try_cab.py
 
-# 2. (Recommended) create an isolated environment
-$ python -m venv .venv
-$ source .venv/bin/activate     # PowerShell: .venv\Scripts\Activate.ps1
+# One-command setup
+python scripts/super_easy_setup.py
 
-# 3. Install Python dependencies
-$ pip install --upgrade pip
-$ pip install -r requirements.txt
+# Quick test (no API keys needed)
+python tests/integration/test_agent.py --agent mock --dataset data/converted_dataset.jsonl --max-issues 1
 ```
 
-### 3 ― Configure Secrets
-Create a **.env** file in the project root and paste your token:
-```dotenv
-GITHUB_TOKEN=ghp_yourpersonalaccesstoken
-```
-> **Tip 📌** Create the token at <https://github.com/settings/tokens> → **Classic tokens**.  
-> The script prints your remaining request quota before and after each run.
+📚 **For complete beginners**: See [docs/SUPER_EASY_START.md](docs/SUPER_EASY_START.md)
 
-### 4 ― Collect Repository Data (`get_github_repo.py`)
-Run the helper script to build an initial CSV of repositories matching your criteria:
+### 🔧 Manual Setup
 ```bash
-$ python get_github_repo.py   # formerly get_github_issue.py in v1.0
+# Prerequisites: Python 3.8+
+git clone https://github.com/your-org/CodeAssistBench.git
+cd CodeAssistBench
+pip install -r requirements.txt
+
+# Configuration (optional for basic testing)
+cp .env.template .env
+# Edit .env with your API keys if needed
 ```
-The script is interactive by default:  
-1. Choose a language from the menu (e.g. `Python`).  
-2. Enter how many repositories you want to analyse (e.g. `500`).  
-3. Optionally override the cutoff date (`YYYY‑MM‑DD`).
 
-A CSV named like `python_repos_analysis_YYYYMMDD_HHMMSS.csv` is written to the project root with community‑score metrics.
+## 📊 Usage
 
-### 5. Extract & Validate Issue-Level Q&A (`get_github_issue.py`)
-
-Once you’ve generated your repo CSV in Step 4, run:
+### 1. Data Setup
+Generate the benchmark dataset from GitHub issues:
 
 ```bash
-python get_github_issue.py
+# Generate dataset for specific languages
+python scripts/cab_cli.py generate --languages python javascript typescript
+
+# Or try demo mode (no API keys needed)
+python scripts/cab_cli.py demo
 ```
 
-#### Interactive prompts
-1. **CSV path**  
-   Path to the file you created in Step 4 (e.g. `python_repos_analysis_20250522_113015.csv`).
+This creates a dataset of real GitHub issues with:
+- Problem descriptions
+- Human-provided solutions
+- User satisfaction criteria
+- Docker environment requirements
 
-2. **Label-based filtering**  
-   - Enter `y` to restrict crawling to issues labeled `question` or `help wanted`.  
-   - Enter `n` to scan *all* closed issues.
-
-#### What the script does
-
-| Phase               | Description                                                                                                     |
-| ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 🔄 **Fetch issues**   | Calls the GitHub REST API (page-by-page), respecting rate limits.                                                |
-| ⚙️ **Deduplicate**    | Merges duplicates when an issue carries multiple labels.                                                       |
-| 🚫 **Apply filters**  | Keeps only issues with contributions from **multiple authors** and **no external media** (URLs/images/videos). |
-| 💬 **Fetch comments** | Pulls the full discussion thread for each retained issue.                                                     |
-| 💾 **Persist**        | Writes one timestamped JSON file per repo:  
-  `github_issues_<owner>_<repo>_YYYYMMDD_HHMMSS.json`.                                                            |
-
-#### Output
-- **Console summary:** counts of processed, skipped (single-author or media-heavy), and retained issues.  
-- **JSON files:** one per repository, each containing clean Q&A pairs ready for downstream analysis.
-
-### 6. Filter & Qualify Conversations (`conv_filter.py`)
-Once Step 5 is complete, run:
+### 2. Agent Running
+Test AI agents using the modular framework:
 
 ```bash
-python conv_filter.py
+# Test with mock agent (no API calls required)
+python tests/integration/test_agent.py --agent mock --dataset data/converted_dataset.jsonl
+
+# Test with OpenAI GPT-4
+python tests/integration/test_agent.py --agent openai-gpt4 --dataset data/converted_dataset.jsonl --max-issues 5
+
+# Test with Claude
+python tests/integration/test_agent.py --agent claude-sonnet --dataset data/converted_dataset.jsonl --verbose
+
+# Test with Cursor CLI (if installed)
+python tests/integration/test_agent.py --agent cursor-cli --dataset data/converted_dataset.jsonl
+
+# Test with Amazon Q CLI (if installed)
+python tests/integration/test_agent.py --agent amazon-q --dataset data/converted_dataset.jsonl
+
+# Test with Local LLM (Ollama)
+python tests/integration/test_agent.py --agent local-llama2 --dataset data/converted_dataset.jsonl
+
+# Test Judge functionality (Step 3)
+python tests/integration/test_judge.py
+
+# Test Full Pipeline (Agent + Judge)
+python tests/integration/test_full_pipeline.py
+
+# Test External AI Tools as Judges
+python tests/integration/test_judge_agents.py
+
+# Compare Different Judges
+python examples/judges/example_judge_comparison.py
 ```
-Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
-#### What the script does
+The benchmark tests AI agents by:
+- **Modular Testing**: Any agent implementing `CABAgent` interface can be tested
+- **Realistic Scenarios**: Presenting real GitHub issues with multi-turn conversations
+- **Flexible Integration**: Support for OpenAI, Claude, local models, and custom agents
+- Allowing agents to explore codebases
+- Recording agent responses and solutions
+- Measuring solution quality
 
-| Phase                     | Description                                                                                                                                       |
-|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| 🤖 Init Bedrock client     | Configures AWS Bedrock runtime with your region & model.                                                                                           |
-| 🔍 Load issues             | Reads each `*.json` from `input_dir`.                                                                                                             |
-| 📝 Evaluate issue          | Sends title, body, and comments to the LLM; answers 7 Yes/No questions (`resolved`, `clear solution`, `PII-free`, `reproducible`).                 |
-| ✅ Filter qualified issues | Retains only issues meeting all criteria: non-self-answered, technically specific, solution-contained, PII-free, reproducible.                       |
-| 💾 Persist results         | Writes filtered issues to `output_dir/<owner>_<repo>.json` and logs every LLM interaction to:  
-  - `llm_responses.jsonl`  
-  - `evaluation_results.jsonl`  |
-
-
-#### Output
-
-Filtered JSON files in `output_dir`, each containing only the qualified Q&A.  
-LLM logs under your chosen `output_log_dir` (raw inputs, outputs, timings, metadata).
-
-### 7. Filter Irrelevant Comments (`msg_filter.py`)
-
-Once Step 6 is complete, run:
+### 3. Judge Running
+Evaluate agent performance:
 
 ```bash
-python msg_filter.py
+# Analyze results
+python cab/data/produce_results.py
+
+# Generate performance report
+python cab/data/produce_results.py --output results_report.json
 ```
 
-Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+The judge evaluates:
+- **Accuracy**: How often agents provide correct solutions
+- **Satisfaction**: How well solutions meet user requirements
+- **Efficiency**: Time and resource usage
+- **Reproducibility**: Success rate in Docker environments
 
-#### What the script does
+## 📈 Results
 
-| Phase                         | Description                                                                           |
-|-------------------------------|---------------------------------------------------------------------------------------|
-| 🤖 Init Bedrock client         | Configures AWS Bedrock runtime with your region & model.                               |
-| 🔄 Merge comments              | Combines consecutive comments from the same author into a single entry.                |
-| 🗑️ Identify irrelevant comments | Uses an LLM to detect and list comments with no support-related value.                 |
-| 🔍 Filter conversation         | Removes purely social or off-topic comments while preserving technical discussion.     |
-| 💾 Persist results             | Writes filtered issues to `output_dir` and logs raw LLM responses under `logs/`.       |
+CAB generates comprehensive evaluation metrics:
 
-#### Output
+- **Overall Performance**: Accuracy across all issues
+- **Language-specific Results**: Performance by programming language
+- **Difficulty Analysis**: Performance on easy/medium/hard problems
+- **Solution Quality**: Detailed analysis of agent responses
 
-Filtered JSON files in `output_dir`, each containing only issues with relevant comments. Raw LLM logs written to `output_dir/logs/raw_responses_<timestamp>.jsonl`.
+### Example Results
+```
+Overall Accuracy: 73.2%
+├── Python: 78.5%
+├── JavaScript: 71.8%
+└── TypeScript: 69.3%
 
-### 8. Extract User Satisfaction Conditions (`scon_filter.py`)
-Once Step 7 is complete, run:
+Solution Quality:
+├── Correct: 73.2%
+├── Partially Correct: 18.4%
+└── Incorrect: 8.4%
+```
 
+## 🏗️ Architecture
+
+CAB uses a **modular architecture** with clear separation of concerns:
+
+### **Agent Interface** (`cab/agents/agent_interface.py`)
+- **`CABAgent`**: Abstract base class that any AI agent must implement
+- **Built-in Agents**: OpenAI, Claude, and Mock agents ready to use
+- **External Agents**: Cursor CLI, GitHub Copilot, Local LLMs (Ollama)
+- **Easy Extension**: Add new agents by implementing the interface
+- **No Dependencies**: Agents are independent of the testing framework
+
+### **Simulated User Environment** (`cab/utils/simulated_user.py`)
+- **`SimulatedUser`**: Simulates realistic user interactions
+- **`CABEvaluator`**: Orchestrates agent evaluation on datasets
+- **Multi-turn Conversations**: Supports back-and-forth dialogue
+- **Satisfaction Tracking**: Evaluates user satisfaction criteria
+
+### **Benefits of This Architecture**
+- ✅ **Modular**: Test any agent without modifying the framework
+- ✅ **Extensible**: Easy to add new AI models or testing strategies
+- ✅ **Independent**: Agents and testing framework are decoupled
+- ✅ **Testable**: Mock agent allows testing without API calls
+- ✅ **Flexible**: Support for different conversation patterns and evaluation metrics
+
+## 🔧 External Agent Integration
+
+CAB supports testing external AI tools and agents:
+
+### **Available External Agents**
+- **Cursor CLI**: Test Cursor's AI coding assistant
+- **GitHub Copilot**: Test GitHub Copilot CLI
+- **Amazon Q CLI**: Test Amazon Q's AI coding assistant
+- **Local LLMs**: Test Ollama models (Llama2, CodeLlama, Mistral)
+- **Custom Scripts**: Test any custom AI agent script
+
+### **Setup External Agents**
 ```bash
-python scon_filter.py
+# Check available external agents
+python tests/integration/test_external_agents.py
+
+# Test Cursor CLI (requires Cursor CLI installation)
+python tests/integration/test_agent.py --agent cursor-cli --dataset data/converted_dataset.jsonl
+
+# Test Local LLM (requires Ollama installation)
+python tests/integration/test_agent.py --agent local-llama2 --dataset data/converted_dataset.jsonl
 ```
-Please note that you need to specify your input/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
-#### What the script does
+### **Adding Custom Agents**
 
-| Phase                              | Description                                                                                                            |
-|------------------------------------|------------------------------------------------------------------------------------------------------------------------|
-| 🤖 Init Bedrock client              | Configures AWS Bedrock runtime with your region & model.                                                                |
-| 📂 Load conversations               | Reads each `*.json` from the specified `input_dir`.                                                                    |
-| 📋 Extract satisfaction conditions   | Uses an LLM to identify general user satisfaction criteria (what the user needed, not the specific solution).           |
-| ✅ Verify conditions                | Validates which extracted conditions are actually satisfied by the original conversation context.                     |
-| 💾 Persist results                  | Saves conversations augmented with `satisfaction_conditions` to `output_dir` and writes prompts/responses logs.       |
-
-#### Output
-
-Processed JSON files in `output_dir`, each containing conversations with `satisfaction_conditions`.  
-Prompts and responses saved to `output_dir/<filename>_prompts_responses.json`.
-
-### 9. Classify Docker Needs (`docker_filter.py`)
-Once Step 8 is complete, run:
-
+#### Quick Start
 ```bash
-python docker_filter.py
+# Test your custom agent directly
+python tests/integration/test_custom_agent.py my_agent.py MyAgent --max-issues 3
 ```
-Please note that you need to specify your issue/output directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
 
-#### What the script does
+#### Custom Agent Template
+```python
+# my_custom_agent.py
+from cab.agents.agent_interface import CABAgent, ConversationContext, AgentResponse
 
-| Phase                             | Description                                                                                                                             |
-|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
-| 🤖 Init Bedrock client             | Configures AWS Bedrock runtime with your region & model.                                                                                 |
-| 📂 Load filtered conversations      | Reads each `*.json` from the `scon_filter` output directory.                                                                              |
-| 📑 Classify Docker requirement      | Uses an LLM to determine if each issue:  
-1. Does not need build environment  
-2. Can be dockerized without any issue  
-3. Requires build environment but hard to be dockerized                                                        |
-| 💾 Save classifications             | Writes issues into `need_docker`, `no_need_docker`, or `need_docker_but_cannot` subdirectories.                                         |
-| 📂 Persist LLM logs                 | Stores raw prompts and responses in `llm_responses/`.                                                                                   |
-| 📊 Generate summary                 | Aggregates counts and percentages into `classification_summary.json` and `processed_issues.json`.                                        |
+class MyAgent(CABAgent):
+    def __init__(self):
+        super().__init__(name="MyAgent", model_name="my-model")
+    
+    def setup(self) -> bool:
+        """Initialize your agent"""
+        return True
+    
+    def respond(self, context: ConversationContext) -> AgentResponse:
+        """Generate response to the issue"""
+        issue = context.issue_data["first_question"]
+        response = f"I can help with: {issue['title']}"
+        return AgentResponse(content=response)
+```
 
-#### Output
+#### Advanced Integration
+```python
+from cab.agents.external_agents import CustomScriptAgent
+from cab.utils.simulated_user import CABEvaluator
 
-- Issues sorted into:
-  - `no_need_docker`: issues that can be verified without a build environment
-  - `need_docker`: issues that require Docker for verification
-  - `need_docker_but_cannot`: issues requiring build environment but difficult to containerize
-- Raw LLM logs under `llm_responses/`.
-- Summary statistics in `classification_summary.json` and processed IDs in `processed_issues.json`.
+# Create custom agent
+agent = CustomScriptAgent('my_ai_script.py', 'MyCustomAgent')
 
+# Test with CAB
+evaluator = CABEvaluator()
+result = evaluator.evaluate_agent(agent, 'dataset.jsonl')
+```
 
-### 10. Fetch GitHub Commits & Generate Dockerfiles  
-Once Step 9 is complete, run both scripts in sequence:
+📚 **See [docs/CUSTOM_AGENT_GUIDE.md](docs/CUSTOM_AGENT_GUIDE.md) for detailed examples and best practices.**
 
+## ⚖️ Judge Testing (Step 3)
+
+CAB includes an automated judge that evaluates agent responses:
+
+### **Judge Capabilities**
+- **Technical Correctness**: Assesses accuracy and completeness of solutions
+- **User Satisfaction**: Evaluates against original user satisfaction conditions
+- **Docker Validation**: Verifies solutions work in containerized environments
+- **Verbosity Assessment**: Evaluates response clarity and appropriateness
+
+### **Testing the Judge**
 ```bash
-python get_github_commit.py
-python generate_dockerfile.py
+# Test judge functionality
+python test_judge.py
+
+# Test full pipeline (Agent + Judge)
+python test_full_pipeline.py
 ```
 
-Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+### **Using the Judge in Your Code**
+```python
+from cab.core.run import judge_maintainer_answer
 
-#### What the scripts do
+# Judge an agent response
+judgment, verdict, key_issues, alignment_score = judge_maintainer_answer(
+    issue_data, agent_response, docker_results
+)
 
-| Phase                                 | Description                                                                                                                      |
-|---------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| 🤖 Init GitHub & Bedrock clients       | Configures the GitHub API client (using your `GITHUB_TOKEN`) and the Bedrock LLM client.                                         |
-| 📥 Load filter output                  | Reads each `*.json` from the `scon_filter` and `docker_filter/need_docker` directories.                                         |
-| ⏳ Fetch commits                        | For each repo, calls GitHub’s API to retrieve all commits up to the latest issue date.                                          |
-| 📝 Save commit data                    | Persists a `commits_<source>.json` file containing SHA, author, date, and message for each commit.                              |
-| 🐳 Generate Dockerfile candidates      | Uses an LLM to produce Dockerfile candidates for each issue, based on repo state, commit SHA, README, workflows, and errors.     |
-| 🔄 Improve & retest Dockerfiles        | Iteratively fixes failed builds by feeding error logs back to the LLM, generating improved Dockerfile versions.                 |
-| 📂 Persist Dockerfiles & logs          | Writes final Dockerfile(s) under `build_env/`, stores detailed failure logs in `issue_build_failure_logs/` and LLM logs in `llm_logs/`. |
-| 📊 Generate summary                    | Outputs a build summary with success rates, LLM call counts, and timing into the console and a JSON summary file.               |
+print(f"Verdict: {verdict}")
+print(f"Satisfaction Rate: {alignment_score.get('percentage', 0):.1f}%")
+```
 
-#### Output
+### **External AI Tools as Judges**
+CAB supports using external AI tools as judges:
 
-- **Commit data**: `github_commits/commits_<repo>.json`  
-- **Dockerfiles**: Written to `build_env/issue_<repo>_<number>.json` on success  
-- **Failure logs**: JSON files in `issue_build_failure_logs/` with error & explanation  
-- **LLM logs**: Timestamped `.log` files in `llm_logs/`  
-- **Build summary**: Printed to console and saved in `classification_summary.json` and per-issue output files  
+```python
+from cab.judges.judge_agents import create_judge
 
-### 11. Generate Dataset
+# Create judge using Amazon Q CLI
+judge = create_judge('amazon-q')
 
-Run the `generate_dataset.py` script to produce a newline-delimited JSON file:
+# Judge an agent response
+judgment, verdict, key_issues, alignment_score = judge.judge_response(
+    issue_data, agent_response, docker_results
+)
 
+print(f"Amazon Q Verdict: {verdict}")
+```
+
+**Available Judge Types:**
+- **`amazon-q`**: Amazon Q CLI judge
+- **`cursor-cli`**: Cursor CLI judge  
+- **`local-llama2`**: Local LLM (Llama2) judge
+- **`local-codellama`**: Local LLM (CodeLlama) judge
+- **`local-mistral`**: Local LLM (Mistral) judge
+
+#### Custom Agent Tools
 ```bash
-python generate_dataset.py
+# Test custom agent directly (recommended)
+python tests/integration/test_custom_agent.py my_agent.py MyAgent
+
+# Register and test with CLI (advanced)
+python cab/utils/register_custom_agent.py register-test my_agent.py MyAgent my-custom
+
+# List all available agents
+python cab/utils/register_custom_agent.py list
 ```
 
-Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+## 🔧 Advanced Usage
 
-#### What the script does
+### Custom Configuration
+Edit `config.yaml` to customize:
+- Number of repositories per language
+- Issue filtering criteria
+- Docker environment settings
+- Evaluation parameters
 
-| Phase               | Description                                                                                          |
-|---------------------|------------------------------------------------------------------------------------------------------|
-| 📂 Load source      | Scans each language subdirectory under `.../docker_filter/{language}/build_env` and `.../no_need_docker` |
-| 📝 Parse issue data | Extracts repository URL, issue metadata, comments, satisfaction conditions, and Dockerfile content    |
-| 🔗 Resolve commits  | Finds the latest commit SHA on or before each issue’s `created_at` using your `github_commits` files |
-| 📑 Format entries   | Builds one JSON object per issue with the following fields:                                          |
-|                     | • `language`                                                                                         |
-|                     | • `commit_info.repository` and `commit_info.latest_commit.sha`                                       |
-|                     | • `first_question.title` and `first_question.body`                                                   |
-|                     | • `comments` (array)                                                                                 |
-|                     | • `user_satisfaction_condition` (array)                                                              |
-|                     | • `created_at`                                                                                       |
-|                     | • `dockerfile` (only for `build_env` issues)                                                         |
-| 💾 Write JSONL      | Appends each JSON object as a new line in `dataset_all.jsonl`                                        |
-| 📊 Print statistics | Logs total entries, per-language counts, build_env vs. no_need_docker breakdown, and commit coverage |
+### Web Interface
+```bash
+# Start web dashboard
+python web_app.py
 
-#### Format of each dataset entry
+# Open browser to http://localhost:8000
+```
 
-```json
-{
-  "language": "python",
-  "commit_info": {
-    "repository": "https://github.com/owner/repo",
-    "latest_commit": { "sha": "abc123..." }
-  },
-  "first_question": {
-    "title": "Issue title here",
-    "body": "Full issue body text here"
-  },
-  "comments": [ /* array of comment objects */ ],
-  "user_satisfaction_condition": [ /* array of strings */ ],
-  "created_at": "2024-05-01T12:34:56Z",
-  "dockerfile": "FROM ubuntu:20.04\n..."  // only present for build_env issues
+### Docker Deployment
+```bash
+# Run with Docker
+docker-compose up
+
+# Or build custom image
+docker build -t cab-benchmark .
+```
+
+## 📚 Documentation
+
+- **[Pipeline Guide](docs/PIPELINE_GUIDE.md)**: Detailed pipeline documentation
+- **[Contributing](CONTRIBUTING.md)**: How to contribute to CAB
+- **[API Reference](docs/api.md)**: Programmatic usage
+
+## 🔬 Research Applications
+
+CAB enables researchers to:
+- **Compare AI models** objectively on real problems
+- **Measure progress** in AI coding capabilities
+- **Identify weaknesses** in current approaches
+- **Develop better evaluation metrics**
+
+## 📄 Citation
+
+```bibtex
+@inproceedings{kim2025codeassistbench,
+  title={CodeAssistBench (CAB): Dataset & Benchmarking for Multi-turn Chat-Based Code Assistance}, 
+  author={Myeongsoo Kim and Shweta Garg and Baishakhi Ray and Varun Kumar and Anoop Deoras},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2025},
+  track={Datasets and Benchmarks}
 }
 ```
 
-#### Output
-- **Dataset file**: dataset_all.jsonl — one JSON object per line, ready for downstream analysis or model training.
+**Paper:** [arXiv:2507.10646](https://arxiv.org/abs/2507.10646) | **Venue:** NeurIPS 2025 Datasets & Benchmarks Track
 
-### 12. Run Tests
+## 🤝 Contributing
 
-Execute the `run.py` script to process your dataset and run the full test pipeline:
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-```bash
-python run.py
-```
-Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+## 📜 License
 
-#### What the script does
+### Dataset License: CC-BY-NC 4.0
+The CAB dataset is released under the Creative Commons Attribution-NonCommercial 4.0 International License (CC-BY-NC 4.0). This applies to the GitHub issues, processed conversations, and benchmark data.
 
-| Phase                  | Description                                                                                                           |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| 🐍 Initialize           | Configures application & LLM logging, loads `.env`, sets up Bedrock/OpenAI and Docker clients                       |
-| 📥 Load dataset         | Reads `dataset_all.jsonl` (or language-specific JSONL under `language_results_gpt/`)                                  |
-| 🔗 Clone & checkout     | For each issue: clones the repo at the selected commit, with retry & timeout logic                                    |
-| 🔍 Interactive exploration | Runs up to N iterations of “explore” commands via the maintainer agent to gather code context                       |
-| 💬 Conversation loop    | Alternates between user and maintainer agents (with optional judge) until user satisfaction or max rounds             |
-| 🐳 Docker validation    | If a Dockerfile is present, builds the image, runs generated test commands inside the container, collects logs        |
-| ⚖️ Judge solution        | Evaluates the final maintainer answer against reference conversation & user satisfaction conditions                   |
-| 💾 Persist results      | Writes per-batch JSONL files (`responses_*.jsonl` / `docker_responses_*.jsonl`) and updates `summary_*.json` reports |
-| 📊 Generate summary     | Aggregates metrics: success rates, satisfaction, alignment scores, conversation stats, and LLM call counts           |
+**Important:** This dataset is for research and evaluation purposes only. Commercial use is prohibited. Do not use for training AI models without explicit legal approval.
 
-#### Outputs
+### Software License: MIT
+The open source code in this repository is released under the MIT License.
 
-- Processed batches: `language_results_gpt/{language}/batch_{n}_{timestamp}.jsonl`
-- Docker batches: `language_results_gpt/{language}/docker_responses_{n}_{timestamp}.jsonl`
-- Batch summaries: `language_results_gpt/{language}/summary_{timestamp}.json`
+See [LICENSE](LICENSE) for full details.
 
-### 13. Produce Results
+## 📚 Dataset Citations
 
-Run the `produce_results.py` script to aggregate and display model performance metrics:
+This dataset incorporates data from the following sources:
 
-```bash
-python produce_results.py
-```
-Please note that you need to specify your input/output/log directory. Search `CHANGE_IT_TO_YOUR_PATH`, and change it to your path.
+- **GitHub Issues**: Collected from public repositories under their respective open source licenses
+- **Repository Data**: Top-starred repositories across 7 programming languages
+- **Conversation Data**: Multi-turn discussions between users and maintainers
+- **Solution Data**: Human-verified solutions and satisfaction criteria
 
-#### What the script does
+All source repositories are properly cited and users must comply with their original licenses.
 
-| Phase                    | Description                                                                                                                            |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 📥 Load model outputs     | Scans each model’s `language_results_*` directories for all languages and JSONL files                                                  |
-| 🏷️ Parse entries          | Reads each JSONL entry, extracting `final_verdict`, verbosity, original conversation length, and total LLM rounds                         |
-| 🔢 Aggregate statistics   | Counts total entries, verdict distributions, verbosity distributions, and per-language verdict counts                                    |
-| ➕ Compute averages        | Calculates average original conversation length and average LLM history length per verdict                                              |
-| 🗄️ Build summary tables    | Prepares overall accuracy comparison and per-language breakdowns                                                                         |
-| 📈 Print summaries         | Outputs formatted tables:  
-  - Overall accuracy comparison across models  
-  - Per-language comparison tables for verdicts and verbosity  
+---
 
-#### Outputs
-- Overall accuracy comparison across models
-- Per-language comparison tables for verdicts and verbosity
-
-## Logs & Reproducibility
-
-Both logs capture raw LLM interactions end‑to‑end, including prompts and tool calls, to enable full reproducibility of our pipeline.
-
-- 📄 A full trace of the benchmark build process can be found in the raw LLM log:  
-[LLM Log (Benchmark Generation)](https://drive.google.com/file/d/1riLanOSGZfmYsPAvTCUx9eeh4iK_ex0d/view?usp=sharing)
-- 📄 A full trace of the empricial study process can be found in the raw LLM log: 
-[LLM Log (Experiment Run)](https://drive.google.com/file/d/1UCj5v-o3olwjYM5lyIbWjts4LyrMDZLT/view?usp=sharing)
-
-## Note
-The date cutoff (November 1, 2024) for recent repositories is specifically chosen to avoid data leakage in model training and evaluation.
+**Made with ❤️ for the AI research community**
